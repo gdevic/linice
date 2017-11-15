@@ -81,6 +81,7 @@ static const int crtc_enable[0x19] = {     // 0x0A Cursor Start Register
 
 typedef struct
 {
+    int col;                            // Current line's color index
     BYTE *pText;                        // Address of the VGA text buffer
     BYTE savedX, savedY;                // Last recently saved cursor coordinates
     BYTE scrollTop, scrollBottom;       // Scroll region top and bottom coordinates
@@ -124,6 +125,7 @@ void VgaInit(void)
     vga.scrollTop = 0;
     vga.scrollBottom = MAX_SIZEY - 1;
     vga.pText = (BYTE *) LINUX_VGA_TEXT;
+    vga.col = COL_NORMAL;
 }
 
 
@@ -256,9 +258,9 @@ static void ScrollUp()
                 outVga.sizeX * 2 * (vga.scrollBottom - vga.scrollTop));
 
         // Clear the last line
-        memset(vga.pText + (vga.scrollBottom * outVga.sizeX) * 2,
-               0,
-               outVga.sizeX * 2 );
+        memset_w(vga.pText + (vga.scrollBottom * outVga.sizeX) * 2,
+               pIce->col[COL_NORMAL] * 256 + ' ',
+               outVga.sizeX );
     }
 }
 
@@ -290,7 +292,9 @@ void VgaSprint(char *s)
 
             case DP_CLS:
                     // Clear the screen and reset the cursor coordinates
-                    memset(vga.pText, 0, outVga.sizeY * outVga.sizeX * 2);
+                    memset_w(vga.pText,
+                        pIce->col[COL_NORMAL] * 256 + ' ',
+                        outVga.sizeY * outVga.sizeX);
                     outVga.x = 0;
                     outVga.y = 0;
                 break;
@@ -330,29 +334,29 @@ void VgaSprint(char *s)
                                 outVga.sizeX * 2 * (vga.scrollBottom - vga.scrollTop));
 
                         // Clear the first line
-                        memset(vga.pText + (vga.scrollTop * outVga.sizeX) * 2,
-                               0,
-                               outVga.sizeX * 2 );
+                        memset_w(vga.pText + (vga.scrollTop * outVga.sizeX) * 2,
+                               pIce->col[COL_NORMAL] * 256 + ' ',
+                               outVga.sizeX);
                     }
                 break;
 
-            case DP_SETWRITEATTR:
-                    s++;            // NOT IMPLEMENTED YET
+            case DP_SETCOLINDEX:
+                    vga.col = *s++;
                 break;
 
             case '\r':
-                    // Erase all characters to the right of the cursor pos and move cursor to left
-                    while( outVga.x < outVga.sizeX )
-                    {
-                        *(WORD *)(vga.pText + (outVga.x +  outVga.y * outVga.sizeX) * 2) = 0x0720;
-                        outVga.x++;
-                    }
+                    // Erase all characters to the right of the cursor pos and move cursor back
+                    memset_w(vga.pText + (outVga.x +  outVga.y * outVga.sizeX) * 2,
+                            pIce->col[vga.col] * 256 + ' ',
+                            outVga.sizeX - outVga.x);
                     outVga.x = 0;
+                    vga.col = COL_NORMAL;
                 break;
 
             case '\n':
                     // Go to a new line, possible autoscroll
                     outVga.x = 0;
+                    vga.col = COL_NORMAL;
 
                     // Check if we are on the last line of autoscroll
                     if( vga.scrollBottom==outVga.y )
@@ -363,7 +367,8 @@ void VgaSprint(char *s)
 
             default:
                     // All printable characters
-                    *(WORD *)(vga.pText + (outVga.x +  outVga.y * outVga.sizeX) * 2) = (WORD) c + 0x0700;
+                    *(WORD *)(vga.pText + (outVga.x +  outVga.y * outVga.sizeX) * 2)
+                        = (WORD) c + pIce->col[vga.col] * 256;
 
                     // Advance the print position
                     if( outVga.x < outVga.sizeX )

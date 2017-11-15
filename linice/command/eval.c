@@ -52,6 +52,7 @@
 * 05/20/97   Literal handling                                     Goran Devic *
 * 09/10/97   Literal function may call evaluator                  Goran Devic *
 * 03/11/01   Modified for LinIce                                  Goran Devic *
+* 04/22/01   Further mods for default hex                         Goran Devic *
 * --------   ---------------------------------------------------  ----------- *
 *******************************************************************************
 *   Include Files                                                             *
@@ -69,9 +70,9 @@
 *                                                                             *
 ******************************************************************************/
 
-// Predefined default base is decimal and there are no literal handlers.
+// Predefined default base is hex and there are no literal handlers.
 
-int nEvalDefaultBase = 10;
+int nEvalDefaultBase = 16;
 int (*pfnEvalLiteralHandler)( char *sName ) = NULL;
 
 
@@ -547,6 +548,32 @@ int Evaluate( char *sExpr, char **psNext )
 
 /******************************************************************************
 *                                                                             *
+*   BOOL Expression(DWORD *value, char *sExpr, char **psNext )                *
+*                                                                             *
+*******************************************************************************
+*
+*   Evaluates an expression.
+*
+*   Returns:
+*       TRUE - expression ok: *value = result
+*       FALSE - expression was invalid, appropriate message printed out
+*               via dprinth() function
+*
+******************************************************************************/
+BOOL Expression(DWORD *value, char *sExpr, char **psNext )
+{
+    *value = Evaluate( sExpr, psNext );
+
+    // Check for error in evaluation
+//    if( *args != 0 )
+
+
+    return( TRUE );
+}
+
+
+/******************************************************************************
+*                                                                             *
 *   BOOL cmdEvaluate(char *args, int subClass)                                *
 *                                                                             *
 *******************************************************************************
@@ -556,18 +583,12 @@ int Evaluate( char *sExpr, char **psNext )
 ******************************************************************************/
 BOOL cmdEvaluate(char *args, int subClass)
 {
-    int value;
+    DWORD value;
 
-    nEvalDefaultBase = 16;
-
-    value = Evaluate( args, &args );
-
-//    dprinth(0, " Decimal=%d  Hex=%08X\n", value, value);
-    INFO((" Decimal=%d  Hex=%08X\n", value, value));
-
-    // Check for error in evaluation
-//    if( *args != 0 )
-
+    if( Expression(&value, args, &args) )
+    {
+        dprinth(1, " Decimal=%d  Hex=%08X\n", value, value);
+    }
 
     return( TRUE );
 }

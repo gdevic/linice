@@ -155,25 +155,28 @@ void GetDataLine(PTADDRDESC pAddr)
 }
 
 
-void PrintDataLines(int lines)
+void PrintDataLines(int maxLines)
 {
+    int nLine = 1;
     TADDRDESC Addr;
 
     Addr = deb.dataAddr;                // Copy the current data address
 
-    while( lines-- > 0 )
+    while( nLine < maxLines )
     {
         GetDataLine(&Addr);
-        dprinth(lines, buf);
+        if(dprinth(nLine++, buf)==FALSE)
+            break;
     }
 }
 
+static char *sSize[4] = { "byte", "word", "", "dword" };
 
 void DataDraw(void)
 {
-    dprint("-Data---------------------------------------------------------------------------\n");
+    PrintLine(" Data                                               %s", sSize[deb.DumpSize-1]);
 
-    PrintDataLines(pWin->d.nLines - 1);
+    PrintDataLines(pWin->d.nLines);
 }
 
 

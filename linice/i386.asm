@@ -25,6 +25,7 @@ global  WriteCRTC
 global  inp
 global  GetByte
 global  strtolower
+global  memset_w
 
 global testint3
 
@@ -459,15 +460,17 @@ GetByte:
 memset_w:
         push    ebp
         mov     ebp, esp
+        push    edi
 
-        mov     ax, ds
-        mov     es, ax
         mov     edi, [ebp+8]
         mov     eax, [ebp+12]
         mov     ecx, [ebp+16]
+        or      ecx, ecx
+        jz      @zero
         cld
         rep     stosw
-
+@zero:
+        pop     edi
         pop     ebp
         ret
 
@@ -555,3 +558,4 @@ testint3:
         mov     edi, 6
         mov     ebp, 7
         int     3
+

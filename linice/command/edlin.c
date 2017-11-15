@@ -327,7 +327,7 @@ void EdLin( char *sCmdLine )
 
         // Print (new) help line
 
-        dprint("%c%c%c%s", DP_SETCURSORXY, 1+0, 1+pOut->sizeY-1, sHelpLine);
+        dprint("%c%c%c%c%c%s", DP_SETCURSORXY, 1+0, 1+pOut->sizeY-1, DP_SETCOLINDEX, COL_HELP, sHelpLine);
 
         // Print current edited line and position the cursor
 
@@ -547,12 +547,9 @@ void EdLin( char *sCmdLine )
     if( fCmdBuf==TRUE )
         HistoryDisplay(0, 0);
 
-    // Print the final line and scroll it up
+    // Print the final line and scroll it up.. Add it to the history buffer
 
-    dprint("%c%c%c%s\n", DP_SETCURSORXY, 1+0, 1+yCur, sCmd );
-
-    // Add a new line to the command history buffer
-
-    HistoryAdd(sCmd);
+    dprint("%c%c%c", DP_SETCURSORXY, 1+0, 1+yCur);
+    dprinth(1, "%s\n", sCmd);
 }
 

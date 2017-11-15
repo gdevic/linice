@@ -54,6 +54,16 @@ extern BOOL cmdCode    (char *args, int subClass);      // customization.c
 extern BOOL cmdSet     (char *args, int subClass);      // customization.c
 extern BOOL cmdLines   (char *args, int subClass);      // customization.c
 extern BOOL cmdXit     (char *args, int subClass);      // flow.c
+extern BOOL cmdGo      (char *args, int subClass);      // flow.c
+extern BOOL cmdWd      (char *args, int subClass);      // windowcontrol.c
+extern BOOL cmdWc      (char *args, int subClass);      // windowcontrol.c
+extern BOOL cmdWr      (char *args, int subClass);      // windowcontrol.c
+extern BOOL cmdCls     (char *args, int subClass);      // windowcontrol.c
+extern BOOL cmdTable   (char *args, int subClass);      // symbols.c
+extern BOOL cmdReg     (char *args, int subClass);      // registers.c
+extern BOOL cmdGdt     (char *args, int subClass);      // sysinfo.c
+extern BOOL cmdLdt     (char *args, int subClass);      // sysinfo.c
+extern BOOL cmdIdt     (char *args, int subClass);      // sysinfo.c
 
 
 TCommand Cmd[] = {
@@ -80,7 +90,7 @@ TCommand Cmd[] = {
 {    "BPX",      3, 0, Unsupported,    "BPX address [IF expression] [DO bp-action]", "ex: BPX 282FE0",    0 },
 {    "BSTAT",    5, 0, Unsupported,    "BSTAT [breakpoint #]", "ex: BSTAT 3", 0 },
 {    "C",        1, 0, Unsupported,    "C address1 L length address2", "ex: C 80000 L 40 EBX",    0 },
-{    "CLS",      3, 0, Unsupported,    "CLS clear window", "ex: CLS", 0 },
+{    "CLS",      3, 0, cmdCls,         "CLS clear window", "ex: CLS", 0 },
 {    "CODE",     4, 0, cmdCode,        "CODE [ON | OFF]", "ex: CODE OFF", 0 },
 {    "COLOR",    5, 0, Unsupported,    "COLOR normal bold reverse help line", "ex: COLOR 30 3E 1F 1E 34", 0 },
 {    "CPU",      3, 0, Unsupported,    "CPU [-I]", "ex: CPU", 0 },
@@ -112,8 +122,8 @@ TCommand Cmd[] = {
 {    "FLASH",    5, 0, Unsupported,    "FLASH [ON | OFF]", "ex: FLASH ON",    0 },
 {    "FOBJ",     4, 0, Unsupported,    "FOBJ pfile_object", "ex: FOBJ EAX",   0 },
 {    "FORMAT",   6, 0, Unsupported,    "FORMAT Change format of data window", "ex: FORMAT",   0 },
-{    "G",        1, 0, Unsupported,    "G [=address] [address]", "ex: G 231456",  0 },
-{    "GDT",      3, 0, Unsupported,    "GDT [selector | GDT base-address]", "ex: GDT 28", 0 },
+{    "G",        1, 0, cmdGo,          "G [=address] [address]", "ex: G 231456",  0 },
+{    "GDT",      3, 0, cmdGdt,         "GDT [selector | GDT base-address]", "ex: GDT 28", 0 },
 {    "GENINT",   6, 0, Unsupported,    "GENINT [NMI | INT1 | INT3 | int-number]", "ex: GENINT 2", 0 },
 {    "H",        1, 0, Unsupported,    "H or Help [command]", "ex: H R",  0 },
 {    "HBOOT",    5, 0, Unsupported,    "HBOOT System boot (total reset)", "ex: HBOOT",    0 },
@@ -123,10 +133,10 @@ TCommand Cmd[] = {
 {    "I1HERE",   6, 0, Unsupported,    "I1HERE [ON | OFF]", "ex: I1HERE ON",  0 },
 {    "I3HERE",   6, 0, Unsupported,    "I3HERE [ON | OFF]", "ex: I3HERE ON",  0 },
 {    "IB",       2, 0, Unsupported,    "IB port", "ex: IB 3DA",   0 },
-{    "IDT",      3, 0, Unsupported,    "IDT [int-number | IDT base-address]", "ex: IDT 21",   0 },
-{    "IW",       2, 0, Unsupported,    "IW port", "ex: IW DX",    0 },
 {    "ID",       2, 0, Unsupported,    "ID port", "ex: ID DX",    0 },
-{    "LDT",      3, 0, Unsupported,    "LDT [selector | LDT table selector]", "ex: LDT 45",   0 },
+{    "IW",       2, 0, Unsupported,    "IW port", "ex: IW DX",    0 },
+{    "IDT",      3, 0, cmdIdt,         "IDT [int-number | IDT base-address]", "ex: IDT 21",   0 },
+{    "LDT",      3, 0, cmdLdt,         "LDT [selector | LDT table selector]", "ex: LDT 45",   0 },
 {    "LINES",    5, 0, cmdLines,       "LINES [25 | 43 | 50 | 60]", "ex: LINES 43",   0 },
 {    "LOCALS",   6, 0, Unsupported,    "LOCALS", "ex: LOCALS",    0 },
 {    "M",        1, 0, Unsupported,    "M address1 L length address2", "ex: M 4000 L 80 8000",    0 },
@@ -148,7 +158,7 @@ TCommand Cmd[] = {
 {    "PRN",      3, 0, Unsupported,    "PRN [LPTx | COMx]", "ex: PRN LPT1",   0 },
 {    "PROC",     4, 0, Unsupported,    "PROC [-xo] [task-name]", "ex: PROC -x Explorer",  0 },
 {    "QUERY",    5, 0, Unsupported,    "QUERY [[-x] address] [process-type]", "ex: QUERY PROGMAN",    0 },
-{    "R",        1, 0, Unsupported,    "R [-d | register-name | register-name [=] value]", "ex: R EAX=50",    0 },
+{    "R",        1, 0, cmdReg,         "R [-d | register-name | register-name [=] value]", "ex: R EAX=50",    0 },
 {    "RS",       2, 0, Unsupported,    "RS Restore program screen", "ex: RS", 0 },
 {    "S",        1, 0, Unsupported,    "S [-cu] address L length data-string", "ex: S 0 L ffffff 'Help',0D,0A",   0 },
 {    "SERIAL",   6, 0, Unsupported,    "SERIAL [ON|VT100 [com-port] [baud-rate] | OFF]", "ex: SERIAL ON 2 19200", 0 },
@@ -161,20 +171,20 @@ TCommand Cmd[] = {
 {    "T",        1, 0, Unsupported,    "T [=address] [count]", "ex: T",   0 },
 {    "THREAD",   6, 0, Unsupported,    "THREAD [TCB | ID | task-name]", "ex: THREAD", 0 },
 {    "TRACE",    5, 0, Unsupported,    "TRACE [B | OFF | start]", "ex: TRACE 50", 0 },
-{    "TABLE",    5, 0, Unsupported,    "TABLE [[R] table-name | AUTOON | AUTOOFF]", "ex: TABLE test", 0 },
+{    "TABLE",    5, 0, cmdTable,       "TABLE [[R] table-name | AUTOON | AUTOOFF]", "ex: TABLE test", 0 },
 {    "TABS",     4, 0, Unsupported,    "TABS [1 - 8]", "ex: TABS 4",  0 },
 {    "TSS",      3, 0, Unsupported,    "TSS [TSS selector]", "ex: TSS",   0 },
 {    "TYPES",    5, 0, Unsupported,    "TYPES [type-name]", "ex: TYPE DWORD", 0 },
 {    "U",        1, 0, Unsupported,    "U [address [L length]]", "ex: U EIP-10",  0 },
 {    "VER",      3, 0, Unsupported,    "VER Display LinIce version", "ex: VER",   0 },
 {    "WATCH",    5, 0, Unsupported,    "WATCH address", "ex: WATCH VariableName", 0 },
-{    "WC",       2, 0, Unsupported,    "WC [window-size]", "ex: WC 8",    0 },
-{    "WD",       2, 0, Unsupported,    "WD [window-size]", "ex: WD 4",    0 },
+{    "WC",       2, 0, cmdWc,          "WC [window-size]", "ex: WC 8",    0 },
+{    "WD",       2, 0, cmdWd,          "WD [window-size]", "ex: WD 4",    0 },
 {    "WF",       2, 0, Unsupported,    "WF [-D] [B | W | D | F | P | *]", "ex: WF",   0 },
 {    "WIDTH",    5, 0, Unsupported,    "WIDTH [80-160]", "ex: WIDTH 100", 0 },
 {    "WL",       2, 0, Unsupported,    "WL [window-size]", "ex: WL 8",    0 },
 {    "WHAT",     4, 0, Unsupported,    "WHAT expression", "ex: WHAT system",  0 },
-{    "WR",       2, 0, Unsupported,    "WR Toggle register window", "ex: WR", 0 },
+{    "WR",       2, 0, cmdWr,          "WR Toggle register window", "ex: WR", 0 },
 {    "WS",       2, 0, Unsupported,    "WS [window-size]", "ex: WS 8",    0 },
 {    "WW",       2, 0, Unsupported,    "WW Toggle watch window", "ex: WW",    0 },
 {    "WX",       2, 0, Unsupported,    "WX [D | F | *]", "WX 8",  0 },
@@ -447,7 +457,7 @@ BOOL CommandExecute( char *pCmd )
             // assign it as a pointer to the first argument
 
             pCmd += Cmd[i].nLen;
-            while( (*pCmd==' ') && (*pCmd!=0) ) pCmd++;
+            while( *pCmd==' ' ) pCmd++;
 
             // Call the command function handler
 
@@ -528,7 +538,7 @@ void CommandBuildHelpIndex()
 ******************************************************************************/
 BOOL Unsupported(char *args, int subClass)
 {
-    dprint("Not yet implemented.\n");
+    dprinth(1, "Not yet implemented.\n");
 
     return( TRUE );
 }
@@ -561,7 +571,7 @@ int GetOnOff(char *args)
     if( len==3 && strnicmp(args, "off", 3)==0 )
         return( 2 );                    // OFF
 
-    dprint("Syntax error.\n");
+    dprinth(1, "Syntax error.\n");
 
     return( 0 );
 }

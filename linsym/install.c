@@ -51,6 +51,11 @@
 *                                                                             *
 ******************************************************************************/
 
+// These two addresses are read from the kernel symbol table.
+// They are used to set up debugger keyboard hook.
+DWORD handle_kbd_event = 0;
+DWORD handle_scancode = 0;
+
 extern int system2(char *command);
 
 /******************************************************************************
@@ -70,6 +75,63 @@ void GetString(char *p, char *pStr)
 }
 
 
+BOOL AbortLoad(char *sMsg)
+{
+    printf("%s\n", sMsg);
+    printf("Press a key to continue, or ESC to abort loading debugger\n");
+
+    return( getc(stdin)==27 );
+}
+
+BOOL GetKeyboardHandle()
+{
+    int items, found = 0;
+    FILE *fp;
+    DWORD address;
+    char code;
+    char sFunct[128];
+
+    fp = fopen("/boot/System.map", "r");
+    if( fp==NULL )
+    {
+        fp = fopen("./System.map", "r");
+        if( fp==NULL )
+        {
+            if( AbortLoad("Failed to open System.map file... Keyboard hooks will not work!") )
+                exit(-1);
+        }
+    }
+
+    // Look for the address of keyboard handler functions in the system map file
+    while( !feof(fp) )
+    {
+        items = fscanf(fp, "%X %c %s\n", &address, &code, &sFunct);
+        if( items==3 && strcmp("handle_kbd_event", sFunct)==0 )
+        {
+            printf("handle_kbd_event = %08X\n", address);
+            handle_kbd_event = address;
+            if( found++==2 )
+                break;
+        }
+        else
+        if( items==3 && strcmp("handle_scancode", sFunct)==0 )
+        {
+            printf("handle_scancode = %08X\n", address);
+            handle_scancode = address;
+            if( found++==2 )
+                break;
+        }
+    }
+
+    fclose(fp);
+
+    if( found < 2 && AbortLoad("Failed to locate kandle_kbd_event/handle_scancode... Keyboard hooks will not work!") )
+        exit(-1);
+
+    return( TRUE );
+}
+
+
 /******************************************************************************
 *                                                                             *
 *   void OpInstall()                                                          *
@@ -77,6 +139,8 @@ void GetString(char *p, char *pStr)
 *******************************************************************************
 *
 *   Loads linice.o module.  Feeds it the init file so it can configure itself.
+*   Looks for the System.map file and the keyboard routine "handle_kbd_event"
+*   to send to ice.o as a parameter, so it can hook into the keyboard handler.
 *
 ******************************************************************************/
 void OptInstall()
@@ -91,10 +155,16 @@ void OptInstall()
 
     // Remove linice device file (useful when debugging linice)
     // Anyways, this file should not exist there at this point...
-    system2("rm /dev/ice");
+    system2("rm /dev/ice >/dev/null");
+
+    GetKeyboardHandle();
 
     // Load the linice.o device driver module
-    status = system2("insmod linice.o ice_debug_level=1");
+    sprintf(sLine, "insmod linice.o ice_debug_level=1 kbd=%d scan=%d",
+        handle_kbd_event,
+        handle_scancode);
+
+    status = system2(sLine);
 
     // insmod must return 0 to load module correctly
     if( status==0 )

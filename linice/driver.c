@@ -66,12 +66,20 @@ MODULE_DESCRIPTION("Linux kernel debugger");
 //
 // Define parameters for the module:
 //  linice=<string>                     What???
+//  kbd=<address>                       Address of the handle_kbd_event function
+//  scan=<address>                      Address of the handle_scancode function
 //  ice_debug_level=[0 - 1]             Set the level for the output messages:
 //                                      0 - Do not display INFO level
 //                                      1 - Display INFO level messages
 
 MODULE_PARM(linice, "s");               // linice=<string>
 char *linice = "";                      // default value
+
+MODULE_PARM(kbd, "i");                  // kbd=<integer>
+DWORD kbd = 0;                          // default value
+
+MODULE_PARM(scan, "i");                 // scan=<integer>
+DWORD scan = 0;                         // default value
 
 MODULE_PARM(ice_debug_level, "i");      // ice_debug_level=<integer>
 int ice_debug_level = 1;                // default value
@@ -132,10 +140,13 @@ static PFNMKNOD sys_mknod;
 static PFNUNLINK sys_unlink;
 
 extern int InitPacket(PTINITPACKET pInit);
+extern int UserAddSymbolTable(void *pSymtab);
 
 extern void ice_free(BYTE *p);
 extern void ice_free_heap(BYTE *pHeap);
 
+extern void KeyboardHook(DWORD handle_kbd_event, DWORD handle_scancode);
+extern void KeyboardUnhook();
 extern void UnHookDebuger(void);
 
 /******************************************************************************
@@ -185,6 +196,9 @@ int init_module(void)
             // Module loaded ok
             if(val >= 0)
             {
+                // Hook the Linux keyboard handler function
+                KeyboardHook(kbd, scan);
+
                 // Register /proc/linice virtual file
                 proc_register(&proc_root, &linice_proc_entry);
 
@@ -228,6 +242,9 @@ void cleanup_module(void)
     mm_segment_t oldFS;
 
     INFO(("cleanup_module\n"));
+
+    // Unhook the keyboard hook
+    KeyboardUnhook();
 
     // Unregister /proc virtual file
     proc_unregister(&proc_root, linice_proc_entry.low_ino);
@@ -300,6 +317,9 @@ static int DriverIOCTL(struct inode *inode, struct file *file, unsigned int ioct
         break;
 
         case ICE_IOCTL_ADD_SYM:         // Add a symbol table
+            INFO(("ICE_IOCTL_ADD_SYM\n"));
+
+            retval = UserAddSymbolTable((void *)param);
             break;
 
         case ICE_IOCTL_REMOVE_SYM:      // Remove a symbol table

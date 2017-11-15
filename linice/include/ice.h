@@ -57,12 +57,17 @@ typedef struct
     BYTE *pHistoryBuffer;               // Pointer to a history buffer
     DWORD nHistorySize;                 // History buffer size
 
-    BOOL fLowercase;                    // Is output disassembly lowercased?
-
     BOOL fRunningIce;                   // Is ICE running?
 
     int layout;                         // Keyboard layout
     char keyFn[4][12][MAX_STRING];      // Key assignments for function keys
+
+    BYTE col[5];                        // Color attributes
+#define COL_NORMAL          0
+#define COL_BOLD            1
+#define COL_REVERSE         2
+#define COL_HELP            3
+#define COL_LINE            4
 
     // Statistics variables
     int nIntsPass[0x40];                // Number of interrupts received
@@ -134,6 +139,8 @@ typedef struct
     BOOL fPause;
     BOOL fSymbols;
 
+    CHAR BreakKey;                      // Key combination for break
+
 } TDEB, *PTDEB;
 
 extern TDEB deb;                        // Global data structure
@@ -157,6 +164,7 @@ typedef struct
 
 typedef struct
 {
+    BOOL fEnable;                       // Windowing enabled?
     TFRAME r;                           // Register window frame
     TFRAME d;                           // Data window frame
     TFRAME c;                           // Code window frame
@@ -228,7 +236,7 @@ extern PTOUT pOut;                      // Pointer to a current output device
 #define DP_SETSCROLLREGIONYY    0xF9    // Set top and bottom scroll region
 #define DP_SCROLLUP             0xF8    // Scroll up a scroll region
 #define DP_SCROLLDOWN           0xF7    // Scroll down a scroll region
-#define DP_SETWRITEATTR         0xF6    // Set the current write attribute index
+#define DP_SETCOLINDEX          0xF6    // Set the current line's color index
 
 
 /******************************************************************************
@@ -252,9 +260,11 @@ extern void PutKey( CHAR Key );
 
 extern int dprint( char *format, ... );
 extern BOOL dprinth( int nLineCount, char *format, ... );
+extern int PrintLine(char *format,...);
 extern void dputc(UCHAR c);
 
 extern BOOL CommandExecute( char *pCmd );
+
 extern void HistoryDraw(void);
 extern DWORD HistoryDisplay(DWORD hView, int nDir);
 extern DWORD HistoryGetTop(void);
@@ -264,9 +274,15 @@ extern void ClearHistory(void);
 extern BYTE ReadCRTC(int index);
 extern void WriteCRTC(int index, int value);
 extern int GetByte(WORD sel, DWORD offset);
+extern void memset_w(void *dest, WORD data, int size);
 
 extern BOOL AddrIsPresent(PTADDRDESC pAddr);
 extern BYTE AddrGetByte(PTADDRDESC pAddr);
+
+// Command parser helpers:
+extern BOOL Expression(DWORD *value, char *sExpr, char **psNext );
+extern int Evaluate( char *sExpr, char **psNext );
+extern int GetOnOff(char *args);
 
 
 #endif //  _ICE_H_

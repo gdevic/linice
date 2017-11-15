@@ -69,7 +69,9 @@ static int sens = 8;                    // Mouse sensitivity
 void MouseHandler(PTMPACKET pPacket)
 {
     mouseX += pPacket->Xd;
-    mouseY += pPacket->Yd;
+    mouseY -= pPacket->Yd;
+
+    //dprint("%02X %02X %d %d \n", mouseX, mouseY, pPacket->Xd, pPacket->Yd);
 
     if( mouseX < 0 )
         mouseX = 0;

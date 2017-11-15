@@ -48,8 +48,6 @@
 *                                                                             *
 ******************************************************************************/
 
-static char printBuf[256];
-
 /******************************************************************************
 *                                                                             *
 *   Functions                                                                 *
@@ -77,6 +75,58 @@ void dputc(UCHAR c)
 
 /******************************************************************************
 *                                                                             *
+*   int PrintLine(char *format,...)                                           *
+*                                                                             *
+*******************************************************************************
+*
+*   Prints a loosely formatted header line.
+*
+*   Where:
+*       format is the standard printf() format string
+*       ... standard printf() list of arguments.
+*
+*   Returns:
+*       number of characters actually printed.
+*
+******************************************************************************/
+int PrintLine(char *format,...)
+{
+    char printBuf[256];
+    char *pBuf = printBuf, *p;
+    int written;
+    va_list arg;
+
+    // Print the line into a string
+    va_start( arg, format );
+    written = vsprintf(pBuf, format, arg);
+    va_end(arg);
+
+    // Append enough spaces to fill in a current line width
+    memset(pBuf+written, ' ', pOut->sizeX - written);
+    pBuf[pOut->sizeX] = '\n';
+    pBuf[pOut->sizeX+1]   = 0;
+
+    // Change spaces into the graphics line
+    p = pBuf;
+    while( *p )
+    {
+        if( *p==' ' )
+            *p = 0xC4;                  // Horizontal line extended code
+        p++;
+    }
+
+    // Set the color that is assigned for a header line
+    dprint("%c%c", DP_SETCOLINDEX, COL_LINE);
+
+    // Send the string to a current output device driver
+    pOut->sprint(pBuf);
+
+    return( pOut->sizeX );
+}
+
+
+/******************************************************************************
+*                                                                             *
 *   int dprint( char *format, ... )                                           *
 *                                                                             *
 *******************************************************************************
@@ -93,6 +143,7 @@ void dputc(UCHAR c)
 ******************************************************************************/
 int dprint( char *format, ... )
 {
+    char printBuf[256];
     char *pBuf = printBuf;
     int written;
     va_list arg;
@@ -120,6 +171,7 @@ int dprint( char *format, ... )
 *
 *   Where:
 *       nLineCount is the line count for printing in the history buffer
+*           Start with 1 and increment for every line.
 *       format is the standard printf() format string
 *       ... standard printf() list of arguments.
 *
@@ -130,6 +182,7 @@ int dprint( char *format, ... )
 ******************************************************************************/
 BOOL dprinth( int nLineCount, char *format, ... )
 {
+    char printBuf[256];
     CHAR Key;
     char *pBuf = printBuf;
     int written;
@@ -143,19 +196,22 @@ BOOL dprinth( int nLineCount, char *format, ... )
     // If we are printing in the history buffer, store it there as well
     if( pOut->y > pWin->h.Top )
     {
-//        HistoryAdd(pBuf);
+        HistoryAdd(pBuf);
         pOut->sprint(pBuf);
-#if 0
+
         // If we are printing to a history buffer, and the line count is reached,
         // print the help line and wait for a keypress
         if( (nLineCount % pWin->h.nLines)==0 )
         {
-            dprint("%c%c%c    Press any key to continue; Esc to cancel\r", DP_SETCURSORXY, 1+0, 1+pOut->sizeY-1);
+            dprint("%c%c%c%c%c%c    Press any key to continue; Esc to cancel\r%c",
+                DP_SAVEXY,
+                DP_SETCURSORXY, 1+0, 1+pOut->sizeY-1,
+                DP_SETCOLINDEX, COL_HELP,
+                DP_RESTOREXY);
             Key = GetKey(TRUE);
             if( Key==ESC )
                 return( FALSE );
         }
-#endif
     }
     else
     {
@@ -165,5 +221,3 @@ BOOL dprinth( int nLineCount, char *format, ... )
 
     return( TRUE );
 }
-
-

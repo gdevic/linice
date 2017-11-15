@@ -65,30 +65,35 @@ typedef struct
 // SYMBOL TABLE STRUCTURE
 /////////////////////////////////////////////////////////////////
 
+#define MAGIC_SYMTAB        0x33445566  // Magic symbol ID number
+#define MAX_MODULE_NAME     16          // Length of the module name string (incl. 0)
+#define MAX_SYMBOL_NAME     32          // Length of a symbol name string (incl. 0)
+
+typedef struct
+{
+    DWORD dwAddress;                    // Symbol address
+    DWORD Type;                         // Symbol type code
+    char name[MAX_SYMBOL_NAME];         // ASCIIZ Symbol name
+} TSYM, *PTSYM;
+
 typedef struct tagTSYMTAB
 {
-    DWORD size;                         // Size of this structure
+    DWORD magic;                        // Magic ID number
+    DWORD size;                         // Size of the whole structure
+    char name[MAX_MODULE_NAME];         // Name of the symbol table
+    DWORD nElem;                        // How many symbols are defined here
+    DWORD Flags;                        // Flags
+
     struct tagTSYMTAB *next;            // Next table in a list
-    char name[16];                      // Name of the symbol table
-    DWORD nElem;                        // How many symbols are here
 
-    DWORD pType;        // = &address[nElem]
-    DWORD pName;        // = &address[nElem * 2]
-    DWORD pNamePool;    // = &address[nElem * 3]
-
-    DWORD address[1];                   // Array of symbol addresses
-/*  [0..nElem]      Symbol address
-pType:
-    [0..nElem]      Symbol type
-pName:
-    [0..nElem]      Offest into symbols names pool
-pNameLookup:
-    ['a'..'z','*']  27 offsets into symbols names pool, indexed
-pNamePool:
-    [ASCIIZ,...]    Pool of symbol names
-*/
+    TSYM sym[1];                        // Symbol array
+/*  [0..nElem]      Array of symbol structures */
 
 } TSYMTAB, *PTSYMTAB;
+
+// If symbols are sorted by address, we will use binary search,
+// otherwise, we are using linear search
+#define SYMF_SORTED     0x0001          // Symbols are sorted by address
 
 
 /////////////////////////////////////////////////////////////////
@@ -99,7 +104,7 @@ pNamePool:
 
 #define ICE_IOCTL_INIT       _IOC(_IOC_WRITE, ICE_IOC_MAGIC, 0x81, sizeof(TINITPACKET))
 #define ICE_IOCTL_ADD_SYM    _IOC(_IOC_WRITE, ICE_IOC_MAGIC, 0x82, sizeof(TSYMTAB))
-#define ICE_IOCTL_REMOVE_SYM _IOC(_IOC_WRITE, ICE_IOC_MAGIC, 0x83, sizeof(TSYMTAB))
+#define ICE_IOCTL_REMOVE_SYM _IOC(_IOC_WRITE, ICE_IOC_MAGIC, 0x83, MAX_MODULE_NAME)
 
 
 #endif //  _ICE_IOCTL_H_

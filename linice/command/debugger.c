@@ -69,16 +69,29 @@ void DebuggerEnter(void)
 {
     BOOL fContinue = TRUE;
 
+    // Enable windowing and save background
+    pWin->fEnable = TRUE;
     dputc(DP_SAVEBACKGROUND);
 
     // Set the new CS:EIP for code disasembly
     deb.codeAddr.sel = deb.r->cs;
     deb.codeAddr.offset = deb.r->eip;
 
+    memcpy(&deb.r_prev, deb.r, sizeof(TREGS));
+
     // Recalculate window locations based on visibility and number of lines
     // and repaint all windows
 
     RecalculateDrawWindows();
+
+    // Print the reason for break into the debugger
+//    if( deb.nInterrupt==1 )
+//        dprinth(1, "Breakpoint due to INT1\n");
+
+    dprinth(1, "Breakpoint due to INT%02X\n", deb.nInterrupt);
+
+//    if( deb.nInterrupt==3 )
+//        dprinth(1, "Breakpoint due to INT3\n");
 
     while( fContinue )
     {
@@ -87,6 +100,11 @@ void DebuggerEnter(void)
         fContinue = CommandExecute( sCmd+1 );   // Skip the prompt
     }
 
+memcpy(deb.r, &deb.r_prev, sizeof(TREGS));
+
+
+    // Disable windowing and restore background
+    pWin->fEnable = FALSE;
 //    dputc(DP_RESTOREBACKGROUND);
 }
 

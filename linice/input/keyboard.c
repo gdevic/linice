@@ -33,6 +33,7 @@
 #include "ice.h"                        // Include main debugger structures
 #include "ibm-pc.h"                     // Include hardware defines
 #include "intel.h"                      // Include processor specific stuff
+#include "debug.h"                      // Include our dprintk()
 
 
 /******************************************************************************
@@ -46,12 +47,6 @@
 *   Local Defines, Variables and Macros                                       *
 *                                                                             *
 ******************************************************************************/
-
-#define SC_CONTROL          29          // Control key key scan code
-#define SC_ALT              56          // Alt key scan code
-#define SC_LEFT_SHIFT       42          // Left shift key scan code
-#define SC_RIGHT_SHIFT      54          // Right shift key scan code
-#define SC_CAPS_LOCK        58          // Caps lock key scan code
 
 static const BYTE code_table[MAX_LAYOUT][2][128] = {
 {    //                                         LAYOUT_US
@@ -100,9 +95,14 @@ static const BYTE code_table[MAX_LAYOUT][2][128] = {
 static BOOL fShift = FALSE;
 static BOOL fAlt = FALSE;
 static BOOL fControl = FALSE;
-
 static BOOL fCapsLock = FALSE;
 
+// Keyboard hook variables
+
+typedef void (*TLinuxHandleScancode)(unsigned char, unsigned int);
+static TLinuxHandleScancode LinuxHandleScancode;
+static DWORD *pKbdHook;                     // Original kbd hook address
+static DWORD KbdHook;                       // Original kbd hook value
 
 /******************************************************************************
 *                                                                             *
@@ -111,7 +111,6 @@ static BOOL fCapsLock = FALSE;
 ******************************************************************************/
 
 extern void MouseHandler(PTMPACKET pPacket);
-
 
 
 /******************************************************************************
@@ -125,8 +124,12 @@ BYTE GetAux()
 
     while( ((inp(KBD_STATUS) & STATUS_AUXB)==0 )  && timeout) timeout--;
 
+    if( timeout==0 )
+        dprint("PS2 TIMEOUT\n");
+
     return( inp(KBD_DATA) );
 }
+
 
 /******************************************************************************
 *                                                                             *
@@ -146,17 +149,15 @@ BYTE GetAux()
 ******************************************************************************/
 void KeyboardHandler(void)
 {
-    CHAR AsciiCode, bNext;
+    CHAR AsciiCode;
     BYTE ScanCode;
-    BYTE Code, Pressed;
+    BYTE Code, fPressed;
     TMPACKET mPacket;
     BYTE packet[3];
 
     // Check the status of the controller; do nothing for now, but soon
     // we'll have to handle PS/2 mouse here
     Code = inp( KBD_STATUS );
-
-    AsciiCode = 0;
 
     // If a PS/2 mouse was moved, eat the codes
     if( Code & STATUS_AUXB )
@@ -167,12 +168,14 @@ void KeyboardHandler(void)
         packet[1] = GetAux();
         packet[2] = GetAux();
 
+        //dprint("%02X %02X %02X \n", packet[0], packet[1], packet[2]);
+
         // Map the PS2 mouse packets into internal mouse packet structure
         //
         //  D7   D6   D5   D4   D3   D2   D1   D0
         //  YV   XV   YS   XS   1    CB   RB   LB
-        //  < Y displacement                    >
         //  < X displacement                    >
+        //  < Y displacement                    >
 
         mPacket.buttons =
             ((packet[0] & 1) << 2) |        // LB
@@ -180,14 +183,14 @@ void KeyboardHandler(void)
             ((packet[0] & 4) >> 1);         // CB
 
         if( packet[0] & 0x20 )
-            mPacket.Yd = -(256 - packet[1]);
+            mPacket.Yd = -(256 - packet[2]);
         else
-            mPacket.Yd = packet[1];
+            mPacket.Yd = packet[2];
 
         if( packet[0] & 0x10 )
-            mPacket.Xd = -(256 - packet[2]);
+            mPacket.Xd = -(256 - packet[1]);
         else
-            mPacket.Xd = packet[2];
+            mPacket.Xd = packet[1];
 
         // Call the common mouse handler
 
@@ -198,99 +201,69 @@ void KeyboardHandler(void)
         // Read the keyboard scan code
 
         ScanCode = inp( KBD_DATA );
+        AsciiCode = 0;
 
         // On a key press, bit 7 of the scan code is 0.  When a key is being
         // released, bit 7 is 1.
 
         Code = ScanCode & 0x7F;
-        Pressed = (ScanCode >> 7) ^ 1;
+        fPressed = (ScanCode >> 7) ^ 1;
 
-        // Check for shift keys
-        //
-        if( (Code == SC_LEFT_SHIFT) || (Code == SC_RIGHT_SHIFT) )
+        switch( Code )
         {
-            // Determine if shift was pressed or depressed (bit 7):
-            // fShift is 1 if shift has been pressed
-            //           0 if shift has been released
-            fShift = Pressed;
-        }
-        else
+            case SC_LEFT_SHIFT:         // Check for shift keys: left and right
+            case SC_RIGHT_SHIFT:
+                fShift = fPressed;
+                break;
 
-        // Check for control key
-        //
-        if( Code == SC_CONTROL )
-        {
-            // Determine if control was pressed or depressed (bit 7)
-            // fControl is 1 if control key has been pressed
-            //             0 if control key has been released
-            fControl = Pressed;
-        }
-        else
+            case SC_CONTROL:            // Check for CTRL key
+                fControl = fPressed;
+                break;
 
-        // Check for alt keys
-        //
-        if( Code == SC_ALT )
-        {
-            // Determine if alt was pressed or depressed (bit 7)
-            // fAlt is 1 if alt key has been pressed
-            //         0 if alt key has been released
-            fAlt = Pressed;
-        }
-        else
+            case SC_ALT:                // Check for ALT keys
+                fAlt = fPressed;
+                break;
 
-        // Check for caps lock key
-        //
-        if( Code == SC_CAPS_LOCK )
-        {
-            // Toggle caps lock state on press
-            fCapsLock ^= Pressed;
-        }
-        else
+            case SC_CAPS_LOCK:          // Check for caps lock key
+                fCapsLock ^= fPressed;  // Toggle caps lock state on press
+                break;
 
-        // Now return if key was released.  Nothing to do.
-        // Store the code in a queue if a key was pressed.
-        //
-        if( Pressed )
-        {
-            // Map a scancode to an ASCII code
-            //
-            if( fShift )
-                AsciiCode = code_table[pIce->layout][1][ Code ];
-            else
-                AsciiCode = code_table[pIce->layout][0][ Code ];
+            default:
 
-            // Treat function codes as special case
-            if( (AsciiCode>=F1) && (AsciiCode<=F12) )
+            // Now return if key was released.  Nothing to do.
+            // Store the code in a queue if a key was pressed.
+
+            if( fPressed )
             {
-                if( fShift )
-                    AsciiCode += 1 * 12;
+                // Map a scancode to an ASCII code
+                AsciiCode = code_table[pIce->layout][fShift][ Code ];
+
+                // Treat function codes as special case
+                if( (AsciiCode>=F1) && (AsciiCode<=F12) )
+                {
+                    if( fShift )
+                        AsciiCode += 1 * 12;
+                    else
+                    if( fAlt )
+                        AsciiCode += 2 * 12;
+                    else
+                    if( fControl )
+                        AsciiCode += 3 * 12;
+                }
                 else
-                if( fAlt )
-                    AsciiCode += 2 * 12;
-                else
-                if( fControl )
-                    AsciiCode += 3 * 12;
+                {
+                    // Caps Lock key inverts the caps state of the alphabetical characters
+                    if( isalpha(AsciiCode) && fCapsLock )
+                        AsciiCode ^= 0x20;
+
+                    if( fAlt )
+                        AsciiCode |= CHAR_ALT;
+
+                    if( fControl )
+                        AsciiCode |= CHAR_CTRL;
+                }
             }
-            else
-            {
-                // Caps Lock key inverts the caps state of the alphabetical characters
-                if( isalpha(AsciiCode) && fCapsLock )
-                    AsciiCode ^= 0x20;
-
-                // Shift key also inverts the caps state of the alphabetical characters
-                if( isalpha(AsciiCode) && fShift )
-                    AsciiCode ^= 0x20;
-                else
-                if( fShift )
-                    AsciiCode |= CHAR_SHIFT;
-
-                if( fAlt )
-                    AsciiCode |= CHAR_ALT;
-
-                if( fControl )
-                    AsciiCode |= CHAR_CTRL;
-            }
-        }
+        } // switch
 
         if( AsciiCode != 0 )
         {
@@ -298,6 +271,7 @@ void KeyboardHandler(void)
             // the input keyboard queue
 
             PutKey(AsciiCode);
+            //dprint("%c%c%c%02X ", DP_SETCURSORXY, 1, 1, AsciiCode);
         }
 
         // Acknowledge the keyboard controller
@@ -308,5 +282,92 @@ void KeyboardHandler(void)
         outp( ScanCode, KBD_CONTROL );
         inp( PORT_DUMMY );
     }
+}
+
+
+void LiniceHandleScancode(BYTE scancode, BOOL fPressed)
+{
+    static CHAR Key = 0;
+
+    // Keep track of the CTRL and ALT keys since the break combination
+    // have to include one of them
+
+    // Insert the current ASCII code
+    Key = (Key & ~0xFF) | code_table[pIce->layout][0][scancode];
+
+    // Add the shift state
+    if( scancode==SC_CONTROL )
+        Key = fPressed? Key | CHAR_CTRL : Key & ~CHAR_CTRL;
+
+    if( scancode==SC_ALT )
+        Key = fPressed? Key | CHAR_ALT : Key & ~CHAR_ALT;
+
+    if( fPressed && deb.BreakKey==Key )
+    {
+        // Break into the linice...
+        // Since we will take control over the keyboard, need to ack it
+        // and put host into some known state
+
+        // Depress control or alt key
+        if( Key & SC_CONTROL )
+            (LinuxHandleScancode)(SC_CONTROL, !fPressed);
+        else
+            (LinuxHandleScancode)(SC_ALT, !fPressed);
+
+        // We need to rebuild the stack frame... Back up what the Linux keyboard
+        // handler did and form the frame of our own at that location...
+
+//        INFO(("BREAK!!\n"));
+
+        return;
+    }
+
+    // Chain the call to the original handle_scancode
+    (LinuxHandleScancode)(scancode, fPressed);
+}
+
+
+void KeyboardHook(DWORD handle_kbd_event, DWORD handle_scancode)
+{
+    BYTE pattern[5] = { 0xE8, 0, 0, 0, 0 };
+    DWORD *pOffset = (DWORD *)&pattern[1];
+    int nSearchLen = 1000;               // Located within so many bytes
+
+    // Search starting from address handle_kbd_event for the call to a function handle_scancode
+    do  // We increment handle_kbd_event as we go...
+    {
+        handle_kbd_event++;
+
+        // Calculate the possible offset that a CALL instruction would have if
+        // located at this address
+        *pOffset = handle_scancode - (handle_kbd_event + 5);
+
+    } while( memcmp((void *)handle_kbd_event, pattern, 5)!=0 && --nSearchLen );
+
+    if( nSearchLen==0 )
+    {
+        // Did not find the call ?!
+        INFO(("Did not find a call to handle_scancode!\n"));
+    }
+    else
+    {
+        INFO(("Call to handle_scancode at %08X\n", (int)handle_kbd_event));
+        pOffset = (DWORD *)(handle_kbd_event + 1);
+
+        // Store the original offset and insert our handler in place of the call
+        pKbdHook = pOffset;       // Address to hook
+        KbdHook = *pOffset;       // Original value that was there
+
+        *pOffset = (DWORD) LiniceHandleScancode - ((DWORD) pOffset + 4);
+        LinuxHandleScancode = (TLinuxHandleScancode) handle_scancode;
+    }
+}
+
+
+void KeyboardUnhook()
+{
+    // Restore original call to handle_scancode within the handle_kbd_event function
+
+    *(pKbdHook) = KbdHook;
 }
 

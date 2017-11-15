@@ -68,6 +68,41 @@
 ******************************************************************************/
 BOOL cmdXit(char *args, int subClass)
 {
+    // If we entered debugger via INT1 or INT3, we need to advance eip first
+    // to skip those 1-byte codes
+
+    // TODO: How about 2-byte counterparts????
+
+    if( deb.nInterrupt==1 || deb.nInterrupt==3 )
+    {
+//        deb.r->eip += 1;
+    }
+
+    return( FALSE );
+}
+
+
+/******************************************************************************
+*                                                                             *
+*   BOOL cmdGo(char *args, int subClass)                                      *
+*                                                                             *
+*******************************************************************************
+*
+*   Runs the interrupted program
+*
+******************************************************************************/
+BOOL cmdGo(char *args, int subClass)
+{
+    // If we entered debugger via INT1 or INT3, we need to advance eip first
+    // to skip those 1-byte codes
+
+    // TODO: How about 2-byte counterparts????
+
+    if( deb.nInterrupt==1 || deb.nInterrupt==3 )
+    {
+        deb.r->eip += 1;
+    }
+
     return( FALSE );
 }
 

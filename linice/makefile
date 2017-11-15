@@ -7,14 +7,14 @@ DEF = -D__KERNEL__ -D_LOOSE_KERNEL_NAMES -DMODULE -DLINUX -DDBG
 CC = gcc
 AS = nasm
 
-CFLAGS = -gstabs+ -Wall $(DEF) -O -I$(INC) -I$(H1) -I$(H2)
-#CFLAGS =         -Wall $(DEF) -O -I$(INC) -I$(H1) -I$(H2)
+#CFLAGS = -gstabs+ -Wall $(DEF) -O -I$(INC) -I$(H1) -I$(H2)
+CFLAGS =         -Wall $(DEF) -O -I$(INC) -I$(H1) -I$(H2)
 
 
 all:	../bin/linice.o
 
 clean:
-	rm -f ../bin/*
+	rm -f ../bin/linice.o
 	rm -f *.o *~ core
 
 ../bin/linice.o:	driver.o	\
@@ -22,6 +22,7 @@ clean:
 			memaccess.o	\
 			eval.o		\
 			init.o		\
+			symbols.o	\
 			proc.o		\
 			edlin.o		\
 			debugger.o	\
@@ -33,6 +34,8 @@ clean:
 			data.o		\
 			code.o		\
 			customization.o		\
+			windowcontrol.o		\
+			sysinfo.o	\
 			flow.o		\
 			history.o	\
 			input.o		\
@@ -43,9 +46,7 @@ clean:
 			window.o	\
 			vga.o		\
             serial_out.o
-	$(LD) -r $^ -o linice.o
-	cp linice.o ../bin/linice.o
-	cp linice.dat ../bin/linice.dat
+	$(LD) -r $^ -o ../bin/linice.o
 
 driver.o:	driver.c
 	$(CC) $(CFLAGS) -c driver.c
@@ -58,6 +59,9 @@ memaccess.o:	memaccess.c
 
 init.o:		init.c
 	$(CC) $(CFLAGS) -c init.c
+
+symbols.o:		symbols.c
+	$(CC) $(CFLAGS) -c symbols.c
 
 proc.o:		proc.c
 	$(CC) $(CFLAGS) -c proc.c
@@ -97,6 +101,12 @@ code.o:		command/code.c
 
 customization.o:		command/customization.c
 	$(CC) $(CFLAGS) -c command/customization.c
+
+windowcontrol.o:		command/windowcontrol.c
+	$(CC) $(CFLAGS) -c command/windowcontrol.c
+
+sysinfo.o:		command/sysinfo.c
+	$(CC) $(CFLAGS) -c command/sysinfo.c
 
 flow.o:		command/flow.c
 	$(CC) $(CFLAGS) -c command/flow.c

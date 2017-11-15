@@ -60,8 +60,19 @@
 #define KBD_DATA            0x60
 #define KBD_CONTROL         0x64
 #define KBD_STATUS          0x64
+#define STATUS_INPB         0x02
 #define STATUS_AUXB         0x20
 #define KBD_AUXD            0x02
+
+//-----------------------------------------------------------------------------
+// Keyboard Scancodes
+//-----------------------------------------------------------------------------
+
+#define SC_CONTROL          29          // Control key key scan code
+#define SC_ALT              56          // Alt key scan code
+#define SC_LEFT_SHIFT       42          // Left shift key scan code
+#define SC_RIGHT_SHIFT      54          // Right shift key scan code
+#define SC_CAPS_LOCK        58          // Caps lock key scan code
 
 //-----------------------------------------------------------------------------
 // Serial 8250/16450/16550

@@ -12,7 +12,7 @@
 
     Module Description:
 
-        This module contains 
+        This module contains
 
 *******************************************************************************
 *                                                                             *
@@ -105,7 +105,7 @@ int system2(char *command)
         else
             return( status );
     } while( 1 );
-}    
+}
 
 
 /******************************************************************************
@@ -133,7 +133,7 @@ void OptUninstall()
     {
         printf("Error unloading linice module (%d)!\n", status);
     }
-}    
+}
 
 /******************************************************************************
 *                                                                             *
@@ -151,10 +151,11 @@ void OptHelp()
     printf("   -i --install          loads debugger into the memory\n");
     printf("   -s --symbol <name>    adds a symbol table\n");
     printf("   -r --remove <name>    removes a symbol table\n");
+    printf("   -t --translate <map> <sym> translates a map file into a symbol table\n");
     printf("   -u --uninstall        removes debugger from the memory\n");
     printf("   -h --help             this help\n");
     printf("   -v --version          print version number\n");
-}    
+}
 
 /******************************************************************************
 *                                                                             *
@@ -167,11 +168,11 @@ void OptHelp()
 ******************************************************************************/
 void OptVersion()
 {
-    printf("LOADER version %d.%02d build %d\n", 
+    printf("LOADER version %d.%02d build %d\n",
         VER_LOADER >> 8, VER_LOADER & 0xFF, VER_LOADER_BUILD);
 
 
-}    
+}
 
 /******************************************************************************
 *                                                                             *
@@ -186,6 +187,7 @@ void OptVersion()
 *       -i  or  --install        installs debugger module (same as `insmod linice.o')
 *       -s  or  --symbol         adds a symbol table (made by 'nm' command) <name>
 *       -r  or  --remove         removes a symbol table <name>
+*       -t  or  --translate      translate map file <name1) into a symbol table <name2)
 *       -u  or  --uninstall      removes the debugger module (same as `rmmod linice')
 *       -v  or  --version        prints linice version
 *
@@ -218,10 +220,22 @@ int main(int argn, char *argp[])
                     OptUninstall();
 
                 if( (strcmp(ptr, "s")==0) || (strcmp(ptr, "-symbol")==0) )
-                    OptAddSymbolTable(argp[++i]);
+                {
+                    OptAddSymbolTable(argp[i+1]);
+                    i++;
+                }
 
                 if( (strcmp(ptr, "r")==0) || (strcmp(ptr, "-remove")==0) )
-                    OptRemoveSymbolTable(argp[++i]);
+                {
+                    OptRemoveSymbolTable(argp[i+1]);
+                    i++;
+                }
+
+                if( (strcmp(ptr, "t")==0) || (strcmp(ptr, "-translate")==0) )
+                {
+                    OptTranslateSymbolTable(argp[i+1], argp[i+2]);
+                    i+=2;
+                }
 
                 if( (strcmp(ptr, "h")==0) || (strcmp(ptr, "-help")==0) )
                     OptHelp();
@@ -235,4 +249,4 @@ int main(int argn, char *argp[])
     }
 
     return( 0 );
-}    
+}

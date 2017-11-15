@@ -275,8 +275,8 @@ DWORD InterruptHandler( DWORD nInt, PTREGS pRegs )
                 SerialHandler(1);
                 break;
 
-            case 0x2C:      // PS/2 Mouse
-                MouseHandler();
+            case 0x2C:      // PS/2 Mouse - handled within the kbd function
+                KeyboardHandler();
                 break;
 
             case 0x0E:      // PAGE FAULT

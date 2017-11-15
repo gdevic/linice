@@ -1,8 +1,8 @@
 /******************************************************************************
 *                                                                             *
-*   Module:     customization.c                                               *
+*   Module:     sysinfo.c                                                     *
 *                                                                             *
-*   Date:       04/15/01                                                      *
+*   Date:       04/25/01                                                      *
 *                                                                             *
 *   Copyright (c) 2001 - 2001 Goran Devic                                     *
 *                                                                             *
@@ -12,7 +12,7 @@
 
     Module Description:
 
-        Customization commands
+        System information commands
 
 *******************************************************************************
 *                                                                             *
@@ -20,7 +20,7 @@
 *                                                                             *
 *   DATE     DESCRIPTION OF CHANGES                               AUTHOR      *
 * --------   ---------------------------------------------------  ----------- *
-* 04/15/01   Original                                             Goran Devic *
+* 04/25/01   Original                                             Goran Devic *
 * --------   ---------------------------------------------------  ----------- *
 *******************************************************************************
 *   Include Files                                                             *
@@ -45,24 +45,12 @@
 *                                                                             *
 ******************************************************************************/
 
-// Structure used by SET command
-typedef struct
-{
-    char *sVar;                         // Variable name
-    int  sLen;                          // Length of the name
-    BOOL *pVal;                         // Address of the value variable
-} TSETVAR, *PTSETVAR;
-
-static TSETVAR SetVar[] = {
-{ "altscr",   6, &deb.fAltscr },
-{ "code" ,    4, &deb.fCode },
-{ "faults",   6, &deb.fFaults },
-{ "i1here",   6, &deb.fI1Here },
-{ "i3here",   6, &deb.fI3Here },
-{ "lowercase",9, &deb.fLowercase },
-{ "pause",    5, &deb.fPause },
-{ "symbols",  7, &deb.fSymbols },
-{ NULL, }
+// Define Global Descriptor Table system selector types
+static char *gdtSystem[16] = {
+    "Reserved",  "TSS16   ",  "LDT     ",  "TSS16   ",
+    "CallG16 ",  "TaskG16 ",  "IntG16  ",  "TrapG16 ",
+    "Reserved",  "TSS32   ",  "Reserved",  "TSS32   ",
+    "CallG32 ",  "TaskG32 ",  "IntG32  ",  "TrapG32 "
 };
 
 /******************************************************************************
@@ -77,35 +65,77 @@ static TSETVAR SetVar[] = {
 *                                                                             *
 ******************************************************************************/
 
-extern void RecalculateDrawWindows();
+BOOL PrintGDT(int nLine, DWORD base, DWORD sel)
+{
+    TGDT_Gate *pGdt = (TGDT_Gate *) (base + (sel & ~7));
+
+    return(dprinth(nLine, "%04X  %s  %08X  %08X  %d    %s  %s\n",
+        sel,
+        gdtSystem[pGdt->type & 0xF],
+        GET_GDT_BASE(pGdt),
+        pGdt->granularity?
+            (GET_GDT_LIMIT(pGdt) << 12) | 0xFFF
+           : GET_GDT_LIMIT(pGdt),
+        pGdt->dpl,
+        pGdt->present? "P ":"NP",
+        "."));
+}
+
+
+BOOL PrintIDT(int nLine, DWORD base, DWORD intnum)
+{
+    TIDT_Gate *pIdt = (TIDT_Gate *) (base + intnum * sizeof(TIDT_Gate));
+
+    return(dprinth(nLine, "%04X  %s  %04X:%08X  DPL=%d    %s\n",
+        intnum,
+        gdtSystem[pIdt->type & 0xF],
+        pIdt->selector,
+        GET_IDT_BASE(pIdt),
+        pIdt->dpl,
+        pIdt->present? "P ":"NP"));
+}
+
 
 /******************************************************************************
 *                                                                             *
-*   BOOL cmdCode(char *args, int subClass)                                    *
+*   BOOL cmdGdt(char *args, int subClass)                                     *
 *                                                                             *
 *******************************************************************************
 *
-*   CODE [on | off]     - Set code view in disassembly output
-*   CODE                - Display state of the code setting
+*   Display the Global Descriptor Table
 *
 ******************************************************************************/
-BOOL cmdCode(char *args, int subClass)
+BOOL cmdGdt(char *args, int subClass)
 {
-    switch( GetOnOff(args) )
+    int nLine = 2;
+    TDescriptor *pDesc = &deb.gdt;
+    DWORD sel;
+
+    if( *args != 0 )
     {
-        case 1:         // On
-            deb.fCode = TRUE;
-            RecalculateDrawWindows();
-        break;
+        // Display just the given selector or, if the selector given is larger
+        // than 80000000h, display the GDT from that address
 
-        case 2:         // Off
-            deb.fCode = FALSE;
-            RecalculateDrawWindows();
-        break;
+        sel = Evaluate(args, &args);
+        if( sel < 0x80000000 )
+        {
+            PrintGDT(1, pDesc->base, sel);
+            return( TRUE );
+        }
 
-        case 3:         // Display the state of the CODE view
-            dprinth(1, "Code is %s\n", deb.fCode? "on":"off");
-        break;
+        // Proceed with the complete GDT at the given address
+        pDesc = (TDescriptor *) sel;
+    }
+
+    // No parameters - display complete GDT
+
+    dprinth(1, "GDT base=%08X  limit=%X  (%d entries)\n",
+        pDesc->base, pDesc->limit, (pDesc->limit+1) / sizeof(TGDT_Gate));
+
+    sel = 0x0008;
+    while( PrintGDT(nLine++, pDesc->base, sel)==TRUE && sel<pDesc->limit)
+    {
+        sel += sizeof(TGDT_Gate);
     }
 
     return( TRUE );
@@ -114,79 +144,15 @@ BOOL cmdCode(char *args, int subClass)
 
 /******************************************************************************
 *                                                                             *
-*   BOOL cmdSet(char *args, int subClass)                                     *
+*   BOOL cmdLdt(char *args, int subClass)                                     *
 *                                                                             *
 *******************************************************************************
 *
-*   Multiple SET variable handling:
-*       SET ALTSCR [ON | OFF]
-*       SET CODE   [ON | OFF]
-*       SET FAULTS [ON | OFF]
-*       SET I1HERE [ON | OFF]
-*       SET I3HERE [ON | OFF]
-*       SET LOWERCASE [ON | OFF]
-*       SET PAUSE  [ON | OFF]
-*       SET SYMBOLS [ON | OFF]
+*   Display the Local Descriptor Table
 *
 ******************************************************************************/
-BOOL cmdSet(char *args, int subClass)
+BOOL cmdLdt(char *args, int subClass)
 {
-    int nLine = 1;
-    PTSETVAR pVar;
-
-    pVar = SetVar;
-
-    if( *args==0 )
-    {
-        // Simple SET command without parameters - list all variables
-        while( pVar->sVar )
-        {
-            if(dprinth(nLine++, "%s is %s\n", pVar->sVar, *pVar->pVal? "on":"off")==FALSE)
-                break;
-            pVar++;
-        }
-    }
-    else
-    {
-        // Set <VARIABLE> [ON | OFF]
-        // Find the variable name
-        while( pVar->sVar )
-        {
-            if( strnicmp(args, pVar->sVar, pVar->sLen)==0 )
-                break;
-
-            pVar++;
-        }
-
-        // If we did not find a predefined variable...
-        if( pVar->sVar==NULL )
-        {
-            dprinth(1, "Set variable not found\n");
-        }
-        else
-        {
-            // Advance the argument pointer pass the var name and into the
-            // possible argument [ON | OFF]
-            args += pVar->sLen;
-
-            switch( GetOnOff(args) )
-            {
-                case 1:         // On
-                    *pVar->pVal = TRUE;
-                    RecalculateDrawWindows();
-                break;
-
-                case 2:         // Off
-                    *pVar->pVal = FALSE;
-                    RecalculateDrawWindows();
-                break;
-
-                case 3:         // Display the state of the variable
-                    dprinth(1, "%s is %s\n", pVar->sVar, *pVar->pVal? "on":"off");
-                break;
-            }
-        }
-    }
 
     return( TRUE );
 }
@@ -194,28 +160,44 @@ BOOL cmdSet(char *args, int subClass)
 
 /******************************************************************************
 *                                                                             *
-*   BOOL cmdLines(char *args, int subClass)                                   *
+*   BOOL cmdIdt(char *args, int subClass)                                     *
 *                                                                             *
 *******************************************************************************
 *
-*   Display or change number of display lines
+*   Display the Interrupt Descriptor Table
 *
 ******************************************************************************/
-BOOL cmdLines(char *args, int subClass)
+BOOL cmdIdt(char *args, int subClass)
 {
-    int nLines;
+    int nLine = 2;
+    TDescriptor *pDesc = &deb.idt;
+    DWORD intnum;
 
-    if( *args==0 )
+    if( *args != 0 )
     {
-        // No arguments - display number of lines
-        dprinth(1, "Number of lines is %d\n", pOut->sizeY);
+        // Display just the given int number or, if the selector given is larger
+        // than 80000000h, display the IDT starting from that address
+
+        intnum = Evaluate(args, &args);
+        if( intnum < 0x80000000 )
+        {
+            PrintIDT(1, pDesc->base, intnum);
+            return( TRUE );
+        }
+
+        // Proceed with the complete IDT at the given address
+        pDesc = (TDescriptor *) intnum;
     }
-    else
-    {
-        // Set new number of lines
-//        nLines = Evaluate( args, &args );
 
-        // Get the 2-digit decimal number
+    // No parameters - display complete IDT
+
+    dprinth(1, "IDT base=%08X  limit=%X  (%d entries)\n",
+        pDesc->base, pDesc->limit, (pDesc->limit+1) / sizeof(TIDT_Gate));
+
+    intnum = 0;
+    while( PrintIDT(nLine++, pDesc->base, intnum)==TRUE && intnum<pDesc->limit/sizeof(TIDT_Gate))
+    {
+        intnum++;
     }
 
     return( TRUE );

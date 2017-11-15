@@ -32,6 +32,7 @@
 
 #include "clib.h"                       // Include C library header file
 #include "ice.h"                        // Include main debugger structures
+#include "ibm-pc.h"                     // Include hardware defines
 
 #include "ice-ioctl.h"                  // Include our own IOCTL numbers
 
@@ -160,13 +161,16 @@ int InitPacket(PTINITPACKET pInit)
                 // Set default values for initial windows:
                 // Visible: registers, data and code windows and, of course, history
 
-//                pWin->r.fVisible = TRUE;
+                pWin->r.fVisible = TRUE;
                 pWin->r.nLines   = 3;
-//                pWin->d.fVisible = TRUE;
+                pWin->d.fVisible = TRUE;
                 pWin->d.nLines   = 5;
-//                pWin->c.fVisible = TRUE;
+                pWin->c.fVisible = TRUE;
                 pWin->c.nLines   = 5;
                 pWin->h.fVisible = TRUE;
+
+                // Windowing is disabled at first (until we break into the debugger)
+                pWin->fEnable = FALSE;
 
                 // Initialize default data pointer
                 deb.dataAddr.sel = __KERNEL_DS;
@@ -178,7 +182,10 @@ int InitPacket(PTINITPACKET pInit)
                 deb.codeAddr.offset = 0;
                 deb.fCode = FALSE;
 
-                HistoryAdd("LinIce (C) 2000-2001 by Goran Devic");
+                // Initialize the default break key
+                deb.BreakKey = CHAR_CTRL | 'q';
+
+                HistoryAdd("LinIce (C) 2000-2001 by Goran Devic\n");
 
                 // Initialize interrupt handling subsystem
 
@@ -196,7 +203,15 @@ int InitPacket(PTINITPACKET pInit)
 
                         pIce->layout = LAYOUT_US;
 
-                        pIce->fLowercase = pInit->fLowercase;
+                        deb.fLowercase = pInit->fLowercase;
+
+                        // Set up default output colors
+
+                        pIce->col[COL_NORMAL]  = 0x07;
+                        pIce->col[COL_BOLD]    = 0x0F;
+                        pIce->col[COL_REVERSE] = 0x71;
+                        pIce->col[COL_HELP]    = 0x30;
+                        pIce->col[COL_LINE]    = 0x02;
 
                         // Copy keyboard F-key assignments
 

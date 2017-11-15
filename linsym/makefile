@@ -16,7 +16,8 @@ clean:
 
 ../bin/linsym:	install.o	\
 		loader.o	\
-		symbols.o
+		symbols.o   \
+        symutils.o
 	$(CC) $^ -o linsym.o
 	cp linsym.o ../bin/linsym
 	chmod +x ../bin/linsym
@@ -29,5 +30,8 @@ loader.o:		loader.c
 
 symbols.o:		symbols.c
 	$(CC) $(CFLAGS) -c symbols.c
+
+symutils.o:		symutils.c
+	$(CC) $(CFLAGS) -c symutils.c
 
 

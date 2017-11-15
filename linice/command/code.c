@@ -104,17 +104,18 @@ static DWORD GetCodeLine(PTADDRDESC pAddr)
 }
 
 
-static void PrintCodeLines(int lines)
+static void PrintCodeLines(int maxLines)
 {
-    int nLen;
+    int nLen, nLine=1;
     TADDRDESC Addr;
 
     Addr = deb.codeAddr;                // Copy the current code address
 
-    while( lines-- > 0 )
+    while( nLine < maxLines )
     {
         nLen = GetCodeLine(&Addr);
-        dprinth(lines, "%s%s\n", buf, disasm);
+        if(dprinth(nLine++, "%s%s\n", buf, disasm)==FALSE)
+            break;
 
         // Advance code offset for the next line
         Addr.offset += nLen;
@@ -123,9 +124,9 @@ static void PrintCodeLines(int lines)
 
 void CodeDraw()
 {
-    dprint("-Code---------------------------------------------------------------------------\n");
+    PrintLine(" Code");
 
-    PrintCodeLines(pWin->c.nLines - 1);
+    PrintCodeLines(pWin->c.nLines);
 }
 
 

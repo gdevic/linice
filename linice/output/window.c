@@ -136,15 +136,19 @@ void RecalculateDrawWindows()
     pWin->h.nLines = avail - 1;         // Save one extra for the help line
     AdjustTopBottom(&pWin->h);
 
-    // Draw the screen
-    dputc(DP_CLS);
+    // Draw the screen only if linice display enabled
+    if( pWin->fEnable )
+    {
+        // Draw the screen
+        dputc(DP_CLS);
 
-    // Set the new history frame scroll region
-    // Add one to the top Y to skip the header line
-    dprint("%c%c%c", DP_SETSCROLLREGIONYY, pWin->h.Top+1+1, pWin->h.Bottom+1);
+        // Set the new history frame scroll region
+        // Add one to the top Y to skip the header line
+        dprint("%c%c%c", DP_SETSCROLLREGIONYY, pWin->h.Top+1+1, pWin->h.Bottom+1);
 
-    if( pWin->r.fVisible )  (pWin->r.draw)();
-    if( pWin->d.fVisible )  (pWin->d.draw)();
-    if( pWin->c.fVisible )  (pWin->c.draw)();
-    (pWin->h.draw)();
+        if( pWin->r.fVisible )  (pWin->r.draw)();
+        if( pWin->d.fVisible )  (pWin->d.draw)();
+        if( pWin->c.fVisible )  (pWin->c.draw)();
+        (pWin->h.draw)();
+    }
 }
