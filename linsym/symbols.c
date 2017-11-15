@@ -21,8 +21,6 @@
     Module Description:
 
         This module contains code to load and unload symbol tables.
-        They are preprocessed here into constant images that are loaded
-        into ice and used there.
 
 *******************************************************************************
 *                                                                             *
@@ -43,12 +41,12 @@
 #include <stdio.h>                      // Include standard io file
 #include <malloc.h>                     // Include allocation header
 
-#ifndef WINDOWS
+#ifndef WIN32
 #include <sys/ioctl.h>                  // Include ioctl header file
 #include <unistd.h>                     // Include standard UNIX header file
-#else // WINDOWS
+#else // WIN32
 #include <io.h>
-#endif // WINDOWS
+#endif // WIN32
 
 
 #include "ice-symbols.h"                // Include symbol file defines
@@ -77,8 +75,10 @@ extern int system2(char *command);
 *                                                                             *
 *******************************************************************************
 *
-*   Loads a symbol table, processesit and use IOCTL call to load it into
-*   the ice.
+*   Loads a symbol table - use IOCTL call to load it into the debugger.
+*
+*   Where:
+*       sName is the file name of the symbols to load
 *
 ******************************************************************************/
 void OptAddSymbolTable(char *sName)
@@ -105,9 +105,9 @@ void OptAddSymbolTable(char *sName)
                     // Make sure it is a valid symbol file
                     if( !strcmp(pBuf, SYMSIG) )
                     {
-                        //====================================================================
-                        // Send the synbol file down to the module
-                        //====================================================================
+                        //====================================================
+                        // Send the synbol file down to the debugger module
+                        //====================================================
                         hIce = open("/dev/"DEVICE_NAME, O_RDONLY);
                         if( hIce>=0 )
                         {
@@ -119,7 +119,7 @@ void OptAddSymbolTable(char *sName)
                             printf("AddSymbolTable: IOCTL=%d\n", status);
                         }
                         else
-                            printf("AddSymbolTable IOCTL Failed!\n");
+                            printf("Error opening debugger device!\n");
                     }
                     else
                         printf("%s is an invalid Linice symbol file!\n", sName);
@@ -141,17 +141,17 @@ void OptAddSymbolTable(char *sName)
 
 /******************************************************************************
 *                                                                             *
-*   void OptRemoveSymbolTable(char *sName)                                    *
+*   void OptRemoveSymbolTable(char *sTableName)                               *
 *                                                                             *
 *******************************************************************************
 *
 *   Unloads a symbol table of a specified name from the debugger.
 *
 *   Where:
-*       sName is the short name of the symbol table to remove
+*       sName is the internal name of the symbol table to remove
 *
 ******************************************************************************/
-void OptRemoveSymbolTable(char *sName)
+void OptRemoveSymbolTable(char *sTableName)
 {
     int hIce, status;
 
@@ -161,12 +161,12 @@ void OptRemoveSymbolTable(char *sName)
     hIce = open("/dev/"DEVICE_NAME, O_RDONLY);
     if( hIce>=0 )
     {
-        status = ioctl(hIce, ICE_IOCTL_REMOVE_SYM, sName);
+        status = ioctl(hIce, ICE_IOCTL_REMOVE_SYM, sTableName);
         close(hIce);
 
-        printf("RemoveSymbolTable: IOCTL=%d\n", status);
+        printf("RemoveSymbolTable [%s]: IOCTL=%d\n", sTableName, status);
     }
     else
-        printf("Error opening device!\n");
+        printf("Error opening debugger device!\n");
 }
 

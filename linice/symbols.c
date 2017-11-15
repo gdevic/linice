@@ -83,70 +83,10 @@ extern void ice_free_heap(BYTE *pHeap);
 
 int CheckSymtab(TSYMTAB *pSymtab)
 {
-    TGLOBAL *pGlobal;
-    TSYM_PUB *pSym;
-    int i;
-
-    if( pSymtab==NULL )
-        return(100);
-
-    if( !CHKADDR(pSymtab) )
-        return(200);
-
-    if( !CHKADDR(pSymtab->next) && pSymtab->next!=NULL )
-        return(201);
-
-    if( !CHKADDR(pSymtab->pStrings) )
-        return(300);
-
-    if( !CHKADDR(pSymtab->pGlobals) )
-        return(301);
-
-    // Check the GLOBAL structure
-    pGlobal = pSymtab->pGlobals;
-
-    if( !CHKADDR(pGlobal->pSym) )
-        return(500);
-    if( !CHKADDR(pGlobal->pHash) )
-        return(501);
-    if( pGlobal->nHash > 100000 )
-        return(502);
-    if( pGlobal->nSyms > 10000 )
-        return(503);
-
-    pSym = pGlobal->pSym;
-
-    for(i=0; i<pGlobal->nSyms; i++ )
-    {
-        if( !CHKADDR(pSym[i].pName) )
-            return(10000+i);
-    }
 
     return(0);
 }
 
-
-/******************************************************************************
-*                                                                             *
-*   static DWORD str2key(char *str)                                           *
-*                                                                             *
-*******************************************************************************
-*
-*   Creates a hash key for the given string.
-*
-******************************************************************************/
-static DWORD str2key(char *str)
-{
-    int len = strlen(str);
-    DWORD key = 0;
-
-    while( len-- )
-    {
-        key += *str++ << len;
-    }
-
-    return( key );
-}
 
 /******************************************************************************
 *                                                                             *
@@ -161,70 +101,81 @@ static DWORD str2key(char *str)
 *
 *   Returns:
 *       0 init ok
-*       -EINVAL general failure
+*       -EINVAL Bad symbol table
+*       -EFAULT general failure
 *       -ENOMEM not enough memory
 *
 ******************************************************************************/
 int UserAddSymbolTable(void *pSymtab)
 {
-    int retval = -EINVAL, i;
+    int retval = -EINVAL;
     TSYMTAB SymHeader;
     TSYMTAB *pSym;
 
-    // Copy the header of the symbol table into the kernel space
+    // Copy the header of the symbol table into the local structur to examine it
     if( copy_from_user(&SymHeader, pSymtab, sizeof(TSYMTAB))==0 )
     {
-        // Allocate memory for complete symbol table from the private pool
-        pSym = (TSYMTAB *) ice_malloc((unsigned int)SymHeader.size);
-        if( pSym )
+        // Check if we should allocate memory for the symbol table from the allowed pool
+        if( pIce->nSymbolBufferAvail >= SymHeader.dwSize )
         {
-            INFO(("Allocated %d bytes at %X for symbol table\n", (int) SymHeader.size, (int) pSym));
-            // Copy the complete symbol table from the use space
-            if( copy_from_user(pSym, pSymtab, SymHeader.size)==0 )
+            // Allocate memory for complete symbol table from the private pool
+            pSym = (TSYMTAB *) ice_malloc((unsigned int)SymHeader.dwSize);
+            if( pSym )
             {
-                dprinth(1, "Loaded symbols for module '%s' size %d", pSym->name, pSym->size);
+                INFO(("Allocated %d bytes at %X for symbol table\n", (int) SymHeader.dwSize, (int) pSym));
 
-                pIce->nSymbolBufferAvail -= SymHeader.size;
-
-                //============================================================
-                // Fix up all the relative indices to addresses (pointers)
-                //============================================================
-                // 1) general header pointers
-
-                pSym->pStrings = (char*)((DWORD)pSym + (DWORD)pSym->pStrings);
-
-                pSym->pGlobals = (TGLOBAL *)((DWORD)pSym + (DWORD)pSym->pGlobals);
-                pSym->pGlobals->pSym = (TSYM_PUB *)((DWORD)pSym + (DWORD)pSym->pGlobals->pSym);
-                pSym->pGlobals->pHash = (WORD *)((DWORD)pSym + (DWORD)pSym->pGlobals->pHash);
-
-                // 2) Global symbol table pointers to names
-
-                for(i=0; i<pSym->pGlobals->nSyms; i++ )
+                // Copy the complete symbol table from the use space
+                if( copy_from_user(pSym, pSymtab, SymHeader.dwSize)==0 )
                 {
-                    pSym->pGlobals->pSym[i].pName += (DWORD)pSym;
+                    // Make sure we are really loading a symbol table
+                    if( !strcmp(pSym->sSig, SYMSIG) )
+                    {
+                        // Compare the symbol table version - major number has to match
+                        if( (pSym->Version>>8)==(SYMVER>>8) )
+                        {
+                            dprinth(1, "Loaded symbols for module '%s' size %d (ver %d.%d)",
+                                pSym->sTableName, pSym->dwSize, pSym->Version>>8, pSym->Version&0xFF);
+
+                            pIce->nSymbolBufferAvail -= SymHeader.dwSize;
+
+                            // Link this symbol table in the linked list
+                            pSym->next = (struct _SYMTAB *) pIce->pSymTab;
+                            pIce->pSymTab = pSym;
+                            pIce->pSymTabCur = pIce->pSymTab;
+
+                            // Return OK
+                            return( 0 );
+                        }
+                        else
+                        {
+                            dprinth(1, "Error: Symbol table has incompatible version number!");
+                        }
+                    }
+                    else
+                    {
+                        dprinth(1, "Invalid symbol table signature!");
+                    }
+                }
+                else
+                {
+                    ERROR(("Error copying symbol table"));
+                    retval = -EFAULT;
                 }
 
-                // Link this symbol table in the linked list
-                pSym->next = (struct TSYMTAB *) pIce->pSymTab;
-                pIce->pSymTab = pSym;
-                pIce->pSymTabCur = pIce->pSymTab;
-
-                // Return OK
-                return( 0 );
+                // Deallocate memory for symbol table
+                ice_free_heap((void *) pSym);
             }
             else
             {
-                ERROR(("Error copying symbol table"));
+                ERROR(("Unable to allocate %d for symbol table!\n", (int) SymHeader.dwSize));
+                retval = -ENOMEM;
             }
         }
         else
         {
-            ERROR(("Unable to allocate %d for symbol table!\n", (int) SymHeader.size));
+            dprinth(1, "Symbol table memory pool too small to load this table!");
             retval = -ENOMEM;
         }
-
-        // Deallocate memory for symbol table
-        ice_free_heap((void *) pSym);
     }
     else
     {
@@ -250,37 +201,40 @@ int UserAddSymbolTable(void *pSymtab)
 *   Returns:
 *       0 remove ok
 *       -EINVAL Invalid symbol table name
+*       -EFAULT general failure
 *
 ******************************************************************************/
 int UserRemoveSymbolTable(void *pSymtab)
 {
     int retval = -EINVAL;
-    char sName[MAX_MODULE_NAME+1];
+    char sName[MAX_MODULE_NAME];
     TSYMTAB *pSym, *pPrev = NULL;
 
     // Copy the symbol table name from the user address space
     if( copy_from_user(sName, pSymtab, MAX_MODULE_NAME)==0 )
     {
-        sName[MAX_MODULE_NAME] = 0;
+        sName[MAX_MODULE_NAME-1] = 0;
 
-        // Search for the named symbol structure
+        // Search for the symbol table with that specific table name
         pSym = pIce->pSymTab;
         while( pSym )
         {
-            if( !strcmp(pSym->name, sName) )
+            if( !strcmp(pSym->sTableName, sName) )
             {
-                // Found it, unlink it, free it and return success
+                dprinth(1, "Removed symbol table %s", pSym->sTableName);
+
+                // Found it - unlink, free and return success
                 if( pSym==pIce->pSymTab )
                     pIce->pSymTab = (TSYMTAB *) pSym->next;     // First in the linked list
                 else
                     pPrev->next = pSym->next;       // Not the first in the linked list
 
-                // Add the bytes to the free pool
-                pIce->nSymbolBufferAvail += pSym->size;
+                // Add the memory block to the free pool
+                pIce->nSymbolBufferAvail += pSym->dwSize;
 
                 ice_free((BYTE *)pSym);
 
-                // Make no dangling pointers..
+                // Leave no dangling pointers...
                 pIce->pSymTabCur = pIce->pSymTab;
 
                 return(0);
@@ -293,6 +247,7 @@ int UserRemoveSymbolTable(void *pSymtab)
     else
     {
         ERROR(("Invalid IOCTL packet address\n"));
+        retval = -EFAULT;
     }
 
     return(retval);
@@ -310,7 +265,7 @@ int UserRemoveSymbolTable(void *pSymtab)
 ******************************************************************************/
 BOOL cmdTable(char *args, int subClass)
 {
-    TSYMTAB *pSymTab = (TSYMTAB *) pIce->pSymTab;
+    TSYMTAB *pSymTab = pIce->pSymTab;
     int nLine = 2;
 
     if( pSymTab==NULL )
@@ -322,8 +277,7 @@ BOOL cmdTable(char *args, int subClass)
         dprinth(1, "Symbol tables:");
         while( pSymTab )
         {
-            dprinth(nLine++, " %6d  %s   (%08X - %08X)",
-                pSymTab->size, pSymTab->name, pSymTab->pGlobals->dwAddrStart, pSymTab->pGlobals->dwAddrEnd);
+            dprinth(nLine++, " %6d  %s", pSymTab->dwSize, pSymTab->sTableName);
             pSymTab = (TSYMTAB *) pSymTab->next;
         }
     }
@@ -345,24 +299,6 @@ BOOL cmdTable(char *args, int subClass)
 ******************************************************************************/
 BOOL cmdSymbol(char *args, int subClass)
 {
-    TGLOBAL *pGlobals;
-    BOOL fCont = TRUE;
-    int nLine = 1, index;
-
-    if( pIce->pSymTabCur==NULL )
-    {
-        dprinth(1, "No symbol table loaded.");
-    }
-    else
-    {
-        pGlobals = pIce->pSymTabCur->pGlobals;
-        for( index=0; index<pGlobals->nSyms && fCont; index++ )
-        {
-            fCont = dprinth(nLine++,  "  %08X  %s",
-                pGlobals->pSym[index].dwAddress,
-                pGlobals->pSym[index].pName);
-        }
-    }
 
     return( TRUE );
 }
@@ -386,40 +322,7 @@ BOOL cmdSymbol(char *args, int subClass)
 ******************************************************************************/
 BOOL SymbolName2Value(DWORD *pValue, char *name)
 {
-    TGLOBAL *pGlobals;
-    TSYM_PUB *pSympub;
-    DWORD key, hash, index;
-    int len;
 
-    // Exit early if no symbol table available
-    if( pIce->pSymTabCur==NULL )
-        return( FALSE );
-
-    pGlobals = pIce->pSymTabCur->pGlobals;
-    pSympub  = pGlobals->pSym;
-
-    len = strlen(name);
-
-    // Find the key of the symbol name
-    key = str2key(name);
-    hash = key % pGlobals->nHash;
-
-    // Do a hash search for the symbol name
-    while( (index = pGlobals->pHash[hash]) != 0 )
-    {
-        // Compare strings and return if the names match
-        if( strnicmp(name, pSympub[index-1].pName, len)==0 )
-        {
-            *pValue = pSympub[index-1].dwAddress;
-            return( TRUE );
-        }
-
-        // Otherwise, keep linear search...
-        if( ++hash==pGlobals->nHash )
-            hash = 0;
-    }
-
-    // If we are here, the kay was not there
     return( FALSE );
 }
 

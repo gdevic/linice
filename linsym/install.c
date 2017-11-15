@@ -43,14 +43,14 @@
 #include <stdlib.h>                     // Include standard library
 #include <string.h>                     // Include string library
 
-#ifndef WINDOWS
+#ifndef WIN32
 #include <unistd.h>                     // Include standard UNIX header file
 #include <sys/ioctl.h>                  // Include ioctl header file
 #define stricmp     strcasecmp          // Weird gnu c call..
-#else // WINDOWS
+#else // WIN32
 #include <io.h>
 #include <malloc.h>
-#endif // WINDOWS
+#endif // WIN32
 
 #include "ice-ioctl.h"                  // Include shared header file
 

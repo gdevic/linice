@@ -91,10 +91,10 @@
 #include <fcntl.h>                      // Include file control file
 #include <stdio.h>                      // Include standard io file
 
-#ifndef WINDOWS
+#ifndef WIN32
 #include <unistd.h>                     // Include standard UNIX header file
 #include <sys/wait.h>                   // Include waitpid
-#endif
+#endif // WIN32
 
 #include "loader.h"                     // Include global protos
 
@@ -130,7 +130,7 @@ unsigned int opt;
 *                                                                             *
 ******************************************************************************/
 
-extern void OptInstall();
+extern void OptInstall(char *pSystemMap);
 extern void OptUninstall();
 extern void OptAddSymbolTable(char *sName);
 extern void OptRemoveSymbolTable(char *sName);
@@ -551,5 +551,11 @@ int main(int argn, char *argp[])
         OptUninstall();
 
     return( 0 );
+}
+
+
+int _open(const char *path, int oflag)
+{
+    return(open(path, oflag));
 }
 

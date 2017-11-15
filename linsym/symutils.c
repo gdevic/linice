@@ -43,41 +43,19 @@
 #include <errno.h>
 #include <stdlib.h>
 
-#ifdef WINDOWS
+#ifdef WIN32
 #include <io.h>
-#else
+#else // !WIN32
 #include <unistd.h>
-#endif
+#endif // WIN32
 
 #include "ice-types.h"                  // Include private data types
 #include "ice-symbols.h"                // Include symbol file defines
-#include "primes.h"                     // Insert table of 1024 prime numbers
+//#include "primes.h"                     // Insert table of 1024 prime numbers
 
 
-extern void TranslateElf(int fd, int fi, char *pathSources, char *nameOut, int nLevel, DWORD filesize);
-
-/******************************************************************************
-*                                                                             *
-*   DWORD str2key(char *str)                                                  *
-*                                                                             *
-*******************************************************************************
-*
-*   Creates a hash key for the given string.
-*
-******************************************************************************/
-DWORD str2key(char *str)
-{
-    int len = strlen(str);
-    DWORD key = 0;
-
-    while( len-- )
-    {
-        key += *str++ << len;
-    }
-
-    return( key );
-}
-
+extern BYTE *LoadElf(char *sName);
+extern BOOL ElfToSym(BYTE *pElf, char *pSymName, char *pTableName);
 
 /******************************************************************************
 *                                                                             *
@@ -95,14 +73,9 @@ DWORD str2key(char *str)
 *       size - size of the input symbol file in bytes
 *
 ******************************************************************************/
-// Compare function for a quick sort
-int symcmp(const void *p1, const void *p2)
-{
-    return( ((TSYM_PUB *)p1)->dwAddress > ((TSYM_PUB *)p2)->dwAddress );
-}
-
 void TranslateMapFile(int fd, FILE* fIn, char *nameOut, int size)
 {
+#if 0
     char buf[80];                       // Temporary buffer
     DWORD i, items, status, index;
     DWORD key, collisions;              // Used for hashing
@@ -265,6 +238,7 @@ void TranslateMapFile(int fd, FILE* fIn, char *nameOut, int size)
         printf("Module name: %s\n", nameOut);
         printf("  Translated %d global symbols\n", Global.nSyms);
     }
+#endif
 }
 
 
@@ -275,9 +249,9 @@ void TranslateMapFile(int fd, FILE* fIn, char *nameOut, int size)
 *                                                                             *
 *******************************************************************************
 *
-*   Translate file into a symbol table and write it to a file.
+*   Translate an ELF file into a symbol file and write it out.
 *
-*   The types of files that can be translated are:
+*   Several types of files that can be translated are:
 *       ASCII symbol file produced by the 'nm' command
 *       ELF user mode executable file
 *       ELF Kernel module object file
@@ -295,6 +269,8 @@ void OptTranslate(char *pathOut, char *pathIn, char *pathSources, int nLevel)
     struct stat prop;
     char elf[4];
     int fd_out, fd_in, status;
+    BYTE *pBuf;
+    char *pTableName;
 
     // Find the size of the input file
     status = stat(pathIn, &prop);
@@ -313,17 +289,20 @@ void OptTranslate(char *pathOut, char *pathIn, char *pathSources, int nLevel)
                 if( status==1 )
                 {
                     // Determine the internal module name based off the input file name
-                    // Use only trailing name and cut off anything after last '.'
                     if(strrchr(pathIn, '/')!=NULL)
-                        pathIn = strrchr(pathIn, '/') + 1;
-                    if(strchr(pathIn, '.')!=NULL)
-                        *(strchr(pathIn, '.')) = 0;
+                        pTableName = strrchr(pathIn, '/') + 1;
+                    else
+                        pTableName = pathIn;
 
                     fd_in = fileno(fin);
                     if( elf[1]=='E' && elf[2]=='L' && elf[3]=='F' )
                     {
                         // ELF file
-                        TranslateElf(fd_out, fd_in, pathSources, pathIn, nLevel, prop.st_size);
+                        pBuf = LoadElf(pathIn);
+                        if( pBuf )
+                        {
+                            ElfToSym(pBuf, pathOut, pTableName);
+                        }
                     }
                     else
                     {

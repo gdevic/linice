@@ -1,8 +1,8 @@
 /******************************************************************************
 *                                                                             *
-*   Module:     ice-types.h                                                   *
+*   Module:     stabs.h                                                       *
 *                                                                             *
-*   Date:       09/09/00                                                      *
+*   Date:       06/10/01                                                      *
 *                                                                             *
 *   Copyright (c) 2001 Goran Devic                                            *
 *                                                                             *
@@ -20,70 +20,54 @@
 
     Module Description:
 
-        Define some extended data types
+        Define wrappers for ELF stabs.
 
 *******************************************************************************
 *                                                                             *
-*   Changes:                                                                  *
+*   Major changes:                                                            *
 *                                                                             *
 *   DATE     DESCRIPTION OF CHANGES                               AUTHOR      *
 * --------   ---------------------------------------------------  ----------- *
-* 05/28/00   Original                                             Goran Devic *
-* 09/09/00   Modified for LinIce                                  Goran Devic *
+* 06/10/01   Initial version                                      Goran Devic *
 * --------   ---------------------------------------------------  ----------- *
 *******************************************************************************
 *   Important Defines                                                         *
 ******************************************************************************/
-#ifndef _ICE_TYPES_H_
-#define _ICE_TYPES_H_
+#ifndef _STABS_H_
+#define _STABS_H_
+
+/******************************************************************************
+*                                                                             *
+*   Global Defines, Variables and Macros                                      *
+*                                                                             *
+******************************************************************************/
+
+// Define so we can generate enums
+#define __define_stab(NAME, CODE, STRING) NAME=CODE,
+
+enum __stab_debug_code
+{
+#include "stab.def"
+LAST_UNUSED_STAB_CODE
+};
+
+#undef __define_stab
+
+//////////////////////////////////////////////////////////////////////////////
+
+typedef struct
+{
+    int code;
+    char *name;
+} TSTABNAME;
+
+// Define so we can generate structures of stab codes
+#define __define_stab(NAME, CODE, STRING)  { CODE, STRING },
+
+TSTABNAME StabName[] = {
+#include "stab.def"
+{ 0, NULL }
+};
 
 
-#ifndef offsetof
-#define offsetof(s,m) (int)&(((s*)0)->m)
-#endif
-
-typedef unsigned char  BYTE;
-typedef unsigned short WORD;
-typedef unsigned int   DWORD;
-typedef unsigned int   BOOL;
-
-#ifndef TRUE
-#define TRUE    (1==1)
-#endif
-
-#ifndef FALSE
-#define FALSE   (1==0)
-#endif
-
-#ifndef MIN
-#define MIN(a,b)        ((a)<(b)?(a):(b))
-#endif
-
-#ifndef MAX
-#define MAX(a,b)        ((a)<(b)?(b):(a))
-#endif
-
-// We define character type as a 16-bit unsigned int so we can use
-// top several bits for the state of the key modifiers (control/alt)
-typedef unsigned short int CHAR;
-
-// When we need it, character type is unsigned
-typedef unsigned char UCHAR;
-
-///////////////////////////////////////////////////////////////////////////////
-// Define packed structure for MSVC and gcc
-///////////////////////////////////////////////////////////////////////////////
-#ifdef WIN32
-
-#define PACKED
-#pragma pack(1)
-
-#else // !WINDOWS
-
-#define PACKED __attribute__((packed))
-
-#endif // WINDOWS
-
-
-#endif //  _ICE_TYPES_H_
-
+#endif // _STABS_H_

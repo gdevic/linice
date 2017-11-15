@@ -2,7 +2,7 @@
 *                                                                             *
 *   Module:     load_elf.c                                                    *
 *                                                                             *
-*   Date:       11/16/00                                                      *
+*   Date:       09/05/00                                                      *
 *                                                                             *
 *   Copyright (c) 2001 Goran Devic                                            *
 *                                                                             *
@@ -20,7 +20,7 @@
 
     Module Description:
 
-        Loading ELF file
+        This module contains the main ELF buffer parsing code
 
 *******************************************************************************
 *                                                                             *
@@ -28,61 +28,32 @@
 *                                                                             *
 *   DATE     DESCRIPTION OF CHANGES                               AUTHOR      *
 * --------   ---------------------------------------------------  ----------- *
-* 11/16/00   Initial version                                      Goran Devic *
+* 09/05/00   Initial version                                      Goran Devic *
 * --------   ---------------------------------------------------  ----------- *
 *******************************************************************************
 *   Include Files                                                             *
 ******************************************************************************/
-//#include <assert.h>
-//#include <sys/types.h>                  // Include file operations
-#include <malloc.h>
-#include <string.h>                     // Include strings header file
-//#include <fcntl.h>                      // Include file control file
-#include <stdio.h>                      // Include standard io file
 
-#ifdef WINDOWS
-#include <io.h>
-#include <sys/types.h>                  // Include file operations
-#include <sys/stat.h>
-#include <stdlib.h>                     // Include standard library file
-#include "msvc/elf.h"
-#else // !WINDOWS
-#include <unistd.h>                     // Include standard UNIX header file
-#include <linux/elf.h>                  // Load ELF prototypes
-#include <sys/stat.h>                   // Include file operations
-#endif // !WINDOWS
-
-#include "ice-types.h"                  // Include private data types
-#include "ice-symbols.h"                // Include symbol file defines
-#include "loader.h"                     // Include loader global protos
-#include "primes.h"                     // Insert table of 1024 prime numbers
-#include "stabs.h"                      // Load GNU STABS definitions
+#include "Common.h"                     // Include platform specific set
 
 
-void qsort(void *base, size_t nmemb, size_t size, int (*compar)(const void *, const void *));
+//****************************************************************************
+//
+// Assumption: There can be at max 65535 source files and each file can have
+//             at most 65535 lines.
+//             Each function can be at most 64K long (line offsets)
+//
+// Assumption: C function tmpfile() will never fail
+//
+//****************************************************************************
 
-/******************************************************************************
-*                                                                             *
-*   Global Variables                                                          *
-*                                                                             *
-******************************************************************************/
+FILE *fSources;                         // Temp file descriptor for source file names
 
-/******************************************************************************
-*                                                                             *
-*   Local Defines, Variables and Macros                                       *
-*                                                                             *
-******************************************************************************/
+FILE *fGlobals;                         // Temp file descriptor for globals
+int nGlobals;                           // Number of global items that we stored in a file
 
-typedef struct
-{
-    unsigned long n_strx;
-    unsigned char n_type;
-    unsigned char n_other;
-    unsigned short n_desc;
-    unsigned long n_value;
-} PACKED StabEntry;
 
-static const char *SecType[] =
+const char *SecType[] =
 {
     "SHT_NULL",
     "SHT_PROGBITS",
@@ -98,134 +69,24 @@ static const char *SecType[] =
     "SHT_DYNSYM"
 };
 
-extern int symcmp(const void *p1, const void *p2);
-extern DWORD str2key(char *str);
+DWORD nGSYM;                            // Total number of global symbols
+TSource SO[MAX_SO];                     // Source file structure
+DWORD nSO;                              // Number of basic source files
 
-/******************************************************************************
-*                                                                             *
-*   BOOL LoadSource(char *pPath, char *pName, TFILE *pFileCur)                *
-*                                                                             *
-*******************************************************************************
-*
-*   Loads a source file.
-*
-******************************************************************************/
-BOOL LoadSource(char *pPath, char *pName, TFILE *pFileCur)
+int dfs;                                // Top offset into strings file
+
+extern BOOL SetupSourcesArray(FILE *fSources);
+extern BOOL ParseSource(int fd, int fs);
+extern BOOL ParseGlobal(int fd, int fs, FILE *fGlobals, int nGlobals);
+extern BOOL ParseFunctionLines(int fd, int fs, BYTE *pElf);
+extern BOOL ParseFunctionScope(int fd, int fs, BYTE *pBuf);
+extern BOOL ParseTypedefs(int fd, int fs, BYTE *pBuf);
+
+
+int ParseSectionsPass1(BYTE *pBuf)
 {
-    struct stat prop;                   // Source code stat variable
-    char sLocalName[256];               // Local source path/name
-    char *pBuf, *pBufCur;               // Buffer to store source file, current line
-    FILE *fin;                          // Source file descriptor
-    int i, lines;                       // Line counter
-    int status;
+    Elf32_Ehdr *pElfHeader;             // ELF header
 
-    // Search for the source: first in the current directory or the one
-    // given as a command line parameter --source
-    strcpy(sLocalName, pSource);        // Copy default path
-    strcpy(sLocalName, "/");
-    strcat(sLocalName, pName);          // Append file name
-
-    status = stat(sLocalName, &prop);
-    if(status)
-    {
-        // Source file is not found.
-        // Search the default STABS path or a newly entered path name
-        strcpy(sLocalName, pPath);      // Copy STABS path
-        strcpy(sLocalName, "/");
-        strcat(sLocalName, pName);      // Append file name
-
-        status = stat(sLocalName, &prop);
-        if(status)
-        {
-            // Source file is not there. We'll have to ask you
-            // where to look for it, if the --prompt was not specified
-            if( !(opt & OPT_PROMPT) )
-            {
-                do
-                {
-                    // Prompt for the missing source
-                    printf("Enter the correct PATH to the source file %s: ", pName);
-                    gets(sLocalName);
-
-                    // Properly append source name
-                    if( sLocalName[strlen(sLocalName)-1] != '/' )
-                        strcat(sLocalName, "/");
-                    strcat(sLocalName, pName);      // Append file name
-
-                    status = stat(sLocalName, &prop);
-                }
-                while( status != 0 );
-            }
-            else
-            {
-                // Well, can't find the source file so return w/o it
-                return(FALSE);
-            }
-        }
-    }
-
-    // Allocate buffer for the source file
-    pBufCur = pBuf = malloc(prop.st_size);
-    if( pBuf )
-    {
-        // Open the source file, load it line by line counting them
-        fin = fopen(sLocalName, "r");
-        if(fin!=NULL)
-        {
-            lines = 0;
-
-            while( !feof(fin) )
-            {
-                fgets(pBufCur, 256, fin);
-                pBufCur += strlen(pBufCur) + 1;
-                lines++;
-            }
-
-            // Allocate array of char pointer to file lines
-            pFileCur->pLine = calloc(sizeof(char*) * lines, 1);
-
-            // Store pointers to source file lines
-            pBufCur = pBuf;
-            for(i=0; i<lines; i++)
-            {
-                pFileCur->pLine[i] = pBufCur;
-                pBufCur += strlen(pBufCur) + 1;
-            }
-
-            return(TRUE);
-        }
-        else
-        {
-            printf("LoadSource: Error opening %s\n", sLocalName);
-        }
-    }
-    else
-    {
-        printf("LoadSource: Error allocating memory!\n");
-        exit(1);
-    }
-
-    return(FALSE);
-}
-
-
-/******************************************************************************
-*                                                                             *
-
-*                                                                             *
-*******************************************************************************
-*
-*   Parse ELF file and create Linice symbol file
-*
-*   Where:
-*       Elf - ELF header
-*       pBuf - buffer where the ELF input file was loaded
-*       nameOut - the name of the output module
-*       filesize - size of the complete ELF input file
-*
-******************************************************************************/
-void ParseSections(int fd, Elf32_Ehdr *Elf, BYTE *pBuf, char *nameOut, DWORD filesize)
-{
     Elf32_Shdr *Sec;                    // Section header array
     Elf32_Shdr *SecName;                // Section header string table
     Elf32_Shdr *SecCurr;                // Current section
@@ -238,33 +99,28 @@ void ParseSections(int fd, Elf32_Ehdr *Elf, BYTE *pBuf, char *nameOut, DWORD fil
     StabEntry *pStab;                   // Pointer to a stab entry
     char *pStr;                         // Pointer to a stab string
     BOOL fCont;                         // Line continuation?
-    int i;                              // Generic counter
+    char *pSoDir = NULL;                // Source code directory
+    int i;
 
-    TSYMTAB Symtab;                     // Symbol table header to build
-    TGLOBAL Global;                     // Gobals header
-    TSYM_PUB *pSymPub;                  // Pointer to a sym publics
-    WORD *pHash;                        // Pointer to a publics hash table
-    char *pStrings, *pStrCur;           // Pointer to strings, current string
-    DWORD key, index, collisions;       // Used for hashing
-    DWORD items;                        // Generic item counter
-    DWORD written;                      // Bytes written so far
+    printf("=============================================================================\n");
+    printf("||         PARSE SECTIONS PASS 1                                           ||\n");
+    printf("=============================================================================\n");
 
-    TSYMBOL Symbol;                     // Global symbol structure
-    TFUN *pFun, *pFunCur;               // Pointer to function descriptor, current
-    TLINE *pLine, *pLineCur = NULL;     // Pointer to line numbers, current
-    TLEX *pLex, *pLexCur = NULL;        // Pointer to lexical scope, current
+    ASSERT(sizeof(StabEntry)==12);
 
-    TSRC Src;                           // Global source file structure
-    TFILE *pFile, *pFileCur;            // Pointer to file array, current
-    char sPath[256] = { 0 };            // Source code path
+    pElfHeader = (Elf32_Ehdr *) pBuf;
 
+    // PASS1: Reset the counter variables
+    nSO = 0;
+    nGSYM = 0;
+    memset(&SO, 0, sizeof(SO));
 
     // Ok, we have the complete file inside the buffer...
     // Find the section header and the string table of section names
-    Sec = (Elf32_Shdr *) &pBuf[Elf->e_shoff];
-    SecName = &Sec[Elf->e_shstrndx];
+    Sec = (Elf32_Shdr *) &pBuf[pElfHeader->e_shoff];
+    SecName = &Sec[pElfHeader->e_shstrndx];
 
-    for( i=1; i<Elf->e_shnum; i++ )
+    for( i=1; i<pElfHeader->e_shnum; i++ )
     {
         SecCurr = &Sec[i];
         pStr = (char *)pBuf + SecName->sh_offset + SecCurr->sh_name;
@@ -303,43 +159,11 @@ void ParseSections(int fd, Elf32_Ehdr *Elf, BYTE *pBuf, char *nameOut, DWORD fil
 #endif
     }
 
-    //===============================================================
-    // Allocate all buffers
-    //===============================================================
-    // We will overallocate buffers, and then parse the ELF file and
-    // store symbols as we find them. Lastly, we will cut the extras
-
-    // Overallocate buffer for global symbols
-    pSymPub = calloc(filesize, 1);
-
-    // Overallocate buffer for strings
-    pStrCur = pStrings = calloc(filesize, 1);
-
-    // Overallocate buffer for the function descriptor array
-    pFunCur = pFun = calloc(filesize, 1);
-
-    // Overallocate buffer for files: 256 files?  :-)
-    pFileCur = pFile = calloc(sizeof(TFILE) * 256, 1);
-
-    // Make sure all allocations made it
-    if( !pSymPub || !pStrings || !pFun || !pFile )
-    {
-        printf("Error allocating memory!\n");
-        return;
-    }
-
-    Symbol.pFun = pFun;
-
-    //===============================================================
-    // Read ELF global symbol table and build the SYM_PUB array
-    //===============================================================
-
-    items = 0;
+    //==============================
+    // Parse ELF global symbol table
+    //==============================
     if( SecSymtab && SecStrtab )
     {
-        char *pSecStr;                  // Section string name
-        DWORD Section;                  // Section code name
-
         pSym = (Elf32_Sym *) (pBuf + SecSymtab->sh_offset);
         pStr = (char *)pBuf + SecStrtab->sh_offset;
         i = SecSymtab->sh_size / sizeof(Elf32_Sym) - 1;
@@ -357,10 +181,6 @@ void ParseSections(int fd, Elf32_Ehdr *Elf, BYTE *pBuf, char *nameOut, DWORD fil
             printf("st_info  = %02X\n", pSym->st_info );
             printf("st_other = %02X\n", pSym->st_other );
             printf("st_shndx = %04X ", pSym->st_shndx);
-
-            pSecStr = "";
-            Section = 0;
-
             switch(pSym->st_shndx)
             {
             case SHN_UNDEF: printf("EXTERNDEF\n");
@@ -370,103 +190,25 @@ void ParseSections(int fd, Elf32_Ehdr *Elf, BYTE *pBuf, char *nameOut, DWORD fil
             case SHN_COMMON: printf("COMMON\n");
                 break;
             default:
-                pSecStr = pBuf + SecName->sh_offset + Sec[pSym->st_shndx].sh_name;
-                printf("%s\n", pSecStr );
+                printf("%s\n", pBuf + SecName->sh_offset + Sec[pSym->st_shndx].sh_name );
             }
 
-            // If the symbol has the name, proceed to the following check
-            // (Sometimes the name is 0 and sometimes the first char is space)
-            if( pSym->st_name && *(pStr+pSym->st_name)!=' ' )
+            // If a symbol represent a global function or variable, save it in
+            // a fGlobal file:
+            //  11h - Global symbol (variable)
+            //  12h - Global symbol (function)
+            if( pSym->st_info==0x11 || pSym->st_info==0x12 )
             {
-                // If the section string name is data, text, bss, we need to store it
-                if( !strcmp(pSecStr, ".text") )
-                    Section = (DWORD)'T';
-                else
-                if( !strcmp(pSecStr, ".data") )
-                    Section = (DWORD)'D';
-                else
-                if( !strcmp(pSecStr, ".bss") )
-                    Section = (DWORD)'?';
-
-                // Store the symbol if qualified
-                if( Section )
-                {
-                    strcpy(pStrCur, pStr+pSym->st_name);
-
-                    pSymPub[items].dwAddress = pSym->st_value;
-                    pSymPub[items].Section = Section;
-                    pSymPub[items].pName = pStrCur;
-
-                    pStrCur += strlen(pStrCur) + 1;
-                    items++;
-                }
+                fprintf(fGlobals, "%s %08X %08X\n", pStr+pSym->st_name, pSym->st_value, pSym->st_value + pSym->st_size);
+                nGlobals++;
+                printf("Global symbol queued\n");
             }
 
             pSym++;
         }
     }
     else
-    {
-        printf("No global symbols in the file (!)\n");
-        exit(2);
-    }
-
-    //===============================================================
-    // Sort the symbol table by address
-    //===============================================================
-    qsort((void *)pSymPub, items, sizeof(TSYM_PUB), symcmp);
-
-    Global.nSyms       = items;
-    Global.dwAddrStart = pSymPub[0].dwAddress;
-    Global.dwAddrEnd   = pSymPub[Global.nSyms-1].dwAddress;
-
-    // Have a hash table that is several times the number of elements, and find the
-    // prime value that is at least that from our hash table
-    // The max value in the current prime table is 38873, that divided by 4 is about
-    // 9700 entries. Since even the kernel has just about 6000, we are fine.
-    for( i=1; i<1023; i++)
-    {
-        if( primes[i] > items * 4 )
-            break;
-    }
-
-    Global.nHash = primes[i];
-
-    pHash = calloc(sizeof(WORD) * Global.nHash, 1);
-
-    if( pHash==NULL )
-    {
-        printf("Error allocating memory\n");
-        return;
-    }
-
-    //===============================================================
-    // Hash symbol names into the hash table
-    //===============================================================
-    // Loop for each string in the symbol table array, hash it in
-    collisions = 0;
-    for( i=0; i<(int)items; i++)
-    {
-#if 1
-        printf("%08X index: %s\n", pSymPub[i].dwAddress, pSymPub[i].pName);
-        fflush(NULL);
-#endif
-
-        key = str2key(pSymPub[i].pName);
-        index = key % Global.nHash;
-
-        while( pHash[index] != 0 )
-        {
-            collisions++;
-            if( ++index==Global.nHash )
-                index = 0;
-        }
-        // Store the item index into the hash table
-        pHash[index] = (WORD)(i + 1);
-    }
-
-    printf("Hash table collisions: %d out of %d\n", collisions, items);
-
+        printf("No symbols in the file (!)\n");
 
     //=========================
     // Parse STABS
@@ -499,6 +241,9 @@ void ParseSections(int fd, Elf32_Ehdr *Elf, BYTE *pBuf, char *nameOut, DWORD fil
                 case N_GSYM:
                     printf("GSYM   ");
                     printf("line: %d  %s\n", pStab->n_desc, pStr);
+
+                    SO[nSO].nGSYM++;
+                    nGSYM++;
                 break;
 
                 case N_FNAME:
@@ -506,61 +251,28 @@ void ParseSections(int fd, Elf32_Ehdr *Elf, BYTE *pBuf, char *nameOut, DWORD fil
                     printf("%s\n", pStr);
                 break;
 
-                //-----------------------------------------------------------------------
-                //                              FUNCTION
-                //-----------------------------------------------------------------------
                 case N_FUN:
-                    if( *pStr )
-                    {                       // FUNCTION START
-                        printf("FUN---START-%08lX--%s\n", pStab->n_value, pStr);
-
-                        // Copy the function starting address into the current function descriptor
-                        pFunCur->dwAddress = pStab->n_value;
-
-                        // Copy the function name into the strings and link it in
-                        // We are not interested in the type of function return, so we'll cut it off
-                        strcpy(pStrCur, pStr);      // Copy the function name+return_type
-                        strcat(pStrCur, ":");       // Append marking ":"
-                        *(strchr(pStr, ':')) = 0;   // Cut off at first ":"
-
-                        pFunCur->pName = pStrCur;
-                        pStrCur += strlen(pStrCur) + 1;
-
-                        // Overallocate buffer for line numbers
-                        pLineCur = pLine = calloc(filesize, 1);
-
-                        // Overallocate buffer for function lexical scope array
-                        pLexCur = pLex = calloc(filesize, 1);
-
-                        if( !pLine || !pLex )
-                        {
-                            printf("Error allocating memory\n");
-                            return;
-                        }
-
-                        // Link in those two arrays
-                        pFun[Symbol.nFun].pLine = pLine;
-                        pFun[Symbol.nFun].pLex  = pLex;
+                    printf("FUN---");
+                    if( *pStr==0 )
+                    {
+                        // Function end
+                        printf("END--------- +%lX\n\n", pStab->n_value);
                     }
                     else
-                    {                   // FUNCTION END
-                        printf("FUN---END--------- +%lX\n\n", pStab->n_value);
+                    {
+                        // Function start & name
+                        printf("START-%08lX--%s\n", pStab->n_value, pStr);
 
-                        // Copy the function ending address
-                        pFunCur->dwEndAddress = pStab->n_value;
-
-                        pLineCur = NULL;
-                        pLexCur = NULL;
-
-                        // Next function...
-                        pFunCur++;
-                        Symbol.nFun++;
+                        SO[nSO].nFUN++;
+                        nGSYM++;
                     }
                 break;
 
                 case N_STSYM:
                     printf("STSYM  ");
                     printf("line: %d DSS  %08lX  %s\n", pStab->n_desc, pStab->n_value, pStr);
+
+                    SO[nSO].nSTSYM++;
                 break;
 
                 case N_LCSYM:
@@ -604,7 +316,7 @@ void ParseSections(int fd, Elf32_Ehdr *Elf, BYTE *pBuf, char *nameOut, DWORD fil
 
                 case N_RSYM:
                     printf("RSYM  REGISTER VARIABLE ");
-                    printf("%s in %d\n", pStr, (int) pStab->n_value);
+                    printf("%s in %ld\n", pStr, pStab->n_value);
                 break;
 
                 case N_M2C:
@@ -612,19 +324,8 @@ void ParseSections(int fd, Elf32_Ehdr *Elf, BYTE *pBuf, char *nameOut, DWORD fil
                     printf("%s\n", pStr);
                 break;
 
-                //-----------------------------------------------------------------------
-                //                     LINE NUMBERS WITHIN A FUNCTION
-                //-----------------------------------------------------------------------
                 case N_SLINE:
                     printf("SLINE  line: %2d -> +%lX\n", pStab->n_desc, pStab->n_value);
-
-                    // Line address is the relative offset from the function start
-                    pLineCur->dwAddress = pFunCur->dwAddress + pStab->n_value;
-                    pLineCur->dwLine    = pStab->n_desc;
-
-                    // Advance to the next line slot
-                    pLineCur++;
-                    pFun->nLine++;
                 break;
 
                 case N_DSLINE:
@@ -667,9 +368,6 @@ void ParseSections(int fd, Elf32_Ehdr *Elf, BYTE *pBuf, char *nameOut, DWORD fil
                     printf("%s\n", pStr);
                 break;
 
-                //-----------------------------------------------------------------------
-                //                              SOURCE FILE
-                //-----------------------------------------------------------------------
                 case N_SO:
                     printf("SO  ");
                     if( *pStr==0 )
@@ -677,37 +375,28 @@ void ParseSections(int fd, Elf32_Ehdr *Elf, BYTE *pBuf, char *nameOut, DWORD fil
                         // Empty name - end of source file
                         printf("End of source. Text section offset: %08lX\n", pStab->n_value);
                         printf("=========================================================\n");
+
+                        nSO++;
                     }
                     else
                     {
                         if( *(pStr + strlen(pStr) - 1)=='/' )
                         {
-                            // Directory first
+                            // Directory
                             printf("Source directory: %s\n", pStr);
-                            strcpy(sPath, pStr);
+
+                            // Store the pointer to a directory so we can use it later for
+                            // SO and SOL stabs
+                            pSoDir = pStr;
+                            SO[nSO].pPath = pStr;
                         }
                         else
                         {
                             // File
-                            printf("Source file: %s  Text section offset: %08lX\n", pStr, pStab->n_value );
+                            printf("Source file: %s\n", pStr );
 
-                            // If the level of debug info requires, package the sources
-                            if( nTranslate >= TRAN_PACKAGE )
-                                if(LoadSource(sPath, pStr, pFileCur))
-                                {
-                                    // Store the file path/name in the string area
-                                    strcpy(pStrCur, sPath);     // Copy the file path
-                                    strcat(pStrCur, "/");
-                                    strcat(pStrCur, pStr);      // Append the file name
-                                    pFile->pFileName = pStrCur;
-                                    pStrCur += strlen(pStrCur) + 1;
-
-                                    Src.nFile++;
-                                    pFileCur++;
-                                }
-
-                            // Reset the sPath variable after using it
-                            sPath[0] = 0;
+                            fprintf(fSources, "%s%s\n", pSoDir, pStr);
+                            SO[nSO].pName = pStr;
                         }
                     }
                 break;
@@ -717,81 +406,83 @@ void ParseSections(int fd, Elf32_Ehdr *Elf, BYTE *pBuf, char *nameOut, DWORD fil
                     if(fCont)
                     {
                         fCont = FALSE;
-                        printf("                   %s\n", pStr);
+                        printf("%s", pStr);
                     }
                     else
                     {
-                    printf("LSYM   ");
-                    if(pStab->n_value==0)
-                    {
-                        // n_value=0 -> Type definition
-                        if(pStab->n_desc==0)
+                        printf("LSYM   ");
+                        if(pStab->n_value==0)
                         {
-                            // n_desc=0 -> built in type
-                            printf("          TYPEDEF: %s\n", pStr);
+                            int maj, min;
+
+                            // Decode typedef ID numbers
+                            if(sscanf(strchr(pStr, '('), "(%d,%d)", &maj, &min)!=2)
+                            {
+                                printf("Error scanning TYPEDEF ID %s\n", pStr);
+                                return -1;
+                            }
+
+                            // n_value=0 -> Type definition
+                            if(pStab->n_desc==0)
+                            {
+                                // n_desc=0 -> built in type
+                                printf("           TYPEDEF(%d,%d): %s", maj, min, pStr);
+                            }
+                            else
+                            {
+                                // n_desc!=0 -> line number where it is declared
+                                printf("line: %4d TYPEDEF(%d,%d): %s", pStab->n_desc, maj, min, pStr);
+                            }
+
+                            // If the line will continue, dont print \n
+                            SO[nSO].nTYPEDEF++;
                         }
                         else
                         {
-                            // n_desc!=0 -> line number where it is declared
-                            printf("line: %2d  TYPEDEF: %s\n", pStab->n_desc, pStr);
+                            // n_value != 0 -> variable address relative to EBP
+
+                            // n_desc = line number where the symbol is declared
+                            printf("line: %2d LOCAL_VARIABLE [EBP+%02lX] %s", pStab->n_desc, pStab->n_value, pStr);
                         }
                     }
-                    //-----------------------------------------------------------------------
-                    //                  LOCAL VARIABLE TO A FUNCTION
-                    //-----------------------------------------------------------------------
-                    else
-                    {
-                        // n_value != 0 -> variable address relative to EBP
+                    if(pStr[strlen(pStr)-1]!='\\')
+                        printf("\n");
 
-                        // n_desc = line number where the symbol is declared
-                        printf("line: %2d LOCAL_VARIABLE [EBP+%02lX] %s\n", pStab->n_desc, pStab->n_value, pStr);
-
-                        // Add a local variable to a lexical scope
-                        pLexCur->token = LEX_LOCAL;
-
-                        strcpy(pStrCur, pStr);              // Copy the variable name + type
-                        pLexCur->pName = pStrCur;
-                        pStrCur += strlen(pStrCur) + 1;
-
-                        pLexCur->value = pStab->n_value;    // Copy the EBP value
-
-                        pLexCur++;
-                        pFun->nLex++;
-                    }
-                    }
                     // Check if this line will continue on the next one
                     if(pStr[strlen(pStr)-1]=='\\')
                         fCont=TRUE;
                 break;
 
                 case N_BINCL:
-                    printf("BINCL  ");
+                    SO[nSO].nBINCL++;
+
+                    printf("BINCL [%d] ", SO[nSO].nBINCL);
+                    printf("%s\n", pStr);
+                break;
+
+                case N_EXCL:
+                    SO[nSO].nBINCL++;
+
+                    printf("EXCL  [%d] ", SO[nSO].nBINCL);
                     printf("%s\n", pStr);
                 break;
 
                 case N_SOL:
                     printf("SOL  ");
                     printf("%s\n", pStr);
+
+                    // Change of source - if the first character is not '/', we need to
+                    // prefix the last defined file path to complete the directory
+                    if( *pStr!='/' && *pStr!='\\' )
+                    {
+                        fprintf(fSources, "%s", pSoDir);
+                    }
+                    fprintf(fSources, "%s\n", pStr);
                 break;
 
-                //-----------------------------------------------------------------------
-                //                      PARAMETER TO A FUNCTION
-                //-----------------------------------------------------------------------
                 case N_PSYM:
                     printf("PSYM   ");
                     printf("line: %d PARAM [EBP+%lX]  %s\n", pStab->n_desc, pStab->n_value, pStr);
-
-                    // Add a parameter as it was a local variable to a function
-                    pLexCur->token = LEX_PARAM;
-
-                    strcpy(pStrCur, pStr);              // Copy the parameter name + type
-                    pLexCur->pName = pStrCur;
-                    pStrCur += strlen(pStrCur) + 1;
-
-                    pLexCur->value = pStab->n_value;    // Copy the EBP value
-
-                    pLexCur++;
-                    pFun->nLex++;
                 break;
 
                 case N_EINCL:
@@ -803,9 +494,8 @@ void ParseSections(int fd, Elf32_Ehdr *Elf, BYTE *pBuf, char *nameOut, DWORD fil
                     printf("N_ENTRY %08lX\n", pStab->n_value);
                 break;
 
-                case N_EXCL:
-                    printf("EXCL  ");
-                    printf("%s\n", pStr);
+                case N_LBRAC:
+                    printf("LBRAC              +%lX  {  (%d)\n", pStab->n_value, pStab->n_desc);
                 break;
 
                 case N_SCOPE:
@@ -813,34 +503,8 @@ void ParseSections(int fd, Elf32_Ehdr *Elf, BYTE *pBuf, char *nameOut, DWORD fil
                     printf("%s\n", pStr);
                 break;
 
-                //-----------------------------------------------------------------------
-                //                      FUNCTION OPEN LEXICAL SCOPE
-                //-----------------------------------------------------------------------
-                case N_LBRAC:
-                    printf("LBRAC              +%lX  {  (%d)\n", pStab->n_value, pStab->n_desc);
-
-                    pLexCur->token = LEX_LBRAC;
-
-                    // Address of the scope is relative to the function start
-                    pLexCur->value = pFun->dwAddress + pStab->n_value;
-
-                    pLexCur++;
-                    pFun->nLex++;
-                break;
-
-                //-----------------------------------------------------------------------
-                //                      FUNCTION CLOSE LEXICAL SCOPE
-                //-----------------------------------------------------------------------
                 case N_RBRAC:
                     printf("RBRAC              +%lX  }\n", pStab->n_value);
-
-                    pLexCur->token = LEX_RBRAC;
-
-                    // Address of the scope is relative to the function start
-                    pLexCur->value = pFun->dwAddress + pStab->n_value;
-
-                    pLexCur++;
-                    pFun->nLex++;
                 break;
 
                 case N_BCOMM:
@@ -903,174 +567,292 @@ void ParseSections(int fd, Elf32_Ehdr *Elf, BYTE *pBuf, char *nameOut, DWORD fil
     else
         printf("No STAB section in the file\n");
 
-    //===============================================================
-    // We have everything needed to generate output symbol file
-    //===============================================================
-    strcpy(Symtab.Sig, SYMSIG);
-
-    Symtab.size =   sizeof(TSYMTAB) +
-                    (pStrCur - pStrings) +
-                    sizeof(TGLOBAL) +
-                    sizeof(TSYM_PUB) * Global.nSyms +
-                    sizeof(WORD) * Global.nHash;
-
-    strncpy(Symtab.name, nameOut, MAX_MODULE_NAME);
-    Symtab.next = NULL;
-
-    //--------------
-    //  TSYMTAB    |    sizeof(TSYMTAB)
-    //--------------
-    //  Strings    |    pStrCur - pStrings
-    //--------------
-    //  TGLOBAL    |    sizeof(TGLOBAL)
-    //--------------
-    //  TSYM_PUB[] |    sizeof(TSYM_PUB) * TGLOBAL->nSyms
-    //--------------
-    //  WORD Hash[]|    sizeof(WORD) * TGLOBAL->nHash
-    //--------------
-
-    //--------------
-    //  TSYMBOL    |    sizeof(TSYMBOL)
-    //--------------
-    //  TFUN []    |    sizeof(TFUN) * TSYMBOL->nFun
-    //--------------
-    //  TLINE [][] |    sizeof(TLINE) * TFUN[]->nLine * TSYMBOL->nFun
-    //--------------
-    //  TLEX [][]  |    sizeof(TLEX) * TFUN[]->nLine * TSYMBOL->nFun
-    //--------------
-
-
-
-    //===============================================================
-    // Make all pointers relocatable offsets from the start of the file
-    //===============================================================
-
-    // Make symbol's name references relative
-    for(i=0; i<(int)Global.nSyms; i++ )
-    {
-        pSymPub[i].pName = (char *) ((pSymPub[i].pName - pStrings) + sizeof(TSYMTAB));
-    }
-
-    Symtab.pStrings = (char *) sizeof(TSYMTAB);
-    Symtab.pGlobals = (TGLOBAL *) (Symtab.pStrings + (pStrCur - pStrings));
-    Symtab.pTypes   = NULL;
-    Symtab.pSymbols = NULL;
-    Symtab.pSrc     = NULL;
-
-    Global.pSym     = (TSYM_PUB *)((DWORD) Symtab.pGlobals + sizeof(TGLOBAL));
-    Global.pHash    = (WORD *)((DWORD) Global.pSym + sizeof(TSYM_PUB) * Global.nSyms);
-
-    written = 0;
-    written += write(fd, &Symtab, sizeof(TSYMTAB));
-    written += write(fd, pStrings, pStrCur - pStrings);
-    written += write(fd, &Global, sizeof(TGLOBAL));
-    written += write(fd, pSymPub, sizeof(TSYM_PUB) * Global.nSyms);
-    written += write(fd, pHash, sizeof(WORD) * Global.nHash);
-
-    if( written != Symtab.size )
-    {
-        printf("Error writing symbol file\n");
-    }
-    else
-    {
-        printf("Module name: %s\n", nameOut);
-        printf("  Translated %d global symbols\n", Global.nSyms);
-    }
+    return( 0 );
 }
 
 
 /******************************************************************************
 *                                                                             *
-*   void TranslateElf                                                         *
-
-
+*   BYTE *LoadElf(char *sName)                                                *
 *                                                                             *
 *******************************************************************************
 *
-*   Loads an ELF executable or object module and translates it.
+*   Loads an ELF executable or object module.
 *
-*   Where:
-*       fd - the output linice symbol file to write
-*       fi - input ELF file to scan
-*       pathSources - the path(s) where to find source files
-*       nameOut - the name of the output module
-*       nLevel - the level of packaging
-*       filesize - size of the input file
-
-#define TRAN_PUBLICS        1
-#define TRAN_TYPEINFO       2
-#define TRAN_SYMBOLS        3
-#define TRAN_SOURCE         4
-#define TRAN_PACKAGE        5
-
+*   Returns:
+*       pointer to a buffer containing the ELF file.
+*       NULL for error
 *
 ******************************************************************************/
-void TranslateElf(int fd, int fi, char *pathSources, char *nameOut, int nLevel, DWORD filesize)
+BYTE *LoadElf(char *sName)
 {
-    Elf32_Ehdr *pElf;
-    int status;
+    Elf32_Ehdr Elf;                     // ELF header
+    struct stat fd_stat;                // ELF file stats
+    int fd, status;
     BYTE *pBuf;
 
-    // Get the size of the file, allocate memory and load it in
-    pBuf = (BYTE*) malloc(filesize);
-    if( pBuf )
+    // Open the ELF binary file
+    fd = open(sName, O_RDONLY | O_BINARY);
+    if( fd>0 )
     {
-        lseek(fi, 0, SEEK_SET);
-        status = read(fi, pBuf, filesize);
-        if( status==(int)filesize )
+        // Get the file stats
+        fstat(fd, &fd_stat);
+
+        // Read the ELF header
+        status = read(fd, &Elf, sizeof(Elf32_Ehdr));
+        if( status==sizeof(Elf32_Ehdr) )
         {
-            pElf = (Elf32_Ehdr*) pBuf;
-
-            // Do some basic ELF file sanity check
-            if( pElf->e_ident[0]==ELFMAG0
-             && pElf->e_ident[1]==ELFMAG1
-             && pElf->e_ident[2]==ELFMAG2
-             && pElf->e_ident[3]==ELFMAG3
-             && pElf->e_machine==EM_386
-             && pElf->e_ehsize==sizeof(Elf32_Ehdr)
-             && pElf->e_shentsize==sizeof(Elf32_Shdr)
-             && pElf->e_shoff!=0 )
-             {
+            // Make sure it's an ELF file
+            if( Elf.e_ident[0]==ELFMAG0
+             && Elf.e_ident[1]==ELFMAG1
+             && Elf.e_ident[2]==ELFMAG2
+             && Elf.e_ident[3]==ELFMAG3 )
+            {
                 // We only support relocatable and executable files
-                if( pElf->e_type==ET_REL || pElf->e_type==ET_EXEC )
+                if( Elf.e_type==ET_REL || Elf.e_type==ET_EXEC )
                 {
-                    // Dump the ELF header sections
-#if 1
-                    printf("File length: %d\n", filesize);
-                    printf("Elf Header:\n");
-                    printf("Elf32_Half e_type       = %04X      %s\n", pElf->e_type, pElf->e_type==ET_REL? "Relocatable":"Executable");
-                    printf("Elf32_Half e_machine    = %04X      Intel\n", pElf->e_machine);
-                    printf("Elf32_Word e_version    = %08X\n", pElf->e_version);
-                    printf("Elf32_Addr e_entry      = %08X  %s\n", pElf->e_entry, pElf->e_entry==0? "No entry point":"");
-                    printf("Elf32_Off  e_phoff      = %08X  %s\n", pElf->e_phoff, pElf->e_phoff==0? "No program header table":"Program header table offset");
-                    printf("Elf32_Off  e_shoff      = %08X  %s\n", pElf->e_shoff, pElf->e_shoff==0? "No section header table":"Section header table offset");
-                    printf("Elf32_Word e_flags      = %08X\n", pElf->e_flags);
-                    printf("Elf32_Half e_ehsize     = %04X      Elf header size\n", pElf->e_ehsize);
-                    printf("Elf32_Half e_phentsize  = %04X      Size of one pht entry\n", pElf->e_phentsize);
-                    printf("Elf32_Half e_phnum      = %04X      Number of entries in pht\n", pElf->e_phnum);
-                    printf("Elf32_Half e_shentsize  = %04X      Size of one sht entry\n", pElf->e_shentsize);
-                    printf("Elf32_Half e_shnum      = %04X      Number of entries in sht\n", pElf->e_shnum);
-                    printf("Elf32_Half e_shstrndx   = %04X      Sht entry of the section name string table\n", pElf->e_shstrndx);
-#endif
+                    // Make some basic sanity checks
+                    if( Elf.e_machine==EM_386
+                     && Elf.e_ehsize==sizeof(Elf32_Ehdr)
+                     && Elf.e_shentsize==sizeof(Elf32_Shdr)
+                     && Elf.e_shoff!=0 )
+                    {
+                        // Dump the ELF header sections
+                        printf("File: %s  length: %ld\n", sName, fd_stat.st_size);
+                        printf("Elf Header:\n");
+                        printf("Elf32_Half e_type       = %04X      %s\n", Elf.e_type, Elf.e_type==ET_REL? "Relocatable":"Executable");
+                        printf("Elf32_Half e_machine    = %04X      Intel\n", Elf.e_machine);
+                        printf("Elf32_Word e_version    = %08X\n", Elf.e_version);
+                        printf("Elf32_Addr e_entry      = %08X  %s\n", Elf.e_entry, Elf.e_entry==0? "No entry point":"");
+                        printf("Elf32_Off  e_phoff      = %08X  %s\n", Elf.e_phoff, Elf.e_phoff==0? "No program header table":"Program header table offset");
+                        printf("Elf32_Off  e_shoff      = %08X  %s\n", Elf.e_shoff, Elf.e_shoff==0? "No section header table":"Section header table offset");
+                        printf("Elf32_Word e_flags      = %08X\n", Elf.e_flags);
+                        printf("Elf32_Half e_ehsize     = %04X      Elf header size\n", Elf.e_ehsize);
+                        printf("Elf32_Half e_phentsize  = %04X      Size of one pht entry\n", Elf.e_phentsize);
+                        printf("Elf32_Half e_phnum      = %04X      Number of entries in pht\n", Elf.e_phnum);
+                        printf("Elf32_Half e_shentsize  = %04X      Size of one sht entry\n", Elf.e_shentsize);
+                        printf("Elf32_Half e_shnum      = %04X      Number of entries in sht\n", Elf.e_shnum);
+                        printf("Elf32_Half e_shstrndx   = %04X      Sht entry of the section name string table\n", Elf.e_shstrndx);
 
+                        // Get the total length of the file, allocate memory and load it in
+                        pBuf = (BYTE*) malloc(fd_stat.st_size);
+                        if( pBuf )
+                        {
+                            lseek(fd, 0, SEEK_SET);
+                            status = read(fd, pBuf, fd_stat.st_size);
+                            if( status==fd_stat.st_size )
+                            {
+                                return( pBuf );
+                            }
+                            else
+                                printf("Error reading file %s\n", sName);
 
-                    ParseSections(fd, pElf, pBuf, nameOut, filesize);
-
-
-
+                            free(pBuf);
+                        }
+                        else
+                            printf("Error allocating memory\n");
+                    }
+                    else
+                        printf("Invalid ELF file format %s!\n", sName);
                 }
                 else
-                    printf("Only relocatable and executable ELF files are supported\n");
+                    printf("Only relocatable and executable ELF files are supported!\n");
             }
             else
-                printf("Input file is not a valid ELF file\n");
+                printf("The file %s is not a valid ELF file\n", sName);
         }
         else
-            printf("Error reading input ELF file\n");
-
-        free(pBuf);
+            printf("Error reading file %s", sName);
     }
     else
-        printf("Error allocating memory");
+        printf("Unable to open file %s\n", sName);
+
+    return( NULL );
+}
+
+
+void PushString(int fd, char *pStr)
+{
+    TSYMHEADER Header;                  // Generic header
+
+    Header.hType = HTYPE_IGNORE;        // Ignore this header
+    Header.dwSize = sizeof(TSYMHEADER) + strlen(pStr) + 1;
+
+    // Push the header and the string
+    write(fd, &Header, sizeof(TSYMHEADER));
+    write(fd, pStr, strlen(pStr)+1);
+}
+
+/******************************************************************************
+*                                                                             *
+*   BOOL ElfToSym(BYTE *pElf, char *pSymName)                                 *
+*                                                                             *
+*******************************************************************************
+*
+*   Given the buffer containing an ELF file, translates it into a symbol
+*   file which it saves under the pSymName file name.
+*
+*   Where:
+*       pElf - buffer in memory with the complete ELF file to be parsed
+*       pSymName - path/name of the output symbol file
+*       pTableName - internal name of this symbol table
+*
+*   Returns:
+*       True for OK
+*       False for error
+*
+******************************************************************************/
+BOOL ElfToSym(BYTE *pElf, char *pSymName, char *pTableName)
+{
+    int fd;                             // Output symbol file descriptor
+    int i;
+    TSYMTAB SymTab;                     // Symbol table main header structure
+    static TSYMHEADER HeaderEnd =       // Terminating header
+    { HTYPE__END, sizeof(TSYMHEADER) };
+
+    int fs;                             // Temp file descriptor for strings
+    char pTmp[FILENAME_MAX];            // Temporary buffer
+    char *pBuf;                         // Temporary buffer
+
+    // If the pElf is NULL, exit
+    if( pElf )
+    {
+        // Create and truncate the symbol file name
+        printf("Creating symbol file: %s\n", pSymName);
+
+        fd = open(pSymName, O_WRONLY | O_CREAT | O_TRUNC | O_BINARY);
+        if( fd>0 )
+        {
+            // Create a temp file to store source file names
+            fSources = tmpfile();
+
+            // Create a temp file in which we will queue all global symbols
+            // We use text representation of the data that we encounter during
+            // the parsing of the ELF global symbol table
+            fGlobals = tmpfile();
+            nGlobals = 0;
+
+            // PASS 1 - Parse sections and count all the pieces that we will use
+            ParseSectionsPass1(pElf);
+
+            // Print the statistics
+            printf("Number of major source files: %d\n", nSO);
+
+            for(i=0; i<(int)nSO; i++)
+            {
+                printf("Source file %d: %s%s\n", i, SO[i].pPath, SO[i].pName);
+                printf("  Number of types defined:  %d\n", SO[i].nTYPEDEF);
+                printf("  Number of include files:  %d\n", SO[i].nBINCL);
+                printf("  Number of functions:      %d\n", SO[i].nFUN);
+                printf("  Number of global symbols: %d\n", SO[i].nGSYM);
+                printf("  Number of static symbols: %d\n", SO[i].nSTSYM);
+            }
+
+            printf("Total number of global symbols (funct+var): %d\n", nGSYM);
+
+            // Print the list of the source files to load
+            printf("Source files to load:\n");
+            fseek(fSources, 0, SEEK_SET);
+            while( !feof(fSources) )
+            {
+                fgets(pTmp, FILENAME_MAX, fSources);
+                printf("  %s", pTmp);
+            }
+
+            // Set the symbol file header signature
+            strcpy(SymTab.sSig, SYMSIG);
+
+            // Set the internal symbol file name
+            // Zero terminate it in the case it's too long
+            strcpy(SymTab.sTableName, pTableName);
+            SymTab.sTableName[MAX_MODULE_NAME-1] = 0;
+
+            // Set the symbol file version number
+            SymTab.Version = SYMVER;
+
+            SymTab.dwSize = 0;          // To be written later
+            SymTab.dStrings = 0;        // To be written later
+
+            // Write a base header of the symbol table
+            i = write(fd, &SymTab, sizeof(TSYMTAB)-sizeof(TSYMHEADER));
+            if( i==sizeof(TSYMTAB)-sizeof(TSYMHEADER) )
+            {
+                // Create a temp file in which we will append all strings
+                fs = fileno(tmpfile());
+
+                // Make the first string by default a zero length string so we can
+                // safely use offset 0 to represent a non-string and invalid value
+                write(fs, "", 1);
+                dfs = 1;                // Start with the offset 1 of the strings
+
+                PushString(fd, "Symbol information for LinIce kernel level debugger");
+                PushString(fd, "Copyright 2000-2001 Goran Devic");
+
+                // The very first thing we need to do is queue these source
+                // file names into an array so anyone can start referring to
+                // them using a file_id
+                SetupSourcesArray(fSources);
+
+                // Using the temp fGlobals file where we queued all global items
+                // (and nGlobals which contains the number of items),
+                // load and push the global symbol information
+                ParseGlobal(fd, fs, fGlobals, nGlobals);
+
+                // Using the temp fSources file as the source path/name queue,
+                // load and push extracted source files into fd/fs
+                ParseSource(fd, fs);
+
+                // Function lines will parse ELF file and extract tokens
+                ParseFunctionLines(fd, fs, pElf);
+
+                // Function variables and their scopes
+                ParseFunctionScope(fd, fs, pElf);
+
+                // Type definitions bound to each major source file
+                //
+                ParseTypedefs(fd, fs, pElf);
+
+
+                // Add the terminating section HTYPE__END
+                write(fd, &HeaderEnd, sizeof(HeaderEnd));
+
+                // Copy all strings at the end of the headers
+                // Rewind the strings file
+                lseek(fs, 0, SEEK_SET);
+                pBuf = (char *) malloc(dfs);
+                if( pBuf!=NULL )
+                {
+                    // Store the offset to the strings (current top of the fd file)
+//                    SymTab.dStrings = filelength(fd);
+                    SymTab.dStrings = lseek(fd, 0, SEEK_CUR);
+
+                    read(fs, pBuf, dfs);
+                    write(fd, pBuf, dfs);
+
+                    // Total size is headers + strings
+                    SymTab.dwSize = SymTab.dStrings + dfs;
+
+                    // Write out the symbol header
+                    lseek(fd, 0, SEEK_SET);
+                    write(fd, &SymTab, sizeof(TSYMTAB)-sizeof(TSYMHEADER));
+
+                    // Close the symbol file
+                    close(fd);
+
+                    free(pBuf);
+
+                    return( TRUE );
+                }
+                else
+                    printf("Unable to allocate memory\n");
+            }
+            else
+                printf("Error writing symbol file %s\n", pSymName);
+        }
+        else
+            printf("Unable to create symbol file %s\n", pSymName);
+    }
+
+    return( FALSE );
 }
 

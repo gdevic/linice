@@ -42,32 +42,46 @@
 *                                                                             *
 ******************************************************************************/
 
-// Define so we can generate enums
-#define __define_stab(NAME, CODE, STRING) NAME=CODE,
+#ifdef WIN32
+#pragma pack(1)
+#endif
 
-enum __stab_debug_code
-{
-#include "stab.def"
-LAST_UNUSED_STAB_CODE
-};
-
-#undef __define_stab
-
-//////////////////////////////////////////////////////////////////////////////
+//============================================================================
+// 							STAB STRUCTURES
+//============================================================================
 
 typedef struct
 {
-    int code;
-    char *name;
-} TSTABNAME;
+    unsigned long n_strx;
+    unsigned char n_type;
+    unsigned char n_other;
+    unsigned short n_desc;
+    unsigned long n_value;
+} StabEntry;
 
-// Define so we can generate structures of stab codes
-#define __define_stab(NAME, CODE, STRING)  { CODE, STRING },
 
-TSTABNAME StabName[] = {
-#include "stab.def"
-{ 0, NULL }
-};
+extern const char *SecType[];
+
+// Statistics to be filled during the PASS 1
+//===========================================
+
+// Define a structure holding information for a given source file
+typedef struct
+{
+    char *pPath;                        // Path to the source file
+    char *pName;                        // File name of the source file
+    DWORD nBINCL;                       // Number of include files for typedefs for a given source
+    DWORD nTYPEDEF;                     // Number of TYPEDEFs in this source file
+    DWORD nFUN;                         // Number of functions
+    DWORD nGSYM;                        // Number of global symbols
+    DWORD nSTSYM;                       // Number of file static symbols
+} TSource;
+
+extern DWORD nGSYM;                     // Total number of global symbols
+
+#define MAX_SO      1024                // Max number of source file units that we handle
+extern TSource SO[MAX_SO];              // Source file structure
+extern DWORD nSO;                       // Number of basic source files
 
 
 #endif // _STABS_H_

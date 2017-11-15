@@ -43,11 +43,15 @@
 //
 #define DEVICE_NAME         "ice"       // Define LinIce device name (/dev)
 
-// Length of the module name string (incl. 0)
-#define MAX_MODULE_NAME     16
+//////////////////////////////////////////////////////////////////////
+// Length of the module name string (incl. 0) and internal symbol table name
+#define MAX_MODULE_NAME     32
 
-// Default symbol file signature - should be less than MAX_MODULE_NAME
-#define SYMSIG  "Linice Sym\0x1A"
+// Default symbol file signature - hardcoded length in the symbol header struct
+#define SYMSIG              "SYM"
+
+// Define current symbol file version - 1.0
+#define SYMVER              0x0100
 
 //////////////////////////////////////////////////////////////////////
 // Define the maxlimum length (including terminating zero) of:
@@ -78,7 +82,7 @@
 //////////////////////////////////////////////////////////////////////
 // Define number of bytes per line for data dump command (not tested)
 // Must be divisible by 4
-#define DATA_BYTES         16
+#define DATA_BYTES          16
 
 //////////////////////////////////////////////////////////////////////
 // Define maximum X and Y size of the output window in all modes
