@@ -145,8 +145,10 @@ void RecalculateDrawWindows()
     pWin->h.nLines = avail - 1;         // Save one extra for the help line
     AdjustTopBottom(&pWin->h);
 
-    // Draw the screen only if linice display enabled
-    if( pWin->fEnable )
+    // This prevent from us from calling all these drawing functions when the
+    // debugger is not active, in which case we would not have the right memory
+    // access set up
+    if( pIce->fRunningIce==TRUE )
     {
         // Draw the screen
         dputc(DP_CLS);
@@ -159,6 +161,7 @@ void RecalculateDrawWindows()
         DataDraw(FALSE, deb.dataAddr.offset);
         CodeDraw(FALSE);
         HistoryDraw();
+
         // HistoryDraw leaves the cursor coordinates at the proper Y-coordinate
     }
 }

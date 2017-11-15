@@ -207,7 +207,7 @@ DWORD HistoryDisplay(DWORD hView, int nDir)
     TLine *pView = (TLine *) hView;
     DWORD nLines;
 
-    nLines = pWin->h.nLines - 1;
+    nLines = pWin->h.nLines - 2;
 
     if( nDir==0 )
     {
@@ -230,7 +230,7 @@ DWORD HistoryDisplay(DWORD hView, int nDir)
         // This is quite confusing: if we are anywhere within the last
         // screenful, reset the view to the top line of it..
 
-        nLines = pWin->h.nLines - 1;
+        nLines = pWin->h.nLines - 2;
         p = pHead;
 
         while( (p!=pTail) && nLines-- )
@@ -250,7 +250,7 @@ DWORD HistoryDisplay(DWORD hView, int nDir)
     dprint("%c%c%c", DP_SETCURSORXY, 1+0, 1+pWin->h.Top+1);
 
     p = pView;
-    nLines = pWin->h.nLines;
+    nLines = pWin->h.nLines - 2;
     while( p != pHead && nLines-- )
     {
         dprint("%s\r\n", p->line);

@@ -58,6 +58,8 @@ typedef struct
     struct TSYMTAB *next;               // Next symbol structure in a list
 
     char *pStrings;                     // Pointer to strings
+    int relocCode;                      // Current code relocated offset (modules only)
+    int relocData;                      // Current data relocated offset (modules only)
 
 } TSYMPRIV;
 

@@ -204,7 +204,6 @@ typedef struct
 
 typedef struct
 {
-    BOOL fEnable;                       // Windowing enabled?
     TFRAME r;                           // Register window frame
     TFRAME d;                           // Data window frame
     TFRAME c;                           // Code window frame
@@ -284,7 +283,9 @@ extern PTOUT pOut;                      // Pointer to a current output device
 #define DP_SCROLLUP             0x0E    // Scroll up a scroll region
 #define DP_SCROLLDOWN           0x0F    // Scroll down a scroll region
 #define DP_SETCURSORSHAPE       0x10    // Set Insert/Overtype cursor shape (1, 2)
-#define DP_AVAIL                0x11    // First available code
+#define DP_ENABLE_OUTPUT        0x11    // Enable output driver
+#define DP_DISABLE_OUTPUT       0x12    // Disable output driver
+#define DP_AVAIL                0x13    // First available code
 
 
 /******************************************************************************
@@ -344,7 +345,7 @@ extern char *SymAddress2FunctionName(WORD wSel, DWORD dwOffset);
 extern void *SymTabFindSection(TSYMTAB *pSymTab, BYTE hType);
 extern TSYMSOURCE *SymTabFindSource(TSYMTAB *pSymTab, WORD fileID);
 
-extern BOOL SymbolName2Value(DWORD *pValue, char *name);
+extern BOOL SymbolName2Value(TSYMTAB *pSymTab, DWORD *pValue, char *name);
 extern char *SymAddress2FunctionName(WORD wSel, DWORD dwOffset);
 extern char *SymAddress2Name(WORD wSel, DWORD dwOffset);
 extern TSYMFNLIN *SymAddress2FnLin(WORD wSel, DWORD dwOffset);

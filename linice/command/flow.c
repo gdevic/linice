@@ -211,8 +211,16 @@ BOOL cmdTrace(char *args, int subClass)
         deb.TraceCount = 1;
     }
 
-    // Set the trace state
-    deb.fTrace = TRUE;
+    // If symbols are active and we are in the source mode, step one source line instead
+    if( deb.pFnLin )
+    {
+        
+    }
+    else
+    {
+        // Set the simple machine code trace state
+        deb.fTrace = TRUE;
+    }
 
     // Exit into debugee...
     return( FALSE );

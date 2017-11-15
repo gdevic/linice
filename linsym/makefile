@@ -1,4 +1,3 @@
-
 INC = /usr/include
 H   = ../Include
 
@@ -21,6 +20,7 @@ clean:
 		ParseGlobal.o	\
 		ParseSource.o	\
 		ParseTypedefs.o	\
+		ParseReloc.o	\
 		HashTable.o	\
 		loader.o	\
 		symbols.o   \
@@ -46,6 +46,9 @@ ParseSource.o:	ParseSource.c
 
 ParseTypedefs.o:	ParseTypedefs.c
 	$(CC) $(CFLAGS) -c ParseTypedefs.c
+
+ParseReloc.o:	ParseReloc.c
+	$(CC) $(CFLAGS) -c ParseReloc.c
 
 HashTable.o:		HashTable.c
 	$(CC) $(CFLAGS) -c HashTable.c

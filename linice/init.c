@@ -73,9 +73,11 @@ extern void VgaInit();
 extern void VgaSprint(char *s);
 extern void InterruptInit();
 extern void HookDebuger();
+extern void HookSyscall(void);
 extern BOOL InitUserVars(int num);
 extern BOOL InitMacros(int num);
 extern void InitEdit();
+extern void RecalculateDrawWindows(void);
 
 extern BYTE *ice_malloc(DWORD size);
 extern void ice_free_heap(BYTE *pHeap);
@@ -135,8 +137,10 @@ int InitPacket(PTINITPACKET pInit)
                 pWin->c.nLines   = 5;
                 pWin->h.fVisible = TRUE;
 
-                // Windowing is disabled at first (until we break into the debugger)
-                pWin->fEnable = FALSE;
+                // Adjust all output driver coordinates - we won't print anything since
+                // we are not yet in the debugger (pIce->fRunningIce is false)
+                RecalculateDrawWindows();
+                pOut->y = pWin->h.Top + 1;          // Force it into the history buffer
 
                 // Initialize default data pointer
                 deb.dataAddr.sel = __KERNEL_DS;
@@ -151,8 +155,6 @@ int InitPacket(PTINITPACKET pInit)
 
                 // Initialize the default break key
                 deb.BreakKey = CHAR_CTRL | 'Q';
-
-                HistoryAdd("LinIce (C) 2000-2001 by Goran Devic\n");
 
                 pIce->nXDrawSize = pInit->nDrawSize;
 
@@ -211,15 +213,22 @@ int InitPacket(PTINITPACKET pInit)
 
                                         memcpy(pIce->keyFn , pInit->keyFn , sizeof(pIce->keyFn));
 
+                                        // Hook system call table so we can monitor system calls
+                                        HookSyscall();
+                        
                                         // Now we can hook our master IDT so all the faults will route to
                                         // debugger.  This effectively makes it active.
 
                                         HookDebuger();
 
                                         // Interpret init command string and execute it
-
+                        
                                         INFO(("INIT: ""%s""\n", pInit->sInit));
 
+                                        dprinth(1, "LinIce (C) 2000-2001 by Goran Devic.  All Rights Reserved.");
+                                        dprinth(1, "");
+                                        dprinth(1, "LINICE: Init: %s", pInit->sInit);
+                        
                                         if( CommandExecute(pInit->sInit)==TRUE )
                                         {
                                             // Enter the debugger if the init string did not end with command 'X'

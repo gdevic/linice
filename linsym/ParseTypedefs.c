@@ -220,6 +220,14 @@ BOOL ParseTypedefs(int fd, int fs, BYTE *pBuf)
                             else
                                 pDef = pDefBuf;
 
+                            // BUG: I dont know whether this is a bug in a compiler generating typedef stabs,
+                            //      or a feature, but some of typedefs have incorrect format like
+                            //      "persist:,480,32;" without parenthesis...
+                            // Temp fix: Skip over these typedefs (they cause imbalanced scan)
+
+                            if( strchr(pDef, '(')==NULL )
+                                break;
+
                             // Do final processing of the typdef definition:
                             // If the type defined here is one of the basic types that we know
                             // how to process, there is no need to store the complete definition

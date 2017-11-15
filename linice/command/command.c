@@ -101,6 +101,7 @@ extern BOOL cmdCpu     (char *args, int subClass);      // sysinfo.c
 extern BOOL cmdModule  (char *args, int subClass);      // sysinfo.c
 extern BOOL cmdVer     (char *args, int subClass);      // sysinfo.c
 extern BOOL cmdProc    (char *args, int subClass);      // sysinfo.c
+extern BOOL cmdTss     (char *args, int subClass);      // sysinfo.c
 extern BOOL cmdPage    (char *args, int subClass);      // page.c
 extern BOOL cmdPhys    (char *args, int subClass);      // page.c
 extern BOOL cmdPeek    (char *args, int subClass);      // page.c
@@ -231,7 +232,7 @@ TCommand Cmd[] = {
 {    "TRACE",    5, 0, Unsupported,    "TRACE [B | OFF | start]", "ex: TRACE 50", 0 },
 {    "TABLE",    5, 0, cmdTable,       "TABLE [[R] table-name | AUTOON | AUTOOFF]", "ex: TABLE test", 0 },
 {    "TABS",     4, 0, Unsupported,    "TABS [1 - 8]", "ex: TABS 4",  0 },
-{    "TSS",      3, 0, Unsupported,    "TSS [TSS selector]", "ex: TSS",   0 },
+{    "TSS",      3, 0, cmdTss,         "TSS [TSS selector]", "ex: TSS",   0 },
 {    "TYPES",    5, 0, cmdTypes,       "TYPES [type-name]", "ex: TYPE DWORD", 0 },
 {    "U",        1, 0, cmdUnasm,       "Unassemble [address [L length]]", "ex: U EIP-10",  0 },
 {    "VAR",      3, 0, cmdVar,         "VAR [variable-name] | [[*] | [= expression]]", "ex: VAR myvalue = eax+20",   0 },

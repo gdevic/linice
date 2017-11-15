@@ -23,6 +23,7 @@ clean:
 			memaccess.o	\
 			eval.o		\
 			init.o		\
+			syscall.o		\
 			symbolTable.o	\
 			symbols.o	\
 			proc.o		\
@@ -69,6 +70,9 @@ memaccess.o:	memaccess.c
 
 init.o:		init.c
 	$(CC) $(CFLAGS) -c init.c
+
+syscall.o:		syscall.c
+	$(CC) $(CFLAGS) -c syscall.c
 
 symbols.o:		symbolTable.c
 	$(CC) $(CFLAGS) -c symbolTable.c

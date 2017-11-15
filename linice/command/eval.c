@@ -561,7 +561,7 @@ static int GetValue( char **sExpr )
     }
     else
     // The first precedence literal value is the symbol name
-    if( SymbolName2Value((DWORD *)&value, sStart) )
+    if( SymbolName2Value(pIce->pSymTabCur, (DWORD *)&value, sStart) )
     {
         ; // If found, value will be set
 

@@ -37,6 +37,8 @@
 #include "Common.h"                     // Include platform specific set
 
 
+extern BOOL StoreGlobalSymbols(FILE *fGlobals, int nGlobals);
+
 //****************************************************************************
 //
 // Assumption: There can be at max 65535 source files and each file can have
@@ -48,10 +50,6 @@
 //****************************************************************************
 
 FILE *fSources;                         // Temp file descriptor for source file names
-
-FILE *fGlobals;                         // Temp file descriptor for globals
-int nGlobals;                           // Number of global items that we stored in a file
-
 
 const char *SecType[] =
 {
@@ -77,10 +75,11 @@ int dfs;                                // Top offset into strings file
 
 extern BOOL SetupSourcesArray(FILE *fSources);
 extern BOOL ParseSource(int fd, int fs);
-extern BOOL ParseGlobal(int fd, int fs, FILE *fGlobals, int nGlobals);
+extern BOOL ParseGlobal(int fd, int fs);
 extern BOOL ParseFunctionLines(int fd, int fs, BYTE *pElf);
 extern BOOL ParseFunctionScope(int fd, int fs, BYTE *pBuf);
 extern BOOL ParseTypedefs(int fd, int fs, BYTE *pBuf);
+extern BOOL ParseReloc(int fd, int fs, BYTE *pBuf);
 
 extern BOOL HashSymbolAdd(char *pName, DWORD dwValue);
 extern BOOL WriteHashTable(int fd, FILE *fGlobals, DWORD nGlobals);
@@ -98,6 +97,7 @@ int ParseSectionsPass1(BYTE *pBuf)
     Elf32_Shdr *SecSymtab = NULL;       // Section .SYMTAB
     Elf32_Shdr *SecStrtab = NULL;       // Section .STRTAB
 
+    FILE *fGlobals;                     // Temp file descriptor for globals
     Elf32_Sym *pSym;                    // Pointer to a symtab entry
     StabEntry *pStab;                   // Pointer to a stab entry
     char *pStr;                         // Pointer to a stab string
@@ -162,6 +162,12 @@ int ParseSectionsPass1(BYTE *pBuf)
 #endif
     }
 
+    // Create a temp file in which we will queue all global symbols
+    // We use text representation of the data that we encounter during
+    // the parsing of the ELF global symbol table
+    fGlobals = tmpfile();
+    nGlobals = 0;
+
     //==============================
     // Parse ELF global symbol table
     //==============================
@@ -196,22 +202,31 @@ int ParseSectionsPass1(BYTE *pBuf)
                 printf("%s\n", pBuf + SecName->sh_offset + Sec[pSym->st_shndx].sh_name );
             }
 
-            // If a symbol represent a global function or variable, save it in
-            // a fGlobal file:
-            //  11h - Global symbol (variable)
-            //  12h - Global symbol (function)
-            if( pSym->st_info==0x11 || pSym->st_info==0x12 )
-            {
-                fprintf(fGlobals, "%s %08X %08X\n", pStr+pSym->st_name, pSym->st_value, pSym->st_value + pSym->st_size);
-                nGlobals++;
-                printf("Global symbol queued\n");
-            }
+            // Save a global symbol with all its attributes so we can select from it later
+            // on when we need globals.
+            // We should not have empty symbol string name, so special case a null-string
+            fprintf(fGlobals, "%08X %08X %04X %s\n", 
+                pSym->st_value, 
+                pSym->st_value + pSym->st_size, 
+                pSym->st_info, 
+                strlen(pStr+pSym->st_name)? pStr+pSym->st_name : "?");
+
+            nGlobals++;
 
             pSym++;
         }
     }
     else
         printf("No symbols in the file (!)\n");
+
+    //=========================
+    // Store Global Symbols
+    //=========================
+
+    // Now we know the number of global symbols queued in the fGlobals file. Read
+    // them and store them in a memory array for faster search
+
+    StoreGlobalSymbols(fGlobals, nGlobals);
 
     //=========================
     // Parse STABS
@@ -419,6 +434,14 @@ int ParseSectionsPass1(BYTE *pBuf)
                             int maj, min;
 
                             // Decode typedef ID numbers
+
+                            // BUG: I dont know whether this is a bug in a compiler generating typedef stabs,
+                            //      or a feature, but some of typedefs have incorrect format like
+                            //      "persist:,480,32;" without parenthesis...
+                            // Temp fix: Skip over these typedefs (they cause imbalanced scan)
+                            if( strchr(pStr, '(')==NULL )
+                                break;
+
                             if(sscanf(strchr(pStr, '('), "(%d,%d)", &maj, &min)!=2)
                             {
                                 printf("Error scanning TYPEDEF ID %s\n", pStr);
@@ -729,12 +752,6 @@ BOOL ElfToSym(BYTE *pElf, char *pSymName, char *pTableName)
             // Create a temp file to store source file names
             fSources = tmpfile();
 
-            // Create a temp file in which we will queue all global symbols
-            // We use text representation of the data that we encounter during
-            // the parsing of the ELF global symbol table
-            fGlobals = tmpfile();
-            nGlobals = 0;
-
             // PASS 1 - Parse sections and count all the pieces that we will use
             ParseSectionsPass1(pElf);
 
@@ -764,6 +781,12 @@ BOOL ElfToSym(BYTE *pElf, char *pSymName, char *pTableName)
 
             // Set the symbol file header signature
             strcpy(SymTab.sSig, SYMSIG);
+
+            // If the name of the inout file ends with ".o", assume it is a kernel
+            // module object file, and strip that extension so the name will match
+            // to a kernel module name
+            if( strlen(pTableName)>2 && !strcmp(pTableName+strlen(pTableName)-2, ".o") )
+                *(char *)(pTableName+strlen(pTableName)-2) = 0;
 
             // Set the internal symbol file name
             // Zero terminate it in the case it's too long
@@ -796,10 +819,9 @@ BOOL ElfToSym(BYTE *pElf, char *pSymName, char *pTableName)
                 // them using a file_id
                 SetupSourcesArray(fSources);
 
-                // Using the temp fGlobals file where we queued all global items
-                // (and nGlobals which contains the number of items),
-                // load and push the global symbol information
-                ParseGlobal(fd, fs, fGlobals, nGlobals);
+                // Global symbols are loaded into memory array; parse it and
+                // store only useful globals
+                ParseGlobal(fd, fs);
 
                 // Using the temp fSources file as the source path/name queue,
                 // load and push extracted source files into fd/fs
@@ -816,6 +838,9 @@ BOOL ElfToSym(BYTE *pElf, char *pSymName, char *pTableName)
 
                 // Lastly, store all symbols that should be hashed
 //                WriteHashTable(fd, fGlobals, nGlobals);
+
+                // Relocation information, written only for object files (kernel modules)
+                ParseReloc(fd, fs, pElf);
 
                 // Add the terminating section HTYPE__END
                 write(fd, &HeaderEnd, sizeof(HeaderEnd));

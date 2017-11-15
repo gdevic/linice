@@ -196,8 +196,7 @@ int dprint( char *format, ... )
 *                                                                             *
 *******************************************************************************
 *
-*   This print function should be used by all commands. If a command prints
-*   also in a window, line
+*   This print function should be used by all commands.
 *
 *   Where:
 *       nLineCount is the line count for printing in the history buffer
@@ -223,7 +222,7 @@ BOOL dprinth( int nLineCount, char *format, ... )
     written = vsprintf(pBuf, format, arg);
     va_end(arg);
 
-    // If we are printing in the history buffer, store it there as well
+    // If we are printing to the history buffer, store it there as well
     if( pOut->y > pWin->h.Top )
     {
         HistoryAdd(pBuf);

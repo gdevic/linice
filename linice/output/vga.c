@@ -93,6 +93,7 @@ typedef struct
     BYTE *pText;                        // Address of the VGA text buffer
     BYTE savedX, savedY;                // Last recently saved cursor coordinates
     BYTE scrollTop, scrollBottom;       // Scroll region top and bottom coordinates
+    BYTE fEnabled;                      // Output is enabled
 
 } TVga;
 
@@ -134,6 +135,7 @@ void VgaInit(void)
     vga.scrollBottom = MAX_SIZEY - 1;
     vga.pText = (BYTE *) LINUX_VGA_TEXT;
     vga.col = COL_NORMAL;
+    vga.fEnabled = FALSE;
 }
 
 
@@ -312,108 +314,119 @@ void VgaSprint(char *s)
 
     while( (c = *s++) != 0 )
     {
-        switch( c )
+        if( vga.fEnabled )
         {
-            case DP_SAVEBACKGROUND:
-                    SaveBackground();
-                break;
+            switch( c )
+            {
+                case DP_DISABLE_OUTPUT:
+                        vga.fEnabled = FALSE;
+                    break;
 
-            case DP_RESTOREBACKGROUND:
-                    RestoreBackground();
-                break;
+                case DP_SAVEBACKGROUND:
+                        SaveBackground();
+                    break;
 
-            case DP_CLS:
-                    // Clear the screen and reset the cursor coordinates
-                    memset_w(vga.pText,
-                        pIce->col[COL_NORMAL] * 256 + ' ',
-                        outVga.sizeY * outVga.sizeX);
-                    outVga.x = 0;
-                    outVga.y = 0;
-                break;
+                case DP_RESTOREBACKGROUND:
+                        RestoreBackground();
+                    break;
 
-            case DP_SETCURSORXY:
-                    outVga.x = (*s++)-1;
-                    outVga.y = (*s++)-1;
-                break;
+                case DP_CLS:
+                        // Clear the screen and reset the cursor coordinates
+                        memset_w(vga.pText,
+                            pIce->col[COL_NORMAL] * 256 + ' ',
+                            outVga.sizeY * outVga.sizeX);
+                        outVga.x = 0;
+                        outVga.y = 0;
+                    break;
 
-            case DP_SETCURSORSHAPE:
-                    outVga.fOvertype = (*s++)-1;
-                break;
+                case DP_SETCURSORXY:
+                        outVga.x = (*s++)-1;
+                        outVga.y = (*s++)-1;
+                    break;
 
-            case DP_SAVEXY:
-                    vga.savedX = outVga.x;
-                    vga.savedY = outVga.y;
-                break;
+                case DP_SETCURSORSHAPE:
+                        outVga.fOvertype = (*s++)-1;
+                    break;
 
-            case DP_RESTOREXY:
-                    outVga.x = vga.savedX;
-                    outVga.y = vga.savedY;
-                break;
+                case DP_SAVEXY:
+                        vga.savedX = outVga.x;
+                        vga.savedY = outVga.y;
+                    break;
 
-            case DP_SETSCROLLREGIONYY:
-                    vga.scrollTop = (*s++)-1;
-                    vga.scrollBottom = (*s++)-1;
-                break;
+                case DP_RESTOREXY:
+                        outVga.x = vga.savedX;
+                        outVga.y = vga.savedY;
+                    break;
 
-            case DP_SCROLLUP:
-                    // Scroll a portion of the screen up and clear the bottom line
-                    ScrollUp();
-                break;
+                case DP_SETSCROLLREGIONYY:
+                        vga.scrollTop = (*s++)-1;
+                        vga.scrollBottom = (*s++)-1;
+                    break;
 
-            case DP_SCROLLDOWN:
-                    // Scroll a portion of the screen down and clear the top line
-                    if( (vga.scrollTop < vga.scrollBottom) && (vga.scrollBottom < outVga.sizeY) )
-                    {
-                        // Scroll down all requested lines
-                        memmove(vga.pText + ((vga.scrollTop + 1) * outVga.sizeX) * 2,
-                                vga.pText + (vga.scrollTop * outVga.sizeX) * 2,
-                                outVga.sizeX * 2 * (vga.scrollBottom - vga.scrollTop));
-
-                        // Clear the first line
-                        memset_w(vga.pText + (vga.scrollTop * outVga.sizeX) * 2,
-                               pIce->col[COL_NORMAL] * 256 + ' ',
-                               outVga.sizeX);
-                    }
-                break;
-
-            case DP_SETCOLINDEX:
-                    vga.col = *s++;
-                break;
-
-            case '\r':
-                    // Erase all characters to the right of the cursor pos and move cursor back
-                    memset_w(vga.pText + (outVga.x +  outVga.y * outVga.sizeX) * 2,
-                            pIce->col[vga.col] * 256 + ' ',
-                            outVga.sizeX - outVga.x);
-                    outVga.x = 0;
-                    vga.col = COL_NORMAL;
-                break;
-
-            case '\n':
-                    // Go to a new line, possible autoscroll
-                    outVga.x = 0;
-                    vga.col = COL_NORMAL;
-
-                    // Check if we are on the last line of autoscroll
-                    if( vga.scrollBottom==outVga.y )
+                case DP_SCROLLUP:
+                        // Scroll a portion of the screen up and clear the bottom line
                         ScrollUp();
-                    else
-                        outVga.y++;
-                break;
+                    break;
 
-            default:
-                    // All printable characters
-                    *(WORD *)(vga.pText + (outVga.x +  outVga.y * outVga.sizeX) * 2)
-                        = (WORD) c + pIce->col[vga.col] * 256;
+                case DP_SCROLLDOWN:
+                        // Scroll a portion of the screen down and clear the top line
+                        if( (vga.scrollTop < vga.scrollBottom) && (vga.scrollBottom < outVga.sizeY) )
+                        {
+                            // Scroll down all requested lines
+                            memmove(vga.pText + ((vga.scrollTop + 1) * outVga.sizeX) * 2,
+                                    vga.pText + (vga.scrollTop * outVga.sizeX) * 2,
+                                    outVga.sizeX * 2 * (vga.scrollBottom - vga.scrollTop));
 
-                    // Advance the print position
-                    if( outVga.x < outVga.sizeX )
-                        outVga.x++;
-                break;
+                            // Clear the first line
+                            memset_w(vga.pText + (vga.scrollTop * outVga.sizeX) * 2,
+                                   pIce->col[COL_NORMAL] * 256 + ' ',
+                                   outVga.sizeX);
+                        }
+                    break;
+
+                case DP_SETCOLINDEX:
+                        vga.col = *s++;
+                    break;
+
+                case '\r':
+                        // Erase all characters to the right of the cursor pos and move cursor back
+                        memset_w(vga.pText + (outVga.x +  outVga.y * outVga.sizeX) * 2,
+                                pIce->col[vga.col] * 256 + ' ',
+                                outVga.sizeX - outVga.x);
+                        outVga.x = 0;
+                        vga.col = COL_NORMAL;
+                    break;
+
+                case '\n':
+                        // Go to a new line, possible autoscroll
+                        outVga.x = 0;
+                        vga.col = COL_NORMAL;
+
+                        // Check if we are on the last line of autoscroll
+                        if( vga.scrollBottom==outVga.y )
+                            ScrollUp();
+                        else
+                            outVga.y++;
+                    break;
+
+                default:
+                        // All printable characters
+                        *(WORD *)(vga.pText + (outVga.x +  outVga.y * outVga.sizeX) * 2)
+                            = (WORD) c + pIce->col[vga.col] * 256;
+
+                        // Advance the print position
+                        if( outVga.x < outVga.sizeX )
+                            outVga.x++;
+                    break;
+            }
+    
+            ShowCursorPos();
         }
-
-        ShowCursorPos();
+        else
+        {
+            if( c==DP_ENABLE_OUTPUT )
+                vga.fEnabled = TRUE;
+        }
     }
 }
-
 

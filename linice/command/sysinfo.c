@@ -429,7 +429,7 @@ BOOL cmdModule(char *args, int subClass)
         }
 
         // Display all modules matching search criteria
-        dprinth(1, "%c%cModule name       Size   Syms Deps init()   cleanup() Use Flags:",
+        dprinth(1, "%c%cModule   Name              Size   Syms Deps init()   cleanup() Use Flags:",
             DP_SETCOLINDEX, COL_BOLD);
 
         for(; pMod ; pMod = pMod->next )
@@ -446,7 +446,8 @@ BOOL cmdModule(char *args, int subClass)
             if( bits[0]==0 )
                 strcat(bits, "UNINIT");
 
-            if(!dprinth(nLine++, "%-16s  %-6d  %-3d  %-3d %08X %08X   %d   %2X  %s",
+            if(!dprinth(nLine++, "%08X %-16s  %-6d  %-3d  %-3d %08X %08X   %d   %2X  %s",
+                    (DWORD) pMod,
                     *pMod->name? pMod->name : "(kernel)",
                     pMod->size,
                     pMod->nsyms,
@@ -470,6 +471,43 @@ BOOL cmdModule(char *args, int subClass)
     }
 
     return( TRUE );
+}
+
+
+/******************************************************************************
+*                                                                             *
+*   struct module *FindModule(const char *name)                               *
+*                                                                             *
+*******************************************************************************
+*
+*   Searches for a module with a given name.
+*
+*   Where:
+*       name is the module name
+*
+*   Returns:
+*       Address of the module descriptor
+*       NULL if the module is not found
+*
+******************************************************************************/
+struct module *FindModule(const char *name)
+{
+    struct module* pMod;                // Pointer to a current module
+
+    pMod = (struct module*) *pmodule;   // Get to the head of the module list
+
+    if( pMod )
+    {
+        for(; pMod ; pMod = pMod->next )
+        {
+            if( !strcmp(pMod->name, name) )
+            {
+                return( pMod );
+            }
+        }
+    }
+
+    return( NULL );
 }
 
 
@@ -501,20 +539,173 @@ BOOL cmdVer(char *args, int subClass)
 *                                                                             *
 *******************************************************************************
 *
-*   Display process information
+*   Display process information. If process ID is given, it switches the
+*   current context to that process.
 *
 ******************************************************************************/
 BOOL cmdProc(char *args, int subClass)
 {
     int nLine = 1;
+    int pid;
     struct task_struct *pTask;
 
-    for_each_task(pTask)
+    if( *args )
     {
-        if( !dprinth(nLine++, "%4d", pTask->pid ))
-            break;
+        // Switch to a given process ID (decimal)
+
+        pid = (int) GetDec(&args);
+
+        // Search the process list for the given PID
+        for_each_task(pTask)
+        {
+            if( pTask->pid==pid )
+                break;
+        }
+        
+        if( pTask->pid==pid )
+        {
+            // Switch to that process ID
+
+            // TODO: We can't do this safely this way
+
+//            if( pTask!=current )
+            {
+                /* Re-load page tables */
+                {
+                    unsigned long new_cr3 = pTask->tss.cr3;
+                    asm volatile("movl %0,%%cr3": :"r" (new_cr3));
+                }
+            }
+        }
+        else
+        {
+            // Did not find that process ID
+            dprinth(nLine++, "Process ID=%d not found.", pid);
+        }
+    }
+    else
+    {
+        // List the process information
+
+        // Display the process head line
+        dprinth(nLine++, "%c%cPID   TSS  Task      state    uid  gid  name",
+            DP_SETCOLINDEX, COL_BOLD);
+
+        for_each_task(pTask)
+        {
+            if( !dprinth(nLine++, "%c%c%4d  %04X %08X  %s %4d %4d %s",
+                DP_SETCOLINDEX, pTask==current? COL_BOLD : COL_NORMAL,
+                pTask->pid,
+                pTask->tss.tr,
+                (DWORD)pTask, 
+                pTask->state==TASK_RUNNING?         "RUNNING ":
+                pTask->state==TASK_INTERRUPTIBLE?   "SLEEPING":
+                pTask->state==TASK_UNINTERRUPTIBLE? "UNINTR  ":
+                pTask->state==TASK_ZOMBIE?          "ZOMBIE  ":
+                pTask->state==TASK_STOPPED?         "STOPPED ":
+                pTask->state==TASK_SWAPPING?        "SWAPPING":
+                                                    "<?>     ",
+                pTask->uid,
+                pTask->gid,
+                pTask->comm
+                ))
+                break;
+        }
     }
 
     return(TRUE);
+}
+
+
+/******************************************************************************
+*                                                                             *
+*   BOOL cmdTss(char *args, int subClass)                                     *
+*                                                                             *
+*******************************************************************************
+*
+*   Display current TSS structure. If the argument is given, display that
+*   TSS selector.
+*
+******************************************************************************/
+BOOL cmdTss(char *args, int subClass)
+{
+    int nLine = 1;
+    int tr;
+    TGDT_Gate *pGdt;
+    struct thread_struct *tss;
+
+    if( *args )
+    {
+        // Display a selected TSS structure
+
+        tr = Evaluate(args, &args);
+    }
+    else
+    {
+        // TSS that is current should be the same as the one in current->tss
+        tr = current->tss.tr;
+    }
+
+    pGdt = (TGDT_Gate *) (deb.gdt.base + (tr & ~7));
+
+    if( pGdt->type==DESC_TYPE_TSS16B || pGdt->type==DESC_TYPE_TSS16A ||
+        pGdt->type==DESC_TYPE_TSS32B || pGdt->type==DESC_TYPE_TSS32A )
+    {
+        tss = (struct thread_struct *) GET_GDT_BASE(pGdt);
+
+        dprinth(nLine++, "TR=%04X   BASE=%08X  LIMIT=%X",
+                tr,
+                GET_GDT_BASE(pGdt),
+                GET_GDT_LIMIT(pGdt));
+
+        dprinth(nLine++, "LDT=%04X  GS=%04X  FS=%04X  DS=%04X  SS=%04X  CS=%04X  ES=%04X",
+                tss->ldt,
+                tss->gs,
+                tss->fs,
+                tss->ds,
+                tss->ss,
+                tss->cs,
+                tss->es);
+
+        dprinth(nLine++, "CR3=%08X", current->tss.cr3);
+
+        dprinth(nLine++, "EAX=%08X  EBX=%08X  ECX=%08X  EDX=%08X  EIP=%08X",
+                tss->eax,
+                tss->ebx,
+                tss->ecx,
+                tss->edx,
+                tss->eip);
+
+        dprinth(nLine++, "ESI=%08X  EDI=%08X  EBP=%08X  ESP=%08X  EFL=%08X",
+                tss->esi,
+                tss->edi,
+                tss->ebp,
+                tss->esp,
+                tss->eflags);
+
+        dprinth(nLine++, "SS0=%04X:%08X  SS1=%04X:%08X  SS2=%04X:%08X",
+                tss->ss0,
+                tss->esp0,
+                tss->ss1,
+                tss->esp1,
+                tss->ss2,
+                tss->esp2);
+
+        dprinth(nLine++, "I/O Map Base=%04X  I/O Map Size=%X",
+                (int)&tss->io_bitmap[0] - (int)tss,
+                IO_BITMAP_SIZE);
+
+        dprinth(nLine++, "CR2=%08X  trap_no=%08X  error_code=%X",
+                tss->cr2,
+                tss->trap_no,
+                tss->error_code);
+    }
+    else
+    {
+        dprinth(nLine++, "Invalid TSS descriptor %04X", tr);
+    }
+
+
+    return( TRUE );
 }
 

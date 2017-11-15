@@ -692,6 +692,8 @@ void ArmBreakpoints(void)
 *   In addition to all sticky breakpoints, a single non-sticky breakpoint
 *   will be disarmed (but not cleared!)
 *
+*   Debug registers will be cleared.
+*
 ******************************************************************************/
 void DisarmBreakpoints(void)
 {
@@ -749,6 +751,10 @@ void DisarmBreakpoints(void)
         else
             dprinth(1, "ERROR: nsbp not 0xCC!");   // Delete this eventually
     }
+
+    // Clear the DR7 register since it needs to be rebuilt anyways. This allows us to have temp
+    // non-sticky hardware breakpoints
+    deb.sysReg.dr7 = 0;
 }
 
 
@@ -972,22 +978,21 @@ int IsDebugRegAvail(int which)
 
 /******************************************************************************
 *                                                                             *
-*   int ArmDebugReg(int which, TADDRDESC Addr, BYTE type)                     *
+*   int ArmDebugReg(int nDr, TADDRDESC Addr)                                  *
 *                                                                             *
 *******************************************************************************
 *
-*   Arms a specified debug register.
+*   Arms a specified debug register for execution only
 *
 *   Where:
-*       which (0,1,2,3) checks a particular debug reg
+*       nDr (0,1,2,3) selects a particular debug reg
 *       Addr is the sel:offset of the address to arm
-*       type is one of the DR7_* types (eg. DR7_EXEC,...)
 *
 *   Returns:
 *       0
 *
 ******************************************************************************/
-int ArmDebugReg(int which, TADDRDESC Addr, BYTE type)
+int ArmDebugReg(int nDr, TADDRDESC Addr)
 {
     DWORD Linear;
 
@@ -995,13 +1000,14 @@ int ArmDebugReg(int which, TADDRDESC Addr, BYTE type)
     // TODO: We will again assume our selector is zero-based
     Linear = Addr.offset;
 
-    deb.sysReg.dr[which] = Linear;
+    // BPX breakpoint
+    deb.sysReg.dr[nDr] = Linear;
 
-    // Set the type of breakpoint
-    deb.sysReg.dr7 |= type << (which*4 + 16);
+    // Set breakpoint on execution only (value 0)
+    deb.sysReg.dr7 &= ~3 << ((nDr*4)+16);
 
-    // Arm the debug register with both LE and GE bits
-    deb.sysReg.dr7 |= 3 << (which*2);
+    // Set global and local flag to actually enable a breakpoint
+    deb.sysReg.dr7 |= 3 << (nDr*2);
 
     return(0);
 }

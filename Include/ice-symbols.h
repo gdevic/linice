@@ -60,7 +60,8 @@
 #define HTYPE_STATIC            0x05    // All static symbols bound to one source file
 #define HTYPE_TYPEDEF           0x06    // All typedefs bound to one source file
 #define HTYPE_IGNORE            0x07    // This header should be ignored and skipped
-#define HTYPE_SYMBOL_HASH       0x08    // Hash table with all symbols
+#define HTYPE_RELOC             0x08    // Relocation section
+#define HTYPE_SYMBOL_HASH       0x09    // Hash table with all symbols
 #define HTYPE__END              0x00    // (End of the array of headers)
 
 typedef struct
@@ -100,6 +101,7 @@ typedef struct
     DWORD dName;                        // Offset to the global symbol name string
     DWORD dwStartAddress;               // Address where the symbol starts
     DWORD dwEndAddress;                 // Address + size of the symbol
+    BYTE  bFlags;                       // [0]: Code (0), Data (1)
 
 } PACKED TSYMGLOBAL1;
 
@@ -300,6 +302,22 @@ typedef struct
     TSYMTYPEDEF1 list[1];               // Typedef array
     //           ...
 } PACKED TSYMTYPEDEF;
+
+//----------------------------------------------------------------------------
+// HTYPE_RELOC
+// Relocation information for object files (kernel modules).
+
+typedef struct
+{
+//  ------------- constant section -----------------
+    BYTE hType;                         // Header type (ID)
+    DWORD dwSize;                       // Total size in bytes
+//  ------------- type dependent section -----------
+
+    DWORD refOffset;                    // Offset at which to take reloc sample in .text section
+    DWORD symOffset;                    // Offset of the symbol in .data section
+
+} PACKED TSYMRELOC;
 
 //----------------------------------------------------------------------------
 // HTYPE_SYMBOL_HASH

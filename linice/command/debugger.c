@@ -349,12 +349,13 @@ void DebuggerEnter(void)
         SET_CR0( deb.sysReg.cr0 & ~BITMASK(WP_BIT));
 
         {
-            // Disarm all breakpoints by resetting original opcode from our INT3
+            // Disarm all breakpoints by resetting original opcodes at places
+            // where we inserted INT3
             DisarmBreakpoints();
 
             {
-                // Enable windowing and save background
-                pWin->fEnable = TRUE;
+                // Enable output driver and save background
+                dputc(DP_ENABLE_OUTPUT);
                 dputc(DP_SAVEBACKGROUND);
 
                 // Set the content variables used in debugging with symbols
@@ -377,9 +378,9 @@ void DebuggerEnter(void)
 
                 //========================================================================
 
-                // Disable windowing and restore background
-                pWin->fEnable = FALSE;
+                // Restore background and disable output driver
                 dputc(DP_RESTOREBACKGROUND);
+                dputc(DP_DISABLE_OUTPUT);
             }
 
             // Arm all breakpoints by inserting INT3 opcode
@@ -395,13 +396,13 @@ void DebuggerEnter(void)
         SetSysreg(&deb.sysReg);
     }
 
-    // If the fTrap signal flag is set, set it in the eflags register. This
-    // signals a single step over the machine instruction
+    // If the fTrace signal flag is set, set it in the eflags register. This
+    // signals a single step over one machine instruction
     if( deb.fTrace )
         deb.r->eflags |= TF_MASK;
 
     // Set RESUME flag on the eflags and return to the client. This way we dont
-    // break on the same condition, if the hardware bp would trigger at this address
+    // break on the same condition, if the hardware bp would trigger it at this address
     deb.r->eflags |= RF_MASK;
 
     return;

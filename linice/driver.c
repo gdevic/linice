@@ -180,6 +180,7 @@ extern void ice_free_heap(BYTE *pHeap);
 extern void KeyboardHook(DWORD handle_kbd_event, DWORD handle_scancode);
 extern void KeyboardUnhook();
 extern void UnHookDebuger(void);
+extern void UnHookSyscall(void);
 
 /******************************************************************************
 *                                                                             *
@@ -378,6 +379,12 @@ static int DriverIOCTL(struct inode *inode, struct file *file, unsigned int ioct
             break;
 
         case ICE_IOCTL_EXIT:            // Decrement usage count to 1 so we can unload the module
+
+            // Unhook the system call table hooks early here so we dont collide with the
+            // module unload hook function when unloading itself
+            UnHookSyscall();
+
+            // This loop comes really handy when linice does not want to be unloaded
             while( MOD_IN_USE )
             {
                 MOD_DEC_USE_COUNT;

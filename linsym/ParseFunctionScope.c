@@ -40,7 +40,7 @@
 extern int dfs;
 
 extern WORD GetFileId(char *pSoDir, char *pSo);
-
+extern DWORD GetGlobalSymbolAddress(char *pName);
 
 /******************************************************************************
 *                                                                             *
@@ -150,9 +150,6 @@ BOOL ParseFunctionScope(int fd, int fs, BYTE *pBuf)
                     }
                     else
                     {
-                        // Function start & name
-                        printf("START-%08lX--%s\n", pStab->n_value, pStr);
-
                         // We will write a header but later, on an function end,
                         // rewind and rewite it with the complete information
                         // This we do so we can simply keep adding file tokens as
@@ -169,6 +166,14 @@ BOOL ParseFunctionScope(int fd, int fs, BYTE *pBuf)
                         Header.dwStartAddress = pStab->n_value;
                         Header.dwEndAddress   = 0;      // To be written later
                         Header.nTokens        = 0;      // To be written later
+
+                        // If the start address is not defined (0?) and this is an object file
+                        // (kernel module), we can search the global symbols for the address
+                        if( Header.dwStartAddress==0 )
+                            Header.dwStartAddress = GetGlobalSymbolAddress(pStr);
+
+                        // Print function start & name
+                        printf("START-%08lX--%s\n", Header.dwStartAddress, pStr);
 
                         nTokens = 0;
 

@@ -95,8 +95,11 @@ BOOL cmdSymbol(char *args, int subClass)
             {
                 for(i=0; i<pGlobals->nGlobals; i++ )
                 {
-                    if(dprinth(nLine++, " %08X G %s", pGlobals->global[i].dwStartAddress, pIce->pSymTabCur->pPriv->pStrings + pGlobals->global[i].dName)==FALSE)
-                        return( TRUE );
+                    if(dprinth(nLine++, " %08X %c %s",
+                        pGlobals->global[i].dwStartAddress,
+                        (pGlobals->global[i].bFlags & 1)==0x01 ? 'D' : 'C',
+                        pIce->pSymTabCur->pPriv->pStrings + pGlobals->global[i].dName)==FALSE)
+                    return( TRUE );
                 }
             }
         }
@@ -174,7 +177,7 @@ BOOL cmdFile(char *args, int subClass)
 {
     TSYMHEADER *pHead;                  // Generic section header
     TSYMSOURCE *pSrc;                   // Source file header
-    WORD fileID;
+//  WORD fileID;
     int nLine = 1;
 
     if( pIce->pSymTabCur )
@@ -251,13 +254,14 @@ BOOL cmdFile(char *args, int subClass)
 
 /******************************************************************************
 *                                                                             *
-*   BOOL SymbolName2Value(DWORD *pValue, char *name)                          *
+*   BOOL SymbolName2Value(TSYMTAB *pSymTab, DWORD *pValue, char *name)        *
 *                                                                             *
 *******************************************************************************
 *
-*   Translates symbol name to its value
+*   Translates symbol name to its value from a given symbol table
 *
 *   Where:
+*       pSymTab is the symbol table to look
 *       pValue is the address of the variable to receive the value DWORD
 *       name is the symbol name
 *   Returns:
@@ -265,17 +269,49 @@ BOOL cmdFile(char *args, int subClass)
 *       TRUE - *pValue is set with the symbol value
 *
 ******************************************************************************/
-BOOL SymbolName2Value(DWORD *pValue, char *name)
+BOOL SymbolName2Value(TSYMTAB *pSymTab, DWORD *pValue, char *name)
 {
+//    TSYMHEADER *pHead;                  // Generic section header
+    DWORD count;
+
+    TSYMGLOBAL  *pGlobals;              // Globals section pointer
+    TSYMGLOBAL1 *pGlobal;               // Single global item
+
+//    TSYMFNLIN   *pFnLin;                // Function lines section pointer
+//    TSYMFNSCOPE *pFnScope;              // Function scope section pointer
+//    TSYMSTATIC  *pStatic;               // Static symbols section pointer
+//    TSYMSTATIC1 *pStatic1;              // Single static item
+
     // Search in this order:
     //  * Local scope variables
     //  * Current file static variables
     //  * Global variables
     //  * Function names
 
-    if( pIce->pSymTabCur )
+    if( pSymTab )
     {
-        dprinth(1, " SymbolName2Value(%s) ", name);
+
+
+
+        // Global symbols
+
+        pGlobals = (TSYMGLOBAL *) SymTabFindSection(pSymTab, HTYPE_GLOBALS);
+        if( pGlobals )
+        {
+            // Search global symbols for a specified symbol name
+
+            pGlobal  = &pGlobals->global[0];
+
+            for(count=0; count<pGlobals->nGlobals; count++, pGlobal++ )
+            {
+                if( !strcmp(pSymTab->pPriv->pStrings + pGlobal->dName, name) )
+                {
+                    *pValue = pGlobal->dwStartAddress;
+
+                    return( TRUE );
+                }
+            }
+        }
     }
 
     return( FALSE );
@@ -429,7 +465,7 @@ char *SymFnLin2Line(WORD *pLineNumber, TSYMFNLIN *pFnLin, DWORD dwAddress)
 char *SymAddress2FunctionName(WORD wSel, DWORD dwOffset)
 {
     TSYMGLOBAL *pGlobals;
-    TSYMFNSCOPE *pFnScope;
+//  TSYMFNSCOPE *pFnScope;
     int i;
 
     if( pIce->pSymTabCur )

@@ -96,3 +96,14 @@ extern int open(const char *path, int oflag, ...);
 #include "ice-symbols.h"                // Include symbol file structures
 #include "stabs.h"                      // Include STABS defines and structures
 
+// Define internal descriptor for a global symbol
+typedef struct
+{
+    DWORD dwAddress;                    // Start address of a symbol
+    DWORD dwEndAddress;                 // End address of a symbol
+    WORD wAttribute;                    // Attributes of a symbol
+    char Name[MAX_SYMBOL_LEN];          // Symbol canonical name
+} TGLOBAL;
+
+extern TGLOBAL *pGlobals;               // Array of global symbols
+extern int nGlobals;                    // Number of global symbols
