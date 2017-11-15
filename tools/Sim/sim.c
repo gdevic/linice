@@ -53,6 +53,7 @@ int SysFunctionStub() {return(0);};
 
 unsigned long lin_sys_call_table[256];  // System call table
 unsigned long *sys = lin_sys_call_table;// Pointer to system call table
+extern unsigned long **sys_table;       // alias for sys_call_table
 
 BYTE port_KBD_STATUS = 0;
 BYTE port_KBD_DATA = 0;
@@ -190,6 +191,8 @@ void SimInit()
     lin_sys_call_table[__NR_mknod]          = (ULONG)SysFunctionStub;
     lin_sys_call_table[__NR_init_module]    = (ULONG)SysFunctionStub;
     lin_sys_call_table[__NR_delete_module]  = (ULONG)SysFunctionStub;
+
+    sys_table = lin_sys_call_table;
 
     Regs.esp = (DWORD) pPageOffset + 0x1000;
     Regs.ss  = 0x18;

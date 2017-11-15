@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       09/05/00                                                      *
 *                                                                             *
-*   Copyright (c) 2001 Goran Devic                                            *
+*   Copyright (c) 2000-2004 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -280,7 +280,7 @@ BOOL ElfToSym(BYTE *pElf, char *pSymName, char *pTableName)
                         dfs = (PSTR) 2;         // Start with the offset 2 of the strings
 
                         PushString(fd, "Symbol information for Linice kernel level debugger");
-                        PushString(fd, "Copyright 2000-2003 by Goran Devic");
+                        PushString(fd, "Copyright 2000-2004 by Goran Devic");
 
                         // Parse ELF section for the global symbols and complete globals information
                         // Also write out globals symbol table section

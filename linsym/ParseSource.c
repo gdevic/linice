@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       09/05/00                                                      *
 *                                                                             *
-*   Copyright (c) 2001 Goran Devic                                            *
+*   Copyright (c) 2000-2004 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -374,7 +374,7 @@ static BOOL WriteSourceFile(int fd, int fs, char *ptr, WORD file_id)
             }
             else
             {
-                printf("Unable to open source file %s. Skipping...\n", pTmp);
+                printf("Unable to open source file %s -- skipping...\n", pTmp);
 
                 return( TRUE );
             }

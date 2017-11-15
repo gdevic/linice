@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       07/22/02                                                      *
 *                                                                             *
-*   Copyright (c) 2001 Goran Devic                                            *
+*   Copyright (c) 2002-2004 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -144,7 +144,7 @@ static BOOL ChkFunctionScope(TSYMHEADER *pHead, DWORD pStr)
             case TOKTYPE_PARAM:     printf("TOKTYPE_PARAM %s\n", pStr + pFuncScope->list[nTokens].pName);       break;
             case TOKTYPE_RSYM:      printf("TOKTYPE_RSYM  %s\n", pStr + pFuncScope->list[nTokens].pName);       break;
             case TOKTYPE_LSYM:      printf("TOKTYPE_LSYM  %s\n", pStr + pFuncScope->list[nTokens].pName);       break;
-            case TOKTYPE_LCSYM:     printf("TOKTYPE_LCSYM %s\n", pStr + pFuncScope->list[nTokens].pName);       break;
+            case TOKTYPE_LCSYM:     printf("TOKTYPE_LCSYM %s seg:%d\n", pStr + pFuncScope->list[nTokens].pName, pFuncScope->list[nTokens].bSegment);  break;
             case TOKTYPE_LBRAC:     printf("TOKTYPE_LBRAC {\n");       break;
             case TOKTYPE_RBRAC:     printf("TOKTYPE_RBRAC }\n");       break;
             default:
@@ -171,7 +171,8 @@ static BOOL ChkStatic(TSYMHEADER *pHead, DWORD pStr)
 
     for( nStat=0; nStat<pStatic->nStatics; nStat++)
     {
-        printf("    %3d: %08X %s = %s\n", nStat,
+        printf("    %3d: seg:%d  %08X %s = %s\n", nStat,
+            pStatic->list[nStat].bSegment,
             pStatic->list[nStat].dwAddress,
             pStr + pStatic->list[nStat].pName,
             pStatic->list[nStat].pDef ? pStr + pStatic->list[nStat].pDef : "NULL");
@@ -193,10 +194,10 @@ static BOOL ChkGlobals(TSYMHEADER *pHead, DWORD pStr)
 
     for( nGlob=0; nGlob<pGlob->nGlobals; nGlob++)
     {
-        printf("    %3d: %08X %08X F:%02X file_id:%d %s = %s\n", nGlob,
+        printf("    %3d: %08X %08X seg:%02X file_id:%d %s = %s\n", nGlob,
             pGlob->list[nGlob].dwStartAddress,
             pGlob->list[nGlob].dwEndAddress,
-            pGlob->list[nGlob].bFlags,
+            pGlob->list[nGlob].bSegment,
             pGlob->list[nGlob].file_id,
             pStr + pGlob->list[nGlob].pName,
             pGlob->list[nGlob].pDef ? pStr + pGlob->list[nGlob].pDef : "NULL");

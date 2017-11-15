@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       08/03/96                                                      *
 *                                                                             *
-*   Copyright (c) 1996-2000 Goran Devic                                       *
+*   Copyright (c) 1996-2004 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -140,13 +140,18 @@ void InitKeyboardLayout(char Layout[2][128])
 ******************************************************************************/
 BYTE GetAux()
 {
+// TODO: The complete mouse interface has to be designed.
+//       In a vmware box, the timeout happens every time mouse is moved, seems like
+//       the status is not being virtualized well
+//       Check the real hw mouse...
+#if 0
     int timeout = 100;
 
     while( ((inp(KBD_STATUS) & STATUS_AUXB)==0 )  && timeout) timeout--;
 
     if( timeout==0 )
         dprint("PS2 TIMEOUT\n");
-
+#endif
     return( inp(KBD_DATA) );
 }
 
@@ -363,7 +368,7 @@ void LiniceHandleScancode(BYTE scancode, BOOL fPressed)
 
 /******************************************************************************
 *                                                                             *
-*   void KeyboardHook(DWORD handle_kbd_event, DWORD handle_scancode)          *
+*   BOOL KeyboardHook(DWORD handle_kbd_event, DWORD handle_scancode)          *
 *                                                                             *
 *******************************************************************************
 *
@@ -373,14 +378,18 @@ void LiniceHandleScancode(BYTE scancode, BOOL fPressed)
 *       handle_kbd_event is the address of that Linux function
 *       handle_scancode is the address of that Linux function
 *
+*   Returns:
+*       TRUE - keyboard hooked
+*       FALSE - could not locate function call to patch - abort load
+*
 ******************************************************************************/
-void KeyboardHook(DWORD handle_kbd_event, DWORD handle_scancode)
+BOOL KeyboardHook(DWORD handle_kbd_event, DWORD handle_scancode)
 {
     BYTE pattern[5] = { 0xE8, 0, 0, 0, 0 };
     DWORD *pOffset = (DWORD *)&pattern[1];
     int nSearchLen = 10000;               // Located within so many bytes
 
-    INFO(("KeyboardHook()\n"));
+    INFO("KeyboardHook()\n");
 
     // Search starting from address handle_kbd_event for the call to a function handle_scancode
     do  // We increment handle_kbd_event as we go...
@@ -393,16 +402,11 @@ void KeyboardHook(DWORD handle_kbd_event, DWORD handle_scancode)
 
     } while( memcmp((void *)handle_kbd_event, pattern, 5)!=0 && --nSearchLen );
 
-    if( nSearchLen==0 )
+    if( nSearchLen )
     {
-        // Did not find the call ?!
-        INFO(("WARNING: Did not find a call to handle_scancode!\n"));
-        INFO(("         Does your System.map match your kernel??\n"));
-        INFO(("         Keyboard will not be hooked.\n"));
-    }
-    else
-    {
-        INFO(("Call to handle_scancode at %08X\n", (int)handle_kbd_event));
+        // Found the function call to hook
+
+        INFO("Call to handle_scancode at %08X\n", (int)handle_kbd_event);
         pOffset = (DWORD *)(handle_kbd_event + 1);
 
         // Store the original offset and insert our handler in place of the call
@@ -411,7 +415,13 @@ void KeyboardHook(DWORD handle_kbd_event, DWORD handle_scancode)
 
         *pOffset = (DWORD) LiniceHandleScancode - ((DWORD) pOffset + 4);
         LinuxHandleScancode = (TLinuxHandleScancode) handle_scancode;
+
+        return( TRUE );
     }
+
+    // Did not find the call ?!
+
+    return( FALSE );
 }
 
 
@@ -426,7 +436,7 @@ void KeyboardHook(DWORD handle_kbd_event, DWORD handle_scancode)
 ******************************************************************************/
 void KeyboardUnhook()
 {
-    INFO(("KeyboardUnhook()\n"));
+    INFO("KeyboardUnhook()\n");
 
     // Restore original call to handle_scancode within the handle_kbd_event function
     if( pKbdHook )

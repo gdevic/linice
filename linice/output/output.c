@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       09/11/00                                                      *
 *                                                                             *
-*   Copyright (c) 1997, 2001 Goran Devic                                      *
+*   Copyright (c) 1997-2004 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -48,6 +48,7 @@
 
 #include "clib.h"                       // Include C library header file
 #include "ice.h"                        // Include main debugger structures
+#include "font.h"                       // Include font header file
 
 /******************************************************************************
 *                                                                             *
@@ -140,7 +141,7 @@ int PrintLine(char *format,...)
     while( *pBuf )
     {
         if( *pBuf==' ' )
-            *pBuf = 0xC4;               // Horizontal line extended code
+            *pBuf = FONT_HLINE;         // Horizontal line extended code
         pBuf++;
     }
 

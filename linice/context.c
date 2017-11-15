@@ -48,6 +48,8 @@
 ******************************************************************************/
 
 extern BOOL FillLocalScope(TSYMFNSCOPE *pFnScope, DWORD dwEIP);
+extern void RecalculateWatch();
+
 
 /******************************************************************************
 *                                                                             *
@@ -256,6 +258,82 @@ char *SymFnLin2Line(WORD *pLineNumber, TSYMFNLIN *pFnLin, DWORD dwAddress)
 
 /******************************************************************************
 *                                                                             *
+*   TSYMTAB *Address2SymbolTable(WORD wSel, DWORD dwOffset)                   *
+*                                                                             *
+*******************************************************************************
+*
+*   Finds the symbol table with the function at the given address. This call
+*   is used to auto-setup the symbol table context.
+*
+*   NOTE: This function modifies deb.pSymTabCur !
+*
+*   Where:
+*       wSel is the selector part of the address
+*       dwOffset is the offset part of the address
+*   Returns:
+*       NULL - function is not found at that address
+*       address of the symbol table that owns this address
+*
+******************************************************************************/
+TSYMTAB *Address2SymbolTable(WORD wSel, DWORD dwOffset)
+{
+    char *pComm;                        // Command line of the current process
+
+    // Find the symbol table that contains a function from this offset,
+    // loop for each symbol table in the list
+    deb.pSymTabCur = deb.pSymTab;
+
+    // We recognize two cases - kernel mode code and the user mode code
+    if( wSel==GetKernelCS() )
+    {
+        // ------------------------------------------------------------------
+        // This is a kernel code selector. The symbol table should describe
+        // a module or a Linux kernel.
+        // ------------------------------------------------------------------
+        while( deb.pSymTabCur )
+        {
+            if( SymAddress2FnScope(wSel, dwOffset) )
+            {
+                // We found a function that is described in this symbol table
+                // Return the address of the symbol table (already stored in deb)
+                return( deb.pSymTabCur );
+            }
+
+            // Get to the next symbol table in the linked list of symbol tables
+            deb.pSymTabCur = (TSYMTAB*) deb.pSymTabCur->next;
+        };
+    }
+    else
+    {
+        // ------------------------------------------------------------------
+        // This is a user level code. The symbol table should describe
+        // the user application code.
+        // ------------------------------------------------------------------
+        // In addition to the function address, the process name has to match
+        pComm = ice_get_current_comm();
+
+        while( deb.pSymTabCur )
+        {
+            if( !stricmp(pComm, deb.pSymTabCur->sTableName) )
+            {
+                if( SymAddress2FnScope(wSel, dwOffset) )
+                {
+                    // We found a function that is described in this symbol table
+                    // Return the address of the symbol table (already stored in deb)
+                    return( deb.pSymTabCur );
+                }
+            }
+
+            // Get to the next symbol table in the linked list of symbol tables
+            deb.pSymTabCur = (TSYMTAB*) deb.pSymTabCur->next;
+        };
+    }
+
+    return( NULL );
+}
+
+/******************************************************************************
+*                                                                             *
 *   TSYMFNSCOPE *SymAddress2FnScope(WORD wSel, DWORD dwOffset)                *
 *                                                                             *
 *******************************************************************************
@@ -312,6 +390,16 @@ void SetSymbolContext(WORD wSel, DWORD dwOffset)
 {
     WORD wLine;
 
+    // Reset all context state variables so we start from the clean state
+    // and build upon this for whatever context extent we can
+
+    deb.pFnScope = NULL;
+    deb.pFnLin = NULL;
+    deb.pSource = NULL;
+    deb.pSrcEipLine = NULL;
+    deb.codeFileTopLine = 0;
+    deb.codeFileXoffset = 0;
+
     // Adjust the code window's machine code top address:
     // We let the cs:eip free flow within the code window that is bound by
     // codeTopAddr and codeBottomAddr, and adjust the first variable when
@@ -335,6 +423,10 @@ void SetSymbolContext(WORD wSel, DWORD dwOffset)
     }
 
     // Depending on the current process context, set the appropriate deb.pSymTabCur
+    // if the user requested table autoon feature (which is on by default)
+
+    if( deb.fTableAutoOn )
+        Address2SymbolTable(wSel, dwOffset);
 
     if( deb.pSymTabCur )
     {
@@ -371,19 +463,11 @@ void SetSymbolContext(WORD wSel, DWORD dwOffset)
                     if( pWin->c.nLines>2 && deb.codeFileEipLine==deb.codeFileTopLine && deb.codeFileTopLine>1)
                         deb.codeFileTopLine -= 1;
                 }
-
-                return;
             }
         }
     }
 
-    // Something failed.. Reset all variables and default to machine code disassembly
+    // Recalculate watch expressions that depend on context
 
-    deb.pFnScope = NULL;
-    deb.pFnLin = NULL;
-    deb.pSource = NULL;
-    deb.pSrcEipLine = NULL;
-    deb.codeFileTopLine = 0;
-    deb.codeFileXoffset = 0;
+    RecalculateWatch();
 }
-

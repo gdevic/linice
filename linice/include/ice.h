@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       04/27/2000                                                    *
 *                                                                             *
-*   Copyright (c) 2000 Goran Devic                                            *
+*   Copyright (c) 2000-2004 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -68,6 +68,7 @@ typedef struct
 {
     // Define the constant state of the machine
 
+    BOOL fOperational;                  // Linice is operational or not
     BOOL fSmp;                          // Is this machine SMP enabled?
     BOOL fIoApic;                       // Are we using IO APIC?
     TIOAPIC0 IoApic0;                   // Initial content of the first IO APIC register
@@ -99,10 +100,11 @@ typedef struct
     BOOL fI3Here;                       // Break on INT3
     BOOL fI3Kernel;                     // Break on INT3 only in kernel code
     BOOL fLowercase;                    // Display lowercase
-    BOOL fSymbols;                      //
+    BOOL fSymbols;                      // Disassembler shows symbol names instead of numbers
     BOOL fFlash;                        // Restore screen during P and T commands
     BOOL fPause;                        // Pause after a screenful of scrolling info
     BOOL fOvertype;                     // Cursor shape is overtype? (or insert)
+    BOOL fTableAutoOn;                  // Switch symbol tables automatically
     BOOL fCodeEdit;                     // Cursor is in the code window
     UINT nCodeEditY;                    // Effective code edit cursor Y offset within the code window
     TADDRDESC CodeEditAddress;          // Address selected by the code edit cursor
@@ -112,6 +114,7 @@ typedef struct
     UINT nTabs;                         // Tabs value for source display
 
     BOOL fRedraw;                       // Request to redraw the screen after the current command
+    BOOL fPfProtect;                    // Safety optional switch to ignore PF from the Linice
 
     // Define the Linice high-level data structures and pointers
 
@@ -140,7 +143,9 @@ typedef struct
     UINT nDumpSize;                     // Last Dx dump value size
     TADDRDESC dataAddr;                 // Data - current display address
 
-    DWORD error;                        // Error code
+    UINT errorCode;                     // Error code
+    UINT errorParam;                    // Optional parameter to an error message
+
     DWORD memaccess;                    // Last memaccess code, or memaccess error code
     BOOL fStamp;                        // Last memory stamp (checksum) result
 
@@ -187,6 +192,12 @@ typedef struct
     //  0 - serial polling
     //  1 - cursor carret blink
     UINT timer[2];
+
+    // Protection of memory access: One region can be made protected from Linice access
+    // The start and end of this memory region is stored in here
+    DWORD dwProtectStart;               // Start linear address to protect
+    DWORD dwProtectEnd;                 // End linear address to protect
+    DWORD LiniceChecksum;               // Checksum of the Linice code (or SUM)
 
 } TDEB, *PTDEB;
 
@@ -305,8 +316,9 @@ extern PTOUT pOut;                      // Pointer to a current output device
 *                                                                             *
 ******************************************************************************/
 
-extern WCHAR GetKey( BOOL fBlock );     // Read a key code from the input queue
+extern void PostError(UINT errorCode, UINT errorParam);
 
+extern WCHAR GetKey( BOOL fBlock );     // Read a key code from the input queue
 extern void PutKey( WCHAR Key );
 
 extern int dprint( char *format, ... );
@@ -335,14 +347,14 @@ extern BYTE ReadSR(int index);
 extern void WriteSR(int index, int value);
 extern BYTE ReadMdaCRTC(int index);
 extern void WriteMdaCRTC(int index, int value);
-extern int GetByte(WORD sel, DWORD offset);
-extern DWORD GetDWORD(WORD sel, DWORD offset);
-extern DWORD SetByte(WORD sel, DWORD offset, BYTE value);
 extern void memset_w(void *dest, WORD data, int size);
 extern void memset_d(void *dest, DWORD data, int size);
 extern WORD getTR(void);
 extern WORD GetKernelCS(void);
 extern WORD GetKernelDS(void);
+extern void GetSysreg( TSysreg * pSys );
+extern void SetSysreg( TSysreg * pSys );
+
 extern char *mallocHeap(BYTE *pHeap, UINT size);
 extern void freeHeap(BYTE *pHeap, void *mPtr );
 
@@ -358,6 +370,7 @@ extern BOOL VerifySelector(WORD Sel);
 extern BOOL Expression(DWORD *value, char *sExpr, char **psNext );
 extern WORD evalSel;               // Selector result of the expression (optional)
 extern DWORD GetDec(char **psString);
+extern BOOL EOL(char **ppArg);
 
 extern int GetOnOff(char *args);
 
@@ -372,6 +385,10 @@ extern char *SymFnLin2LineExact(WORD *pLineNumber, TSYMFNLIN *pFnLin, DWORD dwAd
 extern TSYMFNSCOPE *SymAddress2FnScope(WORD wSel, DWORD dwOffset);
 
 extern void SetSymbolContext(WORD wSel, DWORD dwOffset);
+
+extern void ObjectEnd(void);
+extern void ObjectStart(void);
+
 
 #endif //  _ICE_H_
 

@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       09/11/00                                                      *
 *                                                                             *
-*   Copyright (c) 2001 Goran Devic                                            *
+*   Copyright (c) 2000-2004 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -65,7 +65,7 @@
 //  * source line width
 //  * print buffer
 //
-#define MAX_STRING          256
+#define MAX_STRING          128
 
 //////////////////////////////////////////////////////////////////////
 // Define number of command lines stored as a history that can be
@@ -124,12 +124,7 @@
 //////////////////////////////////////////////////////////////////////
 // Define size of the internal debugger memory heap
 //
-#define MAX_HEAP            32768
-
-//////////////////////////////////////////////////////////////////////
-// Dont change this. It is a hardcoded value of number of symbol types
-//
-#define MAX_SYMRELOC        4           // Hardcoded to 4 for up to 4 sections
+#define MAX_HEAP            (128*1024)
 
 //////////////////////////////////////////////////////////////////////
 // Timer value for the cursor carret blink rate in graphics modes (out of 100Hz)

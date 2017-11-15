@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       06/13/02                                                      *
 *                                                                             *
-*   Copyright (c) 1997, 2002 Goran Devic                                      *
+*   Copyright (c) 2002-2004 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -51,6 +51,19 @@ typedef struct
 } TFont;
 
 extern TFont Font[MAX_FONTS];
+
+// Define the ASCII code for various characters, note that this may change
+// depending on the font loaded. In particular, the horizontal line may be
+// 0xCA or 0xC4 ! (That's why it is abstracted here for now)
+
+#define FONT_HLINE      0xCA            // Horizontal line
+
+// TODO: Investigate why the current console font does not have these in my simulation box?
+// TODO: Should we load our own font?
+#define FONT_LEFT       24              // We stopped using these since on one font
+#define FONT_RIGHT      25              // they dont exist
+#define FONT_UP         26
+#define FONT_DOWN       27
 
 
 #endif // _FONT_H_

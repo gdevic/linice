@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       09/05/00                                                      *
 *                                                                             *
-*   Copyright (c) 2001 Goran Devic                                            *
+*   Copyright (c) 2000-2004 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -38,6 +38,8 @@
 
 #include "loader.h"                     // Include global protos
 
+#include <ctype.h>                      // Test the character
+
 extern PSTR dfs;
 
 
@@ -57,10 +59,21 @@ typedef struct
 static TGLOBAL *pGlobals = NULL;        // Array of global symbols
 static int nGlobals = 0;                // Number of global symbols
 
+// The array to keep the names of the symbols (variables) from the COMMON sections
+// nCommons is global since we use it as a top entry when doing the symbol
+// relocation since each COMMON variable has its own relocation record on top of
+// the standard segments 0-3
+
+#define MAX_COMMONS     256             // This is the hard-coded since we use BYTE to index it
+
+static char sCommon[MAX_COMMONS][MAX_STRING];
+int nCommons = 4;                       // First available slot - skip standard sections
 
 
 extern WORD GetFileId(char *pSoDir, char *pSo);
 extern DWORD GetGlobalSymbolAddress(char *pName);
+
+int GetGlobalsSection(char *pSection, char *pName);
 
 
 /******************************************************************************
@@ -158,8 +171,7 @@ BOOL StoreGlobalSyms(BYTE *pBuf)
                 case SHN_COMMON : pSecName = "COMMON";    break;
                 default:          pSecName = pBuf + SecName->sh_offset + Sec[pSym->st_shndx].sh_name;
             }
-#if 0
-            if((opt & OPT_VERBOSE) && (nVerbose==2))
+#if 1
             {
                 printf("st_name  = %04X  %s\n", pSym->st_name, pStr+pSym->st_name);
                 printf("st_value = %08X\n", pSym->st_value );
@@ -171,17 +183,27 @@ BOOL StoreGlobalSyms(BYTE *pBuf)
             }
 #endif
             // Save a global symbol with all its attributes so we can select from it later when we need globals.
-            // We should not have empty symbol string name, so special case a null-strings (skip them)
+            // We should not have empty symbol string name, so special case a null-strings.
             nameLen = strlen(pStr+pSym->st_name);
 
-            // Reject empty symbol names &&
+            // Some local symbols are stored with the .# postfix. Remove it as it causes problems matching
+            // them later: Example: buf.0
+            if( nameLen>2 && *(pStr+pSym->st_name+nameLen-2)=='.' && isdigit(*(pStr+pSym->st_name+nameLen-1)) )
+                nameLen -= 2;
+
+            // Since we store global variables, but the value field contains only the variable required alignment
+            // instead of its relative address within its segment, we zap that value to 0 so we can use the same
+            // process to get to that variable, once when we relocate its segment.
+            if( pSym->st_shndx==SHN_COMMON )
+                pSym->st_value = 0x00000000;
+
             // The other special case is the symbol name containing a space. In the gcc apps there is a
             // symbol "<command line>" which can corrupt our string-based parsing
             if(nameLen && !strchr(pStr+pSym->st_name, ' '))
             {
                 // Copy the string into the temporary buffer so we can handle oversized strings
-                strncpy(sSymbol, pStr+pSym->st_name, MAX_SYMBOL_LEN);
-                sSymbol[MAX_SYMBOL_LEN] = '\0';
+                strncpy(sSymbol, pStr+pSym->st_name, MIN(MAX_SYMBOL_LEN, nameLen));
+                sSymbol[MIN(MAX_SYMBOL_LEN, nameLen)] = '\0';
 
                 fprintf(fGlobals, "%08X %08X %04X %10s %s\n",
                     pSym->st_value,
@@ -189,6 +211,17 @@ BOOL StoreGlobalSyms(BYTE *pBuf)
                     pSym->st_info,
                     strlen(pSecName)? pSecName : "?",
                     sSymbol);
+
+                nGlobals++;
+            }
+            else
+            {
+                fprintf(fGlobals, "%08X %08X %04X %10s %s\n",
+                    pSym->st_value,
+                    pSym->st_value + pSym->st_size,
+                    pSym->st_info,
+                    strlen(pSecName)? pSecName : "?",
+                    "?");
 
                 nGlobals++;
             }
@@ -260,7 +293,7 @@ static BOOL WriteGlobalsSection(int fd, int fs)
     DWORD dwSize;                       // Final size of the above structure
     int nGlobalsStored;                 // Number of global symbols stored
     int i, nLen;                        // Counter
-    int eStore;                         // Store this particular symbol
+    int nSection;                       // Segment of that particular symbol
     char *p;                            // Generic character pointer
 
     dwSize = sizeof(TSYMGLOBAL) + sizeof(TSYMGLOBAL1)*(nGlobals-1);
@@ -273,37 +306,25 @@ static BOOL WriteGlobalsSection(int fd, int fs)
 
         for( i=0; i<nGlobals; i++ )
         {
-            eStore = -1;                // -1 means 'dont store this symbol'
+            // Assign the section name; possibly add the section for COMMON
 
-            // Store globals of this kind (MAX_SYMRELOC):
-            //
-            // 0) Program code segment:             0x12  ".text"
-            // 1) Program data segment:             0x11  ".data"    (global variables)
-//          // 2) Program data 2 segment:           0x01  ".data"    (static variables)           DOES NOT WORK THIS WAY
-            // 3) Program data 3 segment:           0x11  ".COMMON"  (uninitialized globals)
-            // 4) Program data 4 segment:           0x11  ".bss"     (uninitialized global data)
+            nSection = GetGlobalsSection(pGlobals[i].SectionName, pGlobals[i].Name);
 
-            if( pGlobals[i].dwAttribute==0x12 && !strcmp(pGlobals[i].SectionName, ".text") )     eStore = 0;
-            if( pGlobals[i].dwAttribute==0x11 && !strcmp(pGlobals[i].SectionName, ".data") )     eStore = 1;
-//          if( pGlobals[i].dwAttribute==0x01 && !strcmp(pGlobals[i].SectionName, ".data") )     eStore = 2;
-            if( pGlobals[i].dwAttribute==0x11 && !strcmp(pGlobals[i].SectionName, "COMMON") )    eStore = 3;
-            if( pGlobals[i].dwAttribute==0x11 && !strcmp(pGlobals[i].SectionName, ".bss") )      eStore = 4;
-
-            VERBOSE2 printf("%c %08X %08X %04X %10s %s\n",
-                eStore<0? ' ': eStore + '0',
-                pGlobals[i].dwAddress,
-                pGlobals[i].dwEndAddress,
-                pGlobals[i].dwAttribute,
-                pGlobals[i].SectionName,
-                pGlobals[i].Name);
-
-            if( eStore>=0 )
+            if( nSection>=0 )
             {
+                VERBOSE2 printf("%2d %08X %08X %04X %10s %s\n",
+                    nSection,
+                    pGlobals[i].dwAddress,
+                    pGlobals[i].dwEndAddress,
+                    pGlobals[i].dwAttribute,
+                    pGlobals[i].SectionName,
+                    pGlobals[i].Name);
+
                 pHeader->list[nGlobalsStored].dwStartAddress = pGlobals[i].dwAddress;
                 pHeader->list[nGlobalsStored].dwEndAddress   = pGlobals[i].dwEndAddress;
                 pHeader->list[nGlobalsStored].pName          = dfs;
                 pHeader->list[nGlobalsStored].file_id        = pGlobals[i].file_id;
-                pHeader->list[nGlobalsStored].bFlags         = eStore;
+                pHeader->list[nGlobalsStored].bSegment       = nSection;
 
                 // Copy the symbol name into the strings
                 write(fs, pGlobals[i].Name, strlen(pGlobals[i].Name)+1);
@@ -344,6 +365,17 @@ static BOOL WriteGlobalsSection(int fd, int fs)
 
                 // Increment the actual number of global symbols stored
                 nGlobalsStored++;
+            }
+            else
+            {
+                // Print out skipped symbol
+
+                VERBOSE2 printf(" - %08X %08X %04X %10s %s\n",
+                    pGlobals[i].dwAddress,
+                    pGlobals[i].dwEndAddress,
+                    pGlobals[i].dwAttribute,
+                    pGlobals[i].SectionName,
+                    pGlobals[i].Name);
             }
         }
 
@@ -629,41 +661,44 @@ BOOL GlobalsName2Address(DWORD *p, char *pName)
 
 /******************************************************************************
 *                                                                             *
-*   char *GlobalsSection2Address(DWORD *p, DWORD dwAttribute, char *pSection) *
+*   char *GlobalsName2Section(char *pName)                                    *
 *                                                                             *
 *******************************************************************************
 *
-*   Looks for a global symbol with the specified combination of attribute and
-*   section name, returning a matching symbol name and the address.
+*   Returns the section name of a global symbol.
 *
 *   Where:
-*       p is the address of the variable to receive address
-*       dwAttribute is the filter symbol attribute that has to match
-*       pName is the global section name to search
+*       pName is the symbol name
 *
 *   Returns:
-*       Address of the symbol name - symbol was found and the address was stored
-*       NULL - symbol was not found. Address is not updated.
+*       Pointer to the section name
+*       NULL if the section name could not be found
 *
 ******************************************************************************/
-char *GlobalsSection2Address(DWORD *p, DWORD dwAttribute, char *pSectionName)
+char *GlobalsName2Section(char *pName)
 {
     TGLOBAL *pGlob;
+    char sSymbol[MAX_SYMBOL_LEN+1];
     int i;
 
-    // All arguments and the globals array have to exist
-    if( p && pSectionName && pGlobals )
+    // Argument and the globals array have to exist
+    if( pName && pGlobals )
     {
+        // Symbol name may have extra characters at the end, so trim it
+        strncpy(sSymbol, pName, MAX_SYMBOL_LEN);
+        sSymbol[MAX_SYMBOL_LEN] = '\0';               // Force zero-terminate the string
+
+        if( strchr(sSymbol, ':') )
+            *(char *)strchr(sSymbol, ':') = 0;
+
         pGlob = pGlobals;
 
         for(i=0; i<nGlobals; i++)
         {
-            if( dwAttribute==pGlob->dwAttribute && !strcmp(pGlob->SectionName, pSectionName) )
+            if( !strcmp(pGlob->Name, sSymbol) )
             {
-                // Found it! Store the address into the caller's variable and return
-                // with the address of the symbol name
-                *p = pGlob->dwAddress;
-                return( pGlob->Name );
+                // Found it! Return the section name
+                return( pGlob->SectionName );
             }
 
             pGlob++;
@@ -673,5 +708,189 @@ char *GlobalsSection2Address(DWORD *p, DWORD dwAttribute, char *pSectionName)
     return( NULL );
 }
 
+/******************************************************************************
+*                                                                             *
+*   BYTE QueryCommonsName(char *pName)                                        *
+*                                                                             *
+*******************************************************************************
+*
+*   Returns the index into the sCommons array of a variable with the given
+*   name. Since that function only considers COMMON types, it returns 0 if the
+*   variable could not be found.
+*
+******************************************************************************/
+BYTE QueryCommonsName(char *pName)
+{
+    int i;
 
+    for(i=4; i<nCommons; i++)
+    {
+        if( !strcmp(sCommon[i], pName) )
+            return( (BYTE) i );
+    }
 
+    return( 0 );
+}
+
+/******************************************************************************
+*                                                                             *
+*   int GetGlobalsSection(char *pSection, char *pName)                        *
+*                                                                             *
+*******************************************************************************
+*
+*   Returns the section number of a symbol. It also creates a new entry in the
+*   sCommon array for the variables of the COMMON type.
+*
+*   Where:
+*       pSection is the section name, example: .data
+*       pName is the symbol name
+*
+*   Returns:
+*       0-3 - standard sections
+*       4 - MAX_COMMONS - Symbol in the COMMON section
+*       -1  for section not found
+*
+******************************************************************************/
+int GetGlobalsSection(char *pSection, char *pName)
+{
+    int i;
+
+    // Assign the right section number for predefined sections
+    if( !strcmp(pSection, ".text") )  return( 0 );
+    if( !strcmp(pSection, ".data") )  return( 1 );
+    if( !strcmp(pSection, ".rodata")) return( 2 );
+    if( !strcmp(pSection, ".bss") )   return( 3 );
+
+    // TODO: Let's sneak .modinfo section along with the COMMONS and see how it goes...
+
+    if( !strcmp(pSection, "COMMON") || !strcmp(pSection, ".modinfo") )
+    {
+        // This is a common symbol. Try to find it in the existing list of commons, and if not there,
+        // add it to the list of commons
+        i = QueryCommonsName(pName);
+        if( i )                         // If we found it, return its index
+            return( i );
+
+        // Did not find the common variable yet in the array. Add it.
+        // Index i already points to the first unused entry.
+        if( nCommons < MAX_COMMONS )
+        {
+            strcpy(sCommon[nCommons], pName);
+
+            nCommons++;                 // Adds one more entry
+
+            return( nCommons-1 );
+        }
+        else
+        {
+            fprintf(stderr, "Too many symbols in the COMMON section. The limit is %d.\n", MAX_COMMONS-4);
+        }
+    }
+
+    // Return invalid section number
+    return( -1 );
+}
+
+/******************************************************************************
+*                                                                             *
+*   BYTE GlobalsName2SectionNumber(char *pName)                               *
+*                                                                             *
+*******************************************************************************
+*
+*   Returns the section number of a symbol. It also creates a new entry in the
+*   sCommon array for the variables of the COMMON type.
+*
+*   Use this function when only a variable name is known.
+*
+*   Where:
+*       pName is the symbol name
+*
+*   Returns:
+*       0-3 - standard sections
+*       4 - MAX_COMMONS - Symbol in the COMMON section
+*
+******************************************************************************/
+BYTE GlobalsName2SectionNumber(char *pName)
+{
+    char *pSection;                     // Section name
+    int nSection;                       // Section number
+
+    // Get the section name and its number, possibly creating a new COMMON section
+    pSection = GlobalsName2Section(pName);
+
+    // The section should be found. If now, we want to know about that case!
+    // TODO: XSNOW causes this to be NULL and it core dumps. See bug 2008.
+    if(pSection)
+    {
+        nSection = GetGlobalsSection(pSection, pName);
+
+        // Whoever is calling this function, it should never return an invalid section number.
+        // If it does, we want to find out about it!
+        if( nSection<0 )
+        {
+            fprintf(stderr, "Invalid section in GlobalsName2SectionNumber() for %s\n", pName);
+            nSection = 1;       // What to do? Return a fake .data section
+        }
+    }
+    else
+    {
+        fprintf(stderr, "Invalid section in GlobalsName2Section() for %s\n", pName);
+        nSection = 1;           // What to do? Return a fake .data section
+    }
+
+    return( (BYTE)(nSection & 0xFF) );
+}
+
+/******************************************************************************
+*                                                                             *
+*   char *GlobalsSection2Address(DWORD *p, int nGlobalIndex, char *pSection)  *
+*                                                                             *
+*******************************************************************************
+*
+*   Looks for a global symbol with the specified combination of attribute and
+*   section name, returning a matching symbol name and the address.
+*
+*   Where:
+*       p is the address of the variable to receive the symbol address
+*       nGlobalIndex is the index of the global record to query
+*       pName is the global section name to search
+*
+*   Returns:
+*       Address of the symbol name - symbol was found and the address was stored
+*       NULL - symbol was not found. Address is not updated.
+*
+******************************************************************************/
+char *GlobalsSection2Address(DWORD *p, int nGlobalIndex, char *pSectionName)
+{
+    TGLOBAL *pGlob;
+
+    pGlob = &pGlobals[nGlobalIndex];
+
+    if( !strcmp(pGlob->SectionName, pSectionName) )
+    {
+        // Found it! Store the address into the caller's variable and return
+        // with the address of the symbol name
+        *p = pGlob->dwAddress;
+        return( pGlob->Name );
+    }
+
+    return( NULL );
+}
+
+/******************************************************************************
+*                                                                             *
+*   char *GlobalsGetSectionName(int nGlobalIndex)                             *
+*                                                                             *
+*******************************************************************************
+*
+*   Returns the section name of the global entry of a given index.
+*
+******************************************************************************/
+char *GlobalsGetSectionName(int nGlobalIndex)
+{
+    TGLOBAL *pGlob;
+
+    pGlob = &pGlobals[nGlobalIndex];
+
+    return( pGlob->SectionName );
+}

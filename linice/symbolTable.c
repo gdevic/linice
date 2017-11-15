@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       10/21/00                                                      *
 *                                                                             *
-*   Copyright (c) 2001 Goran Devic                                            *
+*   Copyright (c) 2000-2004 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -63,10 +63,11 @@
 ******************************************************************************/
 
 extern BOOL FindModule(TMODULE *pMod, char *pName, int nNameLen);
-extern BOOL FindSymbol(TExItem *item, char *pName, int *pNameLen);
+
 
 BOOL SymbolTableRemove(char *pTableName, TSYMTAB *pRemove);
-void SymTabRelocate(TSYMTAB *pSymTab, int pReloc[], int factor);
+BOOL SymTabSetupRelocOffset(TSYMTAB *pSymTab, DWORD dwInitModule, DWORD dwInitModuleSample);
+void SymTabRelocate(TSYMTAB *pSymTab, int factor);
 static void SymTabMakePointers(TSYMTAB *pSymTab, DWORD dStrings);
 
 
@@ -112,15 +113,8 @@ int UserAddSymbolTable(void *pSymUser)
     int retval = -EINVAL;
     TSYMTAB SymHeader;
     TSYMTAB *pSymTab;                   // Symbol table in debugger buffer
-    TSYMPRIV *pPriv;
     DWORD dStrings;                     // Offset to strings (to adjust)
-    BYTE *pInitFunctionOffset;
-    DWORD dwInitFunctionSymbol;
-    DWORD dwDataReloc;
-    TSYMRELOC  *pReloc;                 // Symbol table relocation header
     TMODULE Mod;                        // Module information structure
-    TExItem Item;                       // Expression item to store symbol value
-    int nNameLen = 11;                  // Length of the "init_module" string
 
 
     // Copy the header of the symbol table into the local structur to examine it
@@ -133,137 +127,80 @@ int UserAddSymbolTable(void *pSymUser)
             pSymTab = (TSYMTAB *) mallocHeap(deb.hSymbolBufferHeap, SymHeader.dwSize);
             if( pSymTab )
             {
-                INFO(("Allocated %d bytes at %X for symbol table\n", (int) SymHeader.dwSize, (int) pSymTab));
+                INFO("Allocated %d bytes at %X for symbol table\n", (int) SymHeader.dwSize, (int) pSymTab);
 
-                // Allocate memory for the private section of the symbol table
-                pPriv = (TSYMPRIV *) mallocHeap(deb.hSymbolBufferHeap, sizeof(TSYMPRIV));
-                if( pPriv )
+                // Copy the complete symbol table from the use space
+                if( ice_copy_from_user(pSymTab, pSymUser, SymHeader.dwSize)==0 )
                 {
-                    INFO(("Allocated %d bytes for private symbol table structure\n", sizeof(TSYMPRIV) ));
-                    memset(pPriv, 0, sizeof(TSYMPRIV));
+                    // Make sure we are really loading a symbol table
 
-                    // Copy the complete symbol table from the use space
-                    if( ice_copy_from_user(pSymTab, pSymUser, SymHeader.dwSize)==0 )
+                    // TODO: Here we also want to check the CRC or something like that for a table being loaded
+
+                    if( !strcmp(pSymTab->sSig, SYMSIG) )
                     {
-                        // Make sure we are really loading a symbol table
-
-                        // TODO: Here we also want to check the CRC or something like that for a table being loaded
-
-                        if( !strcmp(pSymTab->sSig, SYMSIG) )
+                        // Compare the symbol table version - major number has to match
+                        if( (pSymTab->Version>>8)==(SYMVER>>8) )
                         {
-                            // Compare the symbol table version - major number has to match
-                            if( (pSymTab->Version>>8)==(SYMVER>>8) )
+                            // Call the remove function that will remove this particular
+                            // symbol table if we are reloading it (at this point new table is not linked in yet)
+                            // TODO: Remove breakpoints in this function?
+                            SymbolTableRemove(pSymTab->sTableName, NULL);
+
+                            dprinth(1, "Loaded symbols for module `%s' size %d (ver %d.%d)",
+                                pSymTab->sTableName, pSymTab->dwSize, pSymTab->Version>>8, pSymTab->Version&0xFF);
+
+                            deb.nSymbolBufferAvail -= SymHeader.dwSize;
+
+                            // Link this symbol table in the linked list and also make it current
+                            pSymTab->next = (struct TSYMTAB *) deb.pSymTab;
+
+                            deb.pSymTab = pSymTab;
+                            deb.pSymTabCur = deb.pSymTab;
+
+                            // Initialize elements of the private symbol table structure
+
+                            dStrings = (DWORD) pSymTab + pSymTab->dStrings;
+
+                            // Relocate all strings within this symbol table to pointers (from offsets)
+
+                            SymTabMakePointers(deb.pSymTabCur, dStrings);
+
+                            // If the symbol table being loaded describes a kernel module, we need to
+                            // see if that module is already loaded, and if so, relocate its symbols
+
+                            // If a module with that symbol name has already been loaded dont relocate again
+                            if( FindModule(&Mod, pSymTab->sTableName, strlen(pSymTab->sTableName)) )
                             {
-                                // Call the remove function that will remove this particular
-                                // symbol table if we are reloading it
-                                SymbolTableRemove(pSymTab->sTableName, NULL);
+                                // Module is already loaded - we need to relocate symbol table based on it
 
-                                dprinth(1, "Loaded symbols for module `%s' size %d (ver %d.%d)",
-                                    pSymTab->sTableName, pSymTab->dwSize, pSymTab->Version>>8, pSymTab->Version&0xFF);
-
-                                // Link the private data structure to the symbol table
-                                pSymTab->pPriv = pPriv;
-
-                                deb.nSymbolBufferAvail -= SymHeader.dwSize;
-
-                                // Link this symbol table in the linked list and also make it current
-                                pSymTab->pPriv->next = (struct TSYMTAB *) deb.pSymTab;
-
-                                deb.pSymTab = pSymTab;
-                                deb.pSymTabCur = deb.pSymTab;
-
-                                // Initialize elements of the private symbol table structure
-
-                                dStrings = (DWORD) pSymTab + pSymTab->dStrings;
-
-                                // Relocate all strings within this symbol table to pointers (from offsets)
-
-                                SymTabMakePointers(deb.pSymTabCur, dStrings);
-
-                                // If the symbol table being loaded describes a kernel module, we need to
-                                // see if that module is already loaded, and if so, relocate its symbols
-
-                                // Try to find if a module with that symbol name has already been loaded
-                                if( FindModule(&Mod, pSymTab->sTableName, strlen(pSymTab->sTableName)) )
+                                // Setup relocation offsets
+                                if( SymTabSetupRelocOffset(pSymTab, (DWORD) Mod.init, (DWORD) Mod.init) )
                                 {
-                                    // Module is already loaded - we need to relocate symbol table based on it
+                                    // Relocate symbol table
+                                    SymTabRelocate(pSymTab, 1);
 
-                                    // Get the offset of the init_module global symbol from this symbol table
-                                    if( FindSymbol(&Item, "init_module", &nNameLen) )
-                                    {
-                                        dwInitFunctionSymbol = *Item.pData;
-
-                                        dprinth(1, "Relocating symbols for `%s'", pSymTab->sTableName);
-
-                                        // Details of relocation scheme are explained in ParseReloc.c file
-
-                                        // --- relocating code section ---
-
-                                        // Get the real kernel address of the init_module function after relocation
-                                        pInitFunctionOffset = (BYTE *) Mod.init;
-
-                                        // Store private reloc adjustment value for code section
-                                        pSymTab->pPriv->reloc[0] = (int)(pInitFunctionOffset - dwInitFunctionSymbol);
-
-                                        // --- relocating data section ---
-
-                                        // Find the symbol table relocation block
-                                        pReloc = (TSYMRELOC *) SymTabFindSection(pSymTab, HTYPE_RELOC);
-                                        if( pReloc )
-                                        {
-                                            int i;
-
-                                            for(i=1; i<MAX_SYMRELOC; i++)
-                                            {
-                                                // Find the address within the code segment from which we will read the offset to
-                                                // our data. Relocation block contains the relative offset from the init_module function
-                                                // to our dword sample that we need to take.
-                                                if( pReloc->list[i].refFixup )
-                                                {
-                                                    dwDataReloc = *(DWORD *) ((DWORD) Mod.init + pReloc->list[i].refFixup);
-                                                    pSymTab->pPriv->reloc[i] = dwDataReloc - pReloc->list[i].refOffset;
-                                                }
-                                            }
-                                        }
-                                        else
-                                        {
-                                            // There was not a single global variable to use for relocation. Odd, but
-                                            // possible... In that case it does not really matter not to relocate data...
-
-                                            dprinth(1, "Symbol table missing HTYPE_RELOC");
-                                        }
-
-                                        // Relocate symbol table by the required offset
-                                        SymTabRelocate(pSymTab, pSymTab->pPriv->reloc, 1);
-                                    }
+                                    // Make that symbol table the current one
+                                    deb.pSymTabCur = pSymTab;
                                 }
+                            }
 
-                                // Return OK
-                                return( 0 );
-                            }
-                            else
-                            {
-                                dprinth(1, "Error: Symbol table has incompatible version number!");
-                            }
+                            // Return OK
+                            return( 0 );
                         }
                         else
                         {
-                            dprinth(1, "Invalid symbol table signature!");
+                            dprinth(1, "Error: Symbol table has incompatible version number!");
                         }
                     }
                     else
                     {
-                        ERROR(("Error copying symbol table"));
-                        retval = -EFAULT;
+                        dprinth(1, "Invalid symbol table signature!");
                     }
-
-                    // Deallocate memory for the private symbol table structure
-                    freeHeap(deb.hSymbolBufferHeap, (void *) pPriv);
                 }
                 else
                 {
-                    ERROR(("Unable to allocate %d for private symbol table structure!\n", sizeof(TSYMPRIV)));
-                    retval = -ENOMEM;
+                    ERROR("Error copying symbol table");
+                    retval = -EFAULT;
                 }
 
                 // Deallocate memory for symbol table
@@ -271,7 +208,7 @@ int UserAddSymbolTable(void *pSymUser)
             }
             else
             {
-                ERROR(("Unable to allocate %d for symbol table!\n", (int) SymHeader.dwSize));
+                ERROR("Unable to allocate %d for symbol table!\n", (int) SymHeader.dwSize);
                 retval = -ENOMEM;
             }
         }
@@ -283,7 +220,7 @@ int UserAddSymbolTable(void *pSymUser)
     }
     else
     {
-        ERROR(("Invalid IOCTL packet address\n"));
+        ERROR("Invalid IOCTL packet address\n");
         retval = -EFAULT;
     }
 
@@ -325,7 +262,7 @@ int UserRemoveSymbolTable(void *pSymtab)
     }
     else
     {
-        ERROR(("Invalid IOCTL packet address\n"));
+        ERROR("Invalid IOCTL packet address\n");
         retval = -EFAULT;
     }
 
@@ -374,15 +311,12 @@ BOOL SymbolTableRemove(char *pTableName, TSYMTAB *pRemove)
 
             // Found it - unlink, free and return success
             if( pSym==deb.pSymTab )
-                deb.pSymTab = (TSYMTAB *) pSym->pPriv->next;     // First in the linked list
+                deb.pSymTab = (TSYMTAB *) pSym->next;           // First in the linked list
             else
-                pPrev->pPriv->next = pSym->pPriv->next;       // Not the first in the linked list
+                pPrev->next = pSym->next;                       // Not the first in the linked list
 
             // Add the memory block to the free pool
             deb.nSymbolBufferAvail += pSym->dwSize;
-
-            // Release the private symbol table data
-            freeHeap(deb.hSymbolBufferHeap, (BYTE *)pSym->pPriv);
 
             // Release the symbol table itself
             freeHeap(deb.hSymbolBufferHeap, (BYTE *)pSym);
@@ -404,7 +338,7 @@ BOOL SymbolTableRemove(char *pTableName, TSYMTAB *pRemove)
         }
 
         pPrev = pSym;
-        pSym = (TSYMTAB *) pSym->pPriv->next;
+        pSym = (TSYMTAB *) pSym->next;
     }
 
     return(FALSE);
@@ -420,7 +354,15 @@ BOOL SymbolTableRemove(char *pTableName, TSYMTAB *pRemove)
 *   Display or set current symbol table. Table name may be specified --
 *   partial name would suffice.
 *
+*   [[r] partial-table-name] | autoon | autoof | $
+*
 *   Optional argument 'R' removes a specified table (or all tables if 'R *')
+*
+*   Optional argument "autoon" or "autoof" will cause automatical switch to
+*   a table that is detected as current.
+*
+*   Optional argument "$" will cause to switch to a table where the current
+*   instruction pointer is located.
 *
 ******************************************************************************/
 BOOL cmdTable(char *args, int subClass)
@@ -428,6 +370,26 @@ BOOL cmdTable(char *args, int subClass)
     TSYMTAB *pSymTab = deb.pSymTab;
     int nLine = 2;
 
+    // First check for few special reserver words, keywords
+
+    if( !strcmp(args, "$") )
+    {
+        // Set the symbol table where the current CS:EIP points to
+        SetSymbolContext(deb.r->cs, deb.r->eip);
+    }
+    else
+    if( !stricmp(args, "autoon") )
+    {
+        // Turn on the automatic symbol table switch
+        deb.fTableAutoOn = TRUE;
+    }
+    else
+    if( !stricmp(args, "autooff") )
+    {
+        // Turn off the automatic symbol table switch
+        deb.fTableAutoOn = FALSE;
+    }
+    else
     if( pSymTab==NULL )
     {
         dprinth(1, "No symbol table loaded.");
@@ -479,7 +441,7 @@ BOOL cmdTable(char *args, int subClass)
                         return(TRUE);
                     }
 
-                    pSymTab = (TSYMTAB *) pSymTab->pPriv->next;
+                    pSymTab = (TSYMTAB *) pSymTab->next;
                 }
 
                 dprinth(1, "Nonexisting symbol table `%s'", args);
@@ -498,7 +460,7 @@ BOOL cmdTable(char *args, int subClass)
                 dprinth(nLine++, " %c%c%6d  %s",
                     DP_SETCOLINDEX, pSymTab==deb.pSymTabCur? COL_BOLD:COL_NORMAL,
                     pSymTab->dwSize, pSymTab->sTableName);
-                pSymTab = (TSYMTAB *) pSymTab->pPriv->next;
+                pSymTab = (TSYMTAB *) pSymTab->next;
             }
         }
     }
@@ -537,7 +499,7 @@ TSYMTAB *SymTabFind(char *name)
             if( !strcmp(pSymTab->sTableName, name) )
                 return( pSymTab );
 
-            pSymTab = (TSYMTAB *) pSymTab->pPriv->next;
+            pSymTab = (TSYMTAB *) pSymTab->next;
         }
     }
 
@@ -673,8 +635,74 @@ TSYMTYPEDEF *SymTabFindTypedef(TSYMTAB *pSymTab, WORD fileID)
 
 
 /******************************************************************************
+*
+*   BOOL SymTabSetupRelocOffset(TSYMTAB *pSymTab, DWORD dwInitModule, DWORD dwInitModuleSample)
+*
+*******************************************************************************
+*
+*   Prepares the symbol table relocation values based on the init_module symbol address.
+*
+*   Where:
+*       pSymTab is the symbol table to prepare. It has to have HTYPE_RELOC data.
+*       dwInitModule is the real address of the init_module
+*       dwInitModuleSample is the address to consider when taking data samples
+*
+*       The 'sample' may not be identical to init_module in the case of sys call
+*       where the code has not yet been copied to the final address, so
+*       although we use that address to compute the .text section offset,
+*       we still need to use the "low" address (which is user space) when
+*       reading sample data for variable relocation.
+*
+*   Returns:
+*       TRUE for ok
+*       FALSE if the relocation section could not be found
+*
+******************************************************************************/
+BOOL SymTabSetupRelocOffset(TSYMTAB *pSymTab, DWORD dwInitModule, DWORD dwInitModuleSample)
+{
+    DWORD dwSampleOffset;               // Real offset of that item
+    TSYMRELOC  *pReloc;                 // Symbol table relocation header
+    int i;                              // Relocation section
+
+    // Find the symbol table relocation block
+    pReloc = (TSYMRELOC *) SymTabFindSection(pSymTab, HTYPE_RELOC);
+    if( pReloc )
+    {
+        // Store private reloc adjustment value for code section (.text)
+        pReloc->list[0].reloc = (int)(dwInitModule - pReloc->list[0].refOffset);
+
+        // Compute the relocation values for other segments
+        for(i=1; i<pReloc->nReloc; i++)
+        {
+            // We can never have fixup from 0 for the sample, so skip those entries.
+            // This can happen if there is no .rodata, for example and we always
+            // store all 4 basic segments (.text, .data, .rodata and .bss)
+            if( pReloc->list[i].refFixup )
+            {
+                // Find the address within the code segment from which we will read the offset to
+                // our data. Relocation block contains the relative offset from the init_module function
+                // to our dword sample that we need to take.
+dprinth(1, "[%d] fixup=%08X offset=%08X", i, pReloc->list[i].refFixup, pReloc->list[i].refOffset);
+                dwSampleOffset = *(DWORD *)(dwInitModuleSample + pReloc->list[i].refFixup);
+dprinth(1, "  %08X %08X = %08X", dwInitModuleSample, dwInitModuleSample + pReloc->list[i].refFixup, dwSampleOffset);
+                pReloc->list[i].reloc = dwSampleOffset - pReloc->list[i].refOffset;
+dprinth(1, "   reloc[%d] = (%08X,%08X)", i, pReloc->list[i].refFixup, pReloc->list[i].refOffset);
+            }
+        }
+    }
+    else
+    {
+        dprinth(1, "SYSCALL: Symbol table missing HTYPE_RELOC!");
+
+        return( FALSE );
+    }
+
+    return( TRUE );
+}
+
+/******************************************************************************
 *                                                                             *
-*   void SymTabRelocate(TSYMTAB *pSymTab, int pReloc[], int factor            *
+*   void SymTabRelocate(TSYMTAB *pSymTab, int factor                          *
 *                                                                             *
 *******************************************************************************
 *
@@ -683,14 +711,13 @@ TSYMTYPEDEF *SymTabFindTypedef(TSYMTAB *pSymTab, WORD fileID)
 *
 *   Where:
 *       pSymTab is the pointer to a symbol table to relocate
-*       pReloc is address of array of relocation values for each symbol type
 *       factor is 1/-1 for relocation direction
 *
 ******************************************************************************/
-void SymTabRelocate(TSYMTAB *pSymTab, int pReloc[], int factor)
+void SymTabRelocate(TSYMTAB *pSymTab, int factor)
 {
+    TSYMRELOC  *pReloc;                 // Symbol table relocation header
     TSYMHEADER *pHead;                  // Generic section header
-    DWORD count;
 
     TSYMGLOBAL  *pGlobals;              // Globals section pointer
     TSYMGLOBAL1 *pGlobal;               // Single global item
@@ -698,85 +725,104 @@ void SymTabRelocate(TSYMTAB *pSymTab, int pReloc[], int factor)
     TSYMFNSCOPE *pFnScope;              // Function scope section pointer
     TSYMSTATIC  *pStatic;               // Static symbols section pointer
     TSYMSTATIC1 *pStatic1;              // Single static item
+    DWORD count;
+    int nSegment;                       // Segment number that the variable is in
 
     if( pSymTab )
     {
-        pHead = pSymTab->header;
+        pReloc = (TSYMRELOC *) SymTabFindSection(pSymTab, HTYPE_RELOC);
 
-        // Loop over the complete symbol table and relocate each appropriate section
-        while( pHead->hType != HTYPE__END )
+        if( pReloc )
         {
-            switch( pHead->hType )
+            if( factor>0 )
+                dprinth(1, "SYSCALL: Relocating symbols for `%s' .text=%08X", pSymTab->sTableName, pReloc->list[0].reloc);
+            else
+                dprinth(1, "SYSCALL: Reverting symbol relocation for `%s'", pSymTab->sTableName);
+
+            pHead = pSymTab->header;
+
+            // Loop over the complete symbol table and relocate each appropriate section
+            while( pHead->hType != HTYPE__END )
             {
-                case HTYPE_GLOBALS:
+                switch( pHead->hType )
+                {
+                    case HTYPE_GLOBALS:
 
-                    pGlobals = (TSYMGLOBAL *) pHead;
-                    pGlobal  = &pGlobals->list[0];
+                        pGlobals = (TSYMGLOBAL *) pHead;
+                        pGlobal  = &pGlobals->list[0];
 
-                    for(count=0; count<pGlobals->nGlobals; count++, pGlobal++ )
-                    {
-                        // pGlobal->bFlags contains the symbol segment that is index
-                        // into the relocation array for that segment type
-                        if( pGlobal->bFlags==0x00 )
+                        for(count=0; count<pGlobals->nGlobals; count++, pGlobal++ )
                         {
-                            // [0] is .text
-                            pGlobal->dwStartAddress += pReloc[0] * factor;
-                            pGlobal->dwEndAddress   += pReloc[0] * factor;
+                            // pGlobal->bSegment contains the symbol segment that is index
+                            // into the relocation array for that segment type
+
+                            nSegment = pGlobal->bSegment;
+
+                            pGlobal->dwStartAddress += pReloc->list[nSegment].reloc * factor;
+                            pGlobal->dwEndAddress   += pReloc->list[nSegment].reloc * factor;
                         }
-                        else
+                        break;
+
+                    case HTYPE_SOURCE:
+                        // This section does not need relocation
+                        break;
+
+                    case HTYPE_FUNCTION_LINES:
+
+                        pFnLin = (TSYMFNLIN *) pHead;
+                        pFnLin->dwStartAddress += pReloc->list[0].reloc * factor;
+                        pFnLin->dwEndAddress   += pReloc->list[0].reloc * factor;
+                        break;
+
+                    case HTYPE_FUNCTION_SCOPE:
+
+                        pFnScope = (TSYMFNSCOPE *) pHead;
+                        pFnScope->dwStartAddress += pReloc->list[0].reloc * factor;
+                        pFnScope->dwEndAddress   += pReloc->list[0].reloc * factor;
+
+                        // Loop for all function scope tokens and relocate TOKTYPE_LCSYM as it is
+                        // the only one containing the address of the symbol (uninitialized local static)
+
+                        for(count=0; count<pFnScope->nTokens; count++ )
                         {
-                            // [1] is .data
-                            pGlobal->dwStartAddress += pReloc[1] * factor;
-                            pGlobal->dwEndAddress   += pReloc[1] * factor;
+                            if( pFnScope->list[count].TokType==TOKTYPE_LCSYM )
+                            {
+                                nSegment = pFnScope->list[count].bSegment;
+
+                                pFnScope->list[count].param += pReloc->list[nSegment].reloc * factor;
+                            }
                         }
+                        break;
 
-                    }
-                    break;
+                    case HTYPE_STATIC:
 
-                case HTYPE_SOURCE:
-                    // This section does not need relocation
-                    break;
+                        pStatic  = (TSYMSTATIC *) pHead;
+                        pStatic1 = &pStatic->list[0];
 
-                case HTYPE_FUNCTION_LINES:
+                        for(count=0; count<pStatic->nStatics; count++, pStatic1++ )
+                        {
+                            nSegment = pStatic1->bSegment;
 
-                    pFnLin = (TSYMFNLIN *) pHead;
-                    pFnLin->dwStartAddress += pReloc[0] * factor;        // [0] is .text
-                    pFnLin->dwEndAddress   += pReloc[0] * factor;
-                    break;
+                            pStatic1->dwAddress += pReloc->list[nSegment].reloc * factor;
+                        }
+                        break;
 
-                case HTYPE_FUNCTION_SCOPE:
+                    case HTYPE_TYPEDEF:
+                        // This section does not need relocation
+                        break;
 
-                    pFnScope = (TSYMFNSCOPE *) pHead;
-                    pFnScope->dwStartAddress += pReloc[0] * factor;
-                    pFnScope->dwEndAddress   += pReloc[0] * factor;
-                    break;
+                    case HTYPE_IGNORE:
+                        // This section does not need relocation
+                        break;
 
-                case HTYPE_STATIC:
+                    default:
+                        // We could catch a corrupted symbols error here if we want to...
+                        break;
+                }
 
-                    pStatic  = (TSYMSTATIC *) pHead;
-                    pStatic1 = &pStatic->list[0];
-
-                    for(count=0; count<pStatic->nStatics; count++, pStatic1++ )
-                    {
-                        pStatic1->dwAddress += pReloc[1] * factor;
-                    }
-                    break;
-
-                case HTYPE_TYPEDEF:
-                    // This section does not need relocation
-                    break;
-
-                case HTYPE_IGNORE:
-                    // This section does not need relocation
-                    break;
-
-                default:
-                    // We could catch a corrupted symbols error here if we want to...
-                    break;
+                // Next section
+                pHead = (TSYMHEADER*)((DWORD)pHead + pHead->dwSize);
             }
-
-            // Next section
-            pHead = (TSYMHEADER*)((DWORD)pHead + pHead->dwSize);
         }
     }
 }
@@ -882,7 +928,7 @@ static void SymTabMakePointers(TSYMTAB *pSymTab, DWORD dStrings)
 
                     pType  = (TSYMTYPEDEF *) pHead;
                     pType1 = &pType->list[0];
-                    pType->pRel = (DWORD)pType->pRel + dStrings;
+                    pType->pRel = (TSYMADJUST *)((DWORD)pType->pRel + dStrings);
 
                     for(count=0; count<pType->nTypedefs; count++, pType1++)
                     {

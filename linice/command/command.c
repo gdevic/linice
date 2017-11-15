@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       09/11/00                                                      *
 *                                                                             *
-*   Copyright (c) 2000 Goran Devic                                            *
+*   Copyright (c) 2000-2004 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -241,7 +241,7 @@ TCommand Cmd[] = {
 {    "T",        1, 0, cmdTrace,       "Trace [count]", "ex: T",   0 },
 //{  "THREAD",   6, 0, Unsupported,    "THREAD [TCB | ID | task-name]", "ex: THREAD", 0 },
 //{  "TRACE",    5, 0, Unsupported,    "TRACE [B | OFF | start]", "ex: TRACE 50", 0 },
-{    "TABLE",    5, 0, cmdTable,       "TABLE [[R] table-name | AUTOON | AUTOOFF]", "ex: TABLE test", 0 },
+{    "TABLE",    5, 0, cmdTable,       "TABLE [[R] table-name] | AUTOON | AUTOOFF | $", "ex: TABLE test", 0 },
 {    "TABS",     4, 0, cmdTabs,        "TABS [1 - 8]", "ex: TABS 4",  0 },
 {    "TSS",      3, 0, cmdTss,         "TSS [TSS selector]", "ex: TSS",   0 },
 {    "TYPES",    5, 0, cmdTypes,       "TYPES [type-name]", "ex: TYPE TagMyType", 0 },
@@ -328,11 +328,11 @@ char *sHelp[] = {
 /* "STACK  - Display call stack", */
 /* "XFRAME - Display active exception frames", */
 /* "THREAD - Display thread information", */
-/* "ADDR   - Display/change address Contexts", */
+/* "ADDR   - Display/change address contexts", */
    "PROC   - Display process information",
 /* "QUERY  - Display a processes virtual address space map", */
    "WHAT   - Identify the type of an expression",
-   "DEVICE - Display info about a device",
+/* "DEVICE - Display info about a device", */
    " I/O PORT COMMANDS",
    "I      - Input data from I/O port",
    "IB     - Input data from I/O port, byte size",
@@ -369,7 +369,7 @@ char *sHelp[] = {
    "LINES  - Set/display number of lines on screen",
    "WIDTH  - Set/display number of columns on screen",
 /* "PRN    - Set printer output port", */
-   "PRINT-SCREEN key - Dump screen to printer",
+/* "PRINT-SCREEN key - Dump screen to printer", */
    "MACRO  - Define a named macro command",
    " UTILITY COMMANDS",
 /* "A      - Assemble code", */
@@ -396,7 +396,7 @@ char *sHelp[] = {
    "WR     - Toggle register window",
 /* "WS     - Toggle call stack window", */
    "WW     - Toggle  watch window",
-/* "EC     - Enter/exit code window", */
+   "EC     - Enter/exit code window",
    ".      - Locate current instruction",
    " WINDOW CONTROL",
    "VGA    - Switch to a VGA text display",
@@ -438,6 +438,43 @@ char *sHelp[] = {
 
 extern char *MacroExpand(char *pCmd);
 
+/******************************************************************************
+*                                                                             *
+*   BOOL EOL(char **ppArg)                                                    *
+*                                                                             *
+*******************************************************************************
+*
+*   Given the pointer to argument, advances it past spaces and checks for
+*   separators ';' returns if the _logical_ end of command line is reached.
+*
+*   It adjusts the argument pointer accordingly.
+*
+*   Where:
+*       ppArg is the address of the pointer to argument string
+*
+*   Returns:
+*       TRUE - _logical_ end of line is reached
+*       FALSE - another non-space character in the line
+*
+******************************************************************************/
+BOOL EOL(char **ppArg)
+{
+    char *arg = *ppArg;                 // Get the pointer to argument string
+
+    // Skip the spaces
+    while( *arg==' ' ) arg++;
+
+    // if we hit the end of string or a logical line terminator, return TRUE
+    if( *arg=='\0' || *arg==';' )
+    {
+        *ppArg = arg;
+        return( TRUE );
+    }
+
+    // Else, the end of line has not been reached
+    *ppArg = arg;
+    return( FALSE );
+}
 
 /******************************************************************************
 *                                                                             *
@@ -531,7 +568,7 @@ BOOL CommandExecute( char *pOrigCmd )
             }
             else
             {
-                deb.error = ERR_COMMAND;
+                PostError(ERR_COMMAND, 0);
                 return( TRUE );
             }
         }
@@ -629,7 +666,7 @@ BOOL cmdHelp(char *args, int subClass)
         else
         {
             // Nope - user typed invalid command
-            deb.error = ERR_COMMAND;
+            PostError(ERR_COMMAND, 0);
         }
     }
     else
@@ -659,7 +696,7 @@ BOOL cmdHelp(char *args, int subClass)
 ******************************************************************************/
 BOOL Unsupported(char *args, int subClass)
 {
-    deb.error = ERR_NOT_IMPLEMENTED;
+    PostError(ERR_NOT_IMPLEMENTED, 0);
 
     return( TRUE );
 }
@@ -695,7 +732,7 @@ int GetOnOff(char *args)
     if( len==6 && strnicmp(args, "kernel", 6)==0 )
         return( 4 );                    // KERNEL
 
-    deb.error = ERR_SYNTAX;
+    PostError(ERR_SYNTAX, 0);
 
     return( 0 );
 }

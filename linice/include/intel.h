@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       9/4/97                                                        *
 *                                                                             *
-*   Copyright (c) 1997, 2001 Goran Devic                                      *
+*   Copyright (c) 1997-2004 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -332,10 +332,10 @@ typedef struct
 #define PVI_BIT         1
 #define TSD_BIT         2
 #define DE_BIT          3
-#define PSE_BIT         4
-#define PAE_BIT         5
+#define PSE_BIT         4   // Page Size Extension; 4Mb pages
+#define PAE_BIT         5   // Page Address Extension; CR3 points to Page Directory Pointers (PDP), 36-bit total
 #define MCE_BIT         6
-#define PGE_BIT         7
+#define PGE_BIT         7   // Paging Global Extensions; on CR3 reload, flush only pages with Global bit cleared
 #define PCE_BIT         8
 
 //#define mov_eax_cr4 __asm _emit 0x0F __asm _emit 0x20 __asm _emit 0xE0

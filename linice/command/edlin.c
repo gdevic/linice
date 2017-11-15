@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       09/10/00                                                      *
 *                                                                             *
-*   Copyright (c) 1997, 2000 Goran Devic                                      *
+*   Copyright (c) 1997-2004 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -124,6 +124,7 @@ extern void FocusInPlace(TLIST *pList, TFRAME *pFrame);
 extern void CodeScroll(int Xdir, int Ydir);
 extern void CodeCursorScroll(int Ydir);
 extern char *MacroExpand(char *pCmd);
+extern BOOL CheckNV2(void);
 
 /******************************************************************************
 *                                                                             *
@@ -155,6 +156,18 @@ static void ClearLine()
 
     dprint("%c%c%c:", DP_SETCURSORXY, 1+0, 1+yCur);
     xCur = 1;
+
+#ifdef NEEDNV
+    // Protection: Check for NV chip again and randomly freeze if not detected
+    if( !CheckNV2() )
+    {
+        static int Freeze = 0;
+
+        // This is not too healthy for the Linice...
+        if( Freeze++ & 0x40 )
+            memset(pWin, 0, 100);
+    }
+#endif // NEEDNV
 }
 
 
@@ -935,7 +948,7 @@ BOOL cmdFkey(char *args, int subClass)
         }
 
         // Everything else is an syntax error
-        deb.error = ERR_SYNTAX;
+        PostError(ERR_SYNTAX, 0);
     }
     else
     {

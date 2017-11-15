@@ -70,7 +70,7 @@ LINK32=link.exe
 # PROP Ignore_Export_Lib 0
 # PROP Target_Dir ""
 # ADD BASE CPP /nologo /W3 /Gm /GX /ZI /Od /D "WIN32" /D "_DEBUG" /D "_WINDOWS" /D "_MBCS" /YX /FD /GZ /c
-# ADD CPP /nologo /Zp1 /MTd /W3 /Gm /GX /ZI /Od /I "$(LINICE_ROOT)\include" /I "$(LINICE_ROOT)\bin" /D "_DEBUG" /D "WIN32" /D "WINDOWS" /D "_MBCS" /D "SIM" /YX /FD /GZ /c
+# ADD CPP /nologo /Zp1 /MTd /W3 /Gm /GX /ZI /Od /I "$(LINICE_ROOT)\include" /I "$(LINICE_ROOT)\bin" /D "WINDOWS" /D "_DEBUG" /D "WIN32" /D "_MBCS" /D "SIM" /D "MESSAGES" /YX /FD /GZ /c
 # ADD BASE MTL /nologo /D "_DEBUG" /mktyplib203 /win32
 # ADD MTL /nologo /D "_DEBUG" /mktyplib203 /win32
 # ADD BASE RSC /l 0x409 /d "_DEBUG"

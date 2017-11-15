@@ -1,0 +1,9 @@
+/bin/test/app
+/bin/test/hello
+/bin/test/int3
+/bin/test/types
+/bin/test/xsnow
+/bin/test/kernel.o
+/bin/test/modlp.o
+/bin/test/modscope.o
+/bin/test/module.o

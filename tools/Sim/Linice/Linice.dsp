@@ -65,7 +65,7 @@ LIB32=link.exe -lib
 # PROP Intermediate_Dir "Debug"
 # PROP Target_Dir ""
 # ADD BASE CPP /nologo /W3 /Gm /GX /ZI /Od /D "WIN32" /D "_DEBUG" /D "_MBCS" /D "_LIB" /YX /FD /GZ /c
-# ADD CPP /nologo /Zp1 /MTd /W3 /Gm /GX /ZI /Od /X /I "$(LINICE_ROOT)\include" /I "$(LINICE_ROOT)\linice\include" /I "$(LINICE_ROOT)\bin" /D "_DEBUG" /D "DBG" /D "WIN32" /D "_MBCS" /D "_LIB" /D "MODULE" /D "SIM" /FD /GZ /c
+# ADD CPP /nologo /Zp1 /MTd /W3 /Gm /GX /ZI /Od /X /I "$(LINICE_ROOT)\include" /I "$(LINICE_ROOT)\linice\include" /I "$(LINICE_ROOT)\bin" /D "DBG" /D "_LIB" /D "MODULE" /D "_DEBUG" /D "WIN32" /D "_MBCS" /D "SIM" /D "MESSAGES" /FD /GZ /c
 # SUBTRACT CPP /YX
 # ADD BASE RSC /l 0x409 /d "_DEBUG"
 # ADD RSC /l 0x409 /d "_DEBUG"
@@ -379,6 +379,10 @@ SOURCE="$(LINICE_ROOT)\linice\memaccess.c"
 # End Source File
 # Begin Source File
 
+SOURCE=..\..\..\linice\messages.c
+# End Source File
+# Begin Source File
+
 SOURCE="$(LINICE_ROOT)\linice\printf.c"
 # End Source File
 # Begin Source File
@@ -404,6 +408,10 @@ SOURCE="$(LINICE_ROOT)\linice\symbolTable.c"
 # Begin Source File
 
 SOURCE="$(LINICE_ROOT)\linice\syscall.c"
+# End Source File
+# Begin Source File
+
+SOURCE="$(LINICE_ROOT)\linice\task.c"
 # End Source File
 # Begin Source File
 

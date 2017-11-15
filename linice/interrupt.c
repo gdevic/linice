@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       04/28/00                                                      *
 *                                                                             *
-*   Copyright (c) 2000 Goran Devic                                            *
+*   Copyright (c) 2000-2004 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -43,6 +43,8 @@
 #include "debug.h"                      // Include our dprintk()
 #include "intel.h"                      // Include processor specific stuff
 #include "iceface.h"                    // Include iceface module stub protos
+#include "disassembler.h"               // Include disassembler
+
 
 /******************************************************************************
 *                                                                             *
@@ -56,9 +58,6 @@ extern void MemAccess_FAULT();
 
 extern DWORD IceIntHandlers[0x30];
 extern DWORD IceIntHandler80;
-
-extern void GetSysreg( TSysreg * pSys );
-extern void SetSysreg( TSysreg * pSys );
 
 extern void DebuggerEnterBreak(void);
 extern void DebuggerEnterDelayedArm(void);
@@ -104,7 +103,6 @@ extern void  SpinlockSet(DWORD *pSpinlock);
 extern void  SpinlockReset(DWORD *pSpinlock);
 
 extern void IntAck(int nInt);
-
 
 /******************************************************************************
 *                                                                             *
@@ -360,7 +358,19 @@ DWORD InterruptHandler( DWORD nInt, PTREGS pRegs )
 
                     break;
                 }
-                chain = GET_IDT_BASE( &LinuxIdt[ReverseMapIrq(nInt)] );
+                else
+                {
+                    // If we page faulted within Linice, there is little we can do
+                    // except we can just try to ignore it. We need to skip the current
+                    // faulting instruction in order to do so, since the PF would restart it.
+                    // However, that is not normal, so the switch deb.fPfProtect is designed
+                    // to let us optionally enable that workaround iff we need it.
+
+                    if( deb.fPfProtect )
+                        pRegs->eip += GetInstructionLen(pRegs->cs, pRegs->eip);
+                    else
+                        chain = GET_IDT_BASE( &LinuxIdt[ReverseMapIrq(nInt)] );
+                }
                 break;
 
             case 0x0D:      // GP FAULT - we handle internal GP faults

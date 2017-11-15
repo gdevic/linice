@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       04/31/00                                                      *
 *                                                                             *
-*   Copyright (c) 2000 Goran Devic                                            *
+*   Copyright (c) 2000-2004 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -61,6 +61,9 @@ static char sCmd[MAX_STRING];
 *                                                                             *
 ******************************************************************************/
 
+extern DWORD Checksum1(DWORD start, DWORD len);
+extern void OEMProtect(void);
+extern void DisplayMessage(void);
 extern void EdLin( char *sCmdLine );
 extern void ArmBreakpoints(void);
 extern void DisarmBreakpoints(void);
@@ -94,6 +97,7 @@ extern void DebPrintErrorString();
 
 void DebuggerEnterBreak(void)
 {
+    TADDRDESC Addr;                     // Address descriptor
     BOOL fAcceptNext;                   // Flag to continue looping inside debugger
 
     // Abort possible single step trace state
@@ -149,6 +153,25 @@ void DebuggerEnterBreak(void)
                         dputc(DP_ENABLE_OUTPUT);
                         dputc(DP_SAVEBACKGROUND);
                     }
+                    // Recalculate the checksum of the linice code to make sure it is not
+                    // trashed by a misbehaving debugee
+                    if( deb.LiniceChecksum != Checksum1((DWORD)ObjectStart, (DWORD)ObjectEnd - (DWORD)ObjectStart) )
+                    {
+                        // Protection: If the user continues to run with the corrupted Linice image,
+                        // we may have a hacker hacking into Linice code. So, after some random time, halt.
+                        static int HaltCount = 0;
+
+                        dprinth(1, "MEMORY CORRUPTED - SYSTEM UNSTABLE. It is advisable to reboot.");
+
+                        if( HaltCount++ > (deb.r->eax & 0xf)+20 )
+                        {
+#if NOSELF
+                            while( 1 );
+#endif // NOSELF
+                            ;
+                        }
+                    }
+
                     // Recalculate window locations based on visibility and number of lines
                     // and repaint all windows
                     RecalculateDrawWindows();
@@ -166,6 +189,12 @@ void DebuggerEnterBreak(void)
                         //========================================================================
                         do
                         {
+                            // Before the user is given a line, display a custom message
+                            // But do it only if the command was not empty, to avoid someone
+                            // camping on an Enter key and getting messages
+                            if( sCmd[1] )
+                                DisplayMessage();
+
                             EdLin( sCmd );
 
                             fAcceptNext = CommandExecute( sCmd+1 );     // Skip the prompt
@@ -178,11 +207,14 @@ void DebuggerEnterBreak(void)
                             }
 
                             // Print the possible error message that occurred during the command run
-                            if( deb.error )
+                            if( deb.errorCode )
                             {
                                 DebPrintErrorString();
-                                deb.error = NOERROR;
+                                deb.errorCode = NOERROR;
                             }
+
+                            // Protection: Parse the list of OEM modules and tag the one we want to mangle
+                            OEMProtect();
 
                         } while( fAcceptNext );
 
@@ -223,7 +255,10 @@ T_count_continuation:
     if( deb.fTrace )
     {
         // Make sure the address is valid
-        if( GetByte(deb.r->cs, deb.r->eip)==0xF4)
+        Addr.sel    = deb.r->cs;
+        Addr.offset = deb.r->eip;
+
+        if( AddrGetByte(&Addr)==0xF4)
         {
             deb.r->eip++;                   // Advance EIP if the current instruction is HLT (0xF4)
         }

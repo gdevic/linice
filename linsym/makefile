@@ -1,18 +1,75 @@
+##############################################################################
+#																			 #
+#	Makefile for LINSYM Linice Symbol Loader/Translator						 #
+#																			 #
+#	(c) 2000-2004 Goran Devic												 #
+#	(c) "Linice" by Goran Devic												 #
+#	(c) "Linsym" by Goran Devic												 #
+#																			 #
+##############################################################################
+
+#-----------------------------------------------------------------------------
+# List of include directories
+#-----------------------------------------------------------------------------
+
 INC = /usr/include
 H   = ../include
 
-CC = gcc
+#-----------------------------------------------------------------------------
+# Compiler defines:
+#	make retail			- retail build
+#	make debug			- engineering debug build (default)
+#   make nd				- engineering non-debug build
+#-----------------------------------------------------------------------------
 
-#CFLAGS = -O -I$(INC) -I$(H)
-#CFLAGS = -gstabs+ -Wall -DDBG -O -I$(INC) -I$(H)
+#-----------------------------------------------------------------------------
+# Compiler defines: Engineering DEBUG build (Development, default)
+#-----------------------------------------------------------------------------
+
+CFLAGS = -gstabs+ -Wall -DDBG -O -I$(INC) -I$(H)
+
+#-----------------------------------------------------------------------------
+# Compiler defines: Engineering NON-DEBUG build
+#-----------------------------------------------------------------------------
+ifeq ($(MAKECMDGOALS),nd)
+
 CFLAGS = -Wall -O3 -I$(INC) -I$(H)
 
+endif
+#-----------------------------------------------------------------------------
+# Compiler defines: RETAIL build
+#-----------------------------------------------------------------------------
+ifeq ($(MAKECMDGOALS),retail)
+
+CFLAGS = -Wall -O3 -I$(INC) -I$(H)
+
+endif
+#-----------------------------------------------------------------------------
+# Compiler that is used.
+#-----------------------------------------------------------------------------
+
+CC = gcc
+
+#-----------------------------------------------------------------------------
+# Formal targets
+#-----------------------------------------------------------------------------
+
+debug:	../bin/linsym
+
+nd:		../bin/linsym
+
+retail:	../bin/linsym
+	@strip ../bin/linsym
 
 all:	../bin/linsym
 
 clean:
 	rm -f ../bin/linsym
 	rm -f *.o *~ core
+
+#-----------------------------------------------------------------------------
+# List of object modules that build the target
+#-----------------------------------------------------------------------------
 
 ../bin/linsym:	install.o	\
         ElfToSym.o  \
@@ -30,8 +87,7 @@ clean:
 		symbols.o   \
         symutils.o  \
 		ChkSym.o
-	$(CC) $^ -o linsym.o
-	cp linsym.o ../bin/linsym
+	$(CC) $^ -o ../bin/linsym
 	chmod +x ../bin/linsym
 
 install.o:	install.c

@@ -43,7 +43,7 @@
 
 #define NAME                "Linice Simulation Environment"
 #define VERSION             "Release 1.01"
-#define ABOUT               "Sim Copyright 2003 Goran Devic"
+#define ABOUT               "Sim Copyright 2004 Goran Devic"
 #define SIM_CLASS           "SimClass"  // Class name of the Sim
 #define SIM_CAPTION         "Sim"       // Caption on the main window
 #define SIM_MENU_NAME       "Menu"      // Resource name of the menu

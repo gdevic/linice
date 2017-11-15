@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       10/16/00                                                      *
 *                                                                             *
-*   Copyright (c) 2001 Goran Devic                                            *
+*   Copyright (c) 2000-2004 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -508,30 +508,29 @@ BOOL cmdStep(char *args, int subClass)
 BOOL cmdZap(char *args, int subClass)
 {
     TADDRDESC Addr;                     // Address to zap
-    int b0;
+    int b0;                             // Temp store current byte so we dont fetch it twice
 
-    // Make sure the address is valid
-    b0 = GetByte(deb.r->cs, deb.r->eip - 1);
-    if( b0==0xCC )
+    // Make sure the address is valid and that we want to zap a real INT3
+    Addr.sel = deb.r->cs;
+    Addr.offset = deb.r->eip - 1;
+
+    if( (b0 = AddrGetByte(&Addr))==0xCC )
     {
-        Addr.sel = deb.r->cs;
-        Addr.offset = deb.r->eip - 1;
-
         // Zap the INT3
         AddrSetByte(&Addr, 0x90, TRUE);
     }
     else
-    if( b0==0x01 || b0==0x03 )
+    if( b0==0x01 || b0==0x03 )          // "INT 1" or "INT 3" two-byte opcodes
     {
-        if( GetByte(deb.r->cs, deb.r->eip - 2)==0xCD )
+        Addr.offset = deb.r->eip - 2;
+
+        if( AddrGetByte(&Addr)==0xCD )
         {
-            Addr.sel = deb.r->cs;
-
             // Zap the 2-byte INT 1 or INT 3
-            Addr.offset = deb.r->eip - 1;
-            AddrSetByte(&Addr, 0x90, TRUE);
+            // Addr.offset = deb.r->eip - 2;    // We already have this offset in .offset
+            AddrSetByte(&Addr, 0x90, TRUE);     // zap with NOP
 
-            Addr.offset = deb.r->eip - 2;
+            Addr.offset = deb.r->eip - 1;       // 2-byte opcode
             AddrSetByte(&Addr, 0x90, TRUE);
         }
     }

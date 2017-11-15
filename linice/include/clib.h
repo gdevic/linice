@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       09/11/00                                                      *
 *                                                                             *
-*   Copyright (c) 2001 Goran Devic                                            *
+*   Copyright (c) 2000-2004 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -77,15 +77,17 @@ enum
     ERR_BPMWALIGN,
     ERR_BPMDALIGN,
     ERR_BPNUM,
+    ERR_BPLINE,
 
     ERR_TOO_COMPLEX,
     ERR_TOO_BIG,
     ERR_NOTAPOINTER,
     ERR_ELEMENTNOTFOUND,
     ERR_ADDRESS,
-    ERR_SELECTOR,
     ERR_INVALIDOP,
     ERR_NOTARRAY,
+
+    ERR_SELECTOR,
 
 } ERRORS;
 

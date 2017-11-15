@@ -2,12 +2,23 @@
 #include <linux/module.h>
 
 int global = 3;
+char gu;
+
+const int ro[3] = { 0, 1, 2 };
+
+int func1()
+{
+    funct(0, 0);
+}
 
 int init_module(void)
 {
     int local;
     register int local2 = 100;
     register int local3 = 0;
+
+    // Global uninitialized
+    gu = 'x' + ro[0];
 
     for(local3=0; local3<1; local3++)
     {

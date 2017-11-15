@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       10/15/00                                                      *
 *                                                                             *
-*   Copyright (c) 2000 Goran Devic                                            *
+*   Copyright (c) 2000-2004 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -73,18 +73,20 @@ typedef struct
 #define VAR_DWORD       1               // Dword variable
 
 static TSETVAR SetVar[] = {
-{ "altscr",   6, &deb.fAltscr,    VAR_BOOL , 0 },
-{ "code" ,    4, &deb.fCode,      VAR_BOOL , 0 },
-{ "faults",   6, &deb.fFaults,    VAR_BOOL , 0 },
-{ "i1here",   6, &deb.fI1Here,    VAR_BOOL , 0 },
-{ "i3here",   6, &deb.fI3Here,    VAR_BOOL , 0 },
-{ "lowercase",9, &deb.fLowercase, VAR_BOOL , 0 },
-{ "pause",    5, &deb.fPause,     VAR_BOOL , 0 },
-{ "symbols",  7, &deb.fSymbols,   VAR_BOOL , 0 },
-{ "flash",    5, &deb.fFlash,     VAR_BOOL , 0 },
-{ "font",     4, &deb.nFont,      VAR_DWORD, 1 },   // Test condition 1 - font size
-{ "framex",   6, &deb.FrameX,     VAR_DWORD, 2 },   // Test condition 2 - frame X coordinate
-{ "framey",   6, &deb.FrameY,     VAR_DWORD, 3 },   // Test condition 3 - frame Y coordinate
+{ "altscr",   6, &deb.fAltscr,      VAR_BOOL , 0 },
+{ "code" ,    4, &deb.fCode,        VAR_BOOL , 0 },
+{ "faults",   6, &deb.fFaults,      VAR_BOOL , 0 },
+{ "i1here",   6, &deb.fI1Here,      VAR_BOOL , 0 },
+{ "i3here",   6, &deb.fI3Here,      VAR_BOOL , 0 },
+{ "lowercase",9, &deb.fLowercase,   VAR_BOOL , 0 },
+{ "pause",    5, &deb.fPause,       VAR_BOOL , 0 },
+{ "symbols",  7, &deb.fSymbols,     VAR_BOOL , 0 },
+{ "flash",    5, &deb.fFlash,       VAR_BOOL , 0 },
+{ "font",     4, &deb.nFont,        VAR_DWORD, 1 },   // Test condition 1 - font size
+{ "framex",   6, &deb.FrameX,       VAR_DWORD, 2 },   // Test condition 2 - frame X coordinate
+{ "framey",   6, &deb.FrameY,       VAR_DWORD, 3 },   // Test condition 3 - frame Y coordinate
+{ "autoon",   6, &deb.fTableAutoOn, VAR_BOOL , 0 },   // TABLE AUTOON | AUTOOFF
+{ "pfprotect",9, &deb.fPfProtect,   VAR_BOOL , 0 },   // Internal: PF Protect
 { NULL, }
 };
 
@@ -293,7 +295,7 @@ static void VarMacro(char *sOp, char *args, TNAMEVAL *pObject, int nElem)
                         pObject[i].pValue = NULL;
                     }
                     else
-                        deb.error = ERR_SYNTAX;
+                        PostError(ERR_SYNTAX, 0);
                 }
                 else
                 {
@@ -324,7 +326,7 @@ static void VarMacro(char *sOp, char *args, TNAMEVAL *pObject, int nElem)
                         pObject[i].pName = mallocHeap(deb.hHeap, nameLen + 1);
                         if( pObject[i].pName==NULL )
                         {
-                            deb.error = ERR_MEMORY;
+                            PostError(ERR_MEMORY, 0);
                             return;
                         }
 
@@ -339,7 +341,7 @@ static void VarMacro(char *sOp, char *args, TNAMEVAL *pObject, int nElem)
                         freeHeap(deb.hHeap, pObject[i].pName);
                         pObject[i].pName = NULL;
 
-                        deb.error = ERR_MEMORY;
+                        PostError(ERR_MEMORY, 0);
                         return;
                     }
 
@@ -554,7 +556,7 @@ BOOL cmdAltkey(char *args, int subClass)
         Key |= toupper(*args);
 
         if( Key==0 || !isalpha(Key & 0x7F) )
-            deb.error = ERR_SYNTAX;
+            PostError(ERR_SYNTAX, 0);
         else
             deb.BreakKey = Key;
     }
@@ -837,7 +839,7 @@ BOOL cmdResize(char *args, int subClass)
                 dprinth(1, "Lines have to be in the range [24, %d]", MAX_OUTPUT_SIZEY);
         }
         else
-            deb.error = ERR_SYNTAX;
+            PostError(ERR_SYNTAX, 0);
     }
 
     return( TRUE );
@@ -924,7 +926,7 @@ BOOL cmdColor(char *args, int subClass)
                 RecalculateDrawWindows();
             }
             else
-                deb.error = ERR_SYNTAX;
+                PostError(ERR_SYNTAX, 0);
         }
     }
 
@@ -991,7 +993,7 @@ BOOL cmdSerial(char *args, int subClass)
                         dprinth(1, "Serial port must be 1, 2, 3 or 4");
                 }
 
-                deb.error = ERR_SYNTAX;
+                PostError(ERR_SYNTAX, 0);
                 return(TRUE);
             }
 Proceed:
@@ -1161,7 +1163,7 @@ BOOL cmdTabs(char *args, int subClass)
                 dprinth(1, "Tabs value should be 1 - 8");
         }
         else
-            deb.error = ERR_SYNTAX;
+            PostError(ERR_SYNTAX, 0);
     }
     else
     {

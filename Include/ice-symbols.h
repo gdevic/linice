@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       11/26/00                                                      *
 *                                                                             *
-*   Copyright (c) 2001 Goran Devic                                            *
+*   Copyright (c) 2000-2004 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -45,12 +45,6 @@
 *                                                                             *
 ******************************************************************************/
 
-#ifdef MODULE
-#include "module-symbols.h"
-#else
-typedef struct {int filler;} TSYMPRIV;
-#endif
-
 //============================================================================
 // 				        LINICE SYMBOL STRUCTURES
 //============================================================================
@@ -82,7 +76,7 @@ typedef struct _SYMTAB
     DWORD dwSize;                       // Total file size
     DWORD dStrings;                     // Offset to the strings section
 
-    TSYMPRIV *pPriv;
+    struct TSYMTAB *next;               // Next symbol structure in a list
 
     TSYMHEADER header[1];               // Array of headers []
     //         ...
@@ -125,6 +119,7 @@ typedef struct
     BYTE TokType;                       // Token type
     DWORD param;                        // Parameter depending on the type
     PSTR  pName;                        // P2 is always a pointer to the name string
+    BYTE  bSegment;                     // Segment where the variable resides (TOKTYPE_LCSYM only)
 
 } PACKED TSYMFNSCOPE1;
 
@@ -155,7 +150,7 @@ typedef struct
     DWORD dwStartAddress;               // Address where the symbol starts
     DWORD dwEndAddress;                 // Address + size of the symbol
     WORD  file_id;                      // Source file ID
-    BYTE  bFlags;                       // Symbol code / data
+    BYTE  bSegment;                     // Segment where the variable resides
 
 } PACKED TSYMGLOBAL1;
 
@@ -179,6 +174,7 @@ typedef struct
     PSTR  pName;                        // Static symbol name string
     PSTR  pDef;                         // Static symbol definition string
     DWORD dwAddress;                    // Address of the symbol
+    BYTE  bSegment;                     // Segment where the variable resides
 
 } PACKED TSYMSTATIC1;
 
@@ -311,12 +307,16 @@ typedef struct
 //
 // Relocation segment type is [0] - .text section (only refOffset used for init_module')
 //                            [1] - .data
-//                            [n]...
+//                            [2] - .rodata
+//                            [3] - .bss
+//                            [4...] - { COMMON variables }
+// [0].refOffset contains the offset of the init_module symbol from the .text section
 
 typedef struct
 {
     DWORD refFixup;                     // Fixup address difference from 'init_module'
     DWORD refOffset;                    // Symbol real offset before relocation
+    int reloc;                          // Currently relocated offset - used only within Linice
 
 } PACKED TSYMRELOC1;
 
@@ -326,8 +326,8 @@ typedef struct
 
     WORD nReloc;                        // Number of elements in the relocation list
 
-    TSYMRELOC1 list[MAX_SYMRELOC];      // Array of symbol relocation references (fixed)
-
+    TSYMRELOC1 list[1];                 // Array of symbol relocation references
+    //     ...
 } PACKED TSYMRELOC;
 
 #endif //  _ICE_SYMBOLS_H_

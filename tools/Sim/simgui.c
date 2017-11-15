@@ -314,7 +314,7 @@ void WinPaint(HWND hWnd)
         }
 #if 0
         // Overlay the logo, why not?  :)
-#define LOGO    "LINICE SIM (c) 2003 Goran Devic"
+#define LOGO    "LINICE SIM (c) 2004 Goran Devic"
         SetTextColor(hdc, RGB( 0xFF, 0xFF, 0xFF ));
         SetBkColor(hdc, RGB( 0x00, 0x00, 0x00 ));
         TextOut(hdc, (80 - sizeof(LOGO))*8, (yLines-2) * -font.lfHeight, LOGO, sizeof(LOGO)-1);

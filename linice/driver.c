@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       09/01/00                                                      *
 *                                                                             *
-*   Copyright (c) 2001 Goran Devic                                            *
+*   Copyright (c) 2000-2004 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -64,13 +64,13 @@ unsigned long **sys_table;             // alias for sys_call_table
 
 //=============================================================================
 
-extern char *linice;                           // default value
-extern DWORD kbd;                              // default value
-extern DWORD scan;                             // default value
-extern DWORD *pmodule;                         // default value
-extern DWORD sys;                              // default value
-extern DWORD iceface;                          // default value
-extern int ice_debug_level;                    // default value
+extern DWORD kbd;
+extern DWORD scan;
+extern DWORD *pmodule;
+extern DWORD sys;
+extern DWORD switchto;
+extern DWORD iceface;
+extern int ice_debug_level;
 
 
 //=============================================================================
@@ -86,6 +86,7 @@ static int major_device_number;
 *                                                                             *
 ******************************************************************************/
 
+extern DWORD Checksum1(DWORD start, DWORD len);
 extern int InitProcFs();
 extern int CloseProcFs();
 
@@ -103,7 +104,9 @@ extern int XInitPacket(TXINITPACKET *pXInit);
 extern int UserAddSymbolTable(void *pSymtab);
 extern int UserRemoveSymbolTable(void *pSymtab);
 
-extern void KeyboardHook(DWORD handle_kbd_event, DWORD handle_scancode);
+extern BOOL TestHookSwitch(void);
+extern void UnHookSwitch(void);
+extern BOOL KeyboardHook(DWORD handle_kbd_event, DWORD handle_scancode);
 extern void KeyboardUnhook();
 extern void UnHookDebuger(void);
 extern void UnHookSyscall(void);
@@ -119,6 +122,8 @@ extern void memFreeHeap(BYTE *hHeap);
 
 extern WORD sel_ice_ds;                 // Place to self-modify the code with this value
 
+extern BOOL CheckNV(void);
+
 /******************************************************************************
 *                                                                             *
 *   int init_module(void)                                                     *
@@ -132,7 +137,19 @@ int IceInitModule(void)
 {
     int val;
 
-    INFO(("init_module\n"));
+    INFO("init_module\n");
+    INFO("  kbd      %08X\n", kbd);
+    INFO("  scan     %08X\n", scan);
+    INFO("  pmodule  %08X\n", pmodule);
+    INFO("  sys      %08X\n", sys);
+    INFO("  switchto %08X\n", switchto);
+
+    // If we are loaded via simple command line 'insmod' dont do anything
+    if( kbd==0 || scan==0 || pmodule==NULL || sys==0 || switchto==0 )
+    {
+        ice_printk("ERROR: Use 'linsym -i' to install Linice debugger.\n");
+        return( -EFAULT );
+    }
 
     // Clean up structures
     memset(&deb, 0, sizeof(TDEB));
@@ -140,74 +157,101 @@ int IceInitModule(void)
     memset(&Win, 0, sizeof(TWINDOWS));
     pWin = &Win;
 
+#ifdef NEEDNV
+    // If we need NV hardware in order to run, check it here
+    if( !CheckNV() )
+    {
+        // NV hardware was not detected
+        ice_printk("ERROR: Could not detect NVIDIA graphics device!\n");
+        ice_printk("You need to have an NVIDIA graphics chip as your primary display controller.\n");
+
+        return -EFAULT;
+    }
+#endif // NEEDNV
+
     // Since we dont know at the compile time what is the kernel DS and CS will be,
     // we query it now. We also need to self-modify one place in the interrupt
-    // handler that will load kernel DS
+    // handler that will load kernel DS. This is done here only since the i386.asm
+    // module needs it. At other places in the Linice we call it as we need it.
     sel_ice_ds = GetKernelDS();
 
-    // Register driver
-
-    major_device_number = ice_register_chrdev(DEVICE_NAME);
-
-    if(major_device_number >= 0 )
+    // Test the task switcher first because it checks the code bytes before hooking
+    // and it is a good indicator that we read from the proper kernel symbol map
+    // This does not hook it yet - we do it once we know we wont unload.
+    if( TestHookSwitch() )
     {
-        INFO(("Params:\n"));
-        INFO(("  kbd     %08X\n", kbd));
-        INFO(("  scan    %08X\n", scan));
-        INFO(("  pmodule %08X\n", pmodule));
-        INFO(("  sys     %08X\n", sys));
-
-        // Set up our own pointer to sys_call_table
-        // Starting with the kernel version 2.4.20 sys_call_table is not exported any more
-        sys_table = (unsigned long **)sys;
-
-        // Create a device node in the /dev directory
-        // and also make sure we have the functions in the systable
-
-        sys_mknod = (PFNMKNOD) sys_table[ice_get__NR_mknod()];
-        sys_unlink = (PFNUNLINK) sys_table[ice_get__NR_unlink()];
-
-        INFO(("sys_mknod = %08X\n", sys_mknod));
-        INFO(("sys_unlink = %08X\n", sys_unlink));
-
-        if(sys_mknod && sys_unlink)
+        // Next: Hook the Linux keyboard handler function
+        if( KeyboardHook(kbd, scan) )
         {
-            val = ice_mknod(sys_mknod, "/dev/"DEVICE_NAME, major_device_number);
-
-            // Module loaded ok
-            if(val >= 0)
+            // Register device driver
+            major_device_number = ice_register_chrdev(DEVICE_NAME);
+            if(major_device_number >= 0 )
             {
-                // Hook the Linux keyboard handler function
-                KeyboardHook(kbd, scan);
+                // Set up our own pointer to sys_call_table
+                // Starting with the kernel version 2.4.20 sys_call_table is not exported any more
+                sys_table = (unsigned long **)sys;
 
-                // Register /proc/linice virtual file
-                if( InitProcFs()==0 )
+                // Create a device node in the /dev directory
+                // and also make sure we have the functions in the systable
+
+                sys_mknod = (PFNMKNOD) sys_table[ice_get__NR_mknod()];
+                sys_unlink = (PFNUNLINK) sys_table[ice_get__NR_unlink()];
+
+                if(sys_mknod && sys_unlink)
                 {
-                    INFO(("Linice successfully loaded.\n"));
+                    val = ice_mknod(sys_mknod, "/dev/"DEVICE_NAME, major_device_number);
 
-                    return 0;
+                    // Dev node created successfully
+                    if(val >= 0)
+                    {
+                        // Register /proc/linice virtual file
+                        if( InitProcFs()==0 )
+                        {
+                            // Calculate the checksum of the Linice code
+                            deb.LiniceChecksum = Checksum1((DWORD)ObjectStart, (DWORD)ObjectEnd - (DWORD)ObjectStart);
+
+                            INFO(("Linice successfully loaded.\n"));
+
+                            return 0;
+                        }
+                        else
+                        {
+                            ice_printk("ERROR: Failed to create /proc entry.");
+                        }
+
+                        ice_rmnod(sys_unlink, "/dev/"DEVICE_NAME);
+                    }
+                    else
+                    {
+                        ice_printk("ERROR: Failed to mknod a /dev/"DEVICE_NAME" node.");
+                    }
                 }
                 else
                 {
-                    ERROR(("Unable to create /proc entry!\n"));
+                    ice_printk("ERROR: Incorrect sys_mknod and sys_unlink.\n");
+                    ice_printk("       Possibly a kernel symbol map mismatch - use 'linsym -i:<System.map>\n");
                 }
+
+                ice_unregister_chrdev(major_device_number, DEVICE_NAME);
             }
             else
             {
-                ERROR(("sys_mknod failed (%d)\n", val));
+                ice_printk("ERROR: Failed to register character device\n");
             }
+
+            KeyboardUnhook();
         }
         else
         {
-            ERROR(("Can't get sys_mknod=%X sys_unlink=%X\n", (int)sys_mknod, (int)sys_unlink));
+            ice_printk("ERROR: Incorrect address of handle_scancode for keyboard hook.\n");
+            ice_printk("       Possibly a kernel symbol map mismatch - use 'linsym -i:<System.map>\n");
         }
     }
     else
     {
-        ERROR(("Failed to register character device (%d)\n", major_device_number));
+        ice_printk("ERROR: Unexpected code bytes hooking a task switcher.\n");
+        ice_printk("       Possibly a kernel symbol map mismatch - use 'linsym -i:<System.map>\n");
     }
-
-    ice_unregister_chrdev(major_device_number, DEVICE_NAME);
 
     return -EFAULT;
 }
@@ -219,15 +263,29 @@ int IceInitModule(void)
 *                                                                             *
 *******************************************************************************
 *
-*   Called once when driver unloads
+*   Called once when the driver unloads.
+*
+*   It is not allowed to uninstall Linice by using the "rmmod" command. There
+*   is a code in syscall.c that prevent us from doing it from within the
+*   delete module hook.
+*
+*   ICE_IOCTL_EXIT is needed first to unhook system calls, after which we run
+*   cleanup_module (this) to finally remove all traces of us.
 *
 ******************************************************************************/
 void IceCleanupModule(void)
 {
-    INFO(("cleanup_module\n"));
+    INFO("cleanup_module\n");
+
+    // Clear all breakpoints; this will reinstate the original BYTE code at the places of embedded INT3,
+    // it will also disable HW breakpoints (DR0...DR3)
+    DisarmBreakpoints();
 
     // Unhook the keyboard hook
     KeyboardUnhook();
+
+    // Unhook the task switch hook
+    UnHookSwitch();
 
     // Unregister /proc virtual file
     CloseProcFs();
@@ -242,7 +300,7 @@ void IceCleanupModule(void)
     UnHookDebuger();
 
     // Unregister driver
-    ice_unregister_chrdev(major_device_number, "ice");
+    ice_unregister_chrdev(major_device_number, DEVICE_NAME);
 
     // Free memory structures
     if( deb.hHistoryBufferHeap != NULL )
@@ -281,7 +339,7 @@ void IceCleanupModule(void)
 ******************************************************************************/
 int DriverOpen(void)
 {
-    INFO(("IceOpen\n"));
+    INFO("IceOpen\n");
 
     ice_mod_inc_use_count();
 
@@ -291,7 +349,7 @@ int DriverOpen(void)
 
 int DriverClose(void)
 {
-    INFO(("IceClose\n"));
+    INFO("IceClose\n");
 
     ice_mod_dec_use_count();
 
@@ -304,13 +362,13 @@ int DriverIOCTL(void *p1, void *p2, unsigned int ioctl, unsigned long param)
     int retval = -EINVAL;                   // Return error code
     char *pBuf;                             // Temporary line buffer pointer
 
-    INFO(("IceIOCTL %X param %X\n", ioctl, (int)param));
+    INFO("IceIOCTL %X param %X\n", ioctl, (int)param);
 
     switch(ioctl)
     {
         //==========================================================================================
         case ICE_IOCTL_INIT:            // Original initialization packet
-            INFO(("ICE_IOCTL_INIT\n"));
+            INFO("ICE_IOCTL_INIT\n");
 
             // Copy the init block to the driver
             if( ice_copy_from_user(&Init, (void *)param, sizeof(TINITPACKET))==0 )
@@ -323,7 +381,7 @@ int DriverIOCTL(void *p1, void *p2, unsigned int ioctl, unsigned long param)
 
         //==========================================================================================
         case ICE_IOCTL_XDGA:            // Start using X linear framebuffer as the output device
-            INFO(("ICE_IOCTL_XDGA\n"));
+            INFO("ICE_IOCTL_XDGA\n");
 
             // Copy the X-init block to the driver
             if( ice_copy_from_user(&XInit, (void *)param, sizeof(TXINITPACKET))==0 )
@@ -337,9 +395,8 @@ int DriverIOCTL(void *p1, void *p2, unsigned int ioctl, unsigned long param)
         //==========================================================================================
         case ICE_IOCTL_EXIT:            // Unload the module
 
-            // Clear all breakpoints; this will reinstate the original BYTE code at the places of embedded INT3,
-            // it will also disable HW breakpoints (DR0...DR3)
-            DisarmBreakpoints();
+            // Linice is not operational any more
+            deb.fOperational = FALSE;
 
             // Unhook the system call table hooks early here so we dont collide with the
             // module unload hook function when unloading itself
@@ -349,6 +406,9 @@ int DriverIOCTL(void *p1, void *p2, unsigned int ioctl, unsigned long param)
 
         //==========================================================================================
         case ICE_IOCTL_EXIT_FORCE:      // Decrement usage count to 1 so we can unload the module
+
+            // Linice is not operational any more
+            deb.fOperational = FALSE;
 
             // Unhook the system call table hooks early here so we dont collide with the
             // module unload hook function when unloading itself
@@ -366,28 +426,28 @@ int DriverIOCTL(void *p1, void *p2, unsigned int ioctl, unsigned long param)
 
         //==========================================================================================
         case ICE_IOCTL_ADD_SYM:         // Add a symbol table
-            INFO(("ICE_IOCTL_ADD_SYM\n"));
+            INFO("ICE_IOCTL_ADD_SYM\n");
 
             retval = UserAddSymbolTable((void *)param);
             break;
 
         //==========================================================================================
         case ICE_IOCTL_REMOVE_SYM:      // Remove a symbol table
-            INFO(("ICE_IOCTL_REMOVE_SYM\n"));
+            INFO("ICE_IOCTL_REMOVE_SYM\n");
 
             retval = UserRemoveSymbolTable((void *)param);
             break;
 
         //==========================================================================================
         case ICE_IOCTL_HISBUF_RESET:    // Fetch a seria of history lines - reset the internal reader
-            INFO(("ICE_IOCTL_HISBUF_RESET\n"));
+            INFO("ICE_IOCTL_HISBUF_RESET\n");
 
             retval = HistoryReadReset();    // It should normally return 0
             break;
 
         //==========================================================================================
         case ICE_IOCTL_HISBUF:          // Fetch a number of history lines, called multiple times
-            INFO(("ICE_IOCTL_HISBUF\n"));
+            INFO("ICE_IOCTL_HISBUF\n");
 
             pBuf = HistoryReadNext();
             if( pBuf && ice_copy_to_user((void *)param, pBuf, MIN(MAX_STRING, strlen(pBuf)+1))==0 )

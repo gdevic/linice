@@ -2,17 +2,44 @@
 *                                                                             *
 *   Module:     iceface.c                                                     *
 *                                                                             *
-*   Copyright (c) 1997-2004 Goran Devic                                       *
-*                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
-*   This source code and produced executable is copyrighted by Goran Devic.   *
-*   This source, portions or complete, and its derivatives can not be given,  *
-*   copied, or distributed by any means without explicit written permission   *
-*   of the copyright owner. All other rights, including intellectual          *
-*   property rights, are implicitly reserved. There is no guarantee of any    *
-*   kind that this software would perform, and nobody is liable for the       *
-*   consequences of running it. Use at your own risk.                         *
+*   Copyright © 2004 by Goran Devic.  All rights reserved.                    *
+*                                                                             *
+*   Redistribution and use in source and binary forms, with or without        *
+*   modification, are permitted provided that the following conditions        *
+*   are met:                                                                  *
+*   1. Redistributions of source code must retain the above copyright         *
+*      notice, this list of conditions and the following disclaimer.          *
+*   2. Redistributions in binary form must reproduce the above copyright      *
+*      notice, this list of conditions and the following disclaimer in the    *
+*      documentation and/or other materials provided with the distribution.   *
+*   3. You may copy and distribute copies of this program but you may not     *
+*      charge money or fees for the software product to anyone except to      *
+*      cover distribution fees. The Author reserves the right to reclassify   *
+*      this software as a non-freeware product at a later date. Doing so      *
+*      will not modify the license agreement of previously distributed        *
+*      executables.                                                           *
+*                                                                             *
+*   THIS SOFTWARE IS PROVIDED BY THE AUTHOR “AS IS” WITHOUT WARRANTIES OF     *
+*   ANY KIND, EITHER EXPRESSED OR IMPLIED, INCLUDING, BUT NOT LIMITED TO,     *
+*   THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR    *
+*   PURPOSE.  IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT,*
+*   INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES ARISING OUT OF   *
+*   THE USE OR INABILITY TO USE THE PROGRAM (INCLUDING, BUT NOT LIMITED TO    *
+*   LOSS OF DATA OR LOSSES SUSTAINED BY YOU OR THIRD PARTES OR A FAILURE OF   *
+*   THE PROGRAM IN ANY WAY).                                                  *
+*                                                                             *
+*   THE AUTHOR RETAINS TITLE TO AND OWNERSHIP IN THE COPYRIGHT OF THE SOFTWARE*
+*   PROGRAM AND THE ASSOCIATED MATERIALS. THIS SOFTWARE IS NOT PROVIDED AS    *
+*   PUBLIC DOMAIN SOFTWARE.                                                   *
+*                                                                             *
+*   AGREEMENT: By using this software product you are automatically agreeing  *
+*   to and show that you have read and understood the terms and conditions    *
+*   contained within this Freeware Software License Agreement. This Agreement *
+*   is then effective while you use and continue to make use of this software *
+*   product. If you do not agree with this Agreement, you must not use this   *
+*   software product. This Agreement is subject to change without notice.     *
 *                                                                             *
 *******************************************************************************
 
@@ -35,33 +62,21 @@
 #define __SMP__
 #endif
 
-#if 0
-
-#define EXPORT_SYMTAB
-#include <linux/config.h>
-#if defined(CONFIG_MODVERSIONS) &&!defined(MODVERSIONS)
-#define MODVERSIONS
-#endif
-#ifdef MODVERSIONS
-#include <linux/modversions.h>
-#endif
-
-#endif
+//#define EXPORT_SYMTAB
+//#include <linux/config.h>
+//#if defined(CONFIG_MODVERSIONS) &&!defined(MODVERSIONS)
+//#define MODVERSIONS
+//#endif
+//#ifdef MODVERSIONS
+//#include <linux/modversions.h>
+//#endif
 
 #include <linux/module.h>
 #include <linux/kernel.h>
 
-
 MODULE_LICENSE("GPL");
 
 #include <linux/version.h>
-
-/*
- * Distinguish relevant classes of Linux kernels.
- *
- * The convention is that version X defines all
- * the KERNEL_Y symbols where Y <= X.
- */
 
 #ifdef KERNEL_VERSION
 #  if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 1, 0)
@@ -131,47 +146,41 @@ MODULE_LICENSE("GPL");
 
 #include <linux/config.h>
 #include <linux/init.h>
-
-
-#include <linux/module.h>               // Include required module include
+#include <linux/module.h>
 #include <linux/init.h>
-#include <linux/kernel.h>               // Include this only in this file
-#include <linux/types.h>                // Include kernel data types
+#include <linux/kernel.h>
+#include <linux/types.h>
 #include <linux/times.h>
-#include <asm/uaccess.h>                // User space memory access functions
-#include <linux/devfs_fs_kernel.h>      // Include file operations file
-#include <asm/unistd.h>                 // Include system call numbers
-
-// Needed for proc virtual file
-#include <linux/proc_fs.h>              // Include proc filesystem support
-
-// Needed for PAGE_OFFSET
-#include <asm/page.h>                   // We need page offset
-
-// Needed for ioremap etc.
+#include <asm/uaccess.h>
+#include <linux/devfs_fs_kernel.h>
+#include <asm/unistd.h>
+#include <linux/proc_fs.h>
+#include <asm/page.h>
 #include <asm/io.h>
-
-
 #include <linux/mm.h>
 #include <asm/pgtable.h>
-
-
-//#include <linux/malloc.h>
-#include <linux/vmalloc.h>              // Kernel memory allocation
-
-#include <linux/pci.h>                  // Include PCI bus defines
-
+#include <linux/vmalloc.h>
+#include <linux/pci.h>
 
 #ifdef SMP
 #include <asm/smp.h>
 #include <asm/mtrr.h>
 #include <asm/mpspec.h>
 #include <asm/pgalloc.h>
-
 //#include <linux/smp.h>
 //#include <linux/smp_lock.h>
 //#include <asm/io_apic.h>
 #endif
+
+#ifdef _PCIHDR
+#include "pcihdr.h"
+#else // _PCIHDR
+#define PCI_VENTABLE_LEN        0
+#define PCI_DEVTABLE_LEN        0
+#define PCI_CLASSCODETABLE_LEN  0
+int PciVenTable;
+int PciDevTable;
+#endif // _PCIHDR
 
 #include "iceface.h"
 
@@ -188,7 +197,6 @@ MODULE_AUTHOR("Goran Devic");
 MODULE_DESCRIPTION("Linux kernel debugger");
 //
 // Define parameters for the module:
-//  linice=<string>                     What???
 //  kbd=<address>                       Address of the handle_kbd_event function
 //  scan=<address>                      Address of the handle_scancode function
 //  mod=<address>                       Address of the module_list variable
@@ -196,9 +204,6 @@ MODULE_DESCRIPTION("Linux kernel debugger");
 //  ice_debug_level=[0 - 1]             Set the level for the output messages:
 //                                      0 - Do not display INFO level
 //                                      1 - Display INFO level messages
-
-MODULE_PARM(linice, "s");               // linice=<string>
-char *linice = "";                      // default value
 
 MODULE_PARM(kbd, "i");                  // kbd=<integer>
 DWORD kbd = 0;                          // default value
@@ -212,19 +217,19 @@ DWORD *pmodule = NULL;                  // default value
 MODULE_PARM(sys, "i");                  // sys=<integer>
 DWORD sys = 0;                          // default value
 
+MODULE_PARM(switchto, "i");             // switchto=<integer>
+DWORD switchto = 0;                     // default value
+
 MODULE_PARM(ice_debug_level, "i");      // ice_debug_level=<integer>
 int ice_debug_level = 1;                // default value
 
-/******************************************************************************
-*                                                                             *
-*   Local Defines, Variables and Macros                                       *
-*                                                                             *
-******************************************************************************/
 
 // Uncomment this on RH9.0 SMP
 #ifdef IO_APIC
 struct mpc_config_ioapic mp_ioapics[MAX_IO_APICS];
 #endif // IO_APIC
+
+static struct proc_dir_entry *pProcEntry;
 
 /******************************************************************************
 *                                                                             *
@@ -232,7 +237,7 @@ struct mpc_config_ioapic mp_ioapics[MAX_IO_APICS];
 *                                                                             *
 ******************************************************************************/
 
-unsigned int ice_get_flags()
+unsigned int ice_get_flags(void)
 {
     unsigned int flags = 0;
 #ifdef IO_APIC
@@ -265,7 +270,7 @@ void ice_smp_call_function(void (*func)(void *), void *info, int retry, int wait
 #endif // SMP
 }
 
-int ice_smp_processor_id()
+int ice_smp_processor_id(void)
 {
 #ifdef SMP
     return( smp_processor_id() );
@@ -292,42 +297,25 @@ void ice_io_apic_write(int n, DWORD reg, DWORD val)
 #endif // IO_APIC
 }
 
-/******************************************************************************
-*                                                                             *
-*   /proc/linice file support                                                 *
-*                                                                             *
-******************************************************************************/
-
-static struct proc_dir_entry *pProcEntry;
-
 int ice_init_proc(int ProcRead, int ProcWrite)
 {
     pProcEntry = create_proc_entry("linice", 0644, &proc_root);
     if( pProcEntry )
     {
-        // We do it using casting pointers to get rid of a type mismatch warning..
         *(int*) &pProcEntry->read_proc  = (int) ProcRead;
         *(int*) &pProcEntry->write_proc = (int) ProcWrite;
     }
     else
-        return( -1 );                   // Return failure
-
-    return( 0 );                        // Return success
+        return( -1 );
+    return( 0 );
 }
 
-int ice_close_proc()
+int ice_close_proc(void)
 {
     remove_proc_entry("linice", &proc_root);
 
     return( 0 );
 }
-
-
-/******************************************************************************
-*                                                                             *
-*   /dev/ice IOCTL interface                                                  *
-*                                                                             *
-******************************************************************************/
 
 typedef int (*PFNOPEN)(struct inode *inode, struct file *file);
 typedef int (*PFNCLOSE)(struct inode *inode, struct file *file);
@@ -335,11 +323,8 @@ typedef int (*PFNIOCTL)(struct inode *inode, struct file *file, unsigned int ioc
 
 extern int DriverOpen(void);
 extern int DriverClose(void);
-extern int DriverIOCTL(void *p1, void *p2, unsigned int ioctl, unsigned long param);
+extern int DriverIOCTL(void *, void *, unsigned int, unsigned long);
 
-
-// File operations structure; in the 2.4 kernel we define it new way, otherwise
-// define it old way:
 //----------------------------------------------
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,4,0)
 //----------------------------------------------
@@ -377,8 +362,8 @@ void ice_unregister_chrdev(int major_device_number, char *pDevice)
     unregister_chrdev(major_device_number, pDevice);
 }
 
-typedef asmlinkage int (*PFNMKNOD)(const char *filename, int mode, dev_t dev);
-typedef asmlinkage int (*PFNUNLINK)(const char *filename);
+typedef asmlinkage int (*PFNMKNOD)(const char *, int, dev_t);
+typedef asmlinkage int (*PFNUNLINK)(const char *);
 
 int ice_mknod(PFNMKNOD sys_mknod, char *pDevice, int major_device_number)
 {
@@ -436,23 +421,10 @@ long ice_copy_from_user(void *p1, void *p2, int len)
     return( copy_from_user(p1, p2, len) );
 }
 
-#if 0
-typedef struct
-{
-    unsigned char bus;                  // Bus number
-    unsigned int devfn;                 // Device and function
-    unsigned short vendor;              // Vendor ID
-    unsigned short device;              // Device ID
-    unsigned int irq;                   // Interrupt number
-    unsigned int master;                // Bus master
-    unsigned long base_address[6];      // List of base addresses
-    unsigned long rom_address;          // ROM address
-    char *pDevice;                      // Device name
+int ice_PCI_VENTABLE_LEN = PCI_VENTABLE_LEN;
+int ice_PCI_DEVTABLE_LEN = PCI_DEVTABLE_LEN;
+int ice_PCI_CLASSCODETABLE_LEN = PCI_CLASSCODETABLE_LEN;
 
-} TPCI;
-#endif
-
-//void ice_get_pci_info(TPCI *pci, struct pci_dev *p)
 void ice_get_pci_info(TPCI *pci, void *ptr)
 {
     struct pci_dev *p = ptr;
@@ -515,7 +487,6 @@ int ice_pci_read_config_dword(void *dev, int where, unsigned int *val)
     return( pci_read_config_dword((struct pci_dev *)dev, where, val) );
 }
 
-
 void *ice_vmalloc(unsigned int size)
 {
     return( vmalloc(size) );
@@ -526,25 +497,17 @@ void  ice_vfree(char *p)
     vfree(p);
 }
 
-
-/******************************************************************************
-*                                                                             *
-*   int init_module(void)                                                     *
-*                                                                             *
-*******************************************************************************
-*
-*   Called once to initialize the module.
-*
-******************************************************************************/
-extern void IceInitModule(void);
+extern int IceInitModule(void);
 
 int init_module(void)
 {
-    IceInitModule();
-
-    return( 0 );
+    return( IceInitModule() );
 }
 
+void ice_printk(char *p)
+{
+    printk(p);
+}
 
 void *ice_get_module(void *pm, TMODULE *pMod)
 {
@@ -552,13 +515,11 @@ void *ice_get_module(void *pm, TMODULE *pMod)
         pm = (void *) *pmodule;
     else
     {
-        // Get the next module in the list
         pm = ((struct module *)pm)->next;
     }
 
     if( pm )
     {
-        // Copy the module information into the private API structure
         pMod->pmodule = pm;
         pMod->name = ((struct module *)pm)->name;
         pMod->flags = ((struct module *)pm)->flags;
@@ -570,7 +531,6 @@ void *ice_get_module(void *pm, TMODULE *pMod)
         pMod->cleanup = ((struct module *)pm)->cleanup;
         pMod->use_count = GET_USE_COUNT((struct module *)pm);
 
-        // Address the Linux kernel module with the name "kernel"
         if( !pMod->name || *pMod->name=='\0' )
             pMod->name = "kernel";
     }
@@ -582,7 +542,6 @@ void *ice_get_module_init(void *pm)
 {
     return( ((struct module *)pm)->init );
 }
-
 
 void ice_for_each_task(int *ref, TTASK *pIceTask, int (ice_for_each_task_cb)(int *,TTASK *))
 {
@@ -618,16 +577,6 @@ char *ice_get_current_comm(void)
     return( current->comm );
 }
 
-
-/******************************************************************************
-*                                                                             *
-*   void cleanup_module(void)                                                 *
-*                                                                             *
-*******************************************************************************
-*
-*   Called once when module unloads.
-*
-******************************************************************************/
 extern void IceCleanupModule(void);
 
 void cleanup_module(void)

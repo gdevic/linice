@@ -1,44 +1,50 @@
-/*********************************************************************
-*                                                                    *
-*   Module:     _Ctype.c                                             *
-*                                                                    *
-*   Revision:   1.00                                                 *
-*                                                                    *
-*   Date:       04/13/96                                             *
-*                                                                    *
-*   Author:     Goran Devic                                          *
-*                                                                    *
-**********************************************************************
-*                                                                    *
-*   Module Description:                                              *
+/******************************************************************************
+*                                                                             *
+*   Module:     ctype.c                                                       *
+*                                                                             *
+*   Date:       04/13/96                                                      *
+*                                                                             *
+*   Copyright (c) 1996-2004 Goran Devic                                       *
+*                                                                             *
+*   Author:     Goran Devic                                                   *
+*                                                                             *
+*   This source code and produced executable is copyrighted by Goran Devic.   *
+*   This source, portions or complete, and its derivatives can not be given,  *
+*   copied, or distributed by any means without explicit written permission   *
+*   of the copyright owner. All other rights, including intellectual          *
+*   property rights, are implicitly reserved. There is no guarantee of any    *
+*   kind that this software would perform, and nobody is liable for the       *
+*   consequences of running it. Use at your own risk.                         *
+*                                                                             *
+*******************************************************************************
+
+    Module Description:
 
         ANSI C / POSIC ctype library implementation
 
     Note: This file is taken from Yaos project, 2.0 string C library and
           slightly trimmed down
 
-**********************************************************************
-*                                                                    *
-*   Changes:                                                         *
-*                                                                    *
-*   DATE     REV   DESCRIPTION OF CHANGES                 AUTHOR     *
-* --------   ----  -----------------------------------   -----------
-  04/13/96   1.00  Original                              Goran Devic
-* 08/14/02   2.00  Trimmed down for Linice project       Goran Devic
-* --------   ----  -----------------------------------   ----------- *
-**********************************************************************
-*   Important defines/undefines
-**********************************************************************/
-
-/*********************************************************************
-*   Include Files
-**********************************************************************/
+*******************************************************************************
+*                                                                             *
+*   Major changes:                                                            *
+*                                                                             *
+*   DATE     DESCRIPTION OF CHANGES                               AUTHOR      *
+* --------   ---------------------------------------------------  ----------- *
+* 04/13/96   Original                                             Goran Devic *
+* 08/14/02   Trimmed down for Linice project                      Goran Devic *
+* --------   ---------------------------------------------------  ----------- *
+*******************************************************************************
+*   Include Files                                                             *
+******************************************************************************/
 
 #include "ctype.h"                      // Include its own header file
 
-/*********************************************************************
-*   Global Variables and Functions
-**********************************************************************/
+/******************************************************************************
+*                                                                             *
+*   Global Variables                                                          *
+*                                                                             *
+******************************************************************************/
 char _ctype_[257] = {
 0,
 _CONTROL,                      /*     0x 0  */

@@ -4,7 +4,7 @@
 ;                                                                             |
 ;   Date: 09/11/00                                                            |
 ;                                                                             |
-;   Copyright (c) 2000 Goran Devic                                            |
+;   Copyright (c) 2000-2004 Goran Devic                                       |
 ;                                                                             |
 ;   Author:     Goran Devic                                                   |
 ;                                                                             |
@@ -39,6 +39,8 @@ global  WriteMdaCRTC
 global  inp
 global  getTR
 global  SelLAR
+global  GetRdtsc
+global  FlushTLB
 
 global  MemAccess_START
 global  GetByte
@@ -52,6 +54,7 @@ global  memset_w
 global  memset_d
 global  GetSysreg
 global  SetSysreg
+global  SetDebugReg
 global  Outpb
 global  Outpw
 global  Outpd
@@ -70,6 +73,11 @@ global  GetKernelDS
 global  GetKernelCS
 global  sel_ice_ds              ; This needs to be initialized at module load time!
 
+global  Checksum1               ; Protection - two checksum functions
+global  Checksum2
+
+global  CheckNV
+global  CheckNV2
 
 ;==============================================================================
 ; External definitions that this module uses
@@ -371,6 +379,13 @@ CRTC_INDEX_COLOR        equ     03D4h
 MDA_INDEX               equ     03B4h
 MDA_DATA                equ     03B5h
 
+;==============================================================================
+;
+;   GetCRTCAddr
+;
+;   Returns the CRTC base register
+;
+;==============================================================================
 GetCRTCAddr:
         push    ax
         mov     dx, MISC_INPUT
@@ -380,6 +395,53 @@ GetCRTCAddr:
         jz      @mono
         mov     dx, CRTC_INDEX_COLOR
 @mono:  pop     ax
+        ret
+
+;==============================================================================
+;
+;   BOOL CheckNV2(void)
+;
+;   Checks if the NVIDIA graphics controller is installed as the primary
+;   graphics controller on this system.
+;
+;   Returns:
+;       eax - BOOL - TRUE - Yes
+;       eax - 0 - No NV controller detected
+;
+;==============================================================================
+CheckNV2:
+        push    dx
+        call    GetCRTCAddr             ; Get the CRTC base
+        in      al, (dx)                ; Get the current index
+        push    ax                      ; Store the index
+
+        mov     al, 1Fh                 ; 1F - Extended CR lock
+        out     (dx), al                ; Index register 1F
+        in      ax, (dx)                ; Get the current state in AH
+        push    ax                      ; Store the current state
+
+        mov     ah, 99h                 ; Any value should lock
+        out     (dx), ax                ; Lock the extended registers
+        in      ax, (dx)                ; Read it back
+        or      ah, ah                  ; Should be 0
+        jnz     @NotNV2                 ; If not, it's not NV chip
+
+        pop     ax                      ; Restore previous state
+        or      ah, ah                  ; Was it locked?
+        jz      @YesNV2                 ; We are done if it was
+        mov     ah, 57h                 ; Unlock code
+        out     (dx), al                ; Unlock the extended registers
+@YesNV2:
+        pop     ax                      ; Restore the index register
+        out     (dx), al                ; Into the CRTC index
+        pop     dx
+        ret                             ; Return non-zero in AX
+@NotNV2:
+        pop     ax                      ; Restore previous state
+        xor     eax, eax                ; Not an NVIDIA chip
+        pop     ax                      ; Restore the index register
+        out     (dx), al                ; Into the CRTC index
+        pop     dx
         ret
 
 ;==============================================================================
@@ -582,6 +644,79 @@ SelLAR:
         jz      @sel_ok                 ; Jump forth if the selector was ok
         xor     eax, eax                ; Reset to zero for invalid selector
 @sel_ok:
+        pop     ebp
+        ret
+
+;==============================================================================
+;
+;   DWORD GetRdtsc(DWORD *[2])
+;
+;   Where:
+;       [ebp + 8 ]      address of the 8-byte buffer to store the value
+;
+;   Returns:
+;       eax - Rdtsc counter - Lower DWORD
+;
+;==============================================================================
+GetRdtsc:
+        push    ebp
+        mov     ebp, esp
+        push    edx
+        push    ebx
+
+        mov     ebx, [ebp + 8]          ; Load the buffer address
+        rdtsc                           ; Get the time-stamp value is EDX:EAX
+        mov     [ebx], eax              ; Store the low dword
+        mov     [ebx+4], edx            ; Store the high dword
+
+        pop     ebx                     ; Return with eax - low dword
+        pop     edx
+        pop     ebp
+        ret
+
+;==============================================================================
+;
+;   void FlushTLB(void)
+;
+;   Reloads CR3 thus flushing the TLB.
+;
+;==============================================================================
+FlushTLB:
+        push    eax
+        mov     eax, cr3
+        mov     cr3, eax
+        pop     eax
+        ret
+
+
+;==============================================================================
+;
+;   DWORD Checksum1( DWORD start, DWORD len )
+;
+;   Calculates the sum of the code region.
+;
+;   Where:
+;       [ebp + 8 ]      start
+;       [ebp + 12 ]     len
+;
+;   Returns:
+;       eax - SUM value
+;
+;==============================================================================
+Checksum1:
+        push    ebp
+        mov     ebp, esp
+        push    ebx
+        push    ecx
+        mov     ebx, [ebp + 8]          ; Load the starting address
+        mov     ecx, [ebp + 12]         ; Load the len in bytes
+        xor     eax, eax                ; Starting checksum value
+@next_sum1:
+        add     eax, [cs:ebx]
+        inc     ebx                     ; Next byte
+        loop    @next_sum1              ; Do it for the whole buffer
+        pop     ecx
+        pop     ebx
         pop     ebp
         ret
 
@@ -913,6 +1048,40 @@ SetSysreg:
 
 ;==============================================================================
 ;
+;   void SetDebugReg( TSysreg * pSys )
+;
+;   Writes debug registers back.
+;
+;   Where:
+;       [ebp + 8 ]        pointer to the SysReg storage
+;
+;==============================================================================
+SetDebugReg:
+        push    ebp
+        mov     ebp, esp
+        push    ebx
+
+        mov     ebx, [ebp + 8]
+
+        mov     eax, [ebx+16]
+        mov     dr0, eax
+        mov     eax, [ebx+20]
+        mov     dr1, eax
+        mov     eax, [ebx+24]
+        mov     dr2, eax
+        mov     eax, [ebx+28]
+        mov     dr3, eax
+        mov     eax, [ebx+32]
+        mov     dr6, eax
+        mov     eax, [ebx+36]
+        mov     dr7, eax
+
+        pop     ebx
+        pop     ebp
+        ret
+
+;==============================================================================
+;
 ;   void Outpb( DWORD port, DWORD value)
 ;   void Outpw( DWORD port, DWORD value)
 ;   void Outpd( DWORD port, DWORD value)
@@ -1089,5 +1258,102 @@ SpinlockTest:
         mov     eax, [edx]
         pop     edx
         pop     ebp
+        ret
+
+;==============================================================================
+;
+;   Hook the task switcher: insert our handler address so the switcher will return to it
+;
+;   Look the file task.c for the detailed description on how the task switcher hook is operated.
+;
+;==============================================================================
+extern  switch_to_header                ; BYTE[6] - containing previous code bytes from __switch_to()
+extern  TaskSwitchOrigRet               ; Original return address, kept in the "C" file so it is in the BSS segment
+extern  SwitchHandler                   ; Our inserted task switcher handler
+
+global  InsertTaskSwitchHandler
+
+AsmTaskSwitchHandler:
+        pushad                          ; Save all registers
+        pushf
+        call    SwitchHandler           ; Run our task switch function next
+        popf
+        popad
+        ret
+
+InsertTaskSwitchHandler:
+        pop     dword [ds:TaskSwitchOrigRet]    ; Stash the address of our return
+        push    dword AsmTaskSwitchHandler      ; Insert our handler
+
+        push    ebp                             ; This code was being zapped by us, so recreate it
+        mov     ebp, [switch_to_header+2]       ; The value EBP is loaded with
+
+        jmp     [TaskSwitchOrigRet]             ; Continue into the __switch_to...
+
+
+;==============================================================================
+;
+;   DWORD Checksum2( DWORD start, DWORD end )
+;
+;   Calculates the sum of the code region. This function is intentionally
+;   written differently from Checksum1 and resides somewhat away from it.
+;
+;   Where:
+;       [ebp + 8 ]      start
+;       [ebp + 12 ]     end
+;
+;   Returns:
+;       eax - SUM value
+;
+;==============================================================================
+Checksum2:
+        push    ebp
+        mov     ebp, esp
+        xor     eax, eax                ; Starting checksum value
+        push    ebx
+        push    edx
+        mov     ebx, [ebp + 8]          ; Load the starting address
+        mov     edx, [ebp + 12]         ; Load the ending address
+@next_sum2:
+        add     eax, [cs:ebx]
+        add     ebx, 1                  ; Next byte
+        cmp     ebx, edx                ; Did we reach the end?
+        jnz     @next_sum2              ; Jump back if we did not
+        pop     edx
+        pop     ebx
+        pop     ebp
+        ret
+
+;==============================================================================
+;
+;   BOOL CheckNV(void)
+;
+;   Checks if the NVIDIA graphics controller is installed as the primary
+;   graphics controller on this system.
+;
+;   Returns:
+;       eax - BOOL - TRUE - Yes
+;       eax - 0 - No NV controller detected
+;
+;==============================================================================
+CheckNV:
+        push    dx
+        call    GetCRTCAddr             ; Get the 3B4/3D4 base CRTC address
+        mov     ax, 0571Fh              ; 1F - Extended CR lock: 57 - unlock for RW
+        out     (dx), ax                ; Unlock for RW
+        in      ax, (dx)                ; Read it back
+        cmp     ah, 03                  ; 3 is a valid readback
+        jnz     @NotNV                  ; Not an NVIDIA chip if there was no 3
+        mov     ax, 0751Fh              ; Unlock for R
+        out     (dx), ax
+        in      ax, (dx)                ; Rad it back
+        cmp     ah, 01                  ; 1 is a valid readback
+        jnz     @NotNV                  ; Not an NVIDIA chip if there was no 1
+        out     (dx), ax                ; Lock the chip
+        pop     dx
+        ret                             ; Return non-zero in AX
+@NotNV:
+        xor     eax, eax                ; Not an NVIDIA chip
+        pop     dx
         ret
 

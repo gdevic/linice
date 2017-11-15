@@ -67,33 +67,33 @@ typedef struct
 } TRegField, *PTRegField;
 
 static TRegField RegField[] = {
-/*               x1  x2  y  offset                flagBit  prev next tab up  down */
-/*  0: EAX */  {  5, 12, 1, offsetof(TREGS, eax), 0,       22,   1,  1, 17,  5 },
-/*  1: EBX */  { 20, 27, 1, offsetof(TREGS, ebx), 0,        0,   2,  2, 18,  6 },
-/*  2: ECX */  { 35, 42, 1, offsetof(TREGS, ecx), 0,        1,   3,  3, 19,  7 },
-/*  3: EDX */  { 50, 57, 1, offsetof(TREGS, edx), 0,        2,   4,  4, 20,  8 },
-/*  4: ESI */  { 65, 72, 1, offsetof(TREGS, esi), 0,        3,   5,  5, 21,  9 },
+/*               x1  x2  y  offset                flagBit     prev next tab up  down */
+/*  0: EAX */  {  5, 12, 1, offsetof(TREGS, eax), 0,          22,   1,  1, 17,  5 },
+/*  1: EBX */  { 20, 27, 1, offsetof(TREGS, ebx), 0,           0,   2,  2, 18,  6 },
+/*  2: ECX */  { 35, 42, 1, offsetof(TREGS, ecx), 0,           1,   3,  3, 19,  7 },
+/*  3: EDX */  { 50, 57, 1, offsetof(TREGS, edx), 0,           2,   4,  4, 20,  8 },
+/*  4: ESI */  { 65, 72, 1, offsetof(TREGS, esi), 0,           3,   5,  5, 21,  9 },
 
-/*  5: EDI */  {  5, 12, 2, offsetof(TREGS, edi), 0,        4,   6,  6,  0, 17 },
-/*  6: EBP */  { 20, 27, 2, offsetof(TREGS, ebp), 0,        5,   7,  7,  1, 18 },
-/*  7: ESP */  { 35, 42, 2, offsetof(TREGS, esp), 0,        6,   8,  8,  2, 19 },
-/*  8: EIP */  { 50, 57, 2, offsetof(TREGS, eip), 0,        7,   9,  9,  3, 20 },
+/*  5: EDI */  {  5, 12, 2, offsetof(TREGS, edi), 0,           4,   6,  6,  0, 17 },
+/*  6: EBP */  { 20, 27, 2, offsetof(TREGS, ebp), 0,           5,   7,  7,  1, 18 },
+/*  7: ESP */  { 35, 42, 2, offsetof(TREGS, esp), 0,           6,   8,  8,  2, 19 },
+/*  8: EIP */  { 50, 57, 2, offsetof(TREGS, eip), 0,           7,   9,  9,  3, 20 },
 
-/*  9:  O  */  { 61, 61, 2, offsetof(TREGS, eip), 1 << 11,  8,  10, 17,  4, 21 },
-/* 10:  D  */  { 63, 63, 2, offsetof(TREGS, eip), 1 << 10,  9,  11, 17,  4, 21 },
-/* 11:  I  */  { 65, 65, 2, offsetof(TREGS, eip), 1 <<  9, 10,  12, 17,  4, 21 },
-/* 12:  S  */  { 67, 67, 2, offsetof(TREGS, eip), 1 <<  7, 11,  13, 17,  4, 21 },
-/* 13:  Z  */  { 69, 69, 2, offsetof(TREGS, eip), 1 <<  6, 12,  14, 17,  4, 21 },
-/* 14:  A  */  { 71, 71, 2, offsetof(TREGS, eip), 1 <<  4, 13,  15, 17,  4, 21 },
-/* 15:  P  */  { 73, 73, 2, offsetof(TREGS, eip), 1 <<  2, 14,  16, 17,  4, 21 },
-/* 16:  C  */  { 75, 75, 2, offsetof(TREGS, eip), 1 <<  0, 15,  17, 17,  4, 21 },
+/*  9:  O  */  { 61, 61, 2, offsetof(TREGS, eflags), 1 << 11,  8,  10, 17,  4, 21 },
+/* 10:  D  */  { 63, 63, 2, offsetof(TREGS, eflags), 1 << 10,  9,  11, 17,  4, 21 },
+/* 11:  I  */  { 65, 65, 2, offsetof(TREGS, eflags), 1 <<  9, 10,  12, 17,  4, 21 },
+/* 12:  S  */  { 67, 67, 2, offsetof(TREGS, eflags), 1 <<  7, 11,  13, 17,  4, 21 },
+/* 13:  Z  */  { 69, 69, 2, offsetof(TREGS, eflags), 1 <<  6, 12,  14, 17,  4, 21 },
+/* 14:  A  */  { 71, 71, 2, offsetof(TREGS, eflags), 1 <<  4, 13,  15, 17,  4, 21 },
+/* 15:  P  */  { 73, 73, 2, offsetof(TREGS, eflags), 1 <<  2, 14,  16, 17,  4, 21 },
+/* 16:  C  */  { 75, 75, 2, offsetof(TREGS, eflags), 1 <<  0, 15,  17, 17,  4, 21 },
 
-/* 17: CS  */  {  4,  7, 3, offsetof(TREGS, cs ), 0,       16,  18, 18,  5,  0 },
-/* 18: DS  */  { 14, 17, 3, offsetof(TREGS, ds ), 0,       17,  19, 19,  6,  1 },
-/* 19: SS  */  { 24, 27, 3, offsetof(TREGS, ss ), 0,       18,  20, 20,  7,  2 },
-/* 20: ES  */  { 34, 37, 3, offsetof(TREGS, es ), 0,       19,  21, 21,  8,  3 },
-/* 21: FS  */  { 44, 47, 3, offsetof(TREGS, fs ), 0,       20,  22, 22,  9,  4 },
-/* 22: GS  */  { 54, 57, 3, offsetof(TREGS, gs ), 0,       21,   0,  0, 17,  0 },
+/* 17: CS  */  {  4,  7, 3, offsetof(TREGS, cs ), 0,          16,  18, 18,  5,  0 },
+/* 18: DS  */  { 14, 17, 3, offsetof(TREGS, ds ), 0,          17,  19, 19,  6,  1 },
+/* 19: SS  */  { 24, 27, 3, offsetof(TREGS, ss ), 0,          18,  20, 20,  7,  2 },
+/* 20: ES  */  { 34, 37, 3, offsetof(TREGS, es ), 0,          19,  21, 21,  8,  3 },
+/* 21: FS  */  { 44, 47, 3, offsetof(TREGS, fs ), 0,          20,  22, 22,  9,  4 },
+/* 22: GS  */  { 54, 57, 3, offsetof(TREGS, gs ), 0,          21,   0,  0, 17,  0 },
 
                { 0 }
 };
@@ -213,11 +213,11 @@ static void EditInPlace(PTRegField pReg, int xDisp)
     }
 
     // Print the help line for the register edit
-    dprint("%c%c%c%c%c%cValid control keys: %c %c %c %c Tab Enter Esc    Insert: Toggle flag\r%c",
+    dprint("%c%c%c%c%c%cValid control keys: %s %s %s %s Tab Enter Esc    Insert: Toggle flag\r%c",
     DP_SAVEXY,
     DP_SETCURSORXY, 1+0, 1+pOut->sizeY-1,
     DP_SETCOLINDEX, COL_HELP,
-    24, 25, 26, 27,
+    "Left", "Right", "Up", "Dn",
     DP_RESTOREXY);
 
     // Save cursor coordinates manually since we can't have more than one
@@ -239,7 +239,8 @@ static void EditInPlace(PTRegField pReg, int xDisp)
         // Position the cursor at the right register coordinate
         dprint("%c%c%c", DP_SETCURSORXY, xCur, yCur);
 
-        Key = toupper(GetKey(TRUE));
+        Key = GetKey(TRUE);
+        Key = toupper(Key);
 
         switch( Key )
         {

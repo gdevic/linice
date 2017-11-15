@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       08/26/02                                                      *
 *                                                                             *
-*   Copyright (c) 2002 Goran Devic                                            *
+*   Copyright (c) 2002-2004 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -55,7 +55,7 @@
 *   Local Defines, Variables and Macros                                       *
 *                                                                             *
 ******************************************************************************/
-/* 
+/*
 * (C) Copyright 1992, ..., 2001 the "DOSEMU-Development-Team".
 *
 * for details see file COPYING in the DOSEMU distribution
@@ -521,7 +521,7 @@ const BYTE key_map_dk[] =
   0, 0, 0, 0, 0, 0, '<', 0,
   0, 0, 0, 0, 0, 0, 0, 0,
   0};
- 
+
 const BYTE shift_map_dk[] =
 {
   0, ESC, '!', '\"', '#', '$', '%', '&',
@@ -955,7 +955,7 @@ const BYTE key_map_es[] = {
 
 const BYTE shift_map_es[] = {
       0,   ESC,  '!',  '"',  '#',  '$',  '%',  '&',
-    '/',  '(',  ')',  '=',  '?',    0,  BACKSPACE,   TAB, 
+    '/',  '(',  ')',  '=',  '?',    0,  BACKSPACE,   TAB,
     'Q',  'W',  'E',  'R',  'T',  'Y',  'U',  'I',
     'O',  'P',  '^',  '*',  ENTER,    0,  'A',  'S',
     'D',  'F',  'G',  'H',  'J',  'K',  'L',    0,
@@ -1000,7 +1000,7 @@ const BYTE key_map_es_latin1[] = {
 
 const BYTE shift_map_es_latin1[] = {
       0,   ESC,  '!',  '"',  250,  '$',  '%',  '&',
-    '/',  '(',  ')',  '=',  '?',  168,  BACKSPACE,   TAB, 
+    '/',  '(',  ')',  '=',  '?',  168,  BACKSPACE,   TAB,
     'Q',  'W',  'E',  'R',  'T',  'Y',  'U',  'I',
     'O',  'P',  0,  '*',  ENTER,    0,  'A',  'S',
     'D',  'F',  'G',  'H',  'J',  'K',  'L',  165,
@@ -1618,33 +1618,33 @@ typedef struct
     BYTE *KeyPageNormal;
     BYTE *KeyPageShift;
     BYTE *KeyPageAlt;
-    
+
 } TKEYTABLE;
 
 static TKEYTABLE keytable_list[] = {
-  {"finnish", 
+  {"finnish",
     (BYTE*)key_map_finnish, (BYTE*)shift_map_finnish, (BYTE*)alt_map_finnish },
   {"finnish-latin1",
     (BYTE*)key_map_finnish_latin1, (BYTE*)shift_map_finnish_latin1, (BYTE*)alt_map_finnish_latin1 },
-  {"us", 
+  {"us",
     (BYTE*)key_map_us, (BYTE*)shift_map_us, (BYTE*)alt_map_us },
-  {"uk", 
+  {"uk",
     (BYTE*)key_map_uk, (BYTE*)shift_map_uk, (BYTE*)alt_map_uk },
-  {"de", 
+  {"de",
     (BYTE*)key_map_de, (BYTE*)shift_map_de, (BYTE*)alt_map_de },
   {"de-latin1",
     (BYTE*)key_map_de_latin1, (BYTE*)shift_map_de_latin1, (BYTE*)alt_map_de_latin1 },
-  {"fr", 
+  {"fr",
     (BYTE*)key_map_fr, (BYTE*)shift_map_fr, (BYTE*)alt_map_fr },
   {"fr-latin1",
     (BYTE*)key_map_fr_latin1, (BYTE*)shift_map_fr_latin1, (BYTE*)alt_map_fr_latin1 },
-  {"dk", 
+  {"dk",
     (BYTE*)key_map_dk, (BYTE*)shift_map_dk, (BYTE*)alt_map_dk },
   {"dk-latin1",
     (BYTE*)key_map_dk_latin1, (BYTE*)shift_map_dk_latin1, (BYTE*)alt_map_dk_latin1 },
-  {"dvorak", 
+  {"dvorak",
     (BYTE*)key_map_dvorak, (BYTE*)shift_map_dvorak, (BYTE*)alt_map_dvorak },
-  {"sg", 
+  {"sg",
     (BYTE*)key_map_sg, (BYTE*)shift_map_sg, (BYTE*)alt_map_sg },
   {"sg-latin1",
     (BYTE*)key_map_sg_latin1, (BYTE*)shift_map_sg_latin1, (BYTE*)alt_map_sg_latin1 },
@@ -1652,31 +1652,31 @@ static TKEYTABLE keytable_list[] = {
     (BYTE*)key_map_no, (BYTE*)shift_map_no, (BYTE*)alt_map_no },
   {"no-latin1",
     (BYTE*)key_map_no_latin1, (BYTE*)shift_map_no_latin1, (BYTE*)alt_map_no_latin1 },
-  {"sf", 
+  {"sf",
     (BYTE*)key_map_sf, (BYTE*)shift_map_sf, (BYTE*)alt_map_sf },
   {"sf-latin1",
     (BYTE*)key_map_sf_latin1, (BYTE*)shift_map_sf_latin1, (BYTE*)alt_map_sf_latin1 },
-  {"es", 
+  {"es",
     (BYTE*)key_map_es, (BYTE*)shift_map_es, (BYTE*)alt_map_es },
   {"es-latin1",
     (BYTE*)key_map_es_latin1, (BYTE*)shift_map_es_latin1, (BYTE*)alt_map_es_latin1 },
-  {"be", 
+  {"be",
     (BYTE*)key_map_be, (BYTE*)shift_map_be, (BYTE*)alt_map_be },
-  {"po", 
+  {"po",
     (BYTE*)key_map_po, (BYTE*)shift_map_po, (BYTE*)alt_map_po },
-  {"it", 
+  {"it",
     (BYTE*)key_map_it, (BYTE*)shift_map_it, (BYTE*)alt_map_it },
-  {"sw", 
+  {"sw",
     (BYTE*)key_map_sw, (BYTE*)shift_map_sw, (BYTE*)alt_map_sw },
-  {"hu", 
+  {"hu",
     (BYTE*)key_map_hu, (BYTE*)shift_map_hu, (BYTE*)alt_map_hu },
   {"hu-cwi",
     (BYTE*)key_map_hu_cwi, (BYTE*)shift_map_hu_cwi, (BYTE*)alt_map_hu_cwi },
   {"hu-latin2",
     (BYTE*)key_map_hu_latin2, (BYTE*)shift_map_hu_latin2, (BYTE*)alt_map_hu_latin2 },
-  {"jp106", 
+  {"jp106",
     (BYTE*)key_map_jp106, (BYTE*)shift_map_jp106, (BYTE*)alt_map_jp106 },
-  {"pl", 
+  {"pl",
     (BYTE*)key_map_pl, (BYTE*)shift_map_pl, (BYTE*)alt_map_pl },
   {"hr-cp852",
     (BYTE*)key_map_hr_cp852, (BYTE*)shift_map_hr_cp852, (BYTE*)alt_map_hr_cp852 },

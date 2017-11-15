@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       07/23/02                                                      *
 *                                                                             *
-*   Copyright (c) 2002 Goran Devic                                            *
+*   Copyright (c) 2002-2004 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -541,7 +541,7 @@ static int PrintBasicTypeValue(char *buf, TTYPEFOOTPRINT *pValue, TSYMTYPEDEF1 *
 }
 
 /******************************************************************************
-*   void PrintEnumTypeValue(char *buf, char *pEnum, BYTE *pVar)
+*   int PrintEnumTypeValue(char *buf, char *pEnum, BYTE *pVar)
 *******************************************************************************
 *
 *   Since enums are a bit odd to decode (complex type yet simple integer),
@@ -551,12 +551,16 @@ static int PrintBasicTypeValue(char *buf, TTYPEFOOTPRINT *pValue, TSYMTYPEDEF1 *
 *       buf - the destination buffer
 *       pVar - the address of the enum integer
 *
+*   Returns:
+*       Number of characters printed
+*
 ******************************************************************************/
-static void PrintEnumTypeValue(char *buf, char *pEnum, BYTE *pVar)
+static int PrintEnumTypeValue(char *buf, char *pEnum, BYTE *pVar)
 {
     int Value;                          // Enums are always ints
     char *p;                            // Walking pointer for the enum definition string
     UINT nNameLen;                      // Length of the name portion
+    int written = 0;                    // Number of characters written
 
     // Walk the enum definition list and find the literal value that corresponds to the variable value
 
@@ -577,9 +581,9 @@ static void PrintEnumTypeValue(char *buf, char *pEnum, BYTE *pVar)
                 {
                     // Found the matching enum value - print it and return
 
-                    sprintf(buf, "%d <\"%s\">", Value, substr(pEnum, 0, nNameLen));
+                    written = sprintf(buf, "%d <\"%s\">", Value, substr(pEnum, 0, nNameLen));
 
-                    return;
+                    return( written );
                 }
 
                 pEnum = p + 1;
@@ -587,9 +591,9 @@ static void PrintEnumTypeValue(char *buf, char *pEnum, BYTE *pVar)
             else
             {
                 // Could not find the colon, so the enum value does not match
-                sprintf(buf, "%d", Value);
+                written = sprintf(buf, "%d", Value);
 
-                return;
+                return( written );
             }
         }
         while( TRUE );
@@ -597,8 +601,10 @@ static void PrintEnumTypeValue(char *buf, char *pEnum, BYTE *pVar)
     else
     {
         // Could not read the value
-        sprintf(buf, "<?>");
+        written = sprintf(buf, "<?>");
     }
+
+    return( written );
 }
 
 /******************************************************************************
@@ -612,11 +618,15 @@ static void PrintEnumTypeValue(char *buf, char *pEnum, BYTE *pVar)
 *       buf - the destination buffer
 *       pPointee - the address to start reading the string
 *
+*   Returns:
+*       Number of characters printed
+*
 ******************************************************************************/
-static void PrintExpandCharPtr(char *buf, BYTE *pPointee)
+static int PrintExpandCharPtr(char *buf, BYTE *pPointee)
 {
     static char String[MAX_CHAR_PTR_SAMPLE+1];  // String to store sample
     int i;                                      // String counter
+    int written = 0;                    // Number of characters written
 
     // Try to read several values from the pointee and print them if they make up a string
     for(i=0; i<MAX_CHAR_PTR_SAMPLE; i++)
@@ -629,18 +639,20 @@ static void PrintExpandCharPtr(char *buf, BYTE *pPointee)
 
             // If the character is not printable, this is not a string
             if( !isprint(String[i]) )
-                return;
+                return( written );
 
             pPointee++;
         }
         else
-            return;
+            return( written );
     }
 
     // Print as much of a string as we got
     String[MAX_CHAR_PTR_SAMPLE] = 0;
 
-    sprintf(buf, "<\"%s\">", String);
+    written = sprintf(buf, " <\"%s\">", String);
+
+    return( written );
 }
 
 
@@ -653,8 +665,12 @@ static void PrintExpandCharPtr(char *buf, BYTE *pPointee)
 *   Main type print function. It looks up in the memory for the data that is
 *   addressed to by the pItem token.
 *
+*   This function handles invalid data type where the pointers are NULL.
+*
 *   Where:
 *       buf - buffer to print effective value of an item descriptor
+*             this function will zero-terminate the buffer
+*             ASSUMPTION: Buffer is large enough - no length checks are done!
 *       pItem - descriptor for the data
 *       pVar - the effective memory address of the data structure
 *       delta - TBD
@@ -678,99 +694,111 @@ void PrintTypeValue(char *buf, TExItem *pItem, BYTE *pVar, UINT delta, UINT widt
 
     pType1 = &pItem->Type;
 
-    if( pItem->Type.maj==0 )
+    // Take care of invalid data pointers (used for illegal watch variables)
+    if( pType1->pDef && pType1->pName )
     {
-        // Immediate data
-
-        if( *pType1->pDef <= TYPEDEF__LAST )
+        if( pItem->Type.maj==0 )
         {
-            // Simple data types
+            // Immediate data
 
-            // Read in the value of the variable, exactly the number of bytes that we need
-
-            GlobalReadMem((BYTE *) &Value, (DWORD) pVar, nSimpleTypes[(int)*pType1->pDef]);
-
-            buf += PrintBasicTypeValue(buf, &Value, pType1);
-        }
-        else
-        {
-            // Complex data types: structure, union, array, ... and enum
-
-            // If this is an enum, process it differently -> decode it
-            if( *pType1->pDef=='e' )
+            if( *pType1->pDef <= TYPEDEF__LAST )
             {
-                PrintEnumTypeValue(buf, pType1->pDef + 1, pVar);
+                // Simple data types
+
+                // Read in the value of the variable, exactly the number of bytes that we need
+
+                GlobalReadMem((BYTE *) &Value, (DWORD) pVar, nSimpleTypes[(int)*pType1->pDef]);
+
+                buf += PrintBasicTypeValue(buf, &Value, pType1);
             }
             else
             {
-                sprintf(buf, "%08X", (DWORD) pVar);
-            }
-        }
-    }
-    else
-    if( pItem->Type.maj==1 )
-    {
-        // One-level pointer indirection
+                // Complex data types: structure, union, array, ... and enum
 
-        // Verify the common case of a NULL pointer first
-        if( pVar==0 )
-        {
-            sprintf(buf, "NULL");
-        }
-        else
-        {
-            // Read the effective address of that pointer: "void *" is unsigned int
-
-            if( GlobalReadDword(&Value._unsigned_int, (DWORD) pVar) )
-            {
-                buf += sprintf(buf, "%08X ", (DWORD) pVar);
-
-                // Try to get one item from the pointee to print out
-                // but process "char *" separately since it is a string
-
-                if( *pType1->pDef==TYPE_CHAR || *pType1->pDef==TYPE_SIGNED_CHAR || *pType1->pDef==TYPE_UNSIGNED_CHAR )
+                // If this is an enum, process it differently -> decode it
+                if( *pType1->pDef=='e' )
                 {
-                    PrintExpandCharPtr(buf, (BYTE *) Value._unsigned_int);
+                    buf += PrintEnumTypeValue(buf, pType1->pDef + 1, pVar);
                 }
                 else
                 {
-                    if( *pType1->pDef <= TYPEDEF__LAST )
-                    {
-                        // Read in the value of the variable, exactly the number of bytes that we need
-
-                        GlobalReadMem((BYTE *) &Value, Value._unsigned_int, nSimpleTypes[(int)*pType1->pDef]);
-
-                        // Read the data from the memory being pointed to, but enclose it in brackets
-                        *buf++ = '<';
-                        buf += PrintBasicTypeValue(buf, &Value, pType1);
-                        *buf++ = '>';
-                    }
-                    else
-                    {
-                        // Pointer to a complex type
-
-                        buf += sprintf(buf, "{...}");
-                    }
+                    buf += sprintf(buf, "%08X", (DWORD) pVar);
                 }
+            }
+        }
+        else
+        if( pItem->Type.maj==1 )
+        {
+            // One-level pointer indirection
+
+            // Verify the common case of a NULL pointer first
+            if( pVar==0 )
+            {
+                buf += sprintf(buf, "NULL");
             }
             else
             {
-                sprintf(buf, "%08X <illegal>", (DWORD) pVar);
+                // Read the effective address of that pointer: "void *" is unsigned int
+
+                if( GlobalReadDword(&Value._unsigned_int, (DWORD) pVar) )
+                {
+                    buf += sprintf(buf, "%08X", (DWORD) pVar);
+
+                    // Try to get one item from the pointee to print out
+                    // but process "char *" separately since it is a string
+
+                    if( *pType1->pDef==TYPE_CHAR || *pType1->pDef==TYPE_SIGNED_CHAR || *pType1->pDef==TYPE_UNSIGNED_CHAR )
+                    {
+                        buf += PrintExpandCharPtr(buf, (BYTE *) Value._unsigned_int);
+                    }
+                    else
+                    {
+                        if( *pType1->pDef <= TYPEDEF__LAST )
+                        {
+                            // Read in the value of the variable, exactly the number of bytes that we need
+                            GlobalReadMem((BYTE *) &Value, Value._unsigned_int, nSimpleTypes[(int)*pType1->pDef]);
+
+                            // Read the data from the memory being pointed to, but enclose it in brackets
+                            *buf++ = ' ';
+                            *buf++ = '<';
+                            buf += PrintBasicTypeValue(buf, &Value, pType1);
+                            *buf++ = '>';
+                        }
+                        else
+                        {
+                            // Pointer to a complex type
+
+                            buf += sprintf(buf, " {...}");
+                        }
+                    }
+                }
+                else
+                {
+                    buf += sprintf(buf, "%08X <illegal>", (DWORD) pVar);
+                }
+            }
+        }
+        else
+        {
+            // Multi-level pointer indirection
+
+            // Verify the common case of a NULL pointer first
+            if( pVar==0 )
+            {
+                buf += sprintf(buf, "NULL");
+            }
+            else
+            {
+                buf += sprintf(buf, "%08X {{...}}", (DWORD) pVar);
             }
         }
     }
     else
     {
-        // Multi-level pointer indirection
-
-        // Verify the common case of a NULL pointer first
-        if( pVar==0 )
-        {
-            sprintf(buf, "NULL");
-        }
-        else
-        {
-            sprintf(buf, "%08X {{...}}", (DWORD) pVar);
-        }
+        // Pointers to data type or name are NULL
+        buf += sprintf(buf, "<unknown>");
     }
+
+    // Zero-terminate the output buffer
+    *buf = '\0';
 }

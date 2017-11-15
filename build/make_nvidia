@@ -1,0 +1,51 @@
+#!/bin/bash
+
+	rm	-rf linice-nvidia
+	rm  -f  linice-nvidia.tar
+
+	echo "+-----------------------------------------------------+"
+	echo "| NVIDIA:              LINICE                         |"
+	echo "+-----------------------------------------------------+"
+	cd ../linice
+	make clean
+	make nvidia
+
+	echo "+-----------------------------------------------------+"
+	echo "| NVIDIA:              LINSYM                         |"
+	echo "+-----------------------------------------------------+"
+	cd ../linsym
+	make clean
+	make retail
+
+	echo "+-----------------------------------------------------+"
+	echo "| NVIDIA:              XICE                           |"
+	echo "+-----------------------------------------------------+"
+	cd ../x
+	make clean
+	make retail
+
+	echo "+-----------------------------------------------------+"
+	echo "| NVIDIA:              PACKAGING                      |"
+	echo "+-----------------------------------------------------+"
+	cd ../build
+	mkdir linice-nvidia
+	cp	../bin/makefile			linice-nvidia
+	cp	../bin/linsym 			linice-nvidia
+	cp  ../bin/iceface.c 		linice-nvidia
+	cp  ../bin/iceface.h		linice-nvidia
+	cp  ../bin/pcihdr.h			linice-nvidia
+	cp  ../bin/linice.dat		linice-nvidia
+	cp	../bin/linice_kernel.o	linice-nvidia
+	cp	../bin/xice				linice-nvidia
+
+	cp  ../docs/License.txt		linice-nvidia
+	cp  ../docs/Readme.txt		linice-nvidia
+	cp  ../docs/Readme.pdf		linice-nvidia
+	cp  ../bin/Version.txt		linice-nvidia
+
+	chmod +644 -R linice-nvidia
+	chmod +755 -R linice-nvidia/linsym
+	chmod +755 -R linice-nvidia/xice
+
+	tar -cvf linice-nvidia.tar linice-nvidia
+	gzip linice-nvidia.tar

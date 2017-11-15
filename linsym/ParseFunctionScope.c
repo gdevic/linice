@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       09/05/00                                                      *
 *                                                                             *
-*   Copyright (c) 2001 Goran Devic                                            *
+*   Copyright (c) 2000-2004 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -42,6 +42,7 @@ extern PSTR dfs;                        // Global pointer to strings (to append)
 
 extern WORD GetFileId(char *pSoDir, char *pSo);
 extern BOOL GlobalsName2Address(DWORD *p, char *pName);
+extern BYTE GlobalsName2SectionNumber(char *pName);
 
 /******************************************************************************
 *                                                                             *
@@ -306,11 +307,12 @@ BOOL ParseFunctionScope(int fd, int fs, BYTE *pBuf)
                 // Local static symbol in the BSS segment
                 case N_LCSYM:
                     // If we are not within a function scope, it is a local variable
-                    // TODO: Local scope variables
                     if(fInFunction)
                     {
+                        list.bSegment= GlobalsName2SectionNumber(pStr);
+
                         VERBOSE2 printf("LCSYM  ");
-                        VERBOSE2 printf("line: %d BSS %08lX  %s\n", pStab->n_desc, pStab->n_value, pStr);
+                        VERBOSE2 printf("line: %d seg:%d %08lX  %s\n", pStab->n_desc, list.bSegment, pStab->n_value, pStr);
 
                         // Write out one token record
                         list.TokType = TOKTYPE_LCSYM;

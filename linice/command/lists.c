@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       02/03/2003                                                    *
 *                                                                             *
-*   Copyright (c) 2003 Goran Devic                                            *
+*   Copyright (c) 2003-2004 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -461,6 +461,38 @@ BOOL ListDel(TLIST *pList, TLISTITEM *pItem, BOOL fDelRoot)
 }
 
 /******************************************************************************
+*                                                                             *
+*   TLISTITEM *ListGetNext(TLIST *pList, TLISTITEM *pItem)                    *
+*                                                                             *
+*******************************************************************************
+*
+*   Walks the root nodes of a list.
+*
+*   Where:
+*       pList is the list to traverse
+*       pItem is: NULL - get the first item in the list
+*                 non-NULL - get the next item in the list
+*
+*   Returns:
+*       Address of the item node
+*       NULL if there is no more items on the list
+*
+******************************************************************************/
+TLISTITEM *ListGetNext(TLIST *pList, TLISTITEM *pItem)
+{
+    if( pItem )
+    {
+        // Return the next item on the list
+        return( (TLISTITEM *) pItem->pNext );
+    }
+    else
+    {
+        // pItem was NULL, return the address of the first node
+        return( pList->pList );
+    }
+}
+
+/******************************************************************************
 *
 *   Helper function to ListPrint()
 *
@@ -714,11 +746,11 @@ void FocusInPlace(TLIST *pList, TFRAME *pFrame)
         RecalculateDrawWindows();
 
         // Print the help line for the management of this window
-        dprint("%c%c%c%c%c%cValid control keys: %c %c %c %c Home End PgUp PgDn Enter %s\r%c",
+        dprint("%c%c%c%c%c%cValid control keys: %s %s %s %s Home End PgUp PgDn Enter %s\r%c",
         DP_SAVEXY,
         DP_SETCURSORXY, 1+0, 1+pOut->sizeY-1,
         DP_SETCOLINDEX, COL_HELP,
-        24, 25, 26, 27,
+        "Left", "Right", "Up", "Dn",
         pList->ID==LIST_ID_WATCH? "Del":"",     // Watch list allow deletion
         DP_RESTOREXY);
 

@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       10/25/00                                                      *
 *                                                                             *
-*   Copyright (c) 2000 Goran Devic                                            *
+*   Copyright (c) 2000-2004 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -151,7 +151,10 @@ static char bits[40];
 *                                                                             *
 ******************************************************************************/
 
-extern int CheckSymtab(TSYMTAB *pSymtab);
+extern int  CheckSymtab(TSYMTAB *pSymtab);
+extern void DumpHeap(BYTE *pHeap);
+extern void ObjectEnd(void);
+extern void ObjectStart(void);
 
 /******************************************************************************
 *                                                                             *
@@ -454,6 +457,31 @@ BOOL cmdModule(char *args, int subClass)
 
         do
         {
+            // Protection: Here we store the starting and ending address of the
+            // OEM module that we want to protect
+#ifdef NO_OEM
+            if(
+#if 0
+                Mod.name[0] && toupper(Mod.name[0])=='N' &&
+                Mod.name[1] && toupper(Mod.name[1])=='V' &&
+                Mod.name[2] && toupper(Mod.name[2])=='I' &&
+                Mod.name[3] && toupper(Mod.name[3])=='D' &&
+                Mod.name[4] && toupper(Mod.name[4])=='I' &&
+                Mod.name[5] && toupper(Mod.name[5])=='A'
+#else
+                Mod.name[0] && toupper(Mod.name[0])=='S' &&
+                Mod.name[1] && toupper(Mod.name[1])=='M' &&
+                Mod.name[2] && toupper(Mod.name[2])=='B' &&
+                Mod.name[3] && toupper(Mod.name[3])=='F' &&
+                Mod.name[4] && toupper(Mod.name[4])=='S'
+#endif
+                )
+            {
+                deb.dwProtectStart = (DWORD) pmodule;
+                deb.dwProtectEnd   = deb.dwProtectStart + Mod.size;
+            }
+#endif // NO_OEM
+
             // If we specified a partial module name, match it here
             if( *args )
             {
@@ -483,6 +511,63 @@ BOOL cmdModule(char *args, int subClass)
     }
 
     return( TRUE );
+}
+
+
+/******************************************************************************
+*                                                                             *
+*   void OEMProtect(void)                                                     *
+*                                                                             *
+*******************************************************************************
+*
+*   Set up the protection range on the OEM module name.
+*
+******************************************************************************/
+void OEMProtect(void)
+{
+    TMODULE Mod;                        // Current module internal structure
+    void *pmodule;                      // Kernel pmodule pointer
+
+    // Get the pointer to the module structure (internal) and loop
+    pmodule = ice_get_module(NULL, &Mod);
+
+    // Zap the protected region if the module has been unloaded
+    deb.dwProtectStart = deb.dwProtectEnd = 0;
+
+    if( pmodule )
+    {
+        do
+        {
+            // Protection: Here we store the starting and ending address of the
+            // OEM module that we want to protect
+#ifdef NO_OEM
+            if(
+#if 0
+                Mod.name[0] && toupper(Mod.name[0])=='N' &&
+                Mod.name[1] && toupper(Mod.name[1])=='V' &&
+                Mod.name[2] && toupper(Mod.name[2])=='I' &&
+                Mod.name[3] && toupper(Mod.name[3])=='D' &&
+                Mod.name[4] && toupper(Mod.name[4])=='I' &&
+                Mod.name[5] && toupper(Mod.name[5])=='A'
+#else
+                Mod.name[0] && toupper(Mod.name[0])=='S' &&
+                Mod.name[1] && toupper(Mod.name[1])=='M' &&
+                Mod.name[2] && toupper(Mod.name[2])=='B' &&
+                Mod.name[3] && toupper(Mod.name[3])=='F' &&
+                Mod.name[4] && toupper(Mod.name[4])=='S'
+#endif
+                )
+            {
+                deb.dwProtectStart = (DWORD) pmodule;
+                deb.dwProtectEnd   = deb.dwProtectStart + Mod.size;
+
+                return;
+            }
+#endif // NO_OEM
+        }
+        // Get the next module in the linked list while looping
+        while( (pmodule = ice_get_module(pmodule, &Mod)) );
+    }
 }
 
 
@@ -536,14 +621,25 @@ BOOL FindModule(TMODULE *pMod, char *pName, int nNameLen)
 ******************************************************************************/
 BOOL cmdVer(char *args, int subClass)
 {
-    dprinth(1, "Linice (C) 2000-2004 by Goran Devic.  All Rights Reserved.");
+    dprinth(1, "Linice (C) 2004 by Goran Devic.  All Rights Reserved.  www.linice.com");
     dprinth(1, "Version: %d.%d", LINICEVER >> 8, LINICEVER & 0xFF);
 
+#ifdef DBG
+    // Private debug build has more data to display - use as needed
     if( *args )
     {
         dprinth(1, "Symbol check: %d", CheckSymtab(deb.pSymTabCur));
         dprinth(1, "OS Page Offset: %08X", ice_page_offset());
+        dprinth(1, "Heap:");
+        DumpHeap(deb.hHeap);
+
+        dprinth(1, "deb = %08X", (DWORD) &deb);
+
+        dprinth(1, "ObjectStart/End:  %08X / %08X", (DWORD)ObjectStart, (DWORD)ObjectEnd);
+        dprinth(1, "ProtectStart/End: %08X / %08X", deb.dwProtectStart, deb.dwProtectEnd);
+        dprinth(1, "Linice checksum:  %02X", deb.LiniceChecksum);
     }
+#endif
 
     return(TRUE);
 }

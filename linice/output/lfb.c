@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       05/18/01                                                      *
 *                                                                             *
-*   Copyright (c) 2000 Goran Devic                                            *
+*   Copyright (c) 2000-2004 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -203,7 +203,7 @@ int XInitPacket(TXINITPACKET *pXInit)
     // over the area of drawing
     if( (deb.pXDrawBuffer = ice_vmalloc(deb.nXDrawSize)) != NULL)
     {
-        INFO(("XWIN: Allocated %d for backing store buffer\n", (int)deb.nXDrawSize));
+        INFO("XWIN: Allocated %d for backing store buffer\n", (int)deb.nXDrawSize);
 
         // Find the physical address of the frame buffer in user address space
         physicalAddress = UserVirtToPhys(pXInit->pFrameBuf);

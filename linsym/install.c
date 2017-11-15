@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       09/05/00                                                      *
 *                                                                             *
-*   Copyright (c) 2001 Goran Devic                                            *
+*   Copyright (c) 2000-2004 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -84,6 +84,9 @@ DWORD module_list = 0;
 
 // Starting with the 2.4.18 kernel, this symbol is not available for kernel modules:
 DWORD sys_call_table = 0;
+
+// Need to follow the task switch
+DWORD switch_to = 0;
 
 
 extern int system2(char *command);
@@ -201,17 +204,24 @@ static BOOL GetSymbolExports(void)
     char code;
     char sSymbol[128];
 
-    handle_kbd_event = handle_scancode = module_list = sys_call_table = 0;
+    handle_kbd_event = handle_scancode = module_list = sys_call_table = switch_to = 0;
 
     // If the system map file has not been opened, return failure
     if( fpSystemMap )
     {
         VERBOSE2 printf("Reading kernel locations from System.map file:\n");
 
+        // TODO: Should we depend on System.map file? Some of these symbols
+        //       can be read from /proc/ksyms
+        //
+        // handle_scancode
+        // sys_call_table
+
+
         // Look for the addresses of some functions in the system map file until
         // we either reach the end of the System.map file or we have them all read
 
-        while( !feof(fpSystemMap) && (!handle_kbd_event || !handle_scancode || !module_list || !sys_call_table) )
+        while( !feof(fpSystemMap) && (!handle_kbd_event || !handle_scancode || !module_list || !sys_call_table || !switch_to) )
         {
             items = fscanf(fpSystemMap, "%X %c %s\n", &address, &code, sSymbol);
             if( items==3 && strcmp("handle_kbd_event", sSymbol)==0 )
@@ -236,6 +246,12 @@ static BOOL GetSymbolExports(void)
             {
                 VERBOSE2 printf("   sys_call_table = %08X\n", address);
                 sys_call_table = address;
+            }
+            else
+            if( items==3 && strcmp("__switch_to", sSymbol)==0 )
+            {
+                VERBOSE2 printf("   switch_to = %08X\n", address);
+                switch_to = address;
             }
         }
 
@@ -525,11 +541,12 @@ BOOL OptInstall(char *pSystemMap)
         //  -x   do not export externs
         //  -f   force load even if kernel version does not match
 
-        sprintf(sLine, "insmod -x -f linice_`uname -r`/linice.o ice_debug_level=1 kbd=%d scan=%d pmodule=%d sys=%d",
+        sprintf(sLine, "insmod -x -f linice_`uname -r`/linice.o ice_debug_level=1 kbd=%d scan=%d pmodule=%d sys=%d switchto=%d",
             handle_kbd_event,
             handle_scancode,
             module_list,
-            sys_call_table);
+            sys_call_table,
+            switch_to);
 
         VERBOSE2 printf("%s\n", sLine);
 

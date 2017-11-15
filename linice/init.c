@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       09/09/00                                                      *
 *                                                                             *
-*   Copyright (c) 2001 Goran Devic                                            *
+*   Copyright (c) 2000-2004 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -74,10 +74,12 @@ extern void VgaSprint(char *s);
 extern void InterruptInit();
 extern void HookDebuger();
 extern void HookSyscall(void);
+extern void HookSwitch(void);
 extern BOOL InitUserVars(int num);
 extern BOOL InitMacros(int num);
 extern void InitEdit();
 extern void InitKeyboardLayout(char Layout[3][128]);
+extern void InitBreakpoints();
 extern BOOL cmdVer(char *args, int subClass);
 extern BYTE *memInitHeap(UINT size);
 extern void memFreeHeap(BYTE *hHeap);
@@ -112,7 +114,7 @@ int InitPacket(PTINITPACKET pInit)
 
             if( (deb.hHistoryBufferHeap = memInitHeap(pInit->nHistorySize)) != NULL)
             {
-                INFO(("Allocated %d Kb for history pool\n", pInit->nHistorySize / 1024));
+                INFO("Allocated %d Kb for history pool\n", pInit->nHistorySize / 1024);
 
                 if( ice_get_flags() & 1 )
                 {
@@ -199,7 +201,7 @@ int InitPacket(PTINITPACKET pInit)
                 {
                     if( (deb.hSymbolBufferHeap = memInitHeap(pInit->nSymbolSize)) != NULL )
                     {
-                        INFO(("Allocated %d Kb for symbol pool\n", pInit->nSymbolSize / 1024));
+                        INFO("Allocated %d Kb for symbol pool\n", pInit->nSymbolSize / 1024);
 
                         deb.nSymbolBufferSize = deb.nSymbolBufferAvail = pInit->nSymbolSize;
 
@@ -233,6 +235,7 @@ int InitPacket(PTINITPACKET pInit)
 
                                         deb.fLowercase = pInit->fLowercase;
                                         deb.fPause = TRUE;
+                                        deb.fTableAutoOn = TRUE;
 
                                         // Set up default output colors
 
@@ -246,6 +249,9 @@ int InitPacket(PTINITPACKET pInit)
 
                                         memcpy(deb.keyFn , pInit->keyFn , sizeof(deb.keyFn));
 
+                                        // Init the breakpoint structures
+                                        InitBreakpoints();
+
                                         // Hook system call table so we can monitor system calls
                                         HookSyscall();
 
@@ -254,14 +260,26 @@ int InitPacket(PTINITPACKET pInit)
 
                                         HookDebuger();
 
+                                        // Hook the task switcher
+                                        HookSwitch();
+
+                                        // Linice is now operational
+                                        deb.fOperational = TRUE;
+
                                         // Interpret init command string and execute it
 
-                                        INFO(("INIT: ""%s""\n", pInit->sInit));
+                                        INFO("INIT: ""%s""\n", pInit->sInit);
 
                                         // Display version information
 
                                         cmdVer("", 0);
 
+#ifdef NVIDIA
+                                        dprinth(1, "THIS IS A SPECIAL NVIDIA BUILD - NOT TO BE DISTRIBUTED OUTSIDE NVIDIA!");
+#endif // NVIDIA
+#ifdef NO_OEM
+                                        dprinth(1, "BY USING THIS SOFTWARE YOU AGREE WITH THE TERMS OF THE LICENSE AGREEMENT.");
+#endif // NO_OEM
                                         dprinth(1, "");
                                         dprinth(1, "LINICE: Init: %s", pInit->sInit);
 
@@ -283,13 +301,13 @@ int InitPacket(PTINITPACKET pInit)
                                     }
                                     else
                                     {
-                                        ERROR(("INIT: Heap too small for MACROS"));
+                                        ERROR("INIT: Heap too small for MACROS");
                                         retval = -ENOMEM;
                                     }
                                 }
                                 else
                                 {
-                                    ERROR(("INIT: Heap too small for VARS"));
+                                    ERROR("INIT: Heap too small for VARS");
                                     retval = -ENOMEM;
                                 }
 
@@ -297,26 +315,26 @@ int InitPacket(PTINITPACKET pInit)
                             }
                             else
                             {
-                                ERROR(("Unable to allocate %d for memory heap!\n", MAX_HEAP));
+                                ERROR("Unable to allocate %d for memory heap!\n", MAX_HEAP);
                                 retval = -ENOMEM;
                             }
                         }
                         else
                         {
-                            ERROR(("deb.hHeap != NULL\n"));
+                            ERROR("deb.hHeap != NULL\n");
                         }
 
                         memFreeHeap(deb.hSymbolBufferHeap);
                     }
                     else
                     {
-                        ERROR(("Unable to allocate %d for symbol buffer!\n", pInit->nSymbolSize));
+                        ERROR("Unable to allocate %d for symbol buffer!\n", pInit->nSymbolSize);
                         retval = -ENOMEM;
                     }
                 }
                 else
                 {
-                    ERROR(("deb.hSymbolBufferHeap != NULL\n"));
+                    ERROR("deb.hSymbolBufferHeap != NULL\n");
                 }
 
                 // Restore background and disable output driver
@@ -327,13 +345,13 @@ int InitPacket(PTINITPACKET pInit)
             }
             else
             {
-                ERROR(("Unable to allocate %d for history buffer!\n", pInit->nHistorySize));
+                ERROR("Unable to allocate %d for history buffer!\n", pInit->nHistorySize);
                 retval = -ENOMEM;
             }
         }
         else
         {
-            ERROR(("deb.hHistoryBuffer != NULL\n"));
+            ERROR("deb.hHistoryBuffer != NULL\n");
         }
     }
 

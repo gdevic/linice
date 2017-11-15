@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       10/25/00                                                      *
 *                                                                             *
-*   Copyright (c) 2000 Goran Devic                                            *
+*   Copyright (c) 2000-2004 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -40,13 +40,54 @@
 #include "iceface.h"                    // Include iceface module stub protos
 #include "ice.h"                        // Include main debugger structures
 
-#include "pcihdr.h"                     // Include PCI header file
-
 /******************************************************************************
 *                                                                             *
 *   Global Variables                                                          *
 *                                                                             *
 ******************************************************************************/
+
+// These structures are defined in the external file pcihdr.h which is conditionally
+// included in the final makefile when creating linice.o
+//
+// Still, here we need to know what is the format of the public data for these fields.
+//
+// WARNING: Every time a new PCIHDR is included (updated) need to verify these stay the same!
+// ASSUMPTION: These structures correspond to the pcidhr.h official file -> http://pcidatabase.com/
+
+typedef struct _PCI_VENTABLE
+{
+    unsigned short  VenId ;
+    char *  VenShort ;
+    char *  VenFull ;
+}  PCI_VENTABLE, *PPCI_VENTABLE ;
+
+extern PCI_VENTABLE PciVenTable [];
+extern UINT ice_PCI_VENTABLE_LEN;
+
+typedef struct _PCI_DEVTABLE
+{
+    unsigned short  VenId ;
+    unsigned short  DevId ;
+    char *  Chip ;
+    char *  ChipDesc ;
+}  PCI_DEVTABLE, *PPCI_DEVTABLE ;
+
+extern PCI_DEVTABLE PciDevTable [];
+extern UINT ice_PCI_DEVTABLE_LEN;
+
+typedef struct _PCI_CLASSCODETABLE
+{
+    unsigned char   BaseClass ;
+    unsigned char   SubClass ;
+    unsigned char   ProgIf ;
+    char *      BaseDesc ;
+    char *      SubDesc ;
+    char *      ProgDesc ;
+}  PCI_CLASSCODETABLE, *PPCI_CLASSCODETABLE ;
+
+extern PCI_CLASSCODETABLE PciClassCodeTable [];
+extern UINT ice_PCI_CLASSCODETABLE_LEN;
+
 
 /******************************************************************************
 *                                                                             *
@@ -91,7 +132,7 @@ static char *GetVendorName(int vendor)
 
     // Search for the vendor name string
     pVendor = PciVenTable;
-    count   = PCI_VENTABLE_LEN;
+    count   = ice_PCI_VENTABLE_LEN;
 
     while( count-- )
     {
@@ -112,7 +153,7 @@ static char *GetChipName(int vendor, int device)
 
     // Search for the device name
     pDev  = PciDevTable;
-    count = PCI_DEVTABLE_LEN;
+    count = ice_PCI_DEVTABLE_LEN;
 
     while( count-- )
     {
@@ -133,7 +174,7 @@ static char *GetChipDesc(int vendor, int device)
 
     // Search for the device description
     pDev  = PciDevTable;
-    count = PCI_DEVTABLE_LEN;
+    count = ice_PCI_DEVTABLE_LEN;
 
     while( count-- )
     {

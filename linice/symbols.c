@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       10/21/00                                                      *
 *                                                                             *
-*   Copyright (c) 2001 Goran Devic                                            *
+*   Copyright (c) 2000-2004 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -600,7 +600,6 @@ BOOL cmdExport(char *args, int subClass)
     return( TRUE );
 }
 
-
 /******************************************************************************
 *                                                                             *
 *   BOOL cmdSymbol(char *args, int subClass)                                  *
@@ -610,9 +609,6 @@ BOOL cmdExport(char *args, int subClass)
 *   Display global symbols from the current symbol table
 *
 ******************************************************************************/
-
-// TODO - How do we implement this function?
-
 BOOL cmdSymbol(char *args, int subClass)
 {
     TSYMGLOBAL *pGlobals;
@@ -633,11 +629,17 @@ BOOL cmdSymbol(char *args, int subClass)
             pGlobals = (TSYMGLOBAL *) SymTabFindSection(deb.pSymTabCur, HTYPE_GLOBALS);
             if( pGlobals )
             {
+                // List the symbols from every segment
+
                 for(i=0; i<pGlobals->nGlobals; i++ )
                 {
-                    if(dprinth(nLine++, " %08X %02d %s",
+                    if(dprinth(nLine++, " %08X %02d %s %s",
                         pGlobals->list[i].dwStartAddress,
-                        pGlobals->list[i].bFlags,
+                        pGlobals->list[i].bSegment,
+                        pGlobals->list[i].bSegment==0x00? ".text  ":
+                        pGlobals->list[i].bSegment==0x01? ".data  ":
+                        pGlobals->list[i].bSegment==0x02? ".rodata":
+                        pGlobals->list[i].bSegment==0x03? ".bss   ": "COMMON ",
                         pGlobals->list[i].pName)==FALSE)
                     return( TRUE );
                 }

@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       05/23/2003                                                    *
 *                                                                             *
-*   Copyright (c) 1996-2003 Goran Devic                                       *
+*   Copyright (c) 1996-2004 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -64,19 +64,38 @@ extern BYTE port_KBD_DATA;
 *                                                                             *
 ******************************************************************************/
 
+// Used this fake code buffer since the switchto task handler actually hooks
+// the code by writing a call to it (5 bytes)
+BYTE FakeCodeBuffer[5];
+
 char *linice = NULL;
 DWORD kbd = 0;
 DWORD scan = 0;
 DWORD *pmodule = NULL;
 DWORD iceface = 0;
+DWORD switchto = FakeCodeBuffer;
 int ice_debug_level = 0;
 
+// We dont support reading of the PCI space from within the Sim, so it is OK
+// to zero all of this out (also, that means we dont include the PCI database header file).
+
+int ice_PCI_VENTABLE_LEN = 0;
+int ice_PCI_DEVTABLE_LEN = 0;
+int ice_PCI_CLASSCODETABLE_LEN = 0;
+
+int PciVenTable;
+int PciDevTable;
 
 /******************************************************************************
 *                                                                             *
 *   Functions                                                                 *
 *                                                                             *
 ******************************************************************************/
+
+void ice_printk(char *p)
+{
+    printk("%s", p);
+}
 
 unsigned int ice_get_flags()
 {
@@ -290,8 +309,7 @@ void *ice_get_current(void)
 
 char *ice_get_current_comm(void)
 {
-    assert(0);
-    return( NULL );
+    return( "types" ); // :)
 }
 
 void cleanup_module(void)
@@ -329,13 +347,13 @@ unsigned char inp(unsigned short port)
     case KBD_DATA:
         return(port_KBD_DATA);
     }
-    
+
     return( 0xFF );
 }
 
 WORD GetKernelCS()
 {
-    return 0x60;
+    return 0x10;
 }
 
 WORD GetKernelDS()

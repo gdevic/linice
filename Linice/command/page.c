@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       10/25/00                                                      *
 *                                                                             *
-*   Copyright (c) 2000 Goran Devic                                            *
+*   Copyright (c) 2000-2004 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -21,6 +21,29 @@
     Module Description:
 
         Commands that deal with page tables.
+
+    A physical page allocated to process VM will have at least two virtual mappings: 
+    one in kernel memory at PAGE_OFFSET+physical_page_address, and one at some 
+    address less than PAGE_OFFSET in process VM. Such pages may also have additional 
+    mappings: for example, multiple processes executing the same program share the 
+    program's executable code by mapping the same physical pages in their respective 
+    page tables.
+
+    HIGHMEM pages don't have a permanent virtual kernel address, so they are exception.
+    Because of them, we need to map PTE ourselves in order to access them since
+    we cannot rely any longer on the formula:
+         pPTE = (TPage *) (ice_page_offset() + pPD[pg].Index * 4096)
+
+    In order to map an arbitrary physical page (but only one at a time!!)
+    We modify the page directory page only, since we know its linear address:
+        PD[0] -> Maps itself
+        PD[1] -> Maps the physical page we want to see
+
+    This effectively maps the page we want to see to the second 4Mb block, or
+    at the address of 4Mb, with the page naturally 4K in size.
+
+    The only drawback to it is we now need to assume that the first 2 PD
+    entries will be 0, which is safe, I believe.
 
 *******************************************************************************
 *                                                                             *
@@ -53,6 +76,10 @@
 *                                                                             *
 ******************************************************************************/
 
+// Place to store the original values of first 2 PD entries during the remap
+
+static DWORD selfMapping[2];
+
 /******************************************************************************
 *                                                                             *
 *   External Functions                                                        *
@@ -60,6 +87,7 @@
 ******************************************************************************/
 
 extern void GetSysreg( TSysreg * pSys );
+extern void FlushTLB(void);
 
 /******************************************************************************
 *                                                                             *
@@ -69,20 +97,93 @@ extern void GetSysreg( TSysreg * pSys );
 
 /******************************************************************************
 *                                                                             *
+*   DWORD mapPhysicalPage(DWORD physAddress)                                  *
+*                                                                             *
+*******************************************************************************
+*
+*   Temporary internally map a physical page to a known address.
+*   This is used to access pages that can not be viewed by any other mapping,
+*   such is Page Tables which do not conform to the kernel 2.2 formula.
+*
+*   Where:
+*       physAddress is the address of the page to map
+*
+*   Returns:
+*       Linear address of the page
+*
+*   Note: You MUST call unmapPhysicalPage() to release the mapping before
+*         going back to the user process.
+*
+******************************************************************************/
+static DWORD mapPhysicalPage(DWORD physAddress)
+{
+    DWORD *p;                           // Linear address of the PD
+    TPage *pPD;                         // Different way to view PD
+
+    // Get the page directory virtual address
+    p = (DWORD *) (ice_page_offset() + deb.sysReg.cr3);
+    pPD = (TPage *) p;                  // Two ways of looking at the value
+    
+    // Store away the original values from the first two entries
+    selfMapping[0] = p[0];
+    selfMapping[1] = p[1];
+
+    p[0] = p[1] = 0;                    // Clean the first two entries
+
+    // Map itself into the linear address 0
+    pPD[0].Index = deb.sysReg.cr3 >> 12;
+    pPD[0].fPresent = TRUE;
+    
+    // Map our page into the linear address of 4 K
+    pPD[1].Index = physAddress >> 12;
+    pPD[1].fPresent = TRUE;
+
+    FlushTLB();                         // Flush the TLB
+
+    // Now this page is visible at the address of 4K
+    return( 1024 * 4 );
+}
+
+/******************************************************************************
+*                                                                             *
+*   void unmapPhysicalPage(void)                                              *
+*                                                                             *
+*******************************************************************************
+*
+*   Releases the temporary internal page mapping.
+*   This function can be called a number of times since it only writes back a
+*   cached value; however, mapping should be called first!
+*
+******************************************************************************/
+static void unmapPhysicalPage(void)
+{
+    DWORD *pPD;                         // Linear address of the PD
+
+    // Get the page directory virtual address
+    pPD = (DWORD *) (ice_page_offset() + deb.sysReg.cr3);
+    
+    // Restore the original values from the first two entries
+    pPD[0] = selfMapping[0];
+    pPD[1] = selfMapping[1];
+
+    FlushTLB();                         // Flush the TLB
+}
+
+/******************************************************************************
+*                                                                             *
 *   BOOL cmdPage(char *args, int subClass)                                    *
 *                                                                             *
 *******************************************************************************
 *
-*   Display page table information.  There are two functions in one - when
-*   we specify a vitual address as a parameter and when we issue command
-*   without parameters.
+*   Display page table information for the complete address space or a
+*   section of it.
 *
 ******************************************************************************/
 BOOL cmdPage(char *args, int subClass)
 {
     TPage *pPD, *pPTE;                  // Pointers to PG and PTE
     DWORD address, pg, pt;              // Linear address and its pd, pte
-    int pages = 1;                      // Number of pages to display
+    int pages = 1;                      // Number of pages to display by default
     int nLine = 1;                      // Standard dprinth line counter
 
     // Get the page directory virtual address
@@ -90,17 +191,19 @@ BOOL cmdPage(char *args, int subClass)
 
     if( *args )
     {
-        // Parameters are specified
+        // ----------------------------------------------------------------------
+        // Parameters are specified - we are dumping partial address space
+        // ----------------------------------------------------------------------
 
         // Read the address parameter
         if( Expression(&address, args, &args) )
         {
-            // Next parameter is optional: L <length>
+            // Next parameter is optional: L <num_pages>
             if( *args=='L' || *args=='l' )
             {
                 args++;
 
-                // Read optional length parameter
+                // Read optional number of pages parameter
                 if( Expression((DWORD *)&pages, args, &args) )
                 {
                     goto Proceed;
@@ -121,8 +224,8 @@ Proceed:
 
         while( pages > 0 )
         {
-            pg = address >> 22;
-            pt = (address >> 12) & 1023;
+            pg = address >> 22;                 // 10 bits wide indexes array of DWORDs in page directory (PD)
+            pt = (address >> 12) & 0x3FF;       // 10 bits wide indexes array of DWORDs into a page table (PTE)
 
             // If it is a 4Mb page, do it differently
             if( (deb.sysReg.cr4 & BITMASK(PSE_BIT)) && pPD[pg].fPS )
@@ -141,17 +244,24 @@ Proceed:
                         pPD[pg].fWriteThr? "WT":"  ")==FALSE)
                     break;
 
+                // Skip 4 Mb
                 address += 1024 * 1024 * 4;
                 pages -= 1024;
             }
             else
             {
                 // Regular 4Kb page - use second level page table
+
+                // This mapping used to work but now PTE pages are swappable
+                // We still do it if the user asked for the first 2 entries in the PD
+                if( pg==0 || pg==1 )
+                    pPTE = (TPage *) (ice_page_offset() + pPD[pg].Index * 4096);
+                else
+                    pPTE = (TPage *) mapPhysicalPage(pPD[pg].Index * 4096);
+
                 if( pPD[pg].fPresent )
                 {
                     // PD marks pte present, so we can examine it
-
-                    pPTE = (TPage *) (ice_page_offset() + pPD[pg].Index * 4096);
 
                     if( pPTE[pt].fPresent )
                     {
@@ -166,7 +276,10 @@ Proceed:
                                 (pPTE[pt].fWrite & pPD[pg].fWrite)? "RW":"R ",
                                 pPTE[pt].fGlobal? 'G':' ',
                                 pPTE[pt].fWriteThr? "WT":"  ")==FALSE)
+                        {
+                            if( !(pg==0 || pg==1) ) unmapPhysicalPage();
                             break;
+                        }
                     }
                     else
                     {
@@ -174,7 +287,10 @@ Proceed:
 
                         if(dprinth(nLine++, "%08X  00000000  NP",
                                 address )==FALSE)
+                        {
+                            if( !(pg==0 || pg==1) ) unmapPhysicalPage();
                             break;
+                        }
                     }
                 }
                 else
@@ -183,17 +299,25 @@ Proceed:
 
                     if(dprinth(nLine++, "%08X  00000000  NP",
                             address )==FALSE)
+                    {
+                        if( !(pg==0 || pg==1) ) unmapPhysicalPage();
                         break;
+                    }
                 }
 
+                // Skip 4 K
                 address += 1024 * 4;
                 pages -= 1;
+
+                if( !(pg==0 || pg==1) ) unmapPhysicalPage();
             }
         }
     }
     else
     {
+        // ----------------------------------------------------------------------
         // No parameters - list all pages with somewhat different output
+        // ----------------------------------------------------------------------
 
         // Print the first line with the page directory info
         dprinth(nLine++, "Page Directory Physical=%08X", deb.sysReg.cr3 );
@@ -203,10 +327,14 @@ Proceed:
         address = 0;                    // Start at address 0
         pages = 1024 * 1024;            // All memory
 
+        // Start with the 8Mb due to our page window allocation
+        address += 1024 * 1024 * 8;
+        pages   -= 1024 * 2;
+
         while( pages > 0 )
         {
-            pg = address >> 22;
-            pt = (address >> 12) & 1023;
+            pg = address >> 22;                 // 10 bits wide indexes array of DWORDs in page directory (PD)
+            pt = (address >> 12) & 0x3FF;       // 10 bits wide indexes array of DWORDs into a page table (PTE)
 
             // If it is a 4Mb page, do it differently
             if( (deb.sysReg.cr4 & BITMASK(PSE_BIT)) && pPD[pg].fPS )
@@ -229,6 +357,7 @@ Proceed:
                         break;
                 }
 
+                // Skip 4 Mb
                 address += 1024 * 1024 * 4;
                 pages -= 1024;
             }
@@ -236,15 +365,17 @@ Proceed:
             {
                 // Regular 4Kb page - use second level page table
 
+                // This mapping used to work but now PTE pages are swappable
+                // pPTE = (TPage *) (ice_page_offset() + pPD[pg].Index * 4096);
+
+                pPTE = (TPage *) mapPhysicalPage(pPD[pg].Index * 4096);
+
                 // Print only present pages
                 if( pPD[pg].fPresent )
                 {
-                    pPTE = (TPage *) (ice_page_offset() + pPD[pg].Index * 4096);
-
                     if( pPTE[pt].fPresent )
                     {
                         // Target page is present in the memory
-
                         if(dprinth(nLine++, "%08X   P  %c %c %c %s   %c %s  %08X - %08X",
                                 pPTE[pt].Index << 12,
                                 pPTE[pt].fDirty? 'D':' ',
@@ -255,19 +386,24 @@ Proceed:
                                 pPTE[pt].fWriteThr? "WT":"  ",
                                 address,
                                 address + 1024 * 4 - 1 )==FALSE)
+                        {
+                            unmapPhysicalPage();
                             break;
+                        }
                     }
                 }
 
+                // Skip 4 K
                 address += 1024 * 4;
                 pages -= 1;
+
+                unmapPhysicalPage();
             }
         }
     }
 
     return(TRUE);
 }
-
 
 /******************************************************************************
 *                                                                             *
@@ -295,7 +431,7 @@ BOOL cmdPhys(char *args, int subClass)
             // Get the page directory virtual address
             pPD = (TPage *) (ice_page_offset() + deb.sysReg.cr3);
 
-            // Search through the complete Intel page table structure
+            // Search through the complete page table structure
             for(pg=0; pg<1024; pg++)
             {
                 // Page directory have to mark it present
@@ -311,7 +447,10 @@ BOOL cmdPhys(char *args, int subClass)
                     }
                     else
                     {
-                        pPTE = (TPage *) (ice_page_offset() + pPD[pg].Index * 4096);
+                        // This mapping used to work but now PTE pages are swappable
+                        // pPTE = (TPage *) (ice_page_offset() + pPD[pg].Index * 4096);
+
+                        pPTE = (TPage *) mapPhysicalPage(pPD[pg].Index * 4096);
 
                         // 4Kb page - loop through the page tables
                         for(pt=0; pt<1024; pt++)
@@ -323,6 +462,7 @@ BOOL cmdPhys(char *args, int subClass)
                                         break;
                             }
                         }
+                        unmapPhysicalPage();
                     }
                 }
             }
@@ -343,6 +483,8 @@ BOOL cmdPhys(char *args, int subClass)
 *
 *   Read from physical memory. There are 3 subclasses of this function:
 *   byte (default), word and dword.
+*
+*   TODO: Possibly expand this function to take the "L" length parameter?
 *
 ******************************************************************************/
 BOOL cmdPeek(char *args, int subClass)
@@ -494,16 +636,21 @@ DWORD UserVirtToPhys(DWORD address)
         if( pPD[pg].fPresent )
         {
             // PD marks pte present, so we can examine it
-            pPTE = (TPage *) (ice_page_offset() + pPD[pg].Index * 4096);
+
+            // This mapping used to work but now PTE pages are swappable
+            // pPTE = (TPage *) (ice_page_offset() + pPD[pg].Index * 4096);
+
+            pPTE = (TPage *) mapPhysicalPage(pPD[pg].Index * 4096);
 
             if( pPTE[pt].fPresent )
             {
                 // Target page is present in the memory
                 phys = pPTE[pt].Index << 12;
             }
+
+            unmapPhysicalPage();
         }
     }
 
     return(phys);
 }
-

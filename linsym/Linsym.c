@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       09/05/00                                                      *
 *                                                                             *
-*   Copyright (c) 2001 Goran Devic                                            *
+*   Copyright (c) 2000-2004 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -289,7 +289,13 @@ void OptHelp(int shorth)
 //        printf("\n");
         printf("       Example: --logfile:Mylog.log,append\n");
 //        printf("\n");
+        printf("\n");
     }
+
+    printf("               www.linice.com\n");
+    printf("Send bug reports to:      bugs@linice.com\n");
+    printf("Send feature requests to: features@linice.com\n");
+    printf("Send comments to:         author@linice.com\n\n");
 
     exit(0);
 }
@@ -314,9 +320,8 @@ int main(int argn, char *argp[])
     nVerbose = 1;                       // Default verbose level
 
     // Print the basic banner
-    printf("\nLinice Debugger ");
-    printf("Symbol Translator/Loader Version %d.%02d\n", LINSYMVER >> 8, LINSYMVER & 0xFF);
-    printf("Linice and Linsym (C) 2000-2004 by Goran Devic.  All Rights Reserved.\n\n");
+    printf("\nLinice Debugger Symbol Translator/Loader Version %d.%02d\n", LINSYMVER >> 8, LINSYMVER & 0xFF);
+    printf("Linice and Linsym (C) 2004 by Goran Devic. All Rights Reserved.\n\n");
 
     // If there were no arguments, just print help and exit (help exits)
     if( argn==1 )
@@ -353,6 +358,9 @@ int main(int argn, char *argp[])
             if( i+1<argn )
             {
                 pTranslate = argp[i+1];  // Assign path/name of the file to translate
+
+                // Change all DOS-style backward slashes into UNIX style forward slashes
+                while(strchr(pTranslate,'\\')) *(char *)strchr(pTranslate,'\\') = '/';
                 i++;
             }
             else
@@ -381,6 +389,9 @@ int main(int argn, char *argp[])
             // --output:{output_file}
             opt |= OPT_OUTPUT;
             pOutput = ptr;
+
+            // Change all DOS-style backward slashes into UNIX style forward slashes
+            while(strchr(pOutput,'\\')) *(char *)strchr(pOutput,'\\') = '/';
         }
         else
         if( !strnicmp(argp[i], "--load", 6) || !strnicmp(argp[i], "-l", 2) )

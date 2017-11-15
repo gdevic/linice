@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       08/02/02                                                      *
 *                                                                             *
-*   Copyright (c) 2002 Goran Devic                                            *
+*   Copyright (c) 2002-2004 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -69,7 +69,6 @@ static int IrqRedir[0x10] = { 0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x
 *                                                                             *
 ******************************************************************************/
 
-extern void SetSysreg( TSysreg * pSys );
 extern DWORD SpinUntilReset(DWORD *pSpinlock);
 
 

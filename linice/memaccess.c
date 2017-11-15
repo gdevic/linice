@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       09/30/00                                                      *
 *                                                                             *
-*   Copyright (c) 2001 Goran Devic                                            *
+*   Copyright (c) 2000-2004 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -67,11 +67,66 @@ typedef struct
 
 static TSTAMP Stamp;
 
+//------------------------------- Protection ---------------------------------
+// NOSELF is defined when the Linice should try to protect against user
+// accessing any memory region that belongs to the Linice module.
+
+#ifdef NOSELF
+
+#define CHECK_NOSELF(p)                                                     \
+    (((DWORD)(p)>=(DWORD)ObjectStart) && ((DWORD)(p)<(DWORD)ObjectEnd)) ?   \
+    ((DWORD)(p) ^ 0x20) + ((DWORD)(p) & 3)  :  (p)
+
+#else  // NOSELF
+
+#define CHECK_NOSELF(p)             (p)
+
+#endif // NOSELF
+
+// NO_OEM is defined to protect memory access to a specific object module
+
+#ifdef NO_OEM
+
+#define CHECK_OEM(p)                                                                      \
+    (((DWORD)(p)>=(DWORD)deb.dwProtectStart) && ((DWORD)(p)<(DWORD)deb.dwProtectEnd)) ?   \
+    ((DWORD)(p) ^ 0x20) + ((DWORD)(p) & 7)  :  (p)
+
+#else  // NO_OEM
+
+#define CHECK_OEM(p)                (p)
+
+#endif // NO_OEM
+
 /******************************************************************************
 *                                                                             *
 *   Functions                                                                 *
 *                                                                             *
 ******************************************************************************/
+
+BYTE ComputeChecksum(BYTE *pMem, UINT size);
+BOOL GlobalReadBYTE(BYTE *pByte, DWORD dwAddress);
+
+// These functions should be called only from this module; all memory access
+// should go through these:
+
+extern DWORD SetByte(WORD sel, DWORD offset, BYTE value);
+extern int   GetByte(WORD sel, DWORD offset);
+extern DWORD GetDWORD(WORD sel, DWORD offset);
+
+//------------------------------- Protection ---------------------------------
+// These function should be placed in this order:
+//
+//  BOOL AddrIsPresent(PTADDRDESC pAddr)
+//  BYTE AddrGetByte(PTADDRDESC pAddr)
+//  DWORD AddrGetDword(PTADDRDESC pAddr)
+//  BOOL GlobalReadDword(DWORD *pDword, DWORD dwAddress)
+//  BOOL GlobalReadBYTE(BYTE *pByte, DWORD dwAddress)
+//
+//  since the separate checksum is calculated within the code range of
+//  the first and last in that block. It is stored here:
+
+BYTE memAccessChecksum;
+extern BYTE memAccessChecksum2;
 
 /******************************************************************************
 *   Returns TRUE if the address descriptor can be use to read data
@@ -88,7 +143,7 @@ BOOL AddrIsPresent(PTADDRDESC pAddr)
 ******************************************************************************/
 BYTE AddrGetByte(PTADDRDESC pAddr)
 {
-    deb.memaccess = GetByte(pAddr->sel, pAddr->offset);
+    deb.memaccess = GetByte(pAddr->sel, CHECK_OEM(CHECK_NOSELF(pAddr->offset)));
 
     return( deb.memaccess & 0xFF );
 }
@@ -101,11 +156,11 @@ DWORD AddrGetDword(PTADDRDESC pAddr)
     DWORD dwValue;
 
     // Do the access check and leave the result in the deb.memaccess
-    deb.memaccess = GetByte(pAddr->sel, pAddr->offset);
+    deb.memaccess = GetByte(pAddr->sel, CHECK_OEM(CHECK_NOSELF(pAddr->offset)));
 
     // Do the actual memory fetch if we could access it
     if( (deb.memaccess & 0x100)==0 )
-        dwValue = GetDWORD(pAddr->sel, pAddr->offset);
+        dwValue = GetDWORD(pAddr->sel, CHECK_OEM(CHECK_NOSELF(pAddr->offset)));
     else
         dwValue = 0xFFFFFFFF;
 
@@ -130,6 +185,23 @@ BOOL GlobalReadDword(DWORD *pDword, DWORD dwAddress)
     *pDword = dwData;
 
     return( TRUE );
+}
+
+/******************************************************************************
+*                                                                             *
+*   void CalcMemAccessChecksum()                                              *
+*                                                                             *
+*******************************************************************************
+*
+*   Computes the checksum of the memory access functions.
+*
+*   Returns:
+*       Stores the checksum in to the local memAccessChecksum variable
+*
+******************************************************************************/
+void CalcMemAccessChecksum()
+{
+    memAccessChecksum = ComputeChecksum((BYTE *)AddrIsPresent, (DWORD)GlobalReadBYTE - (DWORD)AddrIsPresent);
 }
 
 /******************************************************************************
@@ -180,7 +252,7 @@ DWORD AddrSetByte(PTADDRDESC pAddr, BYTE value, BOOL fForce)
     DWORD Access;
     TGDT_Gate *pGdt;
 
-    deb.memaccess = SetByte(pAddr->sel, pAddr->offset, value);
+    deb.memaccess = SetByte(pAddr->sel, CHECK_NOSELF(pAddr->offset), value);
 
     // If the set memory failed, and we really wanted to override
     // protection, use kernel DS selector to set the value, since that is
@@ -196,7 +268,7 @@ DWORD AddrSetByte(PTADDRDESC pAddr, BYTE value, BOOL fForce)
             Addr.sel    = GetKernelDS();
             Addr.offset = GET_GDT_BASE(pGdt) + pAddr->offset;
 
-            deb.memaccess = SetByte(Addr.sel, Addr.offset, value);
+            deb.memaccess = SetByte(Addr.sel, CHECK_NOSELF(Addr.offset), value);
         }
     }
 
@@ -246,15 +318,11 @@ DWORD fnPtr(DWORD arg)
 *   is invalid.
 *
 ******************************************************************************/
-
-// TODO - This function needs to simply set the error number in deb.error and return FALSE
-// TODO - deb.error may need another optional argument to the error code, like in this case
-
 BOOL VerifySelector(WORD Sel)
 {
     if( SelLAR(Sel)==0 )
     {
-        dprinth(1, "Invalid selector 0x%04X", Sel);
+        PostError(ERR_SELECTOR, (UINT) Sel);
 
         return( FALSE );
     }
@@ -331,14 +399,23 @@ BOOL VerifyRange(PTADDRDESC pAddr, DWORD dwSize)
 ******************************************************************************/
 BYTE ComputeChecksum(BYTE *pMem, UINT size)
 {
+    // Junk instructions are added to make it harder to decipher by just
+    // using the disassembler
+    volatile int decoy1, decoy2 = 0;
     BYTE bChecksum = 0;
 
-    while( size-- )
+    while( size-- && decoy2 )
     {
+        if( decoy2<decoy1 )
+            decoy1 = bChecksum + decoy2;
         bChecksum += *pMem++;
+        decoy2 = ((DWORD) pMem) & 0x3F;
     }
 
+    decoy2 = bChecksum + (DWORD)pMem;
     bChecksum = 0xFF - bChecksum;
+    if( decoy1==bChecksum )
+    decoy1 = decoy2 - bChecksum;
 
     return( bChecksum );
 }
@@ -412,3 +489,21 @@ BOOL VerifyMemoryStamp(void)
 
     return( FALSE );
 }
+
+/******************************************************************************
+*                                                                             *
+*   void CalcMemAccessChecksum2()                                             *
+*                                                                             *
+*******************************************************************************
+*
+*   Computes the checksum of the memory access functions.
+*
+*   Returns:
+*       Stores the checksum in to the memAccessChecksum2 variable
+*
+******************************************************************************/
+void CalcMemAccessChecksum2()
+{
+    memAccessChecksum2 = ComputeChecksum((BYTE *)AddrIsPresent, (DWORD)GlobalReadBYTE - (DWORD)AddrIsPresent);
+}
+

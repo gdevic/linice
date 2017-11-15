@@ -1,0 +1,51 @@
+#!/bin/bash
+
+	rm	-rf linice
+	rm	-f  linice.tar
+
+	echo "+-----------------------------------------------------+"
+	echo "| RETAIL:              LINICE                         |"
+	echo "+-----------------------------------------------------+"
+	cd ../linice
+	make clean
+	make retail
+
+	echo "+-----------------------------------------------------+"
+	echo "| RETAIL:              LINSYM                         |"
+	echo "+-----------------------------------------------------+"
+	cd ../linsym
+	make clean
+	make retail
+
+	echo "+-----------------------------------------------------+"
+	echo "| RETAIL:              XICE                           |"
+	echo "+-----------------------------------------------------+"
+	cd ../x
+	make clean
+	make retail
+
+	echo "+-----------------------------------------------------+"
+	echo "| RETAIL:              PACKAGING                      |"
+	echo "+-----------------------------------------------------+"
+	cd ../build
+	mkdir linice
+	cp	../bin/makefile			linice
+	cp	../bin/linsym 			linice
+	cp  ../bin/iceface.c 		linice
+	cp  ../bin/iceface.h		linice
+	cp  ../bin/pcihdr.h			linice
+	cp  ../bin/linice.dat		linice
+	cp	../bin/linice_kernel.o	linice
+	cp	../bin/xice				linice
+
+	cp  ../docs/License.txt		linice
+	cp  ../docs/Readme.txt		linice
+	cp  ../docs/Readme.pdf		linice
+	cp  ../bin/Version.txt		linice
+
+	chmod +644 -R linice
+	chmod +755 -R linice/linsym
+	chmod +755 -R linice/xice
+
+	tar -cvf linice.tar linice
+	gzip linice.tar

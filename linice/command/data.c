@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       05/15/00                                                      *
 *                                                                             *
-*   Copyright (c) 2000 Goran Devic                                            *
+*   Copyright (c) 2000-2004 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -400,11 +400,11 @@ static void DataEdit()
 
     // Print a bottom line message on edit keys. We offer option Tab only
     // for subClass 0-4, that is standard byte, word or dword
-    dprint("%c%c%c%c%c%cValid control keys: %c %c %c %c Enter Esc    %s\r%c",
+    dprint("%c%c%c%c%c%cValid control keys: %s %s %s %s Enter Esc    %s\r%c",
     DP_SAVEXY,
     DP_SETCURSORXY, 1+0, 1+pOut->sizeY-1,
     DP_SETCOLINDEX, COL_HELP,
-    24, 25, 26, 27,
+    "Left", "Right", "Up", "Dn",
     deb.nDumpSize > 4? "":"Tab: Toggle ASCII",
     DP_RESTOREXY);
 

@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       02/26/96                                                      *
 *                                                                             *
-*   Copyright (c) 1996, 2001 Goran Devic                                      *
+*   Copyright (c) 1996-2004 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -81,6 +81,34 @@ typedef struct                          // Free node structure
 *   Functions                                                                 *
 *                                                                             *
 ******************************************************************************/
+
+/******************************************************************************
+*                                                                             *
+*   void DumpHeap(BYTE *pHeap)                                                *
+*                                                                             *
+*******************************************************************************
+*
+*   Dumps the free list of a heap nodes. This is used for debugging of the heap
+*   allocations.
+*
+*   Where:
+*       pHeap is the requested heap
+*
+******************************************************************************/
+void DumpHeap(BYTE *pHeap)
+{
+    Tmalloc *p;
+
+    // Traverse the free list and dump it
+    p = TM(pHeap);
+
+    while( p )
+    {
+        dprinth(1, "%08X  %X (%d)", (DWORD)p, p->size, p->size);
+
+        p = TM(p->next);
+    }
+}
 
 /******************************************************************************
 *                                                                             *
@@ -216,6 +244,9 @@ char *mallocHeap(BYTE *pHeap, UINT size)
     // Also, add the size of the header to be allocated
 
     size = ((size+3) & 0xFFFFFFFC) + HEADER_SIZE;
+
+    // Debug allocations:
+    //dprinth(1, "malloc(%d)", size);
 
     // Traverse the free list and find the first block large enough for the
     // block of the requested size

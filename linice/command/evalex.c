@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       5/15/97                                                       *
 *                                                                             *
-*   Copyright (c) 1997, 2000 Goran Devic                                      *
+*   Copyright (c) 1997-2004 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -369,6 +369,33 @@ static DWORD fnHiword(DWORD arg) { return(arg >> 16);}
 
 /******************************************************************************
 *
+*   BOOL ExItemCompare(TExItem *pItem1, TExItem *pItem2)
+*
+*******************************************************************************
+*
+*   Compares two TExItem structures and returns TRUE if they describe
+*   equivalent value.
+*
+*   Where:
+*       pItem1 - first value
+*       pItem2 - second value
+*
+*   Returns:
+*       TRUE - The two values are equivalent
+*       FALSE - Values are different
+*
+******************************************************************************/
+BOOL ExItemCompare(TExItem *pItem1, TExItem *pItem2)
+{
+    if( pItem1->bType  == pItem2->bType
+    &&  !memcmp(&pItem1->Type, &pItem2->Type, sizeof(TSYMTYPEDEF1)))
+        return( TRUE );
+
+    return( FALSE );
+}
+
+/******************************************************************************
+*
 *   Stack primitives: Operands and Operators
 *
 *******************************************************************************
@@ -412,7 +439,7 @@ static void Push( TStack *Stack, TExItem *pItem )
     if( Stack->Top < MAX_STACK )
         CopyItem(&Stack->Item[Stack->Top++], pItem);
     else
-        deb.error = ERR_TOO_COMPLEX;
+        PostError(ERR_TOO_COMPLEX, 0);
 }
 
 /******************************************************************************
@@ -422,7 +449,7 @@ static void Pop( TStack *Stack, TExItem *pItem )
 {
     if( Stack->Top == 0 )
     {
-        deb.error = ERR_SYNTAX;
+        PostError(ERR_SYNTAX, 0);
     }
 
     CopyItem(pItem, &Stack->Item[ --Stack->Top ]);
@@ -447,7 +474,7 @@ static void PushOp(TOpStack *Stack, BYTE Op)
     if( Stack->Top < MAX_STACK )
         Stack->Op[ Stack->Top++ ] = Op;
     else
-        deb.error = ERR_TOO_COMPLEX;
+        PostError(ERR_TOO_COMPLEX, 0);
 }
 
 /******************************************************************************
@@ -457,7 +484,7 @@ static BYTE PopOp(TOpStack *Stack)
 {
     if( Stack->Top == 0 )
     {
-        deb.error = ERR_SYNTAX;
+        PostError(ERR_SYNTAX, 0);
         return 0;                       // Return something
     }
 
@@ -551,9 +578,9 @@ static BOOL GetHex(UINT *pValue, char **ppString)
     }
 
     if( count<0 )                       // Set error if the number if too big
-        deb.error = ERR_TOO_BIG;
+        PostError(ERR_TOO_BIG, 0);
 
-    if( pChar==*ppString || deb.error ) // Return FALSE if no number was read or error
+    if( pChar==*ppString || deb.errorCode ) // Return FALSE if no number was read or error
         return( FALSE );
 
     *pValue = value;                    // Store the decimal digit final value
@@ -591,14 +618,14 @@ BOOL GetDecB(UINT *pValue, char **ppString)
         // Check for overflow (number too big)
         // Max digit is 4294967295
         if( value>429496729 )
-            deb.error = ERR_TOO_BIG;
+            PostError(ERR_TOO_BIG, 0);
 
         value *= 10;
         value += digit - '0';
         pChar++;
     }
 
-    if( pChar==*ppString || deb.error )
+    if( pChar==*ppString || deb.errorCode )
         return( FALSE );
 
     *pValue = value;                    // Store the decimal digit final value
@@ -857,7 +884,7 @@ static BOOL GetValue( TExItem *item, char **sExpr, int nTokenLen )
             item->Data |= *pToken++;
         }
         if( *pToken!='\'' )             // Non-terminated character constant 'abc'
-            deb.error = ERR_SYNTAX;
+            PostError(ERR_SYNTAX, 0);
 
         item->bType = EXTYPE_LITERAL;   // This was a literal type
         item->pData = (BYTE *)&item->Data;
@@ -914,7 +941,7 @@ static BOOL GetValue( TExItem *item, char **sExpr, int nTokenLen )
             item->pData = (BYTE *)&item->Data;
         }
         else
-            deb.error = ERR_BPNUM;
+            PostError(ERR_BPNUM, 0);
     }
     else
     //----------------------------------------------------------------------------------
@@ -988,17 +1015,21 @@ static BOOL EvalGetTypeCast( TExItem *Item, char **sExpr, int nTokenLen )
 {
     TSYMTYPEDEF1 *pType1;
 
-    // Get the type of the given token
-    if( (pType1 = Type2Typedef(*sExpr, nTokenLen, deb.pFnScope->file_id)) )
+    // We can type cast only if we have active symbols and scope loaded
+    if( deb.pFnScope )
     {
-        // Type was found. Copy its descriptor into the item and get the canonical version of it
-        memcpy(&Item->Type, pType1, sizeof(TSYMTYPEDEF1));
+        // Get the type of the given token
+        if( (pType1 = Type2Typedef(*sExpr, nTokenLen, deb.pFnScope->file_id)) )
+        {
+            // Type was found. Copy its descriptor into the item and get the canonical version of it
+            memcpy(&Item->Type, pType1, sizeof(TSYMTYPEDEF1));
 
-        TypedefCanonical(&Item->Type);
+            TypedefCanonical(&Item->Type);
 
-        Item->bType = EXTYPE_SYMBOL;    // This item is a symbol type now...
+            Item->bType = EXTYPE_SYMBOL;    // This item is a symbol type now...
 
-        return( TRUE );
+            return( TRUE );
+        }
     }
 
     return( FALSE );
@@ -1071,7 +1102,7 @@ static BOOL EvalGetArray( TStack *Values, TOpStack *Operators, TExItem *Item )
             }
         }
     }
-    deb.error = ERR_NOTARRAY;
+    PostError(ERR_NOTARRAY, 0);
 
     return( FALSE );
 }
@@ -1251,7 +1282,7 @@ static void Execute( TStack *Values, int Operation )
                 break;
 
             default:
-                deb.error = ERR_INVALIDOP;
+                PostError(ERR_INVALIDOP, 0);
                 break;
         }
 
@@ -1332,14 +1363,14 @@ static void Execute( TStack *Values, int Operation )
             if( Data2 )
                 itemTop.Data = Data1 / Data2;
             else
-                deb.error = ERR_DIV0;
+                PostError(ERR_DIV0, 0);
             break;
         //--------------------------------------------------------------------
         case OP_MOD:
             if( Data2 )
                 itemTop.Data = Data1 % Data2;
             else
-                deb.error = ERR_DIV0;
+                PostError(ERR_DIV0, 0);
             break;
         //--------------------------------------------------------------------
         case OP_NOT:
@@ -1368,7 +1399,9 @@ static void Execute( TStack *Values, int Operation )
             break;
         //--------------------------------------------------------------------
         case OP_LINE_NUMBER:
-            itemTop.Data = SymLinNum2Address(Data1);   // TEST
+            // Line number has to have the corresponding address, report error otherwise
+            if( (itemTop.Data = SymLinNum2Address(Data1))==0 )
+                PostError(ERR_BPLINE, 0);
             break;
         //--------------------------------------------------------------------
         case OP_SELECTOR:   // Selector:offset
@@ -1379,7 +1412,9 @@ static void Execute( TStack *Values, int Operation )
             itemTop.Data  = Data2;                      // Offset
             itemTop.pData = (BYTE*) &itemTop.Data;
             if(Data1 > 0xFFFF)                          // Selector has to be the valid size
-                deb.error = ERR_SELECTOR;
+                PostError(ERR_SELECTOR, (UINT) Data1);
+
+            evalSel = Data1;                            // Selector
 
             // Do a separate ending since we changed the item type
             Push(Values, &itemTop);
@@ -1422,7 +1457,7 @@ static void Execute( TStack *Values, int Operation )
 *
 *   Returns:
 *       TRUE - expression evaluated ok and the item is stored
-*       FALSE - error evalauting expression; deb.error has the error code
+*       FALSE - error evalauting expression; deb.errorCode has the error code
 *
 ******************************************************************************/
 BOOL Evaluate(TExItem *pItem, char *pExpr, char **ppNext, BOOL fSymbolsValueOf)
@@ -1436,7 +1471,7 @@ BOOL Evaluate(TExItem *pItem, char *pExpr, char **ppNext, BOOL fSymbolsValueOf)
     int nTokenLen;                      // Length of the input token
     int nFunc1;                         // Temp index of the function
 
-    deb.error = 0;                      // Reset the error variable to no error
+//  deb.error = NOERROR;                // Reset the error variable to no error (TODO: ???)
     fDecimal = FALSE;                   // Do not expect decimal number at first
 
     // If the ppNext is NULL, we will use local pointer instead
@@ -1455,7 +1490,7 @@ BOOL Evaluate(TExItem *pItem, char *pExpr, char **ppNext, BOOL fSymbolsValueOf)
     // Precondition: both input arguments are now valid
 
     // Loop for every token in the input string, bail out on any kind of error
-    while( NextToken(&pExpr) && !deb.error )
+    while( NextToken(&pExpr) && !deb.errorCode )
     {
         if( fExpectValue )
         {
@@ -1543,14 +1578,14 @@ BOOL Evaluate(TExItem *pItem, char *pExpr, char **ppNext, BOOL fSymbolsValueOf)
                 // Right bracket needs stack unwinding: ]
                 if( NewOp==OP_BRACKET_END )
                 {
-                    while( PeekOp(&Operators)!=OP_BRACKET_START && !deb.error)
+                    while( PeekOp(&Operators)!=OP_BRACKET_START && !deb.errorCode)
                     {
                         Execute(&Values, PopOp(&Operators));
                     }
 
                     // Here we have to find left bracket, otherwise it's syntax error
                     if( PopOp(&Operators)!=OP_BRACKET_START )
-                        deb.error = ERR_SYNTAX;
+                        PostError(ERR_SYNTAX, 0);
 
                     // Evaluate the array index
                     EvalGetArray(&Values, &Operators, &Item);
@@ -1561,14 +1596,14 @@ BOOL Evaluate(TExItem *pItem, char *pExpr, char **ppNext, BOOL fSymbolsValueOf)
                 // Right parenthesis needs stack unwinding
                 if( NewOp==OP_PAREN_END )
                 {
-                    while( PeekOp(&Operators)!=OP_PAREN_START && !deb.error)
+                    while( PeekOp(&Operators)!=OP_PAREN_START && !deb.errorCode)
                     {
                         Execute(&Values, PopOp(&Operators));
                     }
 
                     // Here we have to find left paren, otherwise it's syntax error
                     if( PopOp(&Operators)!=OP_PAREN_START )
-                        deb.error = ERR_SYNTAX;
+                        PostError(ERR_SYNTAX, 0);
 
                     continue;
                 }
@@ -1603,7 +1638,7 @@ BOOL Evaluate(TExItem *pItem, char *pExpr, char **ppNext, BOOL fSymbolsValueOf)
     }
 
     // At this point the opeator stack should be empty, and the value stack should have only value in it
-    if( IsEmptyOp(&Operators) && Values.Top==1 && !deb.error)
+    if( IsEmptyOp(&Operators) && Values.Top==1 && !deb.errorCode)
     {
         // Success!
         *ppNext = pExpr;
@@ -1612,10 +1647,9 @@ BOOL Evaluate(TExItem *pItem, char *pExpr, char **ppNext, BOOL fSymbolsValueOf)
 
         return( TRUE );
     }
-    else
-    // If something was wrong, and error was not assigned, set the syntax error
-        if( !deb.error )
-            deb.error = ERR_SYNTAX;
+
+    // If we did not return due to the previous clause, post a syntax error if no other error was logged
+    PostError(ERR_SYNTAX, 0);
 
     return( FALSE );
 }
@@ -1650,17 +1684,12 @@ BOOL Expression(DWORD *pValue, char *pExpr, char **ppNext)
         // Literal contains the value in the *pData
         // Register contains the register value in the *pData
         // Symbol contains the address of the symbol in *pData
+        // Address contains the offset in *pData
 
-        if( Item.bType!=EXTYPE_ADDRESS )
-        {
-            // Assign the value from the item pointer
-            *pValue = *(DWORD *)Item.pData;
+        // Assign the value from the item pointer
+        *pValue = *(DWORD *)Item.pData;
 
-            return( TRUE );
-        }
-
-        // Expecting value, not address
-        deb.error = ERR_ADDRESS;
+        return( TRUE );
     }
 
     return( FALSE );
@@ -1743,7 +1772,7 @@ BOOL cmdEvaluate(char *args, int subClass)
         }
     }
     else
-        deb.error = ERR_EXP_WHAT;
+        PostError(ERR_EXP_WHAT, 0);
 
     return( TRUE );
 }

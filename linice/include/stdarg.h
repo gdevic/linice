@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       04/20/96                                                      *
 *                                                                             *
-*   Copyright (c) 2003 Goran Devic                                            *
+*   Copyright (c) 1996-2004 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *

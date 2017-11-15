@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       05/23/2003                                                    *
 *                                                                             *
-*   Copyright (c) 1996-2003 Goran Devic                                       *
+*   Copyright (c) 1996-2004 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -178,11 +178,13 @@ int GetByte(WORD sel, DWORD offset)
     {
         return(*(BYTE *)offset);
     }
+#if 0
     else
     if(offset>=PAGE_OFFSET && offset<(PAGE_OFFSET+SIM_PAGE_OFFSET_SIZE))
     {
         return(*(BYTE *)(offset - PAGE_OFFSET + pPageOffset));
     }
+#endif
     return( 0x100 );
 }
 
@@ -192,11 +194,13 @@ DWORD GetDWORD(WORD sel, DWORD offset)
     {
         return(*(DWORD *)offset);
     }
+#if 0
     else
     if(offset>=PAGE_OFFSET && offset<(PAGE_OFFSET+SIM_PAGE_OFFSET_SIZE))
     {
         return(*(DWORD *)(offset - PAGE_OFFSET + pPageOffset));
     }
+#endif
     return( 0x100 );
 }
 
@@ -254,6 +258,13 @@ DWORD SelLAR(WORD Sel)
     return( 1 );
 }
 
+DWORD GetRdtsc(BYTE *p)
+{
+    BYTE b = *(p+7);
+    b++;
+    *(p+7) = b;
+    return(b);
+}
 
 void LocalCLI()
 {
@@ -299,6 +310,14 @@ void GetSysreg( TSysreg * pSys )
 void SetSysreg( TSysreg * pSys )
 {
 //    assert(0);
+}
+
+void SetDebugReg(TSysreg * pSys)
+{
+}
+
+void FlushTLB(void)
+{
 }
 
 void memset_w(void *dest, WORD data, int size)
@@ -385,5 +404,26 @@ DWORD Inpd(DWORD port)
 {
     assert(0);
     return( 0xFFFFFFFF );
+}
+
+void ArmHookSwitch(void)
+{
+}
+
+void InsertTaskSwitchHandler()
+{
+}
+
+DWORD Checksum1(DWORD start, DWORD len)
+{
+    return( 0 );
+}
+
+void ObjectStart(void)
+{
+}
+
+void ObjectEnd(void)
+{
 }
 

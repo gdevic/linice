@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       10/26/03                                                      *
 *                                                                             *
-*   Copyright (c) 2003 Goran Devic                                            *
+*   Copyright (c) 2003-2004 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -136,7 +136,7 @@ BOOL ParseDump(BYTE *pBuf)
             SecStrtab = SecCurr;
 
         // Dump the section header setting
-#if 0
+#if 1
         {
             static const char *SecType[] =
             {
@@ -170,7 +170,7 @@ BOOL ParseDump(BYTE *pBuf)
             printf("Elf32_Word sh_entsize   = %04X\n", SecCurr->sh_entsize  );
         }
 #endif
-#if 0
+#if 1
         printf("%s\n", pBuf + SecName->sh_offset + SecCurr->sh_name );
 #endif
     }
@@ -235,13 +235,15 @@ BOOL ParseDump(BYTE *pBuf)
                 break;
 
                 case N_STSYM:
+// TODO: This is wrong - a static symbol can be in .data or .rodata section or even in .bss
                     printf("STSYM  ");
-                    printf("line: %d DSS  %08lX  %s\n", pStab->n_desc, pStab->n_value, pStr);
+                    printf("line: %d segment-???  %08lX  %s\n", pStab->n_desc, pStab->n_value, pStr);
                 break;
 
                 case N_LCSYM:
+// TODO: This is wrong - a static symbol can be in .data or .rodata section or even in .bss
                     printf("LCSYM  ");
-                    printf("line: %d BSS %08lX  %s\n", pStab->n_desc, pStab->n_value, pStr);
+                    printf("line: %d segment-??? %08lX  %s\n", pStab->n_desc, pStab->n_value, pStr);
                 break;
 
                 case N_MAIN:

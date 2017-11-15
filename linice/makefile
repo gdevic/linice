@@ -1,10 +1,11 @@
 ##############################################################################
-#
-#	Makefile for LINICE kernel module
-#
-#	(c) 2000-2003 Goran Devic
-#	(c) "Linice" by Goran Devic
-#
+#																			 #
+#	Makefile for LINICE kernel module										 #
+#																			 #
+#	(c) 2000-2004 Goran Devic												 #
+#	(c) "Linice" by Goran Devic												 #
+#	(c) "Linsym" by Goran Devic												 #
+#																			 #
 ##############################################################################
 
 #-----------------------------------------------------------------------------
@@ -16,38 +17,114 @@ H1  = ../include
 H2  = ../bin
 
 #-----------------------------------------------------------------------------
-# Compiler defines
+# Compiler defines:
+#	make retail			- retail build
+#	make nvidia			- retail build - OEM nVidia
+#	make debug			- engineering debug build (default)
+#   make nd				- engineering non-debug build
+#-----------------------------------------------------------------------------
+# Defines that are recognized by the code:
+# 	NOSELF   - Linice is built so it cannot debug itself
+# 	NO_OEM   - Linice is built so it cannot debug module NVIDIA.O
+# 	NVIDIA   - Message about the special build for NVIDIA
+#   NEEDNV	 - Linice is built so it needs NV hardware to run
+# 	MESSAGES - Random messages
+#
+
+#-----------------------------------------------------------------------------
+# Compiler defines: Engineering DEBUG build (Development, default)
 #-----------------------------------------------------------------------------
 
-#DEF = -D__KERNEL__ -D_LOOSE_KERNEL_NAMES -DMODULE -DLINUX -DDBG
-#DEF = -D__KERNEL__ -D_LOOSE_KERNEL_NAMES -DMODULE -DLINUX
+DEF    = -DMODULE -DLINUX -DDBG
+CFLAGS = -gstabs+ -Wall $(DEF) -O -I$(INC) -I$(H1) -I$(H2)
+
+#-----------------------------------------------------------------------------
+# Compiler defines: Engineering NON-DEBUG build
+#-----------------------------------------------------------------------------
+ifeq ($(MAKECMDGOALS),nd)
 
 DEF = -DMODULE -DLINUX
+CFLAGS = -Wall $(DEF) -O2 -I$(INC) -I$(H1) -I$(H2)
 
-CFLAGS = -gstabs+ -Wall $(DEF) -O -I$(INC) -I$(H1) -I$(H2)
-#CFLAGS =         -Wall $(DEF) -O -I$(INC) -I$(H1) -I$(H2)
+endif
+#-----------------------------------------------------------------------------
+# Compiler defines: RETAIL build
+#-----------------------------------------------------------------------------
+ifeq ($(MAKECMDGOALS),retail)
+
+# NOSELF   - Linice is built so it cannot debug itself
+# NO_OEM   - Linice is built so it cannot debug module NVIDIA.O
+# NVIDIA   - Message about the special build for NVIDIA
+# NEEDNV   - Linice is built so it needs NV hardware to run
+# MESSAGES - Random messages
+
+DEF = -DMODULE -DLINUX -DNOSELF -DNO_OEM -DMESSAGES	-DNEEDNV
+CFLAGS = -Wall $(DEF) -O2 -I$(INC) -I$(H1) -I$(H2)
+
+endif
+#-----------------------------------------------------------------------------
+# Compiler defines: NVIDIA build
+#-----------------------------------------------------------------------------
+ifeq ($(MAKECMDGOALS),nvidia)
+
+# NOSELF   - Linice is built so it cannot debug itself
+# NVIDIA   - Message about the special build for NVIDIA
+# NEEDNV   - Linice is built so it needs NV hardware to run
+
+DEF = -DMODULE -DLINUX -DNOSELF -DNVIDIA -DNEEDNV
+CFLAGS = -Wall $(DEF) -O2 -I$(INC) -I$(H1) -I$(H2)
+
+endif
 
 #-----------------------------------------------------------------------------
-# Compiler and assembler that is used. nasm is a mandatory assembler.
+# Compiler and assembler that are used. nasm is a mandatory assembler.
 #-----------------------------------------------------------------------------
 
 CC = gcc
 AS = nasm
 
-all:	../bin/linice_kernel.o
+#-----------------------------------------------------------------------------
+# Formal targets
+#-----------------------------------------------------------------------------
+
+debug:	../bin/linice_kernel.o ../bin/Version.txt
+
+nd:		../bin/linice_kernel.o ../bin/Version.txt
+	perl strip_symbols.pl ../bin/linice_kernel.o
+
+retail:	../bin/linice_kernel.o ../bin/Version.txt
+	perl strip_symbols.pl ../bin/linice_kernel.o
+
+nvidia:	../bin/linice_kernel.o ../bin/Version.txt
+	perl strip_symbols.pl ../bin/linice_kernel.o
+
+all:	../bin/linice_kernel.o ../bin/Version.txt
 
 clean:
 	rm -f ../bin/linice_kernel.o
 	rm -f *.o *~ core
+	rm -f ../bin/Version.txt
+
+#-----------------------------------------------------------------------------
+# List of object modules that build the target
+#-----------------------------------------------------------------------------
+
+# Generate a version text file (version + date/time stamp)
+
+../bin/Version.txt:
+	@perl make_version.pl
 
 ../bin/linice_kernel.o:		\
+			objectstart.o	\
 			driver.o		\
+			i386.o			\
 			malloc.o		\
 			memaccess.o		\
 			evalex.o		\
 			init.o			\
 			errors.o		\
 			syscall.o		\
+			task.o		    \
 			symbolTable.o	\
 			symbols.o		\
 			context.o		\
@@ -80,6 +157,7 @@ clean:
 			pci.o			\
 			flow.o			\
 			history.o		\
+			messages.o		\
 			input.o			\
 			keyboard.o		\
 			vt100i.o		\
@@ -92,8 +170,11 @@ clean:
 			mda.o			\
 			lfb.o			\
             vt100o.o		\
-			i386.o
+			objectend.o
 	$(LD) -r $^ -o ../bin/linice_kernel.o
+
+objectstart.o:	objectstart.c
+	$(CC) $(CFLAGS) -c objectstart.c
 
 driver.o:	driver.c
 	$(CC) $(CFLAGS) -c driver.c
@@ -112,6 +193,9 @@ errors.o:		errors.c
 
 syscall.o:		syscall.c
 	$(CC) $(CFLAGS) -c syscall.c
+
+task.o:			task.c
+	$(CC) $(CFLAGS) -c task.c
 
 symbolTable.o:		symbolTable.c
 	$(CC) $(CFLAGS) -c symbolTable.c
@@ -148,6 +232,9 @@ apic.o:		apic.c
 
 history.o:	history.c
 	$(CC) $(CFLAGS) -c history.c
+
+messages.o:	messages.c
+	$(CC) $(CFLAGS) -c messages.c
 
 debugger.o:	command/debugger.c
 	$(CC) $(CFLAGS) -c command/debugger.c
@@ -250,3 +337,6 @@ vt100o.o:	output/vt100o.c
 
 i386.o:		i386.asm
 	$(AS) -f elf i386.asm -o i386.o
+
+objectend.o:	objectend.c
+	$(CC) $(CFLAGS) -c objectend.c

@@ -1,40 +1,56 @@
 #=============================================================================
 #
-# Final user Makefile for the linice module
+# Final user Makefile for the Linice module
 #
 #=============================================================================
 
-# Set the configure defines that the target kernel was compiled with
+#=============================================================================
+# Start of the user configuration section
+#=============================================================================
+# Set the configure defines that the target kernel was compiled with. This has
+# to match the target kernel.
 
+#-----------------------------------------------------------------------------
+# Select the optional IO APIC and SMP machine build
+#-----------------------------------------------------------------------------
 #TARGET = -DSMP -DIO_APIC
 TARGET =
 
+#-----------------------------------------------------------------------------
 # Set the include path of kernel headers that this module will be supporting
-#INC = /usr/include
+#-----------------------------------------------------------------------------
 INC = /lib/modules/`uname -r`/build/include
-#INC = ../linux-2.4.18-3/include
 
-# Set the compiler flags - note that you have to specify at least -O when
-# compiling a Linux kernel
-CFLAGS = -gstabs+ -Wall -O
+#-----------------------------------------------------------------------------
+# Set the compiler flags
+#-----------------------------------------------------------------------------
+CFLAGS = -gstabs+ -Wall -O -DDBG
 #CFLAGS = -Wall -O
-#CFLAGS = -O
 
-DEF = $(TARGET) -I$(INC) -D__KERNEL__ -D_LOOSE_KERNEL_NAMES -DMODULE -DLINUX -DDBG
-#DEF = $(TARGET) -I$(INC) -D__KERNEL__ -D_LOOSE_KERNEL_NAMES -DMODULE -DLINUX
+#-----------------------------------------------------------------------------
+# Enable if you wish to include full PCI strings header, or comment it out
+# to make the final module a bit smaller (by about ~300K)
+#-----------------------------------------------------------------------------
+#PCIHDR = PCIHDR
+
+#=============================================================================
+# End of the user configuration section
+#=============================================================================
+
+DEF = $(TARGET) -I$(INC) -D__KERNEL__ -D_LOOSE_KERNEL_NAMES -DMODULE -DLINUX -D_$(PCIHDR)
 
 CC = gcc
 
 
 linice.o:	linice_kernel.o iceface.o
-	$(LD) -r $^ -o ../bin/linice.o
+	$(LD) -r $^ -o linice.o
 	@echo ------------------------------------------------------------------------------
 	@echo Creating linice_`uname -r` and copying kernel-dependent module...
 	@mkdir -p linice_`uname -r`
 	@cp -f linice.o linice_`uname -r`
 	@rm -f linice.o
 	@echo ------------------------------------------------------------------------------
-	@echo Done.
+	@echo Done. You may now run \"linsym -i\" to install the linice module.
 
 iceface.o:	iceface.c
 	$(CC) $(CFLAGS) $(DEF) -c iceface.c -o iceface.o

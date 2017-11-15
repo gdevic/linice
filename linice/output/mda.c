@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       04/22/02                                                      *
 *                                                                             *
-*   Copyright (c) 2002 Goran Devic                                            *
+*   Copyright (c) 2002-2004 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *

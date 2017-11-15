@@ -41,7 +41,7 @@
 extern PSTR dfs;
 
 extern WORD GetFileId(char *pSoDir, char *pSo);
-
+extern BYTE GlobalsName2SectionNumber(char *pName);
 
 /******************************************************************************
 *                                                                             *
@@ -67,6 +67,7 @@ static BOOL StoreStaticVariableData(int fd, FILE *fStatics, int nStatics, int fi
 {
     TSYMSTATIC *pStatic;                // Pointer to the buffer
     TSYMSTATIC1 *pStatic1;              // Pointer to the element
+    int nSegment;                       // Variable segment number
 
     // Rewind the temporary file
     fseek(fStatics, 0L, SEEK_SET);
@@ -90,7 +91,8 @@ static BOOL StoreStaticVariableData(int fd, FILE *fStatics, int nStatics, int fi
 
         while( nStatics-- )
         {
-            fscanf(fStatics, "%08X %d %d\n", &pStatic1->dwAddress, (int *) &pStatic1->pName, (int *) &pStatic1->pDef);
+            fscanf(fStatics, "%08X %d %d %d\n", &pStatic1->dwAddress, (int *) &pStatic1->pName, (int *) &pStatic1->pDef, &nSegment);
+            pStatic1->bSegment = (BYTE) nSegment;
 
             pStatic1++;
         }
@@ -127,6 +129,7 @@ BOOL ParseStatic(int fd, int fs, BYTE *pBuf)
     WORD file_id = 0;                   // Current file ID number
     int nCurrentSection;                // Current string section offset
     int nSectionSize;                   // Current section string size
+    int nSegment;                       // Variable segment number
 
     Elf32_Ehdr *pElfHeader;             // ELF header
 
@@ -216,6 +219,9 @@ BOOL ParseStatic(int fd, int fs, BYTE *pBuf)
 
                     // Found a static symbol, write out the address and offsets to name and definition
 
+                    // Get the segment number while we have the name string intact
+                    nSegment = GlobalsName2SectionNumber(pStr);
+
                     //--------------------------------------------------------------------------------
                     // Print the address and the offset to the name (first)
                     fprintf(fStatics, "%08X %d ", (DWORD) pStab->n_value, (int) dfs);
@@ -231,7 +237,7 @@ BOOL ParseStatic(int fd, int fs, BYTE *pBuf)
 
                     //--------------------------------------------------------------------------------
                     // Print the offset to the definition
-                    fprintf(fStatics, "%d\n", (int) dfs);   // End up with the offset to the definition
+                    fprintf(fStatics, "%d ", (int) dfs);    // Continue with the offset to the definition
 
                     pStr = pStr + nLen + 1;                 // Point to the definition string
                     nLen = strlen(pStr) + 1;                // Add 1 for the zero-termination
@@ -239,6 +245,9 @@ BOOL ParseStatic(int fd, int fs, BYTE *pBuf)
                     write(fs, pStr, nLen);
                     dfs += nLen;
 
+                    //--------------------------------------------------------------------------------
+                    // Print the segment number in which the variable resides
+                    fprintf(fStatics, "%d\n", nSegment);    // End with the segment number
 
                     // Increment the number of static symbols
                     nStatics++;

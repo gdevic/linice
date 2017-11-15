@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       10/28/03                                                      *
 *                                                                             *
-*   Copyright (c) 2003 Goran Devic                                            *
+*   Copyright (c) 2003-2004 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -36,17 +36,25 @@
 #ifndef _ICE_VERSION_H_
 #define _ICE_VERSION_H_
 
+// These defines are processed during the build process, so they may not need
+// to change names. At this point I dont anticipate that those 3 version
+// numbers should ever be different for a single build, so they are defined
+// using the same root defines.
+
+#define MAJOR_VERSION       1   // (Keep this comment for the Perl script)
+#define MINOR_VERSION       0   // (Keep this comment for the Perl script)
+
 // Define current Linice version
 //
-#define LINICEVER           0x0100          // Version 1.0
+#define LINICEVER           ((MAJOR_VERSION << 8) | (MINOR_VERSION))
 
 // Define current symbol file version
 //
-#define SYMVER              0x0100          // Version 1.0
+#define SYMVER              ((MAJOR_VERSION << 8) | (MINOR_VERSION))
 
 // Define current linsym program version
 //
-#define LINSYMVER           0x0100          // Version 1.0
+#define LINSYMVER           ((MAJOR_VERSION << 8) | (MINOR_VERSION))
 
 
 #endif //  _ICE_VERSION_H_

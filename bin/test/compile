@@ -4,6 +4,6 @@ gcc -gstabs+ -Wall -dp -DDBG hello.c -o hello
 gcc -gstabs+ -Wall -dp -DDBG int3.c -o int3
 gcc -gstabs+ -Wall -dp -DDBG app12.c app22.c -o app
 
-gcc -gstabs+ -Wall -dp -O0 -I/lib/modules/`uname -r`/build/include -D__KERNEL__ -D_LOOSE_KERNEL_NAMES -DLINUX -DDBG -c module.c
-gcc -gstabs+ -Wall -dp -O0 -I/lib/modules/`uname -r`/build/include -D__KERNEL__ -D_LOOSE_KERNEL_NAMES -DLINUX -DDBG -c modlp.c
-gcc -gstabs+ -Wall -dp -O0 -I/lib/modules/`uname -r`/build/include -D__KERNEL__ -D_LOOSE_KERNEL_NAMES -DLINUX -DDBG -c modscope.c
+gcc -gstabs+ -Wall -dp -I/lib/modules/`uname -r`/build/include -D__KERNEL__ -D_LOOSE_KERNEL_NAMES -DLINUX -DDBG -c module.c
+gcc -gstabs+ -Wall -dp -I/lib/modules/`uname -r`/build/include -D__KERNEL__ -D_LOOSE_KERNEL_NAMES -DLINUX -DDBG -c modlp.c
+gcc -gstabs+ -Wall -dp -I/lib/modules/`uname -r`/build/include -D__KERNEL__ -D_LOOSE_KERNEL_NAMES -DLINUX -DDBG -c modscope.c

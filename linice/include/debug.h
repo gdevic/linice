@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       09/03/00                                                      *
 *                                                                             *
-*   Copyright (c) 2001 Goran Devic                                            *
+*   Copyright (c) 2000-2004 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -42,31 +42,56 @@
 *                                                                             *
 ******************************************************************************/
 
+// We define this differently for MSVC and GCC. The former is used with the
+// SIM define.
+
 #ifdef DBG // ----------------------------------------------------------------
+#ifndef SIM
 
 extern int ice_debug_level;
+extern void kPrint(char *p, ...);
 
-#define INFO(args)                                          \
+#define INFO(args...)                                       \
 {                                                           \
     if(ice_debug_level > 0)                                 \
     {                                                       \
-        printk("Info: %s,%d: ", __FILE__, __LINE__);        \
-        printk##args;                                       \
+        kPrint("Info: %s,%d: ", __FILE__, __LINE__);        \
+        kPrint( args );                                     \
     }                                                       \
 }
 
 
-#define ERROR(args)                                         \
+#define ERROR(args...)                                      \
 {                                                           \
-    printk("Error: %s,%d: ", __FILE__, __LINE__);           \
-    printk##args;                                           \
+    kPrint("Error: %s,%d: ", __FILE__, __LINE__);           \
+    kPrint(args);                                           \
 }
 
+#else // SIM
+
+#define INFO(args)                                          \
+    kPrint("Info: %s,%d: ", __FILE__, __LINE__);            \
+    kPrint( ##args );                                       \
+
+#define ERROR(args)                                         \
+    kPrint("Error: %s,%d: ", __FILE__, __LINE__);           \
+    kPrint( ##args );                                       \
+
+#endif // SIM
 
 #else // DBG -----------------------------------------------------------------
 
-#define INFO(args)      do{;}while(0)
-#define ERROR(args)     do{;}while(0)
+#ifndef SIM
+
+#define INFO(args...)
+#define ERROR(args...)
+
+#else // SIM
+
+#define INFO(args...)      do{;}while(0)
+#define ERROR(args...)     do{;}while(0)
+
+#endif // SIM
 
 #endif // DBG ----------------------------------------------------------------
 

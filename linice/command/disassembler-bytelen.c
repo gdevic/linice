@@ -4,6 +4,8 @@
 *                                                                             *
 *   Date:       06/11/01                                                      *
 *                                                                             *
+*   Copyright (c) 2000-2004 Goran Devic                                       *
+*                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
 *   This source code and produced executable is copyrighted by Goran Devic.   *
@@ -131,6 +133,35 @@ static DWORD GetNextDword(void)
 *   Functions                                                                 *
 *                                                                             *
 ******************************************************************************/
+
+/******************************************************************************
+*                                                                             *
+*   int GetInstructionLen(WORD cs, DWORD eip)                                 *
+*                                                                             *
+*******************************************************************************
+*
+*   Top level generic function that returns the length of the instruction
+*   addressed by eip. The code and data are assumed 32-bit.
+*
+*   Where:
+*       cs, eip is the address of the 32-bit instruction
+*
+*   Returns:
+*       Instruction length at that address
+*
+******************************************************************************/
+int GetInstructionLen(WORD cs, DWORD eip)
+{
+    TDISASM Dis;                        // Disassembler interface structure
+
+    // Get the size in bytes of the current instruction and its flags
+    Dis.bState   = DIS_DATA32 | DIS_ADDRESS32;
+    Dis.wSel     = cs;
+    Dis.dwOffset = eip;
+    DisassemblerLen(&Dis);
+
+    return( Dis.bInstrLen );
+}
 
 /******************************************************************************
 *                                                                             *

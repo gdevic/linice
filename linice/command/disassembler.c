@@ -4,6 +4,8 @@
 *                                                                             *
 *   Date:       03/17/00                                                      *
 *                                                                             *
+*   Copyright (c) 2000-2004 Goran Devic                                       *
+*                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
 *   This source code and produced executable is copyrighted by Goran Devic.   *
@@ -60,11 +62,16 @@ extern char *SymFnScope2Local(TSYMFNSCOPE *pFnScope, DWORD ebpOffset);
 extern char *SymAddress2FunctionName(WORD wSel, DWORD dwOffset);
 extern char *SymAddress2Name(WORD wSel, DWORD dwOffset);
 
+extern void CalcMemAccessChecksum2();
+
 /******************************************************************************
 *                                                                             *
 *   Local Defines, Variables and Macros                                       *
 *                                                                             *
 ******************************************************************************/
+
+BYTE memAccessChecksum2;                // Protection: Memory access functions checksum
+extern BYTE memAccessChecksum;          // Protection: First checksum (memaccess.c)
 
 static TADDRDESC Addr;                  // Current address descriptor
 static BYTE * bpCode;                   // Pointer to code bytes
@@ -193,6 +200,10 @@ BYTE Disassembler( PTDISASM pDis )
     Addr.sel = pDis->wSel;              // Copy the access selector
     Addr.offset = pDis->dwOffset;       // Copy the access offset
 
+    // Protection: calculate memory access checksum and advance the address if the
+    // values dont match
+    CalcMemAccessChecksum2();
+
     bSegOverride = 0;                   // Set default segment (no override)
     nPos = 0;                           // Reset printing position
     sPtr = NULL;                        // Points to no message by default
@@ -201,10 +212,16 @@ BYTE Disassembler( PTDISASM pDis )
     pDis->dwTargetAddress = 0;          // Reset target address and data values
     pDis->dwTargetData    = 0;
 
+    // Protection: This should make it 0
+    memAccessChecksum2 = memAccessChecksum2 - memAccessChecksum;
+
     do
     {
         bOpcode = NEXTBYTE;     // Get the first opcode byte from the target address
         p = &Op1[bOpcode];      // Get the address of the instruction record
+
+        // Protection: Mange flags if the memAccessChecksum2 is not 0
+        p->flags |= memAccessChecksum2;
 
         if( p->flags & DIS_SPECIAL )
         {

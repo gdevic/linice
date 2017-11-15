@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       05/16/00                                                      *
 *                                                                             *
-*   Copyright (c) 2000 Goran Devic                                            *
+*   Copyright (c) 2000-2004 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -769,7 +769,7 @@ BOOL cmdEnterCode(char *args, int subClass)
         }
     }
     else
-        deb.error = ERR_SYNTAX;
+        PostError(ERR_SYNTAX, 0);
 
     return( TRUE );
 }
@@ -809,10 +809,10 @@ BOOL cmdHere(char *args, int subClass)
             }
         }
         else
-            deb.error = ERR_SYNTAX;
+            PostError(ERR_SYNTAX, 0);
     }
     else
-        deb.error = ERR_SYNTAX;
+        PostError(ERR_SYNTAX, 0);
 
     return( TRUE );
 }

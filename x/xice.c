@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       05/20/01                                                      *
 *                                                                             *
-*   Copyright (c) 2001 Goran Devic                                            *
+*   Copyright (c) 2001-2004 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -206,7 +206,7 @@ TXINITPACKET *CollectDisplayInfo(char *sDisplay, BOOL fQuery)
                                 // Unsupported pixel format.. Can't use!
                                 default:
                                     fprintf(stderr, "FAILED: Unsupported pixel depth of %d !\n", depth);
-                                    
+
                                     return( NULL );
                                 break;
                             }
@@ -403,7 +403,7 @@ int main(int argc, char **argp)
             return( -1 );
         }
     }
-    
+
     if( pInit )
     {
         // Send the info packet down to the Linice module

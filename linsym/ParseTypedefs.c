@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       09/05/00                                                      *
 *                                                                             *
-*   Copyright (c) 2001 Goran Devic                                            *
+*   Copyright (c) 2000-2004 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -634,15 +634,24 @@ ProcessType:
 
                     nExType = nExType + 1;                  // New external type record
 
-                    // Add the include to the list of external include files
+                    // TODO: This is a bug, We should never be in this situation. Investigate...
+                    if(nExType<MAX_EXTYPEDEF)
+                    {
+                        // Add the include to the list of external include files
 
-                    ExType[nExType].pFile = malloc(strlen(pStr)+1);
-                    strcpy(ExType[nExType].pFile, pStr);
+                        ExType[nExType].pFile = malloc(strlen(pStr)+1);
+                        strcpy(ExType[nExType].pFile, pStr);
 
-                    ExType[nExType].file_id = file_id;
-                    ExType[nExType].maj     = nLocalInclude;
+                        ExType[nExType].file_id = file_id;
+                        ExType[nExType].maj     = nLocalInclude;
 
-                    VERBOSE2 printf("BINCL local=%d global=%d %s\n", nLocalInclude, nExType, pStr);
+                        VERBOSE2 printf("BINCL local=%d global=%d %s\n", nLocalInclude, nExType, pStr);
+                    }
+                    else
+                    {
+                        fprintf(stderr, "ERROR: Too many nested include files!\n");
+                        nExType--;
+                    }
                 break;
 
                 // New include file that is defined within the scope of another source file.

@@ -4,6 +4,8 @@
 *                                                                             *
 *   Date:       05/24/2003                                                    *
 *                                                                             *
+*   Copyright (c) 2003-2004 Goran Devic                                       *
+*                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
 *******************************************************************************
@@ -43,7 +45,7 @@ typedef unsigned int UINT;
 #if 0
 #define SIM_PAGE_OFFSET_SIZE    (1024 * 1024 * 1024)
 #define PAGE_OFFSET             (0xC0000000)
-#endif 
+#endif
 
 #if 1
 #define SIM_PAGE_OFFSET_SIZE    (1024 * 1024 * 16)

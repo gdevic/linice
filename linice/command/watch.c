@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       09/11/2002                                                    *
 *                                                                             *
-*   Copyright (c) 2002 Goran Devic                                            *
+*   Copyright (c) 2002-2004 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -64,6 +64,9 @@ extern BOOL Evaluate(TExItem *pItem, char *pExpr, char **ppNext, BOOL fSymbolsVa
 extern void PrettyPrintVariableName(char *pString, char *pName, TSYMTYPEDEF1 *pType1);
 extern void MakeSelectedVisible(TLIST *pList, int nLines);
 extern BOOL ListFindItem(TLIST *pList, TExItem *pExItem);
+extern BOOL ListDel(TLIST *pList, TLISTITEM *pItem, BOOL fDelRoot);
+extern BOOL ExItemCompare(TExItem *pItem1, TExItem *pItem2);
+extern TLISTITEM *ListGetNext(TLIST *pList, TLISTITEM *pItem);
 
 
 /******************************************************************************
@@ -130,3 +133,65 @@ void WatchDraw(BOOL fForce)
     ListDraw(&deb.Watch, &pWin->w, fForce);
 }
 
+/******************************************************************************
+*                                                                             *
+*   void RecalculateWatch()                                                   *
+*                                                                             *
+*******************************************************************************
+*
+*   Recalculates all watch expressions. This is called after a context change
+*   since the watches may go in and out of context, so here we re-evaluate
+*   each of them and set up new result string. More detailed behavior is
+*   explained in the code.
+*
+*   Watch needs to be redrawn after this change - here we only update internal
+*   lists and buffers.
+*
+******************************************************************************/
+void RecalculateWatch()
+{
+    TLISTITEM *pItem = NULL;            // Current item
+    TExItem ExItem;                     // Expression item to be evaluated
+
+    // Walk the list of root items and check that the expression is still valid
+    while( (pItem = ListGetNext(&deb.Watch, pItem)) )
+    {
+        // Check the expression
+        if( Evaluate(&ExItem, pItem->Name, NULL, TRUE) )
+        {
+            // Expression evaluated correctly, but we dont know if it is the same variable
+            // so compare the ExItem data structures
+            if( ExItemCompare(&ExItem, &pItem->Item) )
+            {
+                // Values are identical, no need to do anything here
+                ;
+            }
+            else
+            {
+                // Values are not identical - it is a different variable
+
+                // Assign the new item data descriptor
+                memcpy(&pItem->Item, &ExItem, sizeof(TExItem));
+
+                // Need to collapse item and reassign a new value
+                ListDel(&deb.Watch, pItem, FALSE);
+
+                PrettyPrintVariableName(pItem->String, pItem->Name, &pItem->Item.Type);
+            }
+        }
+        else
+        {
+            // Watch item did not evaluate correctly, so the expression is not
+            // valid in this context. Collapse it and mark it invalid
+            ListDel(&deb.Watch, pItem, FALSE);
+
+            // Mark the type invalid
+            pItem->Item.bType = 0;
+
+            memset(&pItem->Item, 0, sizeof(TExItem));
+        }
+    }
+
+    // Clear any logged error during this operation
+    deb.errorCode = NOERROR;
+}

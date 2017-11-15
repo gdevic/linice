@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       06/26/01                                                      *
 *                                                                             *
-*   Copyright (c) 2001 Goran Devic                                            *
+*   Copyright (c) 2001-2004 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -137,7 +137,6 @@ static DWORD dr[8];                     // Temp stored verification values
 ******************************************************************************/
 
 extern DWORD GetHex(char **psString);
-extern void SetSysreg( TSysreg * pSys );
 
 
 DWORD fnBpCount(DWORD arg) { return( deb.bpIndex>=0? bp[deb.bpIndex].CurHits : 0 ); };
@@ -158,8 +157,9 @@ DWORD fnBpLog(DWORD arg)
 *                                                                             *
 ******************************************************************************/
 
-int BreakpointQuery(TADDRDESC Addr);
+extern void CalcMemAccessChecksum();
 
+int BreakpointQuery(TADDRDESC Addr);
 
 /******************************************************************************
 *                                                                             *
@@ -187,6 +187,9 @@ BOOL IsNeedHwBp(BYTE Type)
 void InitBreakpoints()
 {
     memset(bp, 0, sizeof(bp));
+
+    // Protection: Calculate the checksum of the memory access functions
+    CalcMemAccessChecksum();
 }
 
 /******************************************************************************
@@ -221,15 +224,15 @@ BOOL cmdBp(char *args, int subClass)
 
         // The arguments are a list of breakpoint indices separated by space or comma
 
-        while( Expression(&index, args, &args) )
+        while( !EOL(&args) && Expression(&index, args, &args) )
         {
             if( index>=0 && index<MAX_BREAKPOINTS )
             {
-                select[index] = 1;      // Make it selected
+                select[index] = 1;              // Make it selected
             }
             else
             {
-                deb.error = ERR_BPNUM;  // Invalid breakpoint number
+                PostError(ERR_BPNUM, 0);        // Invalid breakpoint number
 
                 return(TRUE);
             }
@@ -242,7 +245,7 @@ BOOL cmdBp(char *args, int subClass)
         // We should have cleaned the argument list
         if( *args )
         {
-            deb.error = ERR_SYNTAX;
+            PostError(ERR_SYNTAX, 0);
 
             return( TRUE );
         }
@@ -293,7 +296,7 @@ BOOL cmdBp(char *args, int subClass)
                                 if( bp[index].DrRequest & GlRequest )
                                 {
                                     // Conflict - we cannot use the requested DR register
-                                    deb.error = ERR_DRUSED;
+                                    PostError(ERR_DRUSED, 0);
                                     break;
                                 }
 
@@ -307,7 +310,7 @@ BOOL cmdBp(char *args, int subClass)
                                     if( hwbpinuse>4 )
                                     {
                                         // Not enough DR registers, so we cannot enable this bp
-                                        deb.error = ERR_BP_TOO_MANY;
+                                        PostError(ERR_BP_TOO_MANY, 0);
                                         break;
                                     }
                                     else
@@ -493,14 +496,14 @@ BOOL cmdBpet(char *args, int subClass)
             }
 
             // From now on it is an invalid breakpoint
-            deb.error = ERR_BPNUM;
+            PostError(ERR_BPNUM, 0);
 
             return(TRUE);
         }
     }
 
     // Everything else is a syntax error
-    deb.error = ERR_SYNTAX;
+    PostError(ERR_SYNTAX, 0);
 
     return(TRUE);
 }
@@ -567,10 +570,10 @@ BOOL cmdBstat(char *args, int subClass)
                 BPstat(index, nFirst);
             }
             else
-                deb.error = ERR_BPNUM;      // Invalid breakpoint number
+                PostError(ERR_BPNUM, 0);    // Invalid breakpoint number
         }
         else
-            deb.error = ERR_SYNTAX;         // Syntax error at this point
+            PostError(ERR_SYNTAX, 0);       // Syntax error at this point
     }
     else
     {
@@ -625,7 +628,7 @@ static BOOL VerifyBreakpoint(TBP *pBp)
             {
                 if( bp[index].address.offset==pBp->address.offset && bp[index].address.sel==pBp->address.sel)
                 {
-                    deb.error = ERR_BPDUP;      // Duplicate breakpoint
+                    PostError(ERR_BPDUP, 0);    // Duplicate breakpoint
 
                     return( FALSE );
                 }
@@ -642,7 +645,7 @@ static BOOL VerifyBreakpoint(TBP *pBp)
             // Port number has to be in the range 0000 - FFFF
             if( pBp->address.offset > 0xFFFF )
             {
-                deb.error = ERR_BPIO;           // Invalid port number in a breakpoint
+                PostError(ERR_BPIO, 0);         // Invalid port number in a breakpoint
 
                 return( FALSE );
             }
@@ -653,7 +656,7 @@ static BOOL VerifyBreakpoint(TBP *pBp)
             // Memory alignment: BPW must be aligned on a word boundary
             if( (pBp->address.offset & 1)!=0 )
             {
-                deb.error = ERR_BPMWALIGN;      // Data alignment error
+                PostError(ERR_BPMWALIGN, 0);    // Data alignment error
 
                 return( FALSE );
             }
@@ -664,7 +667,7 @@ static BOOL VerifyBreakpoint(TBP *pBp)
             // Memory alignment: BPD must be aligned on a dword boundary
             if( (pBp->address.offset & 3)!=0 )
             {
-                deb.error = ERR_BPMDALIGN;      // Data alignment error
+                PostError(ERR_BPMDALIGN, 0);    // Data alignment error
 
                 return( FALSE );
             }
@@ -678,7 +681,7 @@ static BOOL VerifyBreakpoint(TBP *pBp)
         if( pBp->DrRequest & GlRequest )
         {
             // Conflict - we cannot use the requested DR register
-            deb.error = ERR_DRUSED;
+            PostError(ERR_DRUSED, 0);
             return( FALSE );
         }
         else
@@ -694,7 +697,7 @@ static BOOL VerifyBreakpoint(TBP *pBp)
         if( hwbpinuse>4 )
         {
             // Not enough DR registers, so we cannot enable this bp
-            deb.error = ERR_BP_TOO_MANY;
+            PostError(ERR_BP_TOO_MANY, 0);
             return( FALSE );
         }
         else
@@ -744,7 +747,10 @@ BOOL cmdBpx(char *args, int subClass)
     {
         // Only if the valid address had beed selected, we can proceed
         if( deb.CodeEditAddress.sel==0 )
+        {
+            PostError(ERR_BPLINE, 0);
             return( TRUE );
+        }
 
         // Search for an existing breakpoint to know should we set a new one or clear existing one
         if( (index = BreakpointQuery(deb.CodeEditAddress))>=0 )
@@ -868,7 +874,7 @@ BOOL cmdBpx(char *args, int subClass)
                         if( *(args+2)=='3' ) pBp->DrRequest = 1 << 3;
                         else
                         {
-                            deb.error = ERR_DRINVALID;
+                            PostError(ERR_DRINVALID, 0);
                             goto bpx_failed;
                         }
 
@@ -959,7 +965,7 @@ BOOL cmdBpx(char *args, int subClass)
 bpx_failed:;
             }
             else
-                deb.error = ERR_SYNTAX;     // Syntax error evaluating
+                PostError(ERR_SYNTAX, 0);   // Syntax error evaluating
 
             // Free the buffer since setting a bp failed
             freeHeap(deb.hHeap, pBp->pCmd);
@@ -968,10 +974,10 @@ bpx_failed:;
             memset(pBp, 0, sizeof(TBP));
         }
         else
-            deb.error = ERR_INT_OUTOFMEM;   // Internal error: out of memory
+            PostError(ERR_INT_OUTOFMEM, 0); // Internal error: out of memory
     }
     else
-        deb.error = ERR_BP_TOO_MANY;    // No more breakpoints available
+        PostError(ERR_BP_TOO_MANY, 0);      // No more breakpoints available
 
     return(TRUE);
 }
@@ -1415,6 +1421,17 @@ BOOL EvalBreakpoint(void)
     if( deb.bpIndex>=0 )
     {
         p = &bp[deb.bpIndex];
+
+#if NOSELF
+        // Protection: If the breakpoint hit within Linice, simply ignore it and
+        // continue execution. This is so one cannot debug Linice code.
+        // Protection: Under the same roof is the protection for OEM module
+        if( p->address.offset>deb.dwProtectStart && p->address.offset<=deb.dwProtectEnd )
+            return( TRUE );
+
+        if( p->address.offset>(DWORD)ObjectStart && p->address.offset<=(DWORD)ObjectEnd )
+            return( TRUE );
+#endif // NOSELF
 
         // If we hit a one-time breakpoint, clear it
         if( p->Flags & BP_ONETIME )
