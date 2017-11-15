@@ -38,7 +38,7 @@
 
 #include "loader.h"                     // Include global protos
 
-extern int dfs;
+extern PSTR dfs;
 
 
 // Define internal array structre that holds global symbols for a lookup
@@ -299,11 +299,11 @@ static BOOL WriteGlobalsSection(int fd, int fs)
 
             if( eStore>=0 )
             {
-                pHeader->global[nGlobalsStored].dwStartAddress = pGlobals[i].dwAddress;
-                pHeader->global[nGlobalsStored].dwEndAddress   = pGlobals[i].dwEndAddress;
-                pHeader->global[nGlobalsStored].dName          = dfs;
-                pHeader->global[nGlobalsStored].file_id        = pGlobals[i].file_id;
-                pHeader->global[nGlobalsStored].bFlags         = eStore;
+                pHeader->list[nGlobalsStored].dwStartAddress = pGlobals[i].dwAddress;
+                pHeader->list[nGlobalsStored].dwEndAddress   = pGlobals[i].dwEndAddress;
+                pHeader->list[nGlobalsStored].pName          = dfs;
+                pHeader->list[nGlobalsStored].file_id        = pGlobals[i].file_id;
+                pHeader->list[nGlobalsStored].bFlags         = eStore;
 
                 // Copy the symbol name into the strings
                 write(fs, pGlobals[i].Name, strlen(pGlobals[i].Name)+1);
@@ -321,7 +321,7 @@ static BOOL WriteGlobalsSection(int fd, int fs)
                         // Complex definition will be broken up; stores only the basic portion:
                         nLen = p - pGlobals[i].pDef;
 
-                        pHeader->global[nGlobalsStored].dDef = dfs;
+                        pHeader->list[nGlobalsStored].pDef = dfs;
                         write(fs, pGlobals[i].pDef, nLen);
                         dfs += nLen;
 
@@ -333,14 +333,14 @@ static BOOL WriteGlobalsSection(int fd, int fs)
                     {
                         // Simple definition can be stored as-is
 
-                        pHeader->global[nGlobalsStored].dDef = dfs;
+                        pHeader->list[nGlobalsStored].pDef = dfs;
                         write(fs, pGlobals[i].pDef, strlen(pGlobals[i].pDef)+1);
 
                         dfs += strlen(pGlobals[i].pDef)+1;
                     }
                 }
                 else
-                    pHeader->global[nGlobalsStored].dDef = 0;
+                    pHeader->list[nGlobalsStored].pDef = 0;
 
                 // Increment the actual number of global symbols stored
                 nGlobalsStored++;

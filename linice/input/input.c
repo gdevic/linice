@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       09/04/97                                                      *
 *                                                                             *
-*   Copyright (c) 1997, 2001 Goran Devic                                      *
+*   Copyright (c) 1997-2000 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -60,7 +60,7 @@
 
 #define NEXT_KQUEUE(i) (((i)+1 >= MAX_INPUT_QUEUE)? 0 : (i)+1)
 
-static volatile CHAR kQueue[ MAX_INPUT_QUEUE ];   // Input code circular queue
+static volatile WCHAR kQueue[ MAX_INPUT_QUEUE ];  // Input code circular queue
 static volatile int head = 0, tail = 0;           // Head and Tail of that queue
 
 
@@ -74,7 +74,7 @@ extern void InterruptPoll();
 
 /******************************************************************************
 *                                                                             *
-*   CHAR GetKey( IN BOOL fBlock )                                             *
+*   WCHAR GetKey( IN BOOL fBlock )                                            *
 *                                                                             *
 *******************************************************************************
 *
@@ -94,10 +94,10 @@ extern void InterruptPoll();
 *       Pseudo-ASCII code of a next key in a queue
 *
 ******************************************************************************/
-CHAR GetKey( BOOL fBlock )
+WCHAR GetKey( BOOL fBlock )
 {
     BOOL fCarret;                       // Cursor carret on/off state
-    CHAR c;
+    WCHAR c;
 
     // There are two distinct ways to handle input depending on polling or not
 
@@ -108,7 +108,7 @@ CHAR GetKey( BOOL fBlock )
         if( pOut && pOut->carret )
             (pOut->carret)(TRUE);
 
-        pIce->timer[1] = TIMER_CARRET;      // Set the carret blink rate
+        deb.timer[1] = TIMER_CARRET;      // Set the carret blink rate
         fCarret = TRUE;                     // Cursor is currently on
 
         while( head == tail )
@@ -116,10 +116,10 @@ CHAR GetKey( BOOL fBlock )
             InterruptPoll();
 
             // If the blink timer expired, change the state of the carret
-            if( pIce->timer[1]==0 )
+            if( deb.timer[1]==0 )
             {
-                pIce->timer[1] = TIMER_CARRET;  // Reset the timer value
-            
+                deb.timer[1] = TIMER_CARRET;  // Reset the timer value
+
                 if( pOut && pOut->carret )
                     (pOut->carret)(fCarret = !fCarret);
             }
@@ -155,7 +155,7 @@ CHAR GetKey( BOOL fBlock )
 
 /******************************************************************************
 *                                                                             *
-*   void PutKey( CHAR Key )                                                   *
+*   void PutKey( WCHAR Key )                                                  *
 *                                                                             *
 *******************************************************************************
 *
@@ -166,7 +166,7 @@ CHAR GetKey( BOOL fBlock )
 *       Key is the key code to enque
 *
 ******************************************************************************/
-void PutKey( CHAR Key )
+void PutKey( WCHAR Key )
 {
     int bNext;
 

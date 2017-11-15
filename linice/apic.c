@@ -262,7 +262,7 @@ void IoApicUnclamp()
 ******************************************************************************/
 void smpSpin(void *ptr)
 {
-    SpinUntilReset(&pIce->fRunningIce);
+    SpinUntilReset(&deb.fRunningIce);
 
     SetSysreg(&deb.sysReg);
 }

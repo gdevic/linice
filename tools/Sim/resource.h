@@ -27,6 +27,7 @@
 #define IDM_INT1                        40006
 #define IDM_LOAD_CAPTURE                40007
 #define IDM_SETCPUREGS                  40008
+#define IDM_INT3                        40009
 #define IDC_STATIC                      -1
 
 // Next default values for new objects
@@ -35,7 +36,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NO_MFC                     1
 #define _APS_NEXT_RESOURCE_VALUE        103
-#define _APS_NEXT_COMMAND_VALUE         40009
+#define _APS_NEXT_COMMAND_VALUE         40010
 #define _APS_NEXT_CONTROL_VALUE         1002
 #define _APS_NEXT_SYMED_VALUE           101
 #endif

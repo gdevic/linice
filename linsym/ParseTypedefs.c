@@ -40,7 +40,7 @@
 
 #include <ctype.h>
 
-extern int dfs;
+extern PSTR dfs;                        // Global pointer to strings (to append)
 
 extern WORD GetFileId(char *pSoDir, char *pSo);
 
@@ -54,7 +54,7 @@ typedef struct
 {
     int len;                            // String len
     char *pStr;                         // Type definition string
-    DWORD id;                           // Type id number
+    char id;                            // Type id number
 
 } TBASICTYPEDEF;
 
@@ -63,7 +63,6 @@ typedef struct
 #define MAX_SUBDEF      256             // Maximum number of sub-definitions that we can handle
 static char *Subdef[MAX_SUBDEF];
 static int nSubdef;
-
 
 static TBASICTYPEDEF basic[] = {
     {  4, "int:", 1 },
@@ -91,7 +90,7 @@ static TBASICTYPEDEF basic[] = {
 
 /******************************************************************************
 *                                                                             *
-*   DWORD BasicTypedef(char *pDef)                                            *
+*   char BasicTypedef(char *pDef)                                             *
 *                                                                             *
 *******************************************************************************
 *
@@ -105,7 +104,7 @@ static TBASICTYPEDEF basic[] = {
 *       nonzero - Basic built-in type ID
 *
 ******************************************************************************/
-DWORD BasicTypedef(char *pDef)
+char BasicTypedef(char *pDef)
 {
     TBASICTYPEDEF *pType;
 
@@ -148,7 +147,7 @@ BOOL ParseDef(int fd, int fs, char *pDefBuf)
     char *pSub;                         // Pointer to the subdefinition ")="
     char *pSubend;                      // Pointer to the end of the subdefinition
     char *pSubnum;                      // Pointer to the subdefinition number "(x,y)="
-    char c;                             // Temporary character
+    char c, cBasic;                     // Temporary characters
     TSYMTYPEDEF1 list;                  // Typedef record
     int nNameLen;                       // Type name length
 
@@ -224,15 +223,28 @@ BOOL ParseDef(int fd, int fs, char *pDefBuf)
         {
             // If this is a basic built-in typedef, shortcut it here
 
-            if( (list.dDef = BasicTypedef(pDefBuf)) )
+            if( (cBasic = BasicTypedef(pDefBuf)) )
             {
-                // Basic type definition
+                // Basic type definition: pName still points to the name string (like "int",..)
+                // but the pDef points to the basic type identifier (small numbers 1...19) followed by 0.
 
-                list.dName = 0;
+                list.pName = dfs;       // Write the typedef name string
+                nNameLen = strchr(pDefBuf,':')-pDefBuf;
+                write(fs, pDefBuf, nNameLen);
+                write(fs, "", 1);
+
+                dfs += nNameLen + 1;
+
+                list.pDef = dfs;
+                write(fs, &cBasic, 1);
+                write(fs, "", 1);
+
+                dfs += 2;
+
                 write(fd, &list, sizeof(TSYMTYPEDEF1));
                 nTypedefs++;
 
-                VERBOSE2 printf("TYPEDEF(%d,%d) = BASIC %s\n", list.maj, list.min, basic[list.min-1].pStr );
+                VERBOSE2 printf("(%d,%d) = {%d} %s\n", list.maj, list.min, cBasic, basic[cBasic-1].pStr );
 
                 return( TRUE );         // Return here to avoid writing it over again
             }
@@ -243,7 +255,7 @@ BOOL ParseDef(int fd, int fs, char *pDefBuf)
                 {
                     // Write the type name since this is not anonymous type
 
-                    list.dName = dfs;       // Write the typedef name string
+                    list.pName = dfs;       // Write the typedef name string
                     nNameLen = strchr(pDefBuf,':')-pDefBuf;
                     write(fs, pDefBuf, nNameLen);
                     write(fs, "", 1);
@@ -253,7 +265,7 @@ BOOL ParseDef(int fd, int fs, char *pDefBuf)
                     {   // This is only to assist printing a nice substring
                         c = *(pDefBuf + nNameLen);
                         *(pDefBuf + nNameLen) = 0;
-                        VERBOSE2 printf("TYPEDEF(%d,%d) %s = ", list.maj, list.min, pDefBuf );
+                        VERBOSE2 printf("(%d,%d) %s = ", list.maj, list.min, pDefBuf );
                         *(pDefBuf + nNameLen) = c;
                     }
                 }
@@ -263,7 +275,7 @@ BOOL ParseDef(int fd, int fs, char *pDefBuf)
         pSubend++;
 
         // Write the definition string
-        list.dDef = dfs;
+        list.pDef = dfs;
         write(fs, pSub, pSubend-pSub);
         write(fs, "", 1);
         dfs += pSubend-pSub + 1;
@@ -275,7 +287,7 @@ BOOL ParseDef(int fd, int fs, char *pDefBuf)
         {   // This is only to assist printing a nice substring
             c = *pSubend;
             *pSubend = 0;
-            VERBOSE2 printf("TYPEDEF(%d,%d) = %s\n", list.maj, list.min, pSub );
+            VERBOSE2 printf("(%d,%d) = %s\n", list.maj, list.min, pSub );
             *pSubend = c;
         }
 
@@ -408,6 +420,21 @@ BOOL ParseTypedefs(int fd, int fs, BYTE *pBuf)
                         break;
 
                     // Found a complex global definition, move the pointer of the string beyond the symbol
+                    // name so to avoid storing the symbol name as the type name (the definition will be
+                    // stored as an anonymous type
+                    pStr = strchr(pStr, '(');
+
+                    // Note: This code continues into the N_LSYM case...
+                    goto ProcessType;
+
+                // Static symbols: The same rule applies with the static symbols, need to process them
+                // since they may contain complex definition
+                case N_STSYM:
+                    // Find if the static symbol definition is complex, and if not so, break out
+                    if(!strchr(pStr, '='))
+                        break;
+
+                    // Found a complex static definition, move the pointer of the string beyond the symbol
                     // name so to avoid storing the symbol name as the type name (the definition will be
                     // stored as an anonymous type
                     pStr = strchr(pStr, '(');

@@ -69,7 +69,6 @@ BYTE CRTC[256] = { 0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0, 0,0,0,0,0,
 *                                                                             *
 ******************************************************************************/
 
-
 /******************************************************************************
 *                                                                             *
 *   int system2(char *pString)                                                *
@@ -175,6 +174,11 @@ void MemAccess_START() {}
 
 int GetByte(WORD sel, DWORD offset)
 {
+    if(offset>=0x0400000 && offset<0x07F00000)
+    {
+        return(*(BYTE *)offset);
+    }
+    else
     if(offset>=PAGE_OFFSET && offset<(PAGE_OFFSET+SIM_PAGE_OFFSET_SIZE))
     {
         return(*(BYTE *)(offset - PAGE_OFFSET + pPageOffset));
@@ -184,6 +188,11 @@ int GetByte(WORD sel, DWORD offset)
 
 DWORD GetDWORD(WORD sel, DWORD offset)
 {
+    if(offset>=0x0400000 && offset<0x07F00000)
+    {
+        return(*(DWORD *)offset);
+    }
+    else
     if(offset>=PAGE_OFFSET && offset<(PAGE_OFFSET+SIM_PAGE_OFFSET_SIZE))
     {
         return(*(DWORD *)(offset - PAGE_OFFSET + pPageOffset));
@@ -209,7 +218,6 @@ DWORD IceIntHandlers[0x30];
 DWORD IceIntHandler80;
 
 void DebuggerEnterBreak(void);
-void DebuggerEnterDelayedTrace(void);
 void DebuggerEnterDelayedArm(void);
 
 void GetIDT(TDescriptor *p)
@@ -282,23 +290,6 @@ DWORD SpinUntilReset(DWORD *pSpinlock)
     assert(0);
     return( 0 );
 }
-
-
-//-----------------------------------------------------------------------------
-// System Registers Defines
-//-----------------------------------------------------------------------------
-typedef struct
-{
-    DWORD cr0;
-    DWORD cr2;
-    DWORD cr3;
-    DWORD cr4;
-
-    DWORD dr[4];        // First 4 are debug linear address and for convinience
-    DWORD dr6;          //  we keep them as arrays
-    DWORD dr7;
-
-} TSysreg;
 
 void GetSysreg( TSysreg * pSys )
 {

@@ -46,6 +46,9 @@ typedef unsigned char  BYTE;
 typedef unsigned short WORD;
 typedef unsigned int   DWORD;
 typedef unsigned int   BOOL;
+typedef unsigned int   UINT;
+typedef int            ENUM;
+typedef char *         PSTR;
 
 #ifndef TRUE
 #define TRUE    (1==1)
@@ -65,7 +68,7 @@ typedef unsigned int   BOOL;
 
 // We define character type as a 16-bit unsigned int so we can use
 // top several bits for the state of the key modifiers (control/alt)
-typedef unsigned short int CHAR;
+typedef unsigned short int WCHAR;
 
 // When we need it, character type is unsigned
 typedef unsigned char UCHAR;

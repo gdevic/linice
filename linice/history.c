@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       05/20/00                                                      *
 *                                                                             *
-*   Copyright (c) 1997, 2000 Goran Devic                                      *
+*   Copyright (c) 2000 Goran Devic                                            *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -46,8 +46,8 @@
 *                                                                             *
 ******************************************************************************/
 
-#define HISTORY_BUFFER      (pIce->pHistoryBuffer)
-#define MAX_HISTORY_BUF     (pIce->nHistorySize)
+#define HISTORY_BUFFER      (deb.pHistoryBuffer)
+#define MAX_HISTORY_BUF     (deb.nHistorySize)
 
 /******************************************************************************
 *                                                                             *

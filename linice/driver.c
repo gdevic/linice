@@ -53,9 +53,6 @@
 TINITPACKET Init;                       // Major Init packet
 TXINITPACKET XInit;                     // X-ice init packet
 
-TICE Ice;                               // The main debugger structure
-PTICE pIce;                             // And a pointer to it
-
 TDEB deb;                               // Live debugee state structure
 
 TWINDOWS Win;                           // Output windowing structure
@@ -140,9 +137,6 @@ int IceInitModule(void)
     INFO(("init_module\n"));
 
     // Clean up structures
-    memset(&Ice, 0, sizeof(TICE));
-    pIce = &Ice;
-
     memset(&deb, 0, sizeof(TDEB));
 
     memset(&Win, 0, sizeof(TWINDOWS));
@@ -253,20 +247,20 @@ void IceCleanupModule(void)
     ice_unregister_chrdev(major_device_number, "ice");
 
     // Free memory structures
-    if( pIce->pHistoryBuffer != NULL )
-        ice_free(pIce->pHistoryBuffer);
+    if( deb.pHistoryBuffer != NULL )
+        ice_free(deb.pHistoryBuffer);
 
-    if( pIce->hSymbolBufferHeap != NULL )
-        ice_free_heap(pIce->hSymbolBufferHeap);
+    if( deb.hSymbolBufferHeap != NULL )
+        ice_free_heap(deb.hSymbolBufferHeap);
 
-    if( pIce->pXDrawBuffer != NULL )
-        ice_free_heap(pIce->pXDrawBuffer);
+    if( deb.pXDrawBuffer != NULL )
+        ice_free_heap(deb.pXDrawBuffer);
 
-    if( pIce->pXFrameBuffer != NULL )
-        ice_iounmap(pIce->pXFrameBuffer);
+    if( deb.pXFrameBuffer != NULL )
+        ice_iounmap(deb.pXFrameBuffer);
 
-    if( pIce->hHeap != NULL )
-        ice_free_heap(pIce->hHeap);
+    if( deb.hHeap != NULL )
+        ice_free_heap(deb.hHeap);
 
     return;
 }
@@ -344,6 +338,10 @@ int DriverIOCTL(void *p1, void *p2, unsigned int ioctl, unsigned long param)
 
         //==========================================================================================
         case ICE_IOCTL_EXIT:            // Unload the module
+
+            // Clear all breakpoints; this will reinstate the original BYTE code at the places of embedded INT3,
+            // it will also disable HW breakpoints (DR0...DR3)
+            DisarmBreakpoints();
 
             // Unhook the system call table hooks early here so we dont collide with the
             // module unload hook function when unloading itself

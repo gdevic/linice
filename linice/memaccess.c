@@ -57,6 +57,9 @@
 *                                                                             *
 ******************************************************************************/
 
+/******************************************************************************
+*   Returns TRUE if the address descriptor can be use to read data
+******************************************************************************/
 BOOL AddrIsPresent(PTADDRDESC pAddr)
 {
     deb.memaccess = GetByte(pAddr->sel, pAddr->offset);
@@ -64,6 +67,9 @@ BOOL AddrIsPresent(PTADDRDESC pAddr)
     return( (deb.memaccess <= 0xFF)? TRUE : FALSE );
 }
 
+/******************************************************************************
+*   Returns a BYTE from a memory location
+******************************************************************************/
 BYTE AddrGetByte(PTADDRDESC pAddr)
 {
     deb.memaccess = GetByte(pAddr->sel, pAddr->offset);
@@ -71,6 +77,9 @@ BYTE AddrGetByte(PTADDRDESC pAddr)
     return( deb.memaccess & 0xFF );
 }
 
+/******************************************************************************
+*   Returns a DWORD from a memory location
+******************************************************************************/
 DWORD AddrGetDword(PTADDRDESC pAddr)
 {
     DWORD dwValue;
@@ -87,6 +96,68 @@ DWORD AddrGetDword(PTADDRDESC pAddr)
     return( dwValue );
 }
 
+/******************************************************************************
+*   Another way to read a DWORD with a return value if succeeded
+******************************************************************************/
+BOOL GlobalReadDword(DWORD *pDword, DWORD dwAddress)
+{
+    TADDRDESC Addr;                     // Address access descriptor
+    DWORD dwData;                       // Data read
+
+    Addr.sel = GetKernelDS();
+    Addr.offset = dwAddress;
+    dwData = AddrGetDword(&Addr);       // Get the value from that address
+
+    if( deb.memaccess & 0x100 )
+        return( FALSE );
+
+    *pDword = dwData;
+
+    return( TRUE );
+}
+
+/******************************************************************************
+*   Another way to read a BYTE with a return value if succeeded
+******************************************************************************/
+BOOL GlobalReadBYTE(BYTE *pByte, DWORD dwAddress)
+{
+    TADDRDESC Addr;                     // Address access descriptor
+    BYTE bData;                         // Data read
+
+    Addr.sel = GetKernelDS();
+    Addr.offset = dwAddress;
+    bData = AddrGetByte(&Addr);         // Get the value from that address
+
+    if( deb.memaccess & 0x100 )
+        return( FALSE );
+
+    *pByte = bData;
+
+    return( TRUE );
+}
+
+/******************************************************************************
+*   Read a number of bytes from a memory location
+******************************************************************************/
+BOOL GlobalReadMem(BYTE *pBuf, DWORD dwAddress, UINT nLen)
+{
+    memset(pBuf, 0xFF, nLen);
+
+    while( nLen-- )
+    {
+        if( !GlobalReadBYTE(pBuf, dwAddress) )
+            return( FALSE );
+
+        pBuf++;
+        dwAddress++;
+    }
+
+    return( TRUE );
+}
+
+/******************************************************************************
+*   Set a BYTE value
+******************************************************************************/
 DWORD AddrSetByte(PTADDRDESC pAddr, BYTE value, BOOL fForce)
 {
     TADDRDESC Addr;
@@ -159,6 +230,10 @@ DWORD fnPtr(DWORD arg)
 *   is invalid.
 *
 ******************************************************************************/
+
+// TODO - This function needs to simply set the error number in deb.error and return FALSE
+// TODO - deb.error may need another optional argument to the error code, like in this case
+
 BOOL VerifySelector(WORD Sel)
 {
     if( SelLAR(Sel)==0 )

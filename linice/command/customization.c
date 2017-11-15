@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       10/15/00                                                      *
 *                                                                             *
-*   Copyright (c) 2001 - 2001 Goran Devic                                     *
+*   Copyright (c) 2000 Goran Devic                                            *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -123,7 +123,7 @@ extern DWORD GetDec(char **psString);
 
 BOOL InitUserVars(int nVars)
 {
-    if( (pVars = _kMalloc(pIce->hHeap, nVars * sizeof(TNAMEVAL)))==NULL )
+    if( (pVars = _kMalloc(deb.hHeap, nVars * sizeof(TNAMEVAL)))==NULL )
         return(FALSE);
 
     memset(pVars, 0, nVars * sizeof(TNAMEVAL));
@@ -134,7 +134,7 @@ BOOL InitUserVars(int nVars)
 
 BOOL InitMacros(int nMacros)
 {
-    if( (pMacros = _kMalloc(pIce->hHeap, nMacros * sizeof(TNAMEVAL)))==NULL )
+    if( (pMacros = _kMalloc(deb.hHeap, nMacros * sizeof(TNAMEVAL)))==NULL )
         return(FALSE);
 
     memset(pMacros, 0, nMacros * sizeof(TNAMEVAL));
@@ -166,7 +166,7 @@ BOOL GetUserVar(DWORD *pValue, char *sStart, int nLen)
     int i;
 
     // Search for that variable name
-    for(i=0; i<pIce->nVars; i++ )
+    for(i=0; i<deb.nVars; i++ )
     {
         if( pVars[i].pName )
             if( strlen(pVars[i].pName)==nLen )
@@ -175,9 +175,9 @@ BOOL GetUserVar(DWORD *pValue, char *sStart, int nLen)
     }
 
     // If found, evaluate it and store the result
-    if( i < pIce->nVars )
+    if( i < deb.nVars )
     {
-        *pValue = Evaluate(pVars[i].pValue, NULL);
+        Expression(pValue, pVars[i].pValue, NULL);
 
         return(TRUE);
     }
@@ -232,8 +232,8 @@ static void VarMacro(char *sOp, char *args, TNAMEVAL *pObject, int nElem)
             {
                 if( pObject[i].pName != NULL )
                 {
-                    _kFree(pIce->hHeap, pObject[i].pName);
-                    _kFree(pIce->hHeap, pObject[i].pValue);
+                    _kFree(deb.hHeap, pObject[i].pName);
+                    _kFree(deb.hHeap, pObject[i].pValue);
                     pObject[i].pName = NULL;
                     pObject[i].pValue = NULL;
                 }
@@ -287,8 +287,8 @@ static void VarMacro(char *sOp, char *args, TNAMEVAL *pObject, int nElem)
                 {
                     if( i < nElem )
                     {
-                        _kFree(pIce->hHeap, pObject[i].pName);
-                        _kFree(pIce->hHeap, pObject[i].pValue);
+                        _kFree(deb.hHeap, pObject[i].pName);
+                        _kFree(deb.hHeap, pObject[i].pValue);
                         pObject[i].pName = NULL;
                         pObject[i].pValue = NULL;
                     }
@@ -302,7 +302,7 @@ static void VarMacro(char *sOp, char *args, TNAMEVAL *pObject, int nElem)
                     if( i < nElem )
                     {
                         // We found a macro with that name.. Delete its value
-                        _kFree(pIce->hHeap, pObject[i].pValue);
+                        _kFree(deb.hHeap, pObject[i].pValue);
                         pObject[i].pValue = NULL;
                     }
                     else
@@ -321,7 +321,7 @@ static void VarMacro(char *sOp, char *args, TNAMEVAL *pObject, int nElem)
                         }
 
                         // Allocate space for the name and copy it there
-                        pObject[i].pName = _kMalloc(pIce->hHeap, nameLen + 1);
+                        pObject[i].pName = _kMalloc(deb.hHeap, nameLen + 1);
                         if( pObject[i].pName==NULL )
                         {
                             deb.error = ERR_MEMORY;
@@ -333,10 +333,10 @@ static void VarMacro(char *sOp, char *args, TNAMEVAL *pObject, int nElem)
                     }
 
                     // We have name, we just need to add value string
-                    pObject[i].pValue = _kMalloc(pIce->hHeap, valueLen + 1);
+                    pObject[i].pValue = _kMalloc(deb.hHeap, valueLen + 1);
                     if( pObject[i].pValue==NULL )
                     {
-                        _kFree(pIce->hHeap, pObject[i].pName);
+                        _kFree(deb.hHeap, pObject[i].pName);
                         pObject[i].pName = NULL;
 
                         deb.error = ERR_MEMORY;
@@ -412,7 +412,7 @@ char *MacroExpand(char *pCmd)
     }
 
     // Look if the command is a defined macro
-    for(i=0; i<pIce->nMacros; i++ )
+    for(i=0; i<deb.nMacros; i++ )
     {
         if( pMacros[i].pName )
             if( strlen(pMacros[i].pName)==nLen )
@@ -421,7 +421,7 @@ char *MacroExpand(char *pCmd)
     }
 
     // If found the macro, start copying it to the temp buffer
-    if( i < pIce->nMacros )
+    if( i < deb.nMacros )
     {
         for(src = nLen = 0; nLen<MAX_STRING; src++ )
         {
@@ -495,7 +495,7 @@ char *MacroExpand(char *pCmd)
 BOOL cmdVar(char *args, int subClass)
 {
     if( pVars )
-        VarMacro("VAR", args, pVars, pIce->nVars);
+        VarMacro("VAR", args, pVars, deb.nVars);
 
     return(TRUE);
 }
@@ -515,7 +515,7 @@ BOOL cmdVar(char *args, int subClass)
 BOOL cmdMacro(char *args, int subClass)
 {
     if( pMacros )
-        VarMacro("MACRO", args, pMacros, pIce->nMacros);
+        VarMacro("MACRO", args, pMacros, deb.nMacros);
 
     return(TRUE);
 }
@@ -532,7 +532,7 @@ BOOL cmdMacro(char *args, int subClass)
 ******************************************************************************/
 BOOL cmdAltkey(char *args, int subClass)
 {
-    CHAR Key = 0;
+    WCHAR Key = 0;
 
     if( *args==0 )
     {
@@ -718,7 +718,7 @@ BOOL cmdSet(char *args, int subClass)
                     break;
 
                     case VAR_DWORD:
-                            value = Evaluate(args, NULL);
+                            Expression(&value, args, NULL);
 
                             // Run the appropriate test condition on the new variable value
                             switch( pVar->test )
@@ -867,19 +867,19 @@ BOOL cmdColor(char *args, int subClass)
         // No arguments - display screen colors
 #if 0
         dprinth(1, "Colors are %02X %02X %02X %02X %02X",
-            pIce->col[COL_NORMAL],
-            pIce->col[COL_BOLD],
-            pIce->col[COL_REVERSE],
-            pIce->col[COL_HELP],
-            pIce->col[COL_LINE] );
+            deb.col[COL_NORMAL],
+            deb.col[COL_BOLD],
+            deb.col[COL_REVERSE],
+            deb.col[COL_HELP],
+            deb.col[COL_LINE] );
 #endif
         // IMPROVEMENT: Displayed colors are described
         dprinth(1, "Colors are: Normal: %02X  Bold: %02X  Reverse: %02X  Help: %02X  Lines: %02X",
-            pIce->col[COL_NORMAL],
-            pIce->col[COL_BOLD],
-            pIce->col[COL_REVERSE],
-            pIce->col[COL_HELP],
-            pIce->col[COL_LINE] );
+            deb.col[COL_NORMAL],
+            deb.col[COL_BOLD],
+            deb.col[COL_REVERSE],
+            deb.col[COL_HELP],
+            deb.col[COL_LINE] );
     }
     else
     {
@@ -888,11 +888,11 @@ BOOL cmdColor(char *args, int subClass)
         {
             // Reset default screen colors and repaint the window
 
-            pIce->col[COL_NORMAL]  = 0x07;
-            pIce->col[COL_BOLD]    = 0x0B;
-            pIce->col[COL_REVERSE] = 0x71;
-            pIce->col[COL_HELP]    = 0x30;
-            pIce->col[COL_LINE]    = 0x02;
+            deb.col[COL_NORMAL]  = 0x07;
+            deb.col[COL_BOLD]    = 0x0B;
+            deb.col[COL_REVERSE] = 0x71;
+            deb.col[COL_HELP]    = 0x30;
+            deb.col[COL_LINE]    = 0x02;
 
             RecalculateDrawWindows();
         }
@@ -919,7 +919,7 @@ BOOL cmdColor(char *args, int subClass)
                 // Assign colors and repaint the window
 
                 for( i=COL_NORMAL; i<=COL_LINE; i++)
-                    pIce->col[i] = mycol[i];
+                    deb.col[i] = mycol[i];
 
                 RecalculateDrawWindows();
             }
@@ -1081,7 +1081,7 @@ BOOL cmdDisplay(char *args, int subClass)
         case 2:     // DGA-compatible X-Windows display
             // We can switch to this driver only if xice had passed init packet,
             // we allocated memory and initialized this subsystem
-            if( pIce->pXDrawBuffer )
+            if( deb.pXDrawBuffer )
                 pOut = &outDga;
             else
                 dprinth(1, "Error: XWIN not initialized. Please run 'xice' to send parameters..");
@@ -1143,16 +1143,16 @@ BOOL cmdSrc(char *args, int subClass)
 ******************************************************************************/
 BOOL cmdTabs(char *args, int subClass)
 {
-    DWORD dwTabs;
+    UINT nTabs;
 
     if( *args )
     {
         // Argument is supplied - set the tabs value
-        if( Expression(&dwTabs, args, &args) )
+        if( Expression(&nTabs, args, &args) )
         {
-            if( dwTabs>=1 && dwTabs<=8 )
+            if( nTabs>=1 && nTabs<=8 )
             {
-                deb.dwTabs = dwTabs;
+                deb.nTabs = nTabs;
 
                 // Redraw all windows
                 RecalculateDrawWindows();
@@ -1166,9 +1166,51 @@ BOOL cmdTabs(char *args, int subClass)
     else
     {
         // No arguments - display the tabs value
-        dprinth(1, "TABS are %d", deb.dwTabs);
+        dprinth(1, "TABS are %d", deb.nTabs);
     }
 
     return( TRUE );
 }
 
+
+/******************************************************************************
+*                                                                             *
+*   BOOL cmdAscii(char *args, int subClass)                                   *
+*                                                                             *
+*******************************************************************************
+*
+*   Utility function that dumps the ASCII character table.
+*
+******************************************************************************/
+BOOL cmdAscii(char *args, int subClass)
+{
+    int nLine = 1;                      // Standard line counter
+    int nibble;                         // ASCII index
+
+    if(dprinth(nLine++, "         0 1 2 3 4 5 6 7  8 9 A B C D E F")==FALSE) return( TRUE );
+
+    for(nibble=0; nibble<256; nibble+=16)
+    {
+        if(dprinth(nLine++, " %3d %02X  %c%c %c%c %c%c %c%c %c%c %c%c %c%c %c%c  %c%c %c%c %c%c %c%c %c%c %c%c %c%c %c%c",
+                nibble,
+                nibble,
+                DP_ESCAPE, (nibble==0)? ' ' : nibble+0,
+                DP_ESCAPE, nibble+1,
+                DP_ESCAPE, nibble+2,
+                DP_ESCAPE, nibble+3,
+                DP_ESCAPE, nibble+4,
+                DP_ESCAPE, nibble+5,
+                DP_ESCAPE, nibble+6,
+                DP_ESCAPE, nibble+7,
+                DP_ESCAPE, nibble+8,
+                DP_ESCAPE, nibble+9,
+                DP_ESCAPE, nibble+10,
+                DP_ESCAPE, nibble+11,
+                DP_ESCAPE, nibble+12,
+                DP_ESCAPE, nibble+13,
+                DP_ESCAPE, nibble+14,
+                DP_ESCAPE, nibble+15 )==FALSE) break;
+    }
+
+    return( TRUE );
+}

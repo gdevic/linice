@@ -24,6 +24,8 @@
 *                                                                             *
 ******************************************************************************/
 
+#include "..\..\Linice\include\ice.h"
+
 /******************************************************************************
 *                                                                             *
 *   Global Defines, Variables and Macros                                      *
@@ -50,15 +52,6 @@ typedef unsigned int UINT;
 
 extern char *pPageOffset;
 
-// CPU descriptors
-
-typedef struct
-{
-    WORD    limit;                      // [0:15]  limit field
-    DWORD   base;                       // [16:47] base address field
-
-} TDescriptor, *PTDescriptor;
-
 extern TDescriptor GDT;
 extern TDescriptor IDT;
 
@@ -72,34 +65,6 @@ extern TDescriptor IDT;
 #define __NR_delete_module      129
 
 typedef unsigned long ULONG;
-
-/////////////////////////////////////////////////////////////////
-// STRUCTURE DESCRIBING THE LIVE DEBUGEE
-/////////////////////////////////////////////////////////////////
-// Define structure that holds debugee state after an interrupt
-
-typedef struct tagTRegs
-{
-    DWORD   esp;
-    DWORD   ss;
-    DWORD   es;
-    DWORD   ds;
-    DWORD   fs;
-    DWORD   gs;
-    DWORD   edi;
-    DWORD   esi;
-    DWORD   ebp;
-    DWORD   temp;
-    DWORD   ebx;
-    DWORD   edx;
-    DWORD   ecx;
-    DWORD   eax;
-    DWORD   ChainAddress;
-    DWORD   ErrorCode;
-    DWORD   eip;
-    DWORD   cs;
-    DWORD   eflags;
-} TREGS, *PTREGS;
 
 #define OPT_VERBOSE         0x00010000  // Option verbose, make output informative
 extern unsigned int opt;                // Option variable
@@ -115,7 +80,7 @@ extern void SimInstall();
 extern void SimUninstall();
 extern void SimLoadSymbolFile();
 extern void SimUnloadSymbolFile();
-extern void SimINT1();
+extern void CreateSimINT(int nInt);
 extern void SimKey(UINT wCode, DWORD lExt);
 
 extern BOOL OptInstall(char *pSystemMap);

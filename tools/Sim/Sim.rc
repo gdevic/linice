@@ -53,7 +53,8 @@ BEGIN
     END
     POPUP "Events"
     BEGIN
-        MENUITEM "INT1",                        IDM_INT1
+        MENUITEM "INT 1",                       IDM_INT1
+        MENUITEM "INT 3",                       IDM_INT3
         MENUITEM "Set CPU Regs",                IDM_SETCPUREGS
     END
 END
@@ -93,10 +94,10 @@ END
 // Dialog
 //
 
-IDD_DEBUG DIALOGEX 0, 0, 186, 90
+IDD_DEBUG DIALOG DISCARDABLE  0, 0, 186, 90
 STYLE WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME
-EXSTYLE WS_EX_TOOLWINDOW
-FONT 8, "MS Sans Serif", 0, 0, 0x1
+CAPTION "Kernel Debug Out"
+FONT 8, "MS Sans Serif"
 BEGIN
     LISTBOX         IDC_DEBUG_LIST,7,7,172,76,NOT LBS_NOTIFY | 
                     LBS_NOINTEGRALHEIGHT | LBS_EXTENDEDSEL | WS_VSCROLL | 

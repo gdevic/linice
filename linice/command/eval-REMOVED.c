@@ -738,7 +738,7 @@ static void Execute( TStack *Values, int Operation )
 
 /******************************************************************************
 *                                                                             *
-*   int Evaluate( char *sExpr, char **psNext )                                *
+*   int Evaluate2( char *sExpr, char **psNext )                               *
 *                                                                             *
 *******************************************************************************
 *
@@ -758,7 +758,7 @@ static void Execute( TStack *Values, int Operation )
 *       *psNext, if not NULL, is set to the end of the expression
 *
 ******************************************************************************/
-int Evaluate( char *sExpr, char **psNext )
+int Evaluate2( char *sExpr, char **psNext )
 {
     static int nDeep = 0;               // Recursion depth count
     TStack Values, Operators;
@@ -866,11 +866,11 @@ int Evaluate( char *sExpr, char **psNext )
 *       FALSE - expression was invalid, deb.error contains the expression error code
 *
 ******************************************************************************/
-BOOL Expression(DWORD *value, char *sExpr, char **psNext )
+BOOL Expression2(DWORD *value, char *sExpr, char **psNext )
 {
     if( sExpr && *sExpr )
     {
-        *value = Evaluate( sExpr, psNext );
+        *value = Evaluate2( sExpr, psNext );
 
         if( deb.error != NOERROR )
             return( FALSE );
@@ -884,14 +884,14 @@ BOOL Expression(DWORD *value, char *sExpr, char **psNext )
 
 /******************************************************************************
 *                                                                             *
-*   BOOL cmdEvaluate(char *args, int subClass)                                *
+*   BOOL cmdEvaluate2(char *args, int subClass)                               *
 *                                                                             *
 *******************************************************************************
 *
 *   Debuger command to evaluate an expression
 *
 ******************************************************************************/
-BOOL cmdEvaluate(char *args, int subClass)
+BOOL cmdEvaluate2(char *args, int subClass)
 {
     static char buf[MAX_STRING];        // Temp output buffer
     int i;
@@ -899,7 +899,7 @@ BOOL cmdEvaluate(char *args, int subClass)
 
     if( *args )
     {
-        if( Expression(&value, args, &args) && (deb.error==NOERROR) )
+        if( Expression2(&value, args, &args) && (deb.error==NOERROR) )
         {
             if( !*args )
             {
@@ -928,45 +928,3 @@ BOOL cmdEvaluate(char *args, int subClass)
     return( TRUE );
 }
 
-
-/******************************************************************************
-*                                                                             *
-*   BOOL cmdAscii(char *args, int subClass)                                   *
-*                                                                             *
-*******************************************************************************
-*
-*   Utility function that dumps the ASCII character table.
-*
-******************************************************************************/
-BOOL cmdAscii(char *args, int subClass)
-{
-    int nLine = 1;                      // Standard line counter
-    int nibble;                         // ASCII index
-
-    if(dprinth(nLine++, "         0 1 2 3 4 5 6 7  8 9 A B C D E F")==FALSE) return( TRUE );
-
-    for(nibble=0; nibble<256; nibble+=16)
-    {
-        if(dprinth(nLine++, " %3d %02X  %c%c %c%c %c%c %c%c %c%c %c%c %c%c %c%c  %c%c %c%c %c%c %c%c %c%c %c%c %c%c %c%c",
-                nibble,
-                nibble,
-                DP_ESCAPE, (nibble==0)? ' ' : nibble+0,
-                DP_ESCAPE, nibble+1,
-                DP_ESCAPE, nibble+2,
-                DP_ESCAPE, nibble+3,
-                DP_ESCAPE, nibble+4,
-                DP_ESCAPE, nibble+5,
-                DP_ESCAPE, nibble+6,
-                DP_ESCAPE, nibble+7,
-                DP_ESCAPE, nibble+8,
-                DP_ESCAPE, nibble+9,
-                DP_ESCAPE, nibble+10,
-                DP_ESCAPE, nibble+11,
-                DP_ESCAPE, nibble+12,
-                DP_ESCAPE, nibble+13,
-                DP_ESCAPE, nibble+14,
-                DP_ESCAPE, nibble+15 )==FALSE) break;
-    }
-
-    return( TRUE );
-}

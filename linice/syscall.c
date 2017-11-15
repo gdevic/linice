@@ -50,10 +50,10 @@
 
 extern void GetSysreg( TSysreg * pSys );
 extern void SetSysreg( TSysreg * pSys );
-extern int ArmDebugReg(int nDr, TADDRDESC Addr);
+extern void ArmDebugReg(int nDr, TADDRDESC Addr);
 extern TSYMTAB *SymTabFind(char *name);
 extern void SymTabRelocate(TSYMTAB *pSymTab, int pReloc[], int factor);
-extern BOOL FindModule(const char *name, TMODULE *pMod);
+extern BOOL FindModule(TMODULE *pMod, char *pName, int nNameLen);
 
 /******************************************************************************
 *                                                                             *
@@ -123,7 +123,7 @@ asmlinkage int SyscallInitModule(const char *name, void *image)
 
     // Find a kernel module descriptor that has been created after a previous system call
     // create_module. That should be found - else this call will fail anyways...
-    if( FindModule(name, &Mod) )
+    if( FindModule(&Mod, name, strlen(name)) )
     {
         // Try to find if we have a symbol table loaded for this module, so we can relocate it
         // Find the symbol table with the name of this module
@@ -191,7 +191,7 @@ asmlinkage int SyscallInitModule(const char *name, void *image)
 
                 // Make that symbol table the current one
 
-                pIce->pSymTabCur = pSymTab;
+                deb.pSymTabCur = pSymTab;
 
                 //===================================================================
 
@@ -261,8 +261,12 @@ asmlinkage int SyscallDeleteModule(const char *name)
 
     if( retval==0 )
     {
-        // If we had any breakpoints placed within this module, we
-        // need to disable them
+        // TODO: If we had any breakpoints placed within this module, we need to disable them
+
+
+
+
+
 
 
         // Module has been deleted from the kernel space. We need to find

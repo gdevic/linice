@@ -2,7 +2,7 @@
 *                                                                             *
 *   Module:     iceface.c                                                     *
 *                                                                             *
-*   Copyright (c) 1997-2002 Goran Devic                                       *
+*   Copyright (c) 1997-2004 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -555,15 +555,21 @@ void *ice_get_module(void *pm, TMODULE *pMod)
 
     if( pm )
     {
+        // Copy the module information into the private API structure
         pMod->pmodule = pm;
         pMod->name = ((struct module *)pm)->name;
         pMod->flags = ((struct module *)pm)->flags;
         pMod->size = ((struct module *)pm)->size;
         pMod->nsyms = ((struct module *)pm)->nsyms;
         pMod->syms = ((struct module *)pm)->syms;
+        pMod->ndeps = ((struct module *)pm)->ndeps;
         pMod->init = ((struct module *)pm)->init;
         pMod->cleanup = ((struct module *)pm)->cleanup;
         pMod->use_count = GET_USE_COUNT((struct module *)pm);
+
+        // Address the Linux kernel module with the name "kernel"
+        if( !pMod->name || *pMod->name=='\0' )
+            pMod->name = "kernel";
     }
 
     return( pm );

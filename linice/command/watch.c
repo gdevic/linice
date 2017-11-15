@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       09/11/2002                                                    *
 *                                                                             *
-*   Copyright (c) 2000 - 2002 Goran Devic                                     *
+*   Copyright (c) 2002 Goran Devic                                            *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -52,16 +52,20 @@
 *                                                                             *
 ******************************************************************************/
 
-static char buf[MAX_STRING];
-
 /******************************************************************************
 *                                                                             *
 *   External Functions                                                        *
 *                                                                             *
 ******************************************************************************/
 
-extern TLISTITEM *ListAdd(TLIST *pList, TFRAME *pFrame, char *pVar);
+extern TLISTITEM *ListAdd(TLIST *pList, TFRAME *pFrame);
 extern void ListDraw(TLIST *pList, TFRAME *pFrame, BOOL fForce);
+extern void ListDel(TLIST *pList, TLISTITEM *pItem, BOOL fDelRoot);
+extern BOOL Evaluate(TExItem *pItem, char *pExpr, char **ppNext, BOOL fSymbolsValueOf);
+extern void PrettyPrintVariableName(char *pString, char *pName, TSYMTYPEDEF1 *pType1);
+extern void MakeSelectedVisible(TLIST *pList, int nLines);
+extern BOOL ListFindItem(TLIST *pList, TExItem *pExItem);
+
 
 /******************************************************************************
 *                                                                             *
@@ -81,18 +85,41 @@ extern void ListDraw(TLIST *pList, TFRAME *pFrame, BOOL fForce);
 BOOL cmdWatch(char *args, int subClass)
 {
     TLISTITEM *pItem;                   // Item to add to watch list
+    TExItem ExItem;                     // Expression item evaluated
 
-    // Right now we can only watch variables, not expressions
 
-    // New item will be marked as selected
-    if(pItem = ListAdd(&deb.Watch, &pWin->w, args))
+    // Evaluate a new watch expression and get its expression node result
+    if( Evaluate(&ExItem, args, NULL, TRUE) )
     {
-        // Successfully added a watch item, redraw the window
-        WatchDraw(TRUE);
-    }
-    else
-    {
-        dprinth(1, "Unable to add a watch.");
+        // Check that the given watch item is not a duplicate
+        if( !ListFindItem(&deb.Watch, &ExItem) )
+        {
+            // Add a new item to the end of the list
+            // New item will also be marked as selected
+            if(pItem = ListAdd(&deb.Watch, &pWin->w))
+            {
+                // Copy the expression node
+                memcpy(&pItem->Item, &ExItem, sizeof(TExItem));
+
+                // We can delete root watch variables
+                pItem->fCanDelete = TRUE;
+
+                // Copy the expression string into the list item
+                strcpy(pItem->Name, args);
+
+                PrettyPrintVariableName(pItem->String, pItem->Name, &pItem->Item.Type);
+
+                // When we are adding a watch expression, make sure it is visible
+                MakeSelectedVisible(&deb.Watch, pWin->w.nLines );
+
+                // Successfully added a watch item, redraw the window
+                WatchDraw(TRUE);
+            }
+            else
+                dprinth(1, "Unable to add a watch.");
+        }
+        else
+            dprinth(1, "Duplicate watch expression!");
     }
 
     return( TRUE );

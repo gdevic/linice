@@ -51,7 +51,7 @@
 *                                                                             *
 ******************************************************************************/
 
-extern BOOL FindModule(const char *name, TMODULE *pMod);
+extern BOOL FindModule(TMODULE *pMod, char *pName, int nNameLen);
 
 /******************************************************************************
 *                                                                             *
@@ -84,7 +84,7 @@ int Capture(void *p)
 
     dprinth(1, "Capture: %s", name);
 
-    if( FindModule(name, &Mod) )
+    if( FindModule(&Mod, name, strlen(name)) )
     {
         // Module was found. Copy the data: TMODULE info and the module itself
 

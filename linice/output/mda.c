@@ -395,7 +395,7 @@ static void MdaScrollUp()
 
         // Clear the last line
         memset_w(mda.pText + (mda.scrollBottom * outMda.sizeX) * 2,
-               pIce->col[COL_NORMAL] * 256 + ' ',
+               deb.col[COL_NORMAL] * 256 + ' ',
                outMda.sizeX );
     }
 }
@@ -413,13 +413,13 @@ static void MdaScrollUp()
 static void MdaSprint(char *s)
 {
     BYTE c;
-    DWORD dwTabs;
+    UINT nTabs;
 
     while( (c = *s++) != 0 )
     {
         if( c==DP_TAB )
         {
-            for(dwTabs=deb.dwTabs; dwTabs; dwTabs--)
+            for(nTabs=deb.nTabs; nTabs; nTabs--)
                 MdaSprint(" ");
         }
         else
@@ -438,7 +438,7 @@ static void MdaSprint(char *s)
             case DP_CLS:
                     // Clear the screen and reset the cursor coordinates
                     memset_w(mda.pText,
-                        pIce->col[COL_NORMAL] * 256 + ' ',
+                        deb.col[COL_NORMAL] * 256 + ' ',
                         outMda.sizeY * outMda.sizeX);
                     outMda.x = 0;
                     outMda.y = 0;
@@ -484,7 +484,7 @@ static void MdaSprint(char *s)
 
                         // Clear the first line
                         memset_w(mda.pText + (mda.scrollTop * outMda.sizeX) * 2,
-                               pIce->col[COL_NORMAL] * 256 + ' ',
+                               deb.col[COL_NORMAL] * 256 + ' ',
                                outMda.sizeX);
                     }
                 break;
@@ -496,7 +496,7 @@ static void MdaSprint(char *s)
             case '\r':
                     // Erase all characters to the right of the cursor pos and move cursor back
                     memset_w(mda.pText + (outMda.x +  outMda.y * outMda.sizeX) * 2,
-                            pIce->col[mda.col] * 256 + ' ',
+                            deb.col[mda.col] * 256 + ' ',
                             outMda.sizeX - outMda.x);
                     outMda.x = 0;
                     mda.col = COL_NORMAL;
@@ -704,14 +704,14 @@ static void HercMouse(int x, int y)
 static void HercSprint(char *s)
 {
     BYTE c;
-    DWORD dwTabs;
+    UINT nTabs;
 
     // Warning: this function is being reentered
     while( (c = *s++) != 0 )
     {
         if( c==DP_TAB )
         {
-            for(dwTabs=deb.dwTabs; dwTabs; dwTabs--)
+            for(nTabs=deb.nTabs; nTabs; nTabs--)
                 HercSprint(" ");
         }
         else

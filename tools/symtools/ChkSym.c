@@ -61,7 +61,7 @@
 #include "stabs.h"                      // Include STABS defines and structures
 
 
-BOOL ChkIgnore(TSYMHEADER *pHead, char *pStr)
+BOOL ChkIgnore(TSYMHEADER *pHead, DWORD pStr)
 {
     printf("HTYPE_IGNORE\n");
     printf("  Skipping this section...\n");
@@ -70,7 +70,7 @@ BOOL ChkIgnore(TSYMHEADER *pHead, char *pStr)
 }
 
 
-BOOL ChkFunctionLines(TSYMHEADER *pHead, char *pStr)
+BOOL ChkFunctionLines(TSYMHEADER *pHead, DWORD pStr)
 {
     WORD nLine;
     TSYMFNLIN *pFuncLin;
@@ -91,7 +91,7 @@ BOOL ChkFunctionLines(TSYMHEADER *pHead, char *pStr)
 }
 
 
-BOOL ChkFunctionScope(TSYMHEADER *pHead, char *pStr)
+BOOL ChkFunctionScope(TSYMHEADER *pHead, DWORD pStr)
 {
     WORD nTokens;
     TSYMFNSCOPE *pFuncScope;
@@ -99,7 +99,7 @@ BOOL ChkFunctionScope(TSYMHEADER *pHead, char *pStr)
     pFuncScope = (TSYMFNSCOPE *) pHead;
 
     printf("HTYPE_FUNCTION_SCOPE\n");
-    printf("  dName = %s\n", pStr + pFuncScope->dName);
+    printf("  pName = %s\n", pStr + pFuncScope->pName);
     printf("  file_id = %d\n", pFuncScope->file_id);
     printf("  dwStartAddress = %08X\n", pFuncScope->dwStartAddress);
     printf("  dwEndAddress   = %08X\n", pFuncScope->dwEndAddress);
@@ -107,13 +107,13 @@ BOOL ChkFunctionScope(TSYMHEADER *pHead, char *pStr)
 
     for( nTokens=0; nTokens<pFuncScope->nTokens; nTokens++ )
     {
-        printf("    Token: %3d : %08X %08X  ", nTokens, pFuncScope->list[nTokens].p1, pFuncScope->list[nTokens].p2);
+        printf("    Token: %3d : %08X %08X  ", nTokens, pFuncScope->list[nTokens].param, pFuncScope->list[nTokens].pName);
         switch(  pFuncScope->list[nTokens].TokType )
         {
-            case TOKTYPE_PARAM:     printf("TOKTYPE_PARAM %s\n", pStr + pFuncScope->list[nTokens].p2);       break;
-            case TOKTYPE_RSYM:      printf("TOKTYPE_RSYM  %s\n", pStr + pFuncScope->list[nTokens].p2);       break;
-            case TOKTYPE_LSYM:      printf("TOKTYPE_LSYM  %s\n", pStr + pFuncScope->list[nTokens].p2);       break;
-            case TOKTYPE_LCSYM:     printf("TOKTYPE_LCSYM %s\n", pStr + pFuncScope->list[nTokens].p2);       break;
+            case TOKTYPE_PARAM:     printf("TOKTYPE_PARAM %s\n", pStr + pFuncScope->list[nTokens].pName);       break;
+            case TOKTYPE_RSYM:      printf("TOKTYPE_RSYM  %s\n", pStr + pFuncScope->list[nTokens].pName);       break;
+            case TOKTYPE_LSYM:      printf("TOKTYPE_LSYM  %s\n", pStr + pFuncScope->list[nTokens].pName);       break;
+            case TOKTYPE_LCSYM:     printf("TOKTYPE_LCSYM %s\n", pStr + pFuncScope->list[nTokens].pName);       break;
             case TOKTYPE_LBRAC:     printf("TOKTYPE_LBRAC {\n");       break;
             case TOKTYPE_RBRAC:     printf("TOKTYPE_RBRAC }\n");       break;
             default:
@@ -126,19 +126,31 @@ BOOL ChkFunctionScope(TSYMHEADER *pHead, char *pStr)
 }
 
 
-BOOL ChkStatic(TSYMHEADER *pHead, char *pStr)
+BOOL ChkStatic(TSYMHEADER *pHead, DWORD pStr)
 {
+    DWORD nStat;
     TSYMSTATIC *pStatic;
 
     pStatic = (TSYMSTATIC *) pHead;
 
-    printf("HTYPE_STATIC *** TODO ***\n");
+    printf("HTYPE_STATIC\n");
+
+    printf("  file_id = %d\n", pStatic->file_id);
+    printf("  nStatic = %d d\n", pStatic->nStatics);
+
+    for( nStat=0; nStat<pStatic->nStatics; nStat++)
+    {
+        printf("    %3d: %08X %s = %s\n", nStat,
+            pStatic->list[nStat].dwAddress,
+            pStr + pStatic->list[nStat].pName,
+            pStatic->list[nStat].pDef ? pStr + pStatic->list[nStat].pDef : "NULL");
+    }
 
     return(TRUE);
 }
 
 
-BOOL ChkGlobals(TSYMHEADER *pHead, char *pStr)
+BOOL ChkGlobals(TSYMHEADER *pHead, DWORD pStr)
 {
     DWORD nGlob;
     TSYMGLOBAL *pGlob;
@@ -151,19 +163,19 @@ BOOL ChkGlobals(TSYMHEADER *pHead, char *pStr)
     for( nGlob=0; nGlob<pGlob->nGlobals; nGlob++)
     {
         printf("    %3d: %08X %08X F:%02X file_id:%d %s = %s\n", nGlob,
-            pGlob->global[nGlob].dwStartAddress,
-            pGlob->global[nGlob].dwEndAddress,
-            pGlob->global[nGlob].bFlags,
-            pGlob->global[nGlob].file_id,
-            pStr + pGlob->global[nGlob].dName,
-            pGlob->global[nGlob].dDef ? pStr + pGlob->global[nGlob].dDef : "NULL");
+            pGlob->list[nGlob].dwStartAddress,
+            pGlob->list[nGlob].dwEndAddress,
+            pGlob->list[nGlob].bFlags,
+            pGlob->list[nGlob].file_id,
+            pStr + pGlob->list[nGlob].pName,
+            pGlob->list[nGlob].pDef ? pStr + pGlob->list[nGlob].pDef : "NULL");
     }
 
     return( TRUE );
 }
 
 
-BOOL ChkSource(TSYMHEADER *pHead, char *pStr)
+BOOL ChkSource(TSYMHEADER *pHead, DWORD pStr)
 {
     DWORD nLine;
     TSYMSOURCE *pSrc;
@@ -173,21 +185,21 @@ BOOL ChkSource(TSYMHEADER *pHead, char *pStr)
 
     printf("HTYPE_SOURCE\n");
     printf("  file_id     = %d\n", pSrc->file_id);
-    printf("  dSourcePath = %s\n", pStr + pSrc->dSourcePath);
-    printf("  dSourceName = %s\n", pStr + pSrc->dSourceName);
+    printf("  pSourcePath = %s\n", pStr + pSrc->pSourcePath);
+    printf("  pSourceName = %s\n", pStr + pSrc->pSourceName);
     printf("  nLines      = %d\n", pSrc->nLines);
 
     for( nLine=0; nLine<pSrc->nLines; nLine++ )
     {
         printf("    %3d: ", nLine + 1);
-        bSpaces = *(BYTE *)(pStr + pSrc->dLineArray[nLine]);
+        bSpaces = *(BYTE *)(pStr + pSrc->pLineArray[nLine]);
         while(bSpaces!=0)
         {
             printf(" ");
             bSpaces--;
         }
 
-        printf("%s\n", pStr + pSrc->dLineArray[nLine]+1);
+        printf("%s\n", pStr + pSrc->pLineArray[nLine]+1);
     }
 
     return( TRUE );
@@ -216,7 +228,7 @@ static char *basic[] = {
     "VOID",
 };
 
-BOOL ChkTypedefs(TSYMHEADER *pHead, char *pStr)
+BOOL ChkTypedefs(TSYMHEADER *pHead, DWORD pStr)
 {
     WORD nTypedefs;
     TSYMTYPEDEF *pType;
@@ -229,14 +241,14 @@ BOOL ChkTypedefs(TSYMHEADER *pHead, char *pStr)
 
     for( nTypedefs=0; nTypedefs<pType->nTypedefs; nTypedefs++ )
     {
-        if( pType->list[nTypedefs].dDef <= TYPEDEF__LAST )
+        if( *(pStr + pType->list[nTypedefs].pDef) <= TYPEDEF__LAST )
         {
-            printf("    %03d  TYPEDEF(%2d,%2d) BASIC %-25s  %s\n",
+            printf("    %03d  [%2d,%2d] %s = %s\n",
                 nTypedefs,
                 pType->list[nTypedefs].maj,
                 pType->list[nTypedefs].min,
-                basic[pType->list[nTypedefs].dDef],
-                pStr + pType->list[nTypedefs].dName );
+                basic[*(pStr + pType->list[nTypedefs].pDef)],
+                pStr + pType->list[nTypedefs].pName );
         }
         else
         {
@@ -244,15 +256,15 @@ BOOL ChkTypedefs(TSYMHEADER *pHead, char *pStr)
                 nTypedefs,
                 pType->list[nTypedefs].maj,
                 pType->list[nTypedefs].min,
-                pStr + pType->list[nTypedefs].dName,
-                pStr + pType->list[nTypedefs].dDef );
+                pStr + pType->list[nTypedefs].pName,
+                pStr + pType->list[nTypedefs].pDef );
         }
     }
 
     return( TRUE );
 }
 
-BOOL ChkReloc(TSYMHEADER *pHead, char *pStr)
+BOOL ChkReloc(TSYMHEADER *pHead, DWORD pStr)
 {
     TSYMRELOC *pReloc;
     WORD nReloc;
@@ -275,7 +287,7 @@ BOOL CheckSymStructure(char *pBuf, DWORD nLen)
 {
     TSYMTAB *pSym;                      // Symbol file header
     TSYMHEADER *pHead;                  // Generic section header
-    char *pStr;
+    DWORD pStr;                         // Strings section
     int nSection = 0;
     BOOL fTest;                         // Return value from the test
 
@@ -290,7 +302,7 @@ BOOL CheckSymStructure(char *pBuf, DWORD nLen)
 
     if( pSym->dwSize==nLen )
     {
-        pStr = pSym->dStrings + pBuf;
+        pStr = pSym->dStrings + (DWORD) pBuf;
         pHead = pSym->header;
 
         while( pHead->hType != HTYPE__END )

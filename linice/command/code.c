@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       05/16/00                                                      *
 *                                                                             *
-*   Copyright (c) 2000 - 2001 Goran Devic                                     *
+*   Copyright (c) 2000 Goran Devic                                            *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -69,7 +69,6 @@ static TADDRDESC Addr = { 0, 0 };
 ******************************************************************************/
 
 extern int BreakpointQuery(TADDRDESC Addr);
-extern int BreakpointQueryFileLine(WORD file_id, WORD line);
 
 
 /******************************************************************************
@@ -234,13 +233,23 @@ static BYTE GetCodeLine(PTADDRDESC pAddr, BOOL fDecodeExtra, BOOL fTarget)
 }
 
 
+/******************************************************************************
+*                                                                             *
+*   DWORD GetCodeLines()                                                      *
+*                                                                             *
+*******************************************************************************
+*
+*   Returns the number of lines that we need to print out.
+*
+******************************************************************************/
 static DWORD GetCodeLines()
 {
-    // If data frame is visible, we will advance so many lines of code
+    // If code window is visible, we will advance so many lines of code
     if( pWin->c.fVisible )
         return( pWin->c.nLines - 1 );
 
     // Code window is not visible, so advance 8 or (history height-1) code lines
+    // This is in the cases where we just dump source to the history window
     if( pWin->h.nLines > 8 )
         return( 8 );
 
@@ -248,6 +257,23 @@ static DWORD GetCodeLines()
 }
 
 
+/******************************************************************************
+*                                                                             *
+*   char *GetSourceLine(WORD *pwLine, PTADDRDESC pAddr)                       *
+*                                                                             *
+*******************************************************************************
+*
+*   For the given address, returns the pointer to the source file.
+*
+*   Where:
+*       pwLine is the address of the variable receiving the line number
+*       pAddr is the address to query
+*
+*   Returns:
+*       Pointer to the source line; *pwLine is set to the exact line number
+*       NULL if the address does not correspond to any source line
+*
+******************************************************************************/
 char *GetSourceLine(WORD *pwLine, PTADDRDESC pAddr)
 {
     TSYMFNLIN *pFnLin;
@@ -279,6 +305,9 @@ char *GetSourceLine(WORD *pwLine, PTADDRDESC pAddr)
 *
 *   Prints out a block of code lines.
 *
+*   Where:
+*       fForce will force redraw even if source window is not open (dray into history buffer)
+*
 ******************************************************************************/
 void CodeDraw(BOOL fForce)
 {
@@ -308,6 +337,8 @@ void CodeDraw(BOOL fForce)
 
     Addr = deb.codeTopAddr;             // Copy the current code address
     maxLines = GetCodeLines();
+    deb.CodeEditAddress.sel = 0;        // Zero out target address for the code edit mode
+    deb.CodeEditAddress.offset = 0;
 
     // Depending on the source mode, we display source file or basically
     // a machine code with optional mixed source lines
@@ -322,7 +353,10 @@ void CodeDraw(BOOL fForce)
         // Loop and print all the source lines
         while( (nLine <= maxLines) && (wLine < deb.pSource->nLines) )
         {
-            pLine = GET_STRING( deb.pSource->dLineArray[wLine] );
+            // Get the address that corresponds to the source at the current line number
+            Addr.offset = SymLinNum2Address(wLine+1);
+
+            pLine = deb.pSource->pLineArray[wLine];
 
             bSpaces = *(BYTE *)pLine;
 
@@ -342,7 +376,7 @@ void CodeDraw(BOOL fForce)
             else
             {
                 // If the current file_id and line contains a breakpoint, highlight it
-                if( BreakpointQueryFileLine(deb.pSource->file_id, wLine+1) >= 0 )
+                if( BreakpointQuery(Addr) >= 0 )
                     col = COL_BOLD;
                 else
                     col = COL_NORMAL;
@@ -355,6 +389,10 @@ void CodeDraw(BOOL fForce)
                 pLine += deb.codeFileXoffset;
 
             dprinth(nLine++, "%c%c%05d:%s\r", DP_SETCOLINDEX, col, wLine + 1, pLine);
+
+            // For the code edit mode store the address (if valid) if the Y line numbers match
+            if( deb.nCodeEditY==nLine-2 && Addr.offset)
+                deb.CodeEditAddress = Addr;
 
             wLine++;
         }
@@ -431,10 +469,18 @@ void CodeDraw(BOOL fForce)
                     else
                         return;
                 }
+
+                // For the code edit mode store the address if the Y line numbers match
+                if( deb.nCodeEditY==nLine-2 )
+                    deb.CodeEditAddress = Addr;
             }
 
             if(dprinth(nLine++, "%c%c%s\r", DP_SETCOLINDEX, col, pLine)==FALSE)
                 break;
+
+            // For the code edit mode store the address if the Y line numbers match
+            if( deb.nCodeEditY==nLine-2 )
+                deb.CodeEditAddress = Addr;
 
             // Keep the running bottom address
             deb.codeBottomAddr = Addr;
@@ -645,6 +691,135 @@ void CodeScroll(int Xdir, int Ydir)
 
 /******************************************************************************
 *                                                                             *
+*   void CodeCursorScroll(int Ydir)                                           *
+*                                                                             *
+*******************************************************************************
+*
+*   This function is called from the edlim module in the code edit mode,
+*   to move cursor one line up or down, possibly scrolling the content of the
+*   source window.
+*
+*   Where:
+*       Ydir = -1 one line back
+*               1 one line forth
+*
+******************************************************************************/
+void CodeCursorScroll(int Ydir)
+{
+    switch( Ydir )
+    {
+        case -1:        // Cursor up, possibly scroll code window one line down
+            if( deb.nCodeEditY )
+                deb.nCodeEditY--;
+            else
+                // We are already at the first line, scroll the code window
+                CodeScroll(0, -1);
+            break;
+
+        case 1:         // Cursor down, possibly scroll code window one line up
+            if( deb.nCodeEditY < pWin->c.nLines-2 )
+                deb.nCodeEditY++;
+            else
+                // We are at the last line, scroll the window down
+                CodeScroll(0, 1);
+            break;
+    }
+
+    // Redraw the source window so the address variables are adjusted
+    CodeDraw(FALSE);
+}
+
+/******************************************************************************
+*                                                                             *
+*   BOOL cmdEnterCode(char *args, int subClass)                               *
+*                                                                             *
+*******************************************************************************
+*
+*   Moves the cursor to the code window. This allows setting a breakpoint
+*   in place (with F9 key) or executing up to the line (with F7 key), etc.
+*
+*   No parameters.
+*
+******************************************************************************/
+BOOL cmdEnterCode(char *args, int subClass)
+{
+    // Check for no paremeters
+    if( !*args )
+    {
+        // Toggle the code edit window
+        if( deb.fCodeEdit )
+        {
+            // Code edit is already active, deactivate it
+            deb.fCodeEdit = FALSE;
+        }
+        else
+        {
+            // Code edit is not active, activate it
+
+            // If the code window is not visible, make it visible
+            if( pWin->c.fVisible==FALSE )
+            {
+                // Make a window visible and redraw whole screen
+                pWin->c.fVisible = TRUE;
+                RecalculateDrawWindows();
+            }
+
+            deb.fCodeEdit = TRUE;
+            deb.nCodeEditY = 0;
+        }
+    }
+    else
+        deb.error = ERR_SYNTAX;
+
+    return( TRUE );
+}
+
+
+/******************************************************************************
+*                                                                             *
+*   BOOL cmdHere(char *args, int subClass)                                    *
+*                                                                             *
+*******************************************************************************
+*
+*   Executes code up to the selected line or address. The code edit mode has to
+*   be set (EC / F6) in order to select a line.
+*
+*   No parameters.
+*
+******************************************************************************/
+BOOL cmdHere(char *args, int subClass)
+{
+    // Check for no paremeters
+    if( !*args )
+    {
+        // We have to be in the code edit mode for this command to work
+        if( deb.fCodeEdit )
+        {
+            // If the valid address is selected, execute up to that address
+            if( deb.CodeEditAddress.sel )
+            {
+                // Set up a one-time internal breakpoint at the selected address
+                // Instead of repeating the code, we use command "G" to run this command.
+
+                sprintf(buf, "%04X:%08X", deb.CodeEditAddress.sel, deb.CodeEditAddress.offset);
+
+                cmdGo(buf, 0);
+
+                return( FALSE );
+            }
+        }
+        else
+            deb.error = ERR_SYNTAX;
+    }
+    else
+        deb.error = ERR_SYNTAX;
+
+    return( TRUE );
+}
+
+
+/******************************************************************************
+*                                                                             *
 *   BOOL cmdUnasm(char *args, int subClass)                                   *
 *                                                                             *
 *******************************************************************************
@@ -664,16 +839,17 @@ BOOL cmdUnasm(char *args, int subClass)
     {
         // Argument present: U <address> [L <len>]
         evalSel = deb.codeTopAddr.sel;
-        offset = Evaluate(args, &args);
-
-        // Verify the selector value
-        if( VerifySelector(evalSel) )
+        if( Expression(&offset, args, &args) )
         {
-            deb.codeTopAddr.offset = offset;
-            deb.codeTopAddr.sel = evalSel;
+            // Verify the selector value
+            if( VerifySelector(evalSel) )
+            {
+                deb.codeTopAddr.offset = offset;
+                deb.codeTopAddr.sel = evalSel;
+            }
+            else
+                return( TRUE );
         }
-        else
-            return( TRUE );
     }
     else
     {

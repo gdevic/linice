@@ -202,7 +202,7 @@ static void EditInPlace(PTRegField pReg, int xDisp)
     int xCur = 0, yCur = 0;             // Current cursor coordinates
     DWORD nibble;                       // Current typed nibble
     DWORD value = 0;                    // and complete value
-    CHAR Key;                           // Current key pressed
+    WCHAR Key;                          // Current key pressed
 
     // If the register window is not visible, make it visible
     if( pWin->r.fVisible==FALSE )
@@ -354,8 +354,7 @@ BOOL cmdReg(char *args, int subClass)
         // then edit in place
         EditInPlace(&RegField[0], 0);
 
-        // TODO: Edit cs:eip should recalc context. do this better...
-        // If we changed eip, we need to recalculate the whole context
+        // If we changed cs:eip, we need to recalculate the whole context
         SetSymbolContext(deb.r->cs, deb.r->eip);
 
         RecalculateDrawWindows();
@@ -376,6 +375,9 @@ BOOL cmdReg(char *args, int subClass)
             // Restore CPU registers
             memcpy(deb.r, &tempCpuRegs, sizeof(TREGS));
             dprinth(1, "CPU registers restored.");
+
+            // If we changed cs:eip, we need to recalculate the whole context
+            SetSymbolContext(deb.r->cs, deb.r->eip);
 
             RecalculateDrawWindows();
         }
@@ -425,8 +427,7 @@ BOOL cmdReg(char *args, int subClass)
                             // If we changed eip, we better readjust the code window address
                             deb.codeTopAddr.offset = deb.r->eip;
 
-                            // TODO: Edit cs:eip should recalc context. do this better...
-                            // If we changed eip, we need to recalculate the whole context
+                            // If we changed cs:eip, we need to recalculate the whole context
                             SetSymbolContext(deb.r->cs, deb.r->eip);
 
                             RecalculateDrawWindows();

@@ -4,7 +4,7 @@
 ;                                                                             |
 ;   Date: 09/11/00                                                            |
 ;                                                                             |
-;   Copyright (c) 2000 - 2001 Goran Devic                                     |
+;   Copyright (c) 2000 Goran Devic                                            |
 ;                                                                             |
 ;   Author:     Goran Devic                                                   |
 ;                                                                             |
@@ -61,7 +61,6 @@ global  Inpd
 
 global  InterruptPoll
 
-global  TestAndReset
 global  SpinlockTest
 global  SpinUntilReset
 global  SpinlockSet
@@ -1015,6 +1014,16 @@ Inpd:
 ;==============================================================================
 InterruptPoll:
         halt
+
+        ; This is for SuSe running under VmWare - makes it less CPU intensive
+        ; since VmWare yields CPU on kernel HALT, not our HALT
+        push    eax
+        mov     ax, word [0C0106E41h]
+        cmp     ax, 0F4FBh              ; FB  sti
+        jnz     @skip                   ; F4  halt
+        call    0C0106E41h
+@skip:
+        pop     eax
         ret
 
 ;==============================================================================
@@ -1034,25 +1043,12 @@ GetKernelCS:
 ;
 ;   Spinlock functions:
 ;
-;   DWORD TestAndReset(DWORD *pSpinlock);
 ;   DWORD SpinlockTest(DWORD *pSpinlock);
 ;   DWORD SpinUntilReset(DWORD *pSpinlock);
 ;   void  SpinlockSet(DWORD *pSpinlock);
 ;   void  SpinlockReset(DWORD *pSpinlock);
 ;
 ;==============================================================================
-
-TestAndReset:
-        push    ebp
-        mov     ebp, esp
-        push    edx
-        mov     edx, [ebp+8]
-        xor     eax, eax
-        lock
-        xchg    [edx], eax
-        pop     edx
-        pop     ebp
-        ret
 
 SpinUntilReset:
         push    ebp

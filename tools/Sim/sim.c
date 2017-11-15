@@ -57,39 +57,17 @@ unsigned long *sys = lin_sys_call_table;// Pointer to system call table
 BYTE port_KBD_STATUS = 0;
 BYTE port_KBD_DATA = 0;
 
-
-#if 0
-typedef struct tagTRegs
-{
-    DWORD   esp;
-    DWORD   ss;
-    DWORD   es;
-    DWORD   ds;
-    DWORD   fs;
-    DWORD   gs;
-    DWORD   edi;
-    DWORD   esi;
-    DWORD   ebp;
-    DWORD   temp;
-    DWORD   ebx;
-    DWORD   edx;
-    DWORD   ecx;
-    DWORD   eax;
-    DWORD   ChainAddress;
-    DWORD   ErrorCode;
-    DWORD   eip;
-    DWORD   cs;
-    DWORD   eflags;
-} TREGS, *PTREGS;
-#endif
-
-HANDLE hThread;                         // Handle to the debugger thread
+HANDLE hThread = NULL;                  // Handle to the debugger thread
 DWORD dwThreadID;                       // Thread ID number
 
 TREGS Regs;
- 
+extern TDEB deb;
+
 unsigned int opt = OPT_VERBOSE;         // Default options
 int nVerbose = 1;                       // Loader verbose level
+char sTitle[80];                        // Buffer for window title
+
+char sConfig[] = "sim.conf.txt";        // Configuration file
 
 /******************************************************************************
 *                                                                             *
@@ -100,18 +78,78 @@ int nVerbose = 1;                       // Loader verbose level
 static OPENFILENAME File;               // Open file name structure
 static char sFile[512];                 // Temporary file path name
 
+
 /******************************************************************************
 *                                                                             *
 *   Functions                                                                 *
 *                                                                             *
 ******************************************************************************/
+
+void ConfigurationLoad()
+{
+    FILE *fp;
+
+    fp = fopen(sConfig, "r");
+    if(fp)
+    {
+        fscanf(fp, "Regs.eax = %08X\n", &Regs.eax);
+        fscanf(fp, "Regs.ebx = %08X\n", &Regs.ebx);
+        fscanf(fp, "Regs.ecx = %08X\n", &Regs.ecx);
+        fscanf(fp, "Regs.edx = %08X\n", &Regs.edx);
+        fscanf(fp, "Regs.esi = %08X\n", &Regs.esi);
+        fscanf(fp, "Regs.edi = %08X\n", &Regs.edi);
+        fscanf(fp, "Regs.esp = %08X\n", &Regs.esp);
+        fscanf(fp, "Regs.ebp = %08X\n", &Regs.ebp);
+        fscanf(fp, "Regs.eip = %08X\n", &Regs.eip);
+
+        fscanf(fp, "Regs.cs = %04X\n", &Regs.cs);
+        fscanf(fp, "Regs.ds = %04X\n", &Regs.ds);
+        fscanf(fp, "Regs.es = %04X\n", &Regs.es);
+        fscanf(fp, "Regs.fs = %04X\n", &Regs.fs);
+        fscanf(fp, "Regs.gs = %04X\n", &Regs.gs);
+        fscanf(fp, "Regs.ss = %04X\n", &Regs.ss);
+
+        fclose(fp);
+    }
+}
+
+void ConfigurationSave()
+{
+    FILE *fp;
+
+    fp = fopen(sConfig, "w");
+
+    if(fp)
+    {
+        fprintf(fp, "Regs.eax = %08X\n", Regs.eax);
+        fprintf(fp, "Regs.ebx = %08X\n", Regs.ebx);
+        fprintf(fp, "Regs.ecx = %08X\n", Regs.ecx);
+        fprintf(fp, "Regs.edx = %08X\n", Regs.edx);
+        fprintf(fp, "Regs.esi = %08X\n", Regs.esi);
+        fprintf(fp, "Regs.edi = %08X\n", Regs.edi);
+        fprintf(fp, "Regs.esp = %08X\n", Regs.esp);
+        fprintf(fp, "Regs.ebp = %08X\n", Regs.ebp);
+        fprintf(fp, "Regs.eip = %08X\n", Regs.eip);
+
+        fprintf(fp, "Regs.cs = %04X\n", Regs.cs);
+        fprintf(fp, "Regs.ds = %04X\n", Regs.ds);
+        fprintf(fp, "Regs.es = %04X\n", Regs.es);
+        fprintf(fp, "Regs.fs = %04X\n", Regs.fs);
+        fprintf(fp, "Regs.gs = %04X\n", Regs.gs);
+        fprintf(fp, "Regs.ss = %04X\n", Regs.ss);
+
+        fclose(fp);
+    }
+}
+
+
 void SimInit()
 {
     int i;
 
     // Initialize SIM environment
     //=================================================================
-    
+
     pPageOffset = VirtualAlloc(NULL, SIM_PAGE_OFFSET_SIZE, MEM_COMMIT, PAGE_READWRITE);
     //pPageOffset = malloc(SIM_PAGE_OFFSET_SIZE);
 
@@ -153,9 +191,11 @@ void SimInit()
     Regs.esp = (DWORD) pPageOffset + 0x1000;
     Regs.ss  = 0x18;
     Regs.ds  = 0x18;
-    Regs.eip = 0x0804CB52;
+    Regs.eip = 0x0;
     Regs.cs  = 0x10;
     Regs.eflags = 0x203;
+
+    ConfigurationLoad();
 }
 
 void SimInstall()
@@ -182,7 +222,7 @@ void SimLoadSymbolFile()
 
     if( GetOpenFileName( &File ) )
     {
-        OptAddSymbolTable(sFile);        
+        OptAddSymbolTable(sFile);
     }
 }
 
@@ -199,7 +239,7 @@ void SimUnloadSymbolFile()
         // "[drive]:\{Path\}\[Map].[o.]sym"
         p = strrchr(sFile, '\\') + 1;
         *(char *)(strchr(p, '.')) = 0;
-        OptRemoveSymbolTable(p);        
+        OptRemoveSymbolTable(p);
     }
 }
 
@@ -225,20 +265,74 @@ void SimLoadCapture()
     }
 }
 
+int RunCPU()
+{
+    int dr;
+
+    // Keep the CPU going...
+Loop:
+    Regs.eip += 2;                      // Increment by 2 since all assembly instructions are 0 (add eax, al)
+
+    sprintf(sTitle, "Sim: IP=%04X", Regs.eip);
+    SetWindowText(hSim, sTitle);
+
+    // Check debug registers
+    dr = 0;
+    if((deb.sysReg.dr7 & (3<<0)) && !(deb.sysReg.dr7 & (3<<16)) && deb.sysReg.dr[0]==Regs.eip) dr |= 1<<0;
+    if((deb.sysReg.dr7 & (3<<2)) && !(deb.sysReg.dr7 & (3<<18)) && deb.sysReg.dr[1]==Regs.eip) dr |= 1<<1;
+    if((deb.sysReg.dr7 & (3<<4)) && !(deb.sysReg.dr7 & (3<<20)) && deb.sysReg.dr[2]==Regs.eip) dr |= 1<<2;
+    if((deb.sysReg.dr7 & (3<<6)) && !(deb.sysReg.dr7 & (3<<22)) && deb.sysReg.dr[3]==Regs.eip) dr |= 1<<3;
+
+    deb.sysReg.dr6 |= dr;
+
+    // Trap flag has highest priority
+
+    if(Regs.eflags & (1<<8))        // TRAP FLAG
+    {
+        deb.sysReg.dr6 |= 1<<14;    // Trap happened
+
+        return(1);
+    }
+
+    // If debug condition happened, break
+    if(dr)
+        return(1);
+
+    // Else just keep looping until certain EIP
+    if(Regs.eip<100)
+        goto Loop;
+
+    return(0);
+}
+
+
 DWORD WINAPI DebuggerThread(int nInt)
 {
+Execute:
+    sprintf(sTitle, "Sim: Int %d", nInt);
+    SetWindowText(hSim, sTitle);
+
     InterruptHandler( nInt, &Regs );
+
+    if( (nInt = RunCPU()) )
+        goto Execute;
+
+    SetWindowText(hSim, "Sim: Exit thread");
 
     ExitThread(TRUE);
 
     return(0);
 }
 
-void SimINT1()
+void CreateSimINT(int nInt)
 {
+    // Destroy any possible previous thread
+    if(hThread)
+        TerminateThread(hThread, 0);
+
     // Create thread to execute the interrupt
 
-    hThread = CreateThread(NULL, 0, DebuggerThread, 1, 0, &dwThreadID);
+    hThread = CreateThread(NULL, 0, DebuggerThread, nInt, 0, &dwThreadID);
 }
 
 void SimKey(UINT wCode, DWORD lExt)

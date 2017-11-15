@@ -20,7 +20,7 @@
 
     Module Description:
 
-        This header file contains definitions for debugger symbol file .
+        This header file contains definitions for debugger symbol file.
 
 *******************************************************************************
 *                                                                             *
@@ -45,15 +45,15 @@
 *                                                                             *
 ******************************************************************************/
 
-//============================================================================
-// 				        LINICE SYMBOL STRUCTURES
-//============================================================================
-
 #ifdef MODULE
 #include "module-symbols.h"
 #else
 typedef struct {int filler;} TSYMPRIV;
 #endif
+
+//============================================================================
+// 				        LINICE SYMBOL STRUCTURES
+//============================================================================
 
 // Define header types
 #define HTYPE_GLOBALS           0x01    // Global symbols
@@ -88,14 +88,70 @@ typedef struct _SYMTAB
     //         ...
 } PACKED TSYMTAB;
 
+
 //----------------------------------------------------------------------------
-// HTYPE_GLOBALS
-// Defines all global symbols: that includes functions and variables
+// HTYPE_FUNCTION_SCOPE
+// Defines a function run-time execution variable scope
+//----------------------------------------------------------------------------
+
+// Token types:
+#define TOKTYPE_PARAM       0x01        // Function parameter (argument)
+                                        // param: BP+offset to address the parameter
+                                        // pName: Pointer to the name definition string
+
+#define TOKTYPE_RSYM        0x02        // Register local variable
+                                        // param: register index
+                                        // pName: Pointer to the name definition string
+
+#define TOKTYPE_LSYM        0x03        // Local variable kept on the stack
+                                        // param: BP-offset to its address
+                                        // pName: Pointer to the name definition string
+
+#define TOKTYPE_LCSYM       0x04        // Local static variable
+                                        // param: address where is it
+                                        // pName: Pointer to the name definition string
+
+#define TOKTYPE_LBRAC       0x05        // LBRAC scope identifier (open scope)
+                                        // param: function code offset
+                                        // pName: not used, ignore
+
+#define TOKTYPE_RBRAC       0x06        // RBRAC scope identifier (close scope)
+                                        // param: function code offset
+                                        // pName: not used, ignore
+
+// Function descriptor token:
+typedef struct
+{
+    BYTE TokType;                       // Token type
+    DWORD param;                        // Parameter depending on the type
+    PSTR  pName;                        // P2 is always a pointer to the name string
+
+} PACKED TSYMFNSCOPE1;
 
 typedef struct
 {
-    DWORD dName;                        // Offset to the global symbol name string
-    DWORD dDef;                         // Offset to the global symbol definition string
+    TSYMHEADER h;                       // Section header
+
+    PSTR  pName;                        // Function name string
+    WORD  file_id;                      // Function is defined in this file
+    DWORD dwStartAddress;               // Function start address
+    DWORD dwEndAddress;                 // Function end address
+    WORD nTokens;                       // How many tokens are in the array?
+
+    TSYMFNSCOPE1 list[1];               // Function descriptor tokens
+    //     ...
+} PACKED TSYMFNSCOPE;
+
+
+//----------------------------------------------------------------------------
+// HTYPE_GLOBALS
+// Defines all global symbols: that includes functions and variables
+//----------------------------------------------------------------------------
+
+typedef struct
+{
+    PSTR  pName;                        // Global symbol name string
+    PSTR  pDef;                         // Global symbol definition string
     DWORD dwStartAddress;               // Address where the symbol starts
     DWORD dwEndAddress;                 // Address + size of the symbol
     WORD  file_id;                      // Source file ID
@@ -107,16 +163,43 @@ typedef struct
 {
     TSYMHEADER h;                       // Section header
 
+// TODO: Change DWORDs here into UINT
     DWORD nGlobals;                     // Number of global items in the array
-    TSYMGLOBAL1 global[1];              // Array of global symbol descriptors
+    TSYMGLOBAL1 list[1];                // Array of global symbol descriptors
     //           ...
 } PACKED TSYMGLOBAL;
+
+
+//----------------------------------------------------------------------------
+// HTYPE_STATIC
+// Defines all static symbols bound to a single source file
+//----------------------------------------------------------------------------
+
+typedef struct
+{
+    PSTR  pName;                        // Static symbol name string
+    PSTR  pDef;                         // Static symbol definition string
+    DWORD dwAddress;                    // Address of the symbol
+
+} PACKED TSYMSTATIC1;
+
+typedef struct
+{
+    TSYMHEADER h;                       // Section header
+
+    WORD file_id;                       // Static symbols is defined in this file
+    WORD nStatics;                      // How many static symbols are in the array?
+
+    TSYMSTATIC1 list[1];                // Array of static symbol descriptors
+    //           ...
+} PACKED TSYMSTATIC;
+
 
 //----------------------------------------------------------------------------
 // HTYPE_SOURCE
 // Stores a source code file
-//
-// dLineArray is the (DWORD dLine[]) array indexing each line in the source code
+//----------------------------------------------------------------------------
+// pLineArray is the (DWORD dLine[]) array indexing each line in the source code
 // They are zero-terminated. The last index is followed by 0. (Also, the nLines
 // contains the number of lines).
 
@@ -125,16 +208,17 @@ typedef struct
     TSYMHEADER h;                       // Section header
 
     WORD  file_id;                      // This file's unique ID number
-    DWORD dSourcePath;                  // Offset to the source code path/name
-    DWORD dSourceName;                  // Offset to the source code name
+    PSTR  pSourcePath;                  // Source code path/name
+    PSTR  pSourceName;                  // Source code name part only
     DWORD nLines;                       // How many lines this file has
-    DWORD dLineArray[1];                // Array of offsets to each ASCIIZ line
+    PSTR  pLineArray[1];                // Array of pointers to each ASCIIZ line
     //    ...
 } PACKED TSYMSOURCE;
 
 //----------------------------------------------------------------------------
 // HTYPE_FUNCTION_LINES
 // Defines a function line numbers and offset relation
+//----------------------------------------------------------------------------
 
 // Function lines descriptor:
 typedef struct
@@ -158,90 +242,17 @@ typedef struct
 } PACKED TSYMFNLIN;
 
 //----------------------------------------------------------------------------
-// HTYPE_FUNCTION_SCOPE
-// Defines a function run-time execution variable scope
-//
-
-// Token types:
-#define TOKTYPE_PARAM       0x01        // Function parameter (argument)
-                                        // P1: BP+offset to address the parameter
-                                        // P2: offset to the name definition string
-
-#define TOKTYPE_RSYM        0x02        // Register local variable
-                                        // P1: register index
-                                        // P2: offset to the name definition string
-
-#define TOKTYPE_LSYM        0x03        // Local variable kept on the stack
-                                        // P1: BP-offset to its address
-                                        // P2: offset to the name definition string
-
-#define TOKTYPE_LCSYM       0x04        // Local static variable
-                                        // P1: address where is it
-                                        // P2: offset to the name definition string
-
-#define TOKTYPE_LBRAC       0x05        // LBRAC scope identifier (open scope)
-                                        // P1: function code offset
-
-#define TOKTYPE_RBRAC       0x06        // RBRAC scope identifier (close scope)
-                                        // P1: function code offset
-
-// Function descriptor token:
-typedef struct
-{
-    BYTE TokType;                       // Token type
-    DWORD p1;                           // Parameters to use depending on
-    DWORD p2;                           //  the token type
-
-} PACKED TSYMFNSCOPE1;
-
-typedef struct
-{
-    TSYMHEADER h;                       // Section header
-
-    DWORD dName;                        // Offset to the function name string
-    WORD  file_id;                      // Function refers to this file unique ID number
-    DWORD dwStartAddress;               // Function start address
-    DWORD dwEndAddress;                 // Function end address
-    WORD nTokens;                       // How many tokens are in the array?
-
-    TSYMFNSCOPE1 list[1];               // Function descriptor tokens
-    //     ...
-} PACKED TSYMFNSCOPE;
-
-//----------------------------------------------------------------------------
-// HTYPE_STATIC
-// Defines all static symbols bound to a single source file
-
-typedef struct
-{
-    DWORD dName;                        // Offset to the static symbol name string
-    DWORD dDef;                         // Offset to the static symbol definition string
-    DWORD dwAddress;                    // Address of the symbol
-
-} PACKED TSYMSTATIC1;
-
-typedef struct
-{
-    TSYMHEADER h;                       // Section header
-
-    WORD file_id;                       // Static symbols refer to this file unique ID number
-    WORD nStatics;                      // How many static symbols are in the array?
-
-    TSYMSTATIC1 list[1];                // Array of static symbol descriptors
-    //           ...
-} PACKED TSYMSTATIC;
-
-//----------------------------------------------------------------------------
 // HTYPE_TYPEDEF
 // Defines all types bound to a single source file
+//----------------------------------------------------------------------------
 //
 // 'Major' typedef number is the file number in which scope the type is defined.
 // 'Minor' typedef number is the typedef ordinal number and it starts with 1
 //
 // There is a special class of typedefs containing the internal basic types
 // such is 'int' or 'char' whose definition is not stored as string, but instead
-// dDef is used to index them. Naturally, we assumed the dDef will otherwise always
-// be larger than these small numbers:
+// pDef addresses the index (1..19) (still in the strings section.)
+
 #define TYPEDEF_INT                     1
 #define TYPEDEF_CHAR                    2
 #define TYPEDEF_LONG_INT                3
@@ -267,25 +278,28 @@ typedef struct
 {
     WORD maj;                           // Type file number
     WORD min;                           // Type ordinal definition number
-    DWORD dName;                        // Offset to the typedef name string
-    DWORD dDef;                         // Offset to the typedef definition string
-                                        // if dDef<TYPEDEF__LAST, a basic implied type
+    PSTR pName;                         // Typedef name string
+    PSTR pDef;                          // Typedef definition string
+
 } PACKED TSYMTYPEDEF1;
 
 typedef struct
 {
     TSYMHEADER h;                       // Section header
 
-    WORD  file_id;                      // Typedefs refers to this file unique ID number
+    WORD file_id;                       // Typedefs refer to this file unique ID number
+// TODO - do this one as UINT
     WORD nTypedefs;                     // How many typedefs are in the array?
 
     TSYMTYPEDEF1 list[1];               // Typedef array
     //           ...
 } PACKED TSYMTYPEDEF;
 
+
 //----------------------------------------------------------------------------
 // HTYPE_RELOC
 // Relocation information for object files (kernel modules).
+//----------------------------------------------------------------------------
 //
 // Relocation segment type is [0] - .text section (only refOffset used for init_module')
 //                            [1] - .data

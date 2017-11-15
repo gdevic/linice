@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       09/11/00                                                      *
 *                                                                             *
-*   Copyright (c) 1997, 2001 Goran Devic                                      *
+*   Copyright (c) 2000 Goran Devic                                            *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -57,82 +57,90 @@ static int iLast;                       // Last command entry index
 
 BOOL Unsupported(char *args, int subClass);
 
-extern BOOL cmdEvaluate(char *args, int subClass);      // eval.c
-extern BOOL cmdEvaluate2(char *args, int subClass);      // evalex.c
-extern BOOL cmdAscii   (char *args, int subClass);      // eval.c
-extern BOOL cmdAltkey  (char *args, int subClass);      // customization.c
-extern BOOL cmdCode    (char *args, int subClass);      // customization.c
-extern BOOL cmdSet     (char *args, int subClass);      // customization.c
-extern BOOL cmdVar     (char *args, int subClass);      // customization.c
-extern BOOL cmdMacro   (char *args, int subClass);      // customization.c
-extern BOOL cmdResize  (char *args, int subClass);      // customization.c
-extern BOOL cmdColor   (char *args, int subClass);      // customization.c
-extern BOOL cmdSerial  (char *args, int subClass);      // customization.c
-extern BOOL cmdPause   (char *args, int subClass);      // customization.c
-extern BOOL cmdSrc     (char *args, int subClass);      // customization.c
-extern BOOL cmdTabs    (char *args, int subClass);      // customization.c
-extern BOOL cmdDisplay (char *args, int subClass);      // customization.c
-extern BOOL cmdBp      (char *args, int subClass);      // breakpoints.c
-extern BOOL cmdBl      (char *args, int subClass);      // breakpoints.c
-extern BOOL cmdBpet    (char *args, int subClass);      // breakpoints.c
-extern BOOL cmdBstat   (char *args, int subClass);      // breakpoints.c
-extern BOOL cmdBpx     (char *args, int subClass);      // breakpoints.c
-extern BOOL cmdXit     (char *args, int subClass);      // flow.c
-extern BOOL cmdGo      (char *args, int subClass);      // flow.c
-extern BOOL cmdTrace   (char *args, int subClass);      // flow.c
-extern BOOL cmdStep    (char *args, int subClass);      // flow.c
-extern BOOL cmdZap     (char *args, int subClass);      // flow.c
-extern BOOL cmdI1here  (char *args, int subClass);      // flow.c
-extern BOOL cmdI3here  (char *args, int subClass);      // flow.c
-extern BOOL cmdHboot   (char *args, int subClass);      // flow.c
-extern BOOL cmdHalt    (char *args, int subClass);      // flow.c
-extern BOOL cmdWd      (char *args, int subClass);      // windowcontrol.c
-extern BOOL cmdWc      (char *args, int subClass);      // windowcontrol.c
-extern BOOL cmdWr      (char *args, int subClass);      // windowcontrol.c
-extern BOOL cmdWl      (char *args, int subClass);      // windowcontrol.c
-extern BOOL cmdWw      (char *args, int subClass);      // windowcontrol.c
-extern BOOL cmdCls     (char *args, int subClass);      // windowcontrol.c
-extern BOOL cmdRs      (char *args, int subClass);      // windowcontrol.c
-extern BOOL cmdFlash   (char *args, int subClass);      // windowcontrol.c
-extern BOOL cmdTable   (char *args, int subClass);      // symbolTable.c
-extern BOOL cmdSymbol  (char *args, int subClass);      // symbols.c
-extern BOOL cmdTypes   (char *args, int subClass);      // types.c
-extern BOOL cmdFile    (char *args, int subClass);      // symbols.c
-extern BOOL cmdWhat    (char *args, int subClass);      // symbols.c
-extern BOOL cmdReg     (char *args, int subClass);      // registers.c
-extern BOOL cmdLocals  (char *args, int subClass);      // locals.c
-extern BOOL cmdWatch   (char *args, int subClass);      // watch.c
-extern BOOL cmdGdt     (char *args, int subClass);      // sysinfo.c
-extern BOOL cmdLdt     (char *args, int subClass);      // sysinfo.c
-extern BOOL cmdIdt     (char *args, int subClass);      // sysinfo.c
-extern BOOL cmdCpu     (char *args, int subClass);      // sysinfo.c
-extern BOOL cmdModule  (char *args, int subClass);      // sysinfo.c
-extern BOOL cmdVer     (char *args, int subClass);      // sysinfo.c
-extern BOOL cmdProc    (char *args, int subClass);      // sysinfo.c
-extern BOOL cmdTss     (char *args, int subClass);      // sysinfo.c
-extern BOOL cmdPage    (char *args, int subClass);      // page.c
-extern BOOL cmdPhys    (char *args, int subClass);      // page.c
-extern BOOL cmdPeek    (char *args, int subClass);      // page.c
-extern BOOL cmdPoke    (char *args, int subClass);      // page.c
-extern BOOL cmdPci     (char *args, int subClass);      // pci.c
-extern BOOL cmdDdump   (char *args, int subClass);      // data.c
-extern BOOL cmdEdit    (char *args, int subClass);      // data.c
-extern BOOL cmdFormat  (char *args, int subClass);      // data.c
-extern BOOL cmdUnasm   (char *args, int subClass);      // code.c
-extern BOOL cmdDot     (char *args, int subClass);      // code.c
-extern BOOL cmdOut     (char *args, int subClass);      // ioport.c
-extern BOOL cmdIn      (char *args, int subClass);      // ioport.c
-extern BOOL cmdFill    (char *args, int subClass);      // blockops.c
-extern BOOL cmdSearch  (char *args, int subClass);      // blockops.c
-extern BOOL cmdCompare (char *args, int subClass);      // blockops.c
-extern BOOL cmdMove    (char *args, int subClass);      // blockops.c
-extern BOOL cmdHelp    (char *args, int subClass);      // command.c
-extern BOOL cmdFkey    (char *args, int subClass);      // edlin.c
+extern BOOL cmdEvaluate     (char *args, int subClass);      // evalex.c
+extern BOOL cmdAscii        (char *args, int subClass);      // customization.c
+extern BOOL cmdAltkey       (char *args, int subClass);      // customization.c
+extern BOOL cmdCode         (char *args, int subClass);      // customization.c
+extern BOOL cmdSet          (char *args, int subClass);      // customization.c
+extern BOOL cmdVar          (char *args, int subClass);      // customization.c
+extern BOOL cmdMacro        (char *args, int subClass);      // customization.c
+extern BOOL cmdResize       (char *args, int subClass);      // customization.c
+extern BOOL cmdColor        (char *args, int subClass);      // customization.c
+extern BOOL cmdSerial       (char *args, int subClass);      // customization.c
+extern BOOL cmdPause        (char *args, int subClass);      // customization.c
+extern BOOL cmdSrc          (char *args, int subClass);      // customization.c
+extern BOOL cmdTabs         (char *args, int subClass);      // customization.c
+extern BOOL cmdDisplay      (char *args, int subClass);      // customization.c
+extern BOOL cmdBp           (char *args, int subClass);      // breakpoints.c
+extern BOOL cmdBl           (char *args, int subClass);      // breakpoints.c
+extern BOOL cmdBpet         (char *args, int subClass);      // breakpoints.c
+extern BOOL cmdBstat        (char *args, int subClass);      // breakpoints.c
+extern BOOL cmdBpx          (char *args, int subClass);      // breakpoints.c
+extern BOOL cmdXit          (char *args, int subClass);      // flow.c
+extern BOOL cmdGo           (char *args, int subClass);      // flow.c
+extern BOOL cmdTrace        (char *args, int subClass);      // flow.c
+extern BOOL cmdStep         (char *args, int subClass);      // flow.c
+extern BOOL cmdZap          (char *args, int subClass);      // flow.c
+extern BOOL cmdI1here       (char *args, int subClass);      // flow.c
+extern BOOL cmdI3here       (char *args, int subClass);      // flow.c
+extern BOOL cmdHboot        (char *args, int subClass);      // flow.c
+extern BOOL cmdHalt         (char *args, int subClass);      // flow.c
+extern BOOL cmdWd           (char *args, int subClass);      // windowcontrol.c
+extern BOOL cmdWc           (char *args, int subClass);      // windowcontrol.c
+extern BOOL cmdWr           (char *args, int subClass);      // windowcontrol.c
+extern BOOL cmdWl           (char *args, int subClass);      // windowcontrol.c
+extern BOOL cmdWw           (char *args, int subClass);      // windowcontrol.c
+extern BOOL cmdCls          (char *args, int subClass);      // windowcontrol.c
+extern BOOL cmdRs           (char *args, int subClass);      // windowcontrol.c
+extern BOOL cmdFlash        (char *args, int subClass);      // windowcontrol.c
+extern BOOL cmdTable        (char *args, int subClass);      // symbolTable.c
+extern BOOL cmdSymbol       (char *args, int subClass);      // symbols.c
+extern BOOL cmdExport       (char *args, int subClass);      // symbols.c
+extern BOOL cmdTypes        (char *args, int subClass);      // types.c
+extern BOOL cmdFile         (char *args, int subClass);      // symbols.c
+extern BOOL cmdWhat         (char *args, int subClass);      // symbols.c
+extern BOOL cmdReg          (char *args, int subClass);      // registers.c
+extern BOOL cmdLocals       (char *args, int subClass);      // locals.c
+extern BOOL cmdWatch        (char *args, int subClass);      // watch.c
+extern BOOL cmdGdt          (char *args, int subClass);      // sysinfo.c
+extern BOOL cmdLdt          (char *args, int subClass);      // sysinfo.c
+extern BOOL cmdIdt          (char *args, int subClass);      // sysinfo.c
+extern BOOL cmdCpu          (char *args, int subClass);      // sysinfo.c
+extern BOOL cmdModule       (char *args, int subClass);      // sysinfo.c
+extern BOOL cmdVer          (char *args, int subClass);      // sysinfo.c
+extern BOOL cmdProc         (char *args, int subClass);      // sysinfo.c
+extern BOOL cmdTss          (char *args, int subClass);      // sysinfo.c
+extern BOOL cmdPage         (char *args, int subClass);      // page.c
+extern BOOL cmdPhys         (char *args, int subClass);      // page.c
+extern BOOL cmdPeek         (char *args, int subClass);      // page.c
+extern BOOL cmdPoke         (char *args, int subClass);      // page.c
+extern BOOL cmdPci          (char *args, int subClass);      // pci.c
+extern BOOL cmdDdump        (char *args, int subClass);      // data.c
+extern BOOL cmdEdit         (char *args, int subClass);      // data.c
+extern BOOL cmdFormat       (char *args, int subClass);      // data.c
+extern BOOL cmdUnasm        (char *args, int subClass);      // code.c
+extern BOOL cmdDot          (char *args, int subClass);      // code.c
+extern BOOL cmdEnterCode    (char *args, int subClass);      // code.c
+extern BOOL cmdHere         (char *args, int subClass);      // code.c
+extern BOOL cmdOut          (char *args, int subClass);      // ioport.c
+extern BOOL cmdIn           (char *args, int subClass);      // ioport.c
+extern BOOL cmdFill         (char *args, int subClass);      // blockops.c
+extern BOOL cmdSearch       (char *args, int subClass);      // blockops.c
+extern BOOL cmdCompare      (char *args, int subClass);      // blockops.c
+extern BOOL cmdMove         (char *args, int subClass);      // blockops.c
+extern BOOL cmdHelp         (char *args, int subClass);      // command.c
+extern BOOL cmdFkey         (char *args, int subClass);      // edlin.c
+
+//    +--Command name
+//    |          +--Number of characters in the command name
+//    |          |  +--Command subclass number
+//    |          |  |  +--Function
+//    |          |  |  |               +--Help line for that command
+//    |          |  |  |               |
 
 TCommand Cmd[] = {
 {    ".",        1, 0, cmdDot,         "Locate current instruction", "ex: .",  0 },
 {    "?",        1, 0, cmdEvaluate,    "? expression", "ex: ? ax << 1",   0 },
-{    "/",        1, 0, cmdEvaluate2,   "/ expression", "ex: / ax << 1",   0 },
 //{  "A",        1, 0, Unsupported,    "Assemble [Address]", "ex: A CS:1236",    0 },
 //{  "ADDR",     4, 0, Unsupported,    "ADDR [context-handle | task | *]", "ex: ADDR 80FD602C",   0 },
 {    "ALTKEY",   6, 0, cmdAltkey,      "ALTKEY [ALT letter | CTRL letter]", "ex: ALTKEY ALT D",   0 },
@@ -144,14 +152,14 @@ TCommand Cmd[] = {
 //{  "BH",       2, 0, Unsupported,    "BH breakpoint history", "ex: BH", 0 },
 {    "BL",       2, 0, cmdBl,          "BL list current breakpoints", "ex: BL",   0 },
 {    "BPE",      3, 0, cmdBpet,        "BPE edit breakpoint number", "ex: BPE 3",  0 },
-//{  "BPINT",    5, 2, cmdBpx,         "BPINT interrupt-number [IF expression] [DO bp-action]", "ex: BPINT 50",   0 },
-{    "BPIO",     4, 3, cmdBpx,         "BPIO port [R|W|RW] [debug register] [IF expression] [DO bp-action]", "ex: BPIO 3DA W",   0 },
-{    "BPM",      3, 4, cmdBpx,         "BPM[size] address [R|W|RW|X] [debug register] [IF expression] [DO bp-action]", "ex: BPM 1234 RW", 0 },
-{    "BPMB",     4, 4, cmdBpx,         "BPMB address [R|W|RW|X] [debug register] [IF expression] [DO bp-action]", "ex: BPMB 333 R",   0 },
-{    "BPMD",     4, 7, cmdBpx,         "BPMD address [R|W|RW|X] [debug register] [IF expression] [DO bp-action]", "ex: BPMD EDI W",   0 },
-{    "BPMW",     4, 5, cmdBpx,         "BPMW address [R|W|RW|X] [debug register] [IF expression] [DO bp-action]", "ex: BPMW ESP-6 W", 0 },
+//{  "BPINT",    5, 2, Unsupported,    "BPINT interrupt-number [IF expression] [DO bp-action]", "ex: BPINT 50",   0 },
+{    "BPIO",     4, 3, cmdBpx,         "BPIO port [R|W|RW] [debug register] [O] [IF expression] [DO bp-action]", "ex: BPIO 3DA W",   0 },
+{    "BPM",      3, 4, cmdBpx,         "BPM[size] address [R|W|RW|X] [debug register] [O] [IF expression] [DO bp-action]", "ex: BPM 1234 RW", 0 },
+{    "BPMB",     4, 4, cmdBpx,         "BPMB address [R|W|RW|X] [debug register] [O] [IF expression] [DO bp-action]", "ex: BPMB 333 R",   0 },
+{    "BPMD",     4, 7, cmdBpx,         "BPMD address [R|W|RW|X] [debug register] [O] [IF expression] [DO bp-action]", "ex: BPMD EDI W",   0 },
+{    "BPMW",     4, 5, cmdBpx,         "BPMW address [R|W|RW|X] [debug register] [O] [IF expression] [DO bp-action]", "ex: BPMW ESP-6 W", 0 },
 {    "BPT",      3, 1, cmdBpet,        "BPT template breakpoint number", "ex: BPT 0",  0 },
-{    "BPX",      3, 1, cmdBpx,         "BPX address [IF expression] [DO bp-action]", "ex: BPX 282FE0",    0 },
+{    "BPX",      3, 1, cmdBpx,         "BPX address [debug register] [O] [IF expression] [DO bp-action]", "ex: BPX 282FE0",    0 },
 {    "BSTAT",    5, 0, cmdBstat,       "BSTAT [breakpoint #]", "ex: BSTAT 3", 0 },
 {    "C",        1, 0, cmdCompare,     "Compare [-e] address1 L length address2", "ex: C 80000 L 40 EBX",    0 },
 {    "CLS",      3, 0, cmdCls,         "CLS clear window", "ex: CLS", 0 },
@@ -167,10 +175,10 @@ TCommand Cmd[] = {
 {    "DW",       2, 2, cmdDdump,       "DW [address [L length]]", "ex: DW EDI",   0 },
 {    "E",        1, 0, cmdEdit,        "Edit [address] [data]", "ex: E 400000",  0 },
 {    "EB",       2, 1, cmdEdit,        "EB [address] [data]", "ex: EB 324415",    0 },
-//{  "EC",       2, 0, Unsupported,    "EC Enter/exit code window", "ex: EC", 0 },
+{    "EC",       2, 0, cmdEnterCode,   "EC Enter/exit code window", "ex: EC", 0 },
 {    "ED",       2, 4, cmdEdit,        "ED [address] [data]", "ex: ED 84",    0 },
 {    "EW",       2, 2, cmdEdit,        "EW [address] [data]", "ex: EW ESP-8", 0 },
-//{  "EXP",      3, 0, Unsupported,    "EXP [partial-name*]", "ex: EXP GLOB*",    0 },
+{    "EXP",      3, 0, cmdExport,      "EXP [module[!partial-name]]", "ex: EXP module", 0 },
 {    "F",        1, 0, cmdFill,        "Fill address L length data-string", "ex: F EBX L 50 'ABCD'", 0 },
 {    "FAULTS",   6, 0, Unsupported,    "FAULTS [ON | OFF]", "ex: FAULTS ON",  0 },
 {    "FILE",     4, 0, cmdFile,        "FILE [file-name | *]", "ex: FILE main.c", 0 },
@@ -183,7 +191,7 @@ TCommand Cmd[] = {
 {    "H",        1, 0, cmdHelp,        "Help [command]", "ex: H R",  0 },
 {    "HALT",     4, 0, cmdHalt,        "HALT System APM Off", "ex: HALT",    0 },
 {    "HBOOT",    5, 0, cmdHboot,       "HBOOT System boot (total reset)", "ex: HBOOT",    0 },
-{    "HERE",     4, 0, Unsupported,    "HERE Got to current cursor line", "ex: HERE", 0 },
+{    "HERE",     4, 0, cmdHere,        "HERE Go to current cursor line", "ex: HERE", 0 },
 {    "HELP",     4, 0, cmdHelp,        "Help [command]", "ex: HELP R",  0 },
 {    "I",        1, 1, cmdIn,          "I port", "ex: I 21",  0 },
 {    "I1HERE",   6, 0, cmdI1here,      "I1HERE [ON | OFF | KERNEL]", "ex: I1HERE ON",  0 },
@@ -198,7 +206,7 @@ TCommand Cmd[] = {
 {    "M",        1, 0, cmdMove,        "Move source-address L length dest-address", "ex: M 4000 L 80 8000",    0 },
 {    "MACRO",    5, 0, cmdMacro,       "MACRO [macro-name] | [[*] | [= \"macro-body\"]]", "ex: MACRO Oops = \"i3here off; genint 3;\"",   0 },
 {    "MDA",      3, 1, cmdDisplay,     "MDA Switch to Monochrome text output", "ex: MDA",   0 },
-{    "MODULE",   6, 0, cmdModule,      "MODULE [module-name | partial-name*]", "ex: MODULE",    0 },
+{    "MODULE",   6, 0, cmdModule,      "MODULE [module-name | partial-name]", "ex: MODULE",    0 },
 {    "O",        1, 1, cmdOut,         "O port value", "ex: O 21 FF", 0 },
 {    "OB",       2, 1, cmdOut,         "OB port value", "ex: OB 21 FF",   0 },
 {    "OW",       2, 2, cmdOut,         "OW port value", "ex: OW DX AX",   0 },
@@ -401,7 +409,7 @@ char *sHelp[] = {
    "FLASH  - Restore screen during P and T",
    " SYMBOL/SOURCE COMMANDS",
    "SYM    - Display symbols",
-/* "EXP    - Display export symbols", */
+   "EXP    - Display exported symbols from a kernel or a module",
    "SRC    - Toggle between source, mixed & code",
    "TABLE  - Select/remove symbol table",
    "FILE   - Change/display current source file",

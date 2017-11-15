@@ -334,7 +334,7 @@ static void ScrollUp()
 
         // Clear the last line
         memset_w(vga.pText + (vga.scrollBottom * outVga.sizeX) * 2,
-               pIce->col[COL_NORMAL] * 256 + ' ',
+               deb.col[COL_NORMAL] * 256 + ' ',
                outVga.sizeX );
     }
 }
@@ -352,7 +352,7 @@ static void ScrollUp()
 void VgaSprint(char *s)
 {
     BYTE c;
-    DWORD dwTabs;
+    UINT nTabs;
 
     while( (c = *s++) != 0 )
     {
@@ -360,7 +360,7 @@ void VgaSprint(char *s)
         {
             if( c==DP_TAB )
             {
-                for(dwTabs=deb.dwTabs; dwTabs; dwTabs--)
+                for(nTabs=deb.nTabs; nTabs; nTabs--)
                     VgaSprint(" ");
             }
             else
@@ -384,7 +384,7 @@ void VgaSprint(char *s)
                 case DP_CLS:
                         // Clear the screen and reset the cursor coordinates
                         memset_w(vga.pText,
-                            pIce->col[COL_NORMAL] * 256 + ' ',
+                            deb.col[COL_NORMAL] * 256 + ' ',
                             outVga.sizeY * outVga.sizeX);
                         outVga.x = 0;
                         outVga.y = 0;
@@ -430,7 +430,7 @@ void VgaSprint(char *s)
 
                             // Clear the first line
                             memset_w(vga.pText + (vga.scrollTop * outVga.sizeX) * 2,
-                                   pIce->col[COL_NORMAL] * 256 + ' ',
+                                   deb.col[COL_NORMAL] * 256 + ' ',
                                    outVga.sizeX);
                         }
                     break;
@@ -442,7 +442,7 @@ void VgaSprint(char *s)
                 case '\r':
                         // Erase all characters to the right of the cursor pos and move cursor back
                         memset_w(vga.pText + (outVga.x +  outVga.y * outVga.sizeX) * 2,
-                                pIce->col[vga.col] * 256 + ' ',
+                                deb.col[vga.col] * 256 + ' ',
                                 outVga.sizeX - outVga.x);
                         outVga.x = 0;
                         vga.col = COL_NORMAL;
@@ -474,7 +474,7 @@ void VgaSprint(char *s)
                 default:
                         // All printable characters
                         *(WORD *)(vga.pText + (outVga.x +  outVga.y * outVga.sizeX) * 2)
-                            = (WORD) c + pIce->col[vga.col] * 256;
+                            = (WORD) c + deb.col[vga.col] * 256;
 
                         // Advance the print position
                         if( outVga.x < outVga.sizeX )

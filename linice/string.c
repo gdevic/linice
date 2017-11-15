@@ -846,7 +846,7 @@ int strcmpi( const char *s1, const char *s2 )
 *   Returns:
 *       Pointer to the new string or NULL if failed
 *
-*   NOTE: In this implementation, a pIce->hHeap is used
+*   NOTE: In this implementation, a deb.hHeap is used
 *
 *
 ******************************************************************************/
@@ -1103,3 +1103,30 @@ char *substr(char *s, int i, int j)
     return( buf );
 }
 
+/******************************************************************************
+*
+*   int strccpy(char *s1, char *s2, char c)
+*
+*      Copies string s2 into s1 up to and including the terminating 0, or
+*      the source character 'c', whichever comes first. If the terminating
+*      character comes first, it will not be copied, but a terminating 0
+*      will be set instead.
+*
+*   Where:
+*      s1 - pointer to the destination
+*      s2 - pointer to the source
+*      c  - additional terminating character
+*
+*   Returns:
+*      number of characters copied, including the terminating 0
+*
+******************************************************************************/
+int strccpy(char *s1, char *s2, char c)
+{
+    char *original = s1;
+
+    while((*s2 != 0) && (*s2 != c)) *s1++ = *s2++;
+    *s1 = 0;
+    
+    return( s1-original );
+}

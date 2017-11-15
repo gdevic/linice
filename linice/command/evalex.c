@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       5/15/97                                                       *
 *                                                                             *
-*   Copyright (c) 1997, 2002 Goran Devic                                      *
+*   Copyright (c) 1997, 2000 Goran Devic                                      *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -47,6 +47,8 @@
             * symbol name
             * build-in function: byte(), word(), CFL, ...
 
+            Functions can have only 1 parameter since we process them the same as
+            type override, that is in the form: "name(expression)"
 
 *******************************************************************************
 
@@ -73,29 +75,22 @@
 #include "ice.h"                        // Include main debugger structures
 #include "debug.h"                      // Include our dprintk()
 
-extern BOOL SymbolFindByName(DWORD *pSym, TSYMTYPEDEF1 **ppType1, char *pName, int nNameLen);
-
 /******************************************************************************
 *                                                                             *
 *   Global Variables                                                          *
 *                                                                             *
 ******************************************************************************/
 
+// TODO: Get rid of these and make it elegant
+
+WORD evalSel = 0x0000;                  // Selector result of the expression (optional)
+int nEvalDefaultBase = 16;
+
 /******************************************************************************
 *                                                                             *
 *   Local Defines, Variables and Macros                                       *
 *                                                                             *
 ******************************************************************************/
-
-#define ERR_TOO_COMPLEX     100         // Expression too complex
-#define ERR_TOO_BIG         101         // Number (hex) too large
-#define ERR_NOTAPOINTER     102         // Expression value is not a pointer
-#define ERR_ELEMENTNOTFOUND 103         // Structure/union element not found
-#define ERR_ADDRESS         104         // Expecting value, not address
-#define ERR_SELECTOR        105         // Invalid selector value
-#define ERR_INVALIDOP       106         // Invalid operation
-
-int error;
 
 //=============================================================================
 //                              CPU REGISTERS
@@ -168,20 +163,6 @@ static TRegister Reg[] = {
 };
 
 
-/*
-{ "DataAddr", 8, 0xFFFFFFFF, 0, 0 },
-{ "CodeAddr", 8, 0xFFFFFFFF, 0, 0 },
-{ "EAddr",    5, 0xFFFFFFFF, 0, 0 },
-{ "Evalue",   6, 0xFFFFFFFF, 0, 0 },
-{ "DataAddr", 8, 0xFFFFFFFF, 0, 0 },
-
-{ "bpcount", 7, 0xFFFFFFFF, 0, 0 },
-{ "bptotal", 7, 0xFFFFFFFF, 0, 0 },
-{ "bpmiss",  6, 0xFFFFFFFF, 0, 0 },
-{ "bplog",   5, 0xFFFFFFFF, 0, 0 },
-{ "bpindex", 7, 0xFFFFFFFF, 0, 0 }, */
-
-
 //=============================================================================
 //                             INTERNAL FUNCTIONS
 //=============================================================================
@@ -210,28 +191,37 @@ typedef struct
     TFnPtr funct;                       // Function
 } TFunction;
 
+#define MAX_FUNCTION    10              // Ordinal index of the last function in the array
+
 static TFunction Func[] = {
-{ "byte",   4, 1, fnByte },
-{ "word",   4, 1, fnWord },
-{ "dword",  5, 1, fnDword },
-{ "hiword", 6, 1, fnHiword },
+                                        // Functions with 1 parameter
+{ "byte",   4, 1, fnByte },             // 1
+{ "word",   4, 1, fnWord },             // 2
+{ "dword",  5, 1, fnDword },            // 3
+{ "hiword", 6, 1, fnHiword },           // 4
+{ "ptr",    3, 1, fnPtr },              // 5
+                                        // Functions with 0 parameters
+{ "bpcount", 7, 0, fnBpCount },         // 6
+{ "bpmiss",  6, 0, fnBpMiss },          // 7
+{ "bptotal", 7, 0, fnBpTotal },         // 8
+{ "bpindex", 7, 0, fnBpIndex },         // 9
+{ "bplog",   5, 0, fnBpLog },           // 10
 
-{ "bpcount", 7, 0, fnBpCount },
-{ "bpmiss",  6, 0, fnBpMiss },
-{ "bptotal", 7, 0, fnBpTotal },
-{ "bpindex", 7, 0, fnBpIndex },
-{ "bplog",   5, 0, fnBpLog },
-
-{ "ptr",     3, 1, fnPtr },
 { NULL }
 };
 
+// TODO - add these functions:
+/*
+{ "DataAddr", 8, 0xFFFFFFFF, 0, 0 },
+{ "CodeAddr", 8, 0xFFFFFFFF, 0, 0 },
+{ "EAddr",    5, 0xFFFFFFFF, 0, 0 },
+{ "Evalue",   6, 0xFFFFFFFF, 0, 0 },
+{ "DataAddr", 8, 0xFFFFFFFF, 0, 0 },
+*/
 
 //=============================================================================
 
 #define MAX_STACK       10              // Max depth of a stack structure
-
-static char *sTypeDefault = "DWORD";    // Default value data type
 
 // The operators ID table implicitly contains the precedence and the group
 enum
@@ -239,6 +229,8 @@ enum
     OP_NULL = 0,                        // These are not used for calculation
     OP_PAREN_START,                     // but are explicitly checked
     OP_PAREN_END,                       // OP_NULL has to be 0
+    OP_BRACKET_START,
+    OP_BRACKET_END,
 
     OP_BOOL_OR     = 0x10,
 
@@ -273,13 +265,18 @@ enum
     OP_LINE_NUMBER = 0xC0,              // shares symbol "." with OP_DOT
     OP_UNARY_PLUS  = 0xC1,              // shares symbol "-" with OP_MINUS
     OP_UNARY_MINUS = 0xC2,              // shares symbol "+" with OP_PLUS
-    OP_NOT         = 0xC3,
-    OP_BITWISE_NOT = 0xC4,
+    OP_UNARY_AND   = 0xC3,              // shares symbol "&" with OP_AND
+    OP_UNARY_PTR   = 0xC4,              // shares symbol "*" with OP_TIMES
+    OP_NOT         = 0xC5,
+    OP_BITWISE_NOT = 0xC6,
 
-    OP_AT          = 0xD0,              // @
+    OP_UNARY_AT    = 0xD0,              // @
     OP_DOT         = 0xD1,              // .
 
     OP_SELECTOR    = 0xE0,              // :
+
+    OP_TYPECAST    = 0xF0,              // Type cast
+    OP_FUNCTION1   = 0xF1,              // Function with 1 argument
 };
 
 // Precedence mask to be applied to the operator code to get the precedence group
@@ -313,8 +310,10 @@ static TOperators TableOperators[] =
     { ":",   1,   OP_SELECTOR     },
     { "(",   1,   OP_PAREN_START  },
     { ")",   1,   OP_PAREN_END    },
+    { "[",   1,   OP_BRACKET_START},
+    { "]",   1,   OP_BRACKET_END  },
     { ".",   1,   OP_DOT          },
-    { "@",   1,   OP_AT           },
+    { "@",   1,   OP_UNARY_AT     },
     { "|",   1,   OP_OR           },
     { "^",   1,   OP_XOR          },
     { "&",   1,   OP_AND          },
@@ -325,6 +324,10 @@ static TOperators TableOperators[] =
     { "~",   1,   OP_BITWISE_NOT  },
     { NULL,  0,   OP_NULL         }
 };
+
+//=============================================================================
+// STACK STORAGE FOR OPERANDS AND OPERATORS
+//=============================================================================
 
 typedef struct
 {
@@ -349,32 +352,32 @@ static BOOL fDecimal;                   // Prefer decimal number
 *                                                                             *
 ******************************************************************************/
 
-extern BOOL GetUserVar(DWORD *pValue, char *sStart, int nLen);
 extern BOOL EvalBreakpointAddress(TADDRDESC *pAddr, int index);
 extern char *Type2Element(TSYMTYPEDEF1 *pType, char *pName, int nLen);
-
-BOOL SymName2LocalSymbol(TSYMBOL *pSymbol, char *pName, int nTokenLen);
-
-BOOL EvaluateEx( TSYMBOL *pSymbol, char *sExpr, char **psNext );
+extern void TypedefCanonical(TSYMTYPEDEF1 *pType1);
+extern TSYMTYPEDEF1 *Type2Typedef(char *pTypeName, int nLen);
+extern BOOL GlobalReadDword(DWORD *ppDword, DWORD dwAddress);
+extern int GetTypeSize(TSYMTYPEDEF1 *pType1);
+extern void ExpandPrintSymbol(TExItem *Item, char *pName);
+extern BOOL FindSymbol(TExItem *item, char *pName, int *pNameLen);
 
 static DWORD fnByte(DWORD arg) { return(arg & 0xFF); }
 static DWORD fnWord(DWORD arg) { return(arg & 0xFFFF);}
 static DWORD fnDword(DWORD arg) { return(arg);}
 static DWORD fnHiword(DWORD arg) { return(arg >> 16);}
 
-static BOOL EvaluateSubexpression(TExItem *pItem, char *pExpr, char **ppNext);
-
 
 /******************************************************************************
 *
 *   Stack primitives: Operands and Operators
 *
-******************************************************************************
+*******************************************************************************
 *
 *   Operations on the operand stack:
 *
 *       void Push( TStack *Stack, TExItem *pItem )
 *       void Pop( TStack *Stack, TExItem *pItem )
+*       TExItem *Peek( TStack *Stack, TExItem *pItem )
 *
 *   Operations on the operator stack:
 *
@@ -385,26 +388,36 @@ static BOOL EvaluateSubexpression(TExItem *pItem, char *pExpr, char **ppNext);
 *
 *   Special copy function is provided since the member pData may address
 *   its own structure Data member, so the pointer is logically preserved.
-*/
+*
+*******************************************************************************/
+
+/******************************************************************************
+*   Copy source item into the destination item structures
+*******************************************************************************/
 static void CopyItem(TExItem *dest, TExItem *src)
 {
-    dest->bType = src->bType;
-    dest->Data  = src->Data;
-    dest->pType = src->pType;
-    if(src->pData==&src->Data)
-        dest->pData = &dest->Data;
-    else
-        dest->pData = src->pData;
+    // Copy all the elements of the source structure
+    memcpy(dest, src, sizeof(TExItem));
+
+    // If the source pointer to data was addressing its own data store, do the same with the destination
+    if(src->pData==(BYTE *)&src->Data)
+        dest->pData = (BYTE *)&dest->Data;
 }
 
+/******************************************************************************
+*   Push item to the operand stack
+*******************************************************************************/
 static void Push( TStack *Stack, TExItem *pItem )
 {
     if( Stack->Top < MAX_STACK )
         CopyItem(&Stack->Item[Stack->Top++], pItem);
     else
-        error = ERR_TOO_COMPLEX;
+        deb.error = ERR_TOO_COMPLEX;
 }
 
+/******************************************************************************
+*   Pop item from the operand stack
+*******************************************************************************/
 static void Pop( TStack *Stack, TExItem *pItem )
 {
     if( Stack->Top == 0 )
@@ -415,25 +428,45 @@ static void Pop( TStack *Stack, TExItem *pItem )
     CopyItem(pItem, &Stack->Item[ --Stack->Top ]);
 }
 
+/******************************************************************************
+*   Peek an item from the operand stack
+*******************************************************************************/
+static TExItem *Peek(TStack *Stack)
+{
+    if( Stack->Top )
+        return( &Stack->Item[ Stack->Top-1 ] );
+    else
+        return( NULL );
+}
+
+/******************************************************************************
+*   Push an operator
+*******************************************************************************/
 static void PushOp(TOpStack *Stack, BYTE Op)
 {
     if( Stack->Top < MAX_STACK )
         Stack->Op[ Stack->Top++ ] = Op;
     else
-        error = ERR_TOO_COMPLEX;
+        deb.error = ERR_TOO_COMPLEX;
 }
 
+/******************************************************************************
+*   Pop an operator
+*******************************************************************************/
 static BYTE PopOp(TOpStack *Stack)
 {
     if( Stack->Top == 0 )
     {
-        error = ERR_SYNTAX;
+        deb.error = ERR_SYNTAX;
         return 0;                       // Return something
     }
 
     return( Stack->Op[ --Stack->Top ] );
 }
 
+/******************************************************************************
+*   Peek an operator
+*******************************************************************************/
 static BYTE PeekOp(TOpStack *Stack)
 {
     if( Stack->Top )
@@ -441,6 +474,9 @@ static BYTE PeekOp(TOpStack *Stack)
     return( OP_NULL );
 }
 
+/******************************************************************************
+*   Are there any more operators on the operator stack?
+*******************************************************************************/
 static BOOL IsEmptyOp(TOpStack *Stack)
 {
     return( !Stack->Top );
@@ -449,7 +485,42 @@ static BOOL IsEmptyOp(TOpStack *Stack)
 
 /******************************************************************************
 *
-*   BOOL GetHex(DWORD *pValue, char **psString)
+*   BOOL CheckHex(char *pToken, int nTokenLen)
+*
+*******************************************************************************
+*
+*   Checks if a string is a valid hex number.
+*
+*   Where:
+*       pToken is the pointer to a string
+*       nTokenLen is the number of characters to check
+*
+*   Returns:
+*       TRUE - the string is a valid hex number
+*       FALSE - the string is not a valid hex number
+*
+******************************************************************************/
+static BOOL CheckHex(char *pToken, int nTokenLen)
+{
+    int i;                              // Counter
+
+    if( nTokenLen && nTokenLen<=8 )
+    {
+        for(i=0; i<nTokenLen; i++ )
+        {
+            if( !isxdigit(*(pToken+i)) )
+                return( FALSE );
+        }
+
+        return( TRUE );
+    }
+
+    return( FALSE );
+}
+
+/******************************************************************************
+*
+*   BOOL GetHex(UINT *pValue, char **ppString)
 *
 *******************************************************************************
 *
@@ -457,38 +528,36 @@ static BOOL IsEmptyOp(TOpStack *Stack)
 *
 *   Where:
 *       pValue is the address of the variable to receive a number
-*       psString is the address of the string pointer - will be modified
+*       ppString is the address of the pointer to string
 *
 *   Returns:
 *       FALSE - we did not read any hex digits
-*       TRUE - hex digit is read into pValue, psString is updated
+*       TRUE - hex digit is read into pValue, *ppString is updated
 *
 ******************************************************************************/
-static BOOL GetHex(DWORD *pValue, char **psString)
+static BOOL GetHex(UINT *pValue, char **ppString)
 {
-    char *ptr = *psString;
+    char *pChar = *ppString;            // Running pointer to string
     char nibble;
     int count = 8;
-    DWORD value = 0;
+    UINT value = 0;
 
-    while(isxdigit(nibble = *ptr) && count--)
+    while(isxdigit(nibble = *pChar) && count--)
     {
         nibble = tolower(nibble);
         value <<= 4;
         value |= (nibble > '9')? nibble - 'a' + 10: nibble - '0';
-        ptr++;
+        pChar++;
     }
 
-    // Value may be too large to fit in a DWORD
-    if(count<0)
-        error = ERR_TOO_BIG;
+    if( count<0 )                       // Set error if the number if too big
+        deb.error = ERR_TOO_BIG;
 
-    // If the ending string pointer is equal to starting, we did not read any hex digits
-    if(ptr==*psString)
-        return(FALSE);
+    if( pChar==*ppString || deb.error ) // Return FALSE if no number was read or error
+        return( FALSE );
 
-    *psString = ptr;
-    *pValue = value;
+    *pValue = value;                    // Store the decimal digit final value
+    *ppString = pChar;                  // Store the updated string pointer
 
     return(TRUE);
 }
@@ -496,49 +565,79 @@ static BOOL GetHex(DWORD *pValue, char **psString)
 
 /******************************************************************************
 *
-*   BOOL GetDec(DWORD *pValue, char **psString)
+*   BOOL GetDecB(UINT *pValue, char **ppString)
 *
 *******************************************************************************
 *
-*   Converts string to a decimal number.
+*   Converts string to a decimal number, returns boolean.
 *
 *   Where:
 *       pValue is the address of the variable to receive a number
-*       psString is the address of the string pointer - will be modified
+*       ppString is the address of the pointer to string
 *
 *   Returns:
-*       FALSE - we did not read any decimal digits
-*       TRUE - decimal digit is read into pValue, psString is updated
+*       FALSE - we did not read any decimal digits, or error
+*       TRUE - decimal digit is read into pValue, *ppString is updated
 *
 ******************************************************************************/
-static BOOL GetDecB(DWORD *pValue, char **psString)
+BOOL GetDecB(UINT *pValue, char **ppString)
 {
-    // Max digit is 4294967295
-    char *ptr = *psString;
+    char *pChar = *ppString;            // Running pointer to string
     char digit;
-    DWORD value = 0;
+    UINT value = 0;
 
-    while(isdigit(digit = *ptr))
+    while(isdigit(digit = *pChar))
     {
         // Check for overflow (number too big)
+        // Max digit is 4294967295
         if( value>429496729 )
-            error = ERR_TOO_BIG;
+            deb.error = ERR_TOO_BIG;
 
         value *= 10;
         value += digit - '0';
-        ptr++;
+        pChar++;
     }
 
-    // If the ending string pointer is equal to starting, we did not read any digits
-    if(ptr==*psString)
-        return(FALSE);
+    if( pChar==*ppString || deb.error )
+        return( FALSE );
 
-    *psString = ptr;
-    *pValue = value;
+    *pValue = value;                    // Store the decimal digit final value
+    *ppString = pChar;                  // Store the updated string pointer
 
     return(TRUE);
 }
 
+/******************************************************************************
+*
+*   DWORD GetDec(char **ppString)
+*
+*******************************************************************************
+*
+*   Converts string to a decimal number, without checking the error.
+*
+*   Where:
+*       ppString is the address of the pointer to string
+*
+*   Returns:
+*       Decimal number
+*
+******************************************************************************/
+DWORD GetDec(char **ppString)
+{
+    DWORD value;                        // Store value here and return it
+
+    GetDecB(&value, ppString);
+
+    return( value );
+}
+
+/******************************************************************************
+*   TRegister *IsRegister(char *ptr, int nTokenLen)                           *
+*******************************************************************************
+*
+*   Returns the register structure of the CPU register that match.
+*
+******************************************************************************/
 static TRegister *IsRegister(char *ptr, int nTokenLen)
 {
     TRegister *pReg = &Reg[0];
@@ -553,21 +652,48 @@ static TRegister *IsRegister(char *ptr, int nTokenLen)
     return(NULL);
 }
 
-
-static TFunction *IsFunc(char *ptr, int nTokenLen)
+/******************************************************************************
+*   int EvalGetFunc( char **sExpr, int nTokenLen, int params )                *
+*******************************************************************************
+*
+*   Evaluates a string token into a function name, only for functions that
+*   match the number of parameters, since we process them differently.
+*
+*   Where:
+*       item is the item to fill in with the value token
+*       sExpr is an address of a pointer to a string containing expression
+*       params is the required number of parameters (0 or 1)
+*
+*   Returns:
+*       Ordinal index into the function array
+*       0 if no function name match
+*
+******************************************************************************/
+static int EvalGetFunc( char **sExpr, int nTokenLen, int params )
 {
-    TFunction *pFunc = &Func[0];
+    int i = 0;                          // Index into function array
 
-    while(pFunc->sName!=NULL)
+    while(Func[i].sName!=NULL)
     {
-        if(pFunc->nameLen==nTokenLen && !strnicmp(pFunc->sName, ptr, pFunc->nameLen))
-            return(pFunc);
-        pFunc++;
+        if( Func[i].nArgs==params )
+        {
+            if(Func[i].nameLen==nTokenLen && !strnicmp(Func[i].sName, *sExpr, nTokenLen))
+                return(i + 1);          // Return one more than the index
+        }
+        i++;
     }
 
-    return(NULL);
+    return( 0 );                        // Return 0 for failure
 }
 
+/******************************************************************************
+*   int GetTokenLen(char *pToken)                                             *
+*******************************************************************************
+*
+*   Returns the length of the pointed string with respect to the alphanumerical
+*   test + underscore.
+*
+******************************************************************************/
 int GetTokenLen(char *pToken)
 {
     char *pTmp = pToken;
@@ -577,508 +703,8 @@ int GetTokenLen(char *pToken)
     return(pTmp - pToken);
 }
 
-
 /******************************************************************************
-*                                                                             *
-*   TExItem GetValue( char **sExpr )                                            *
-*                                                                             *
-*******************************************************************************
-*
-*   Evaluates a string token into an item structure. Advances the given pointer.
-*
-*   Where:
-*       sExpr is an address of a pointer to a string containing expression.
-*
-*   Returns:
-*       Stack item set up
-*
-******************************************************************************/
-static BOOL GetValue( TExItem *item, char **sExpr )
-{
-    TADDRDESC Addr;
-    int value, n;
-    char *sStart = *sExpr, *sTmp;
-    TRegister *pReg;
-    TFunction *pFunc;
-    int nTokenLen;                      // Length of the input token
-    TSYMTYPEDEF1 *pType1;               // Pointer to a single type definition
-
-
-    DWORD *pSym;
-    char *pSymType;
-
-
-//    item->pType = sTypeDefault;         // Start with default type
-    item->pType = NULL;                 // DWORD is NULL type by default
-    item->bType = EXTYPE_LITERAL;       // Assume literal type
-
-    // Find the length of the token in the input buffer (We assume it is a token)
-
-    nTokenLen = GetTokenLen(sStart);
-
-    // If we switched to decimal radix, try a decimal number first
-    if( fDecimal==TRUE && GetDecB(&value, &sStart) )
-    {
-        goto End;
-    }
-
-    // Check if the first two charcaters represent a hex number
-    if( *sStart=='0' && tolower(*(sStart+1))=='x' )         // 0xHEX
-    {
-        sStart += 2;
-        GetHex(&value, &sStart);
-    }
-    else
-    // Check for character constants: '1', '12', '123', '1234'
-    if( *sStart=='\'' )
-    {
-        value = 0;
-        n = 4;
-        sStart++;
-        while(*sStart && *sStart!='\'' && n--)
-        {
-            value <<= 8;
-            value |= *sStart++;
-        }
-        if( *sStart!='\'' )
-            ;// TODO - No-nterminated character constant 'abc'
-    }
-    else
-    // Check if the first two characters represent a character literal
-    if( *sStart=='\\' )                                 // \DEC or \xHEX
-    {
-        if( tolower(*(sStart+1))=='x' )                    // HEX
-        {
-            sStart += 2;
-            GetHex(&value, &sStart);
-        }
-        else
-        {
-            sStart += 1;
-            GetDecB(&value, &sStart);
-        }
-    }
-    else
-    // The literal value may be the explicit CPU register value
-    if( (pReg = IsRegister(sStart, nTokenLen)) != 0 )
-    {
-        value = (DWORD) deb.r + pReg->offset;
-        value = *(DWORD *)value;
-        value = (value & pReg->Mask) >> pReg->rShift;
-        sStart += pReg->nameLen;
-
-        // Set this type to be the register type
-        item->bType = EXTYPE_REGISTER;
-        item->pType = pReg->sName;
-    }
-    else
-    // Symbol name: local symbol
-//    if( SymName2LocalSymbol(&item, sStart, nTokenLen) )
-//    {
-//        // Symbol name is found and assigned to value in the function above
-//        value = item.Data;
-//        sStart += nTokenLen;
-//    }
-//    else
-    // The first precedence literal value is the symbol name
-//    if( SymbolName2Value(pIce->pSymTabCur, (DWORD *)&value, sStart, nTokenLen) )
-//    {
-//        // Symbol name is found and assigned to value in the function above
-//        sStart += nTokenLen;
-//    }
-//    else
-    // Check if it is a breakpoint token 'bpN' or 'bpNN'
-    if( tolower(*sStart)=='b' && tolower(*(sStart+1))=='p' && isxdigit(*(sStart+2)) )
-    {
-        sStart += 2;
-
-        GetHex(&n, &sStart);
-
-        // Preset selector part in the case it changes
-        Addr.sel = evalSel;
-
-        if( EvalBreakpointAddress(&Addr, n) )
-        {
-            // Store the resulting values
-            value = Addr.offset;
-            evalSel = Addr.sel;
-        }
-        else
-            dprinth(1, "Invalid breakpoint");
-    }
-    else
-    // The literal value may be a built-in function
-    if( (pFunc = IsFunc(sStart, nTokenLen)) != 0 )
-    {
-        sStart += pFunc->nameLen;
-        switch( pFunc->nArgs )
-        {
-            case 0:         // No arguments to a function
-                value = (pFunc->funct)(0);
-            break;
-
-            case 1:         // Single argument to a function
-            // TODO: Use EvaluateSubexpression()
-                value = Evaluate(sStart, &sStart);
-                value = (pFunc->funct)(value);
-            break;
-        }
-    }
-//    else
-    // Check for the symbol name
-//    if( SymbolName2Value(pIce->pSymTabCur, (DWORD *)&value, sStart, nTokenLen) )
-//    {
-//        goto ProcessSymbol;
-//    }
-    else
-    // The liternal string may be the variable (symbol) name
-    if( SymbolFindByName(&pSym, &pType1, sStart, nTokenLen) )
-    {
-        // Return the typed token of the symbol class
-        item->bType = EXTYPE_SYMBOL;
-        item->Data = pSym;
-        item->pData = &item->Data;
-        item->pType = GET_STRING( pType1->dDef );
-
-        *sExpr = sStart + nTokenLen;
-        return( TRUE );
-    }
-    else
-    // The literal string may be the type name (type cast)
-    if( (pType1=Type2Typedef(sStart, nTokenLen)) )
-    {
-        // String is a valid type whose descriptor we got now
-        // Since this is a type cast, we expect form "type(value)" and need to get "(",")"
-        TExItem subitem;
-        char *pEnd, *pDef;              // End of the sub-expression, pointer to definition
-        int major, minor;               // Element major and minor numbers
-        int nOffset, nSize;             // Element offset information and size
-
-        sStart += nTokenLen;            // Get to the end of the type string
-        if( EvaluateSubexpression(&subitem, sStart, &sStart) )
-        {
-ProcessSymbol:
-            // Since this may be a structure, check if it followed by a structure field dereferencing
-            if( *sStart=='.' )
-            {
-                // Structure element dereference
-                sStart += 1;
-                *sExpr = sStart;
-
-                // The type definition should reference a type descriptor
-                pDef = GET_STRING( pType1->dDef );
-                pType1 = Type2Typedef(pDef);
-
-                // Get the token representing the structure element
-                nTokenLen = GetTokenLen(sStart);
-
-                pDef = Type2Element(pType1, sStart, nTokenLen);
-                if( pDef )
-                {
-                    // We found the structure/union element. Read the offset info
-//                    sscanf(pDef, "(%d,%d),%d,%d", &major, &minor, &nOffset, &nSize);
-
-                    // Add the offset to the address of the structure
-                    *(DWORD *)subitem.pData += nOffset / 8;
-                    subitem.bType = EXTYPE_SYMBOL;
-
-                    // Get the type of our element
-                    pType1 = Type2Typedef(pDef);
-                    subitem.pType = GET_STRING( pType1->dDef );
-
-                    sStart += nTokenLen;
-                    *sExpr = sStart;
-                }
-                else
-                    error = ERR_ELEMENTNOTFOUND;
-            }
-            else
-            if( *sStart=='-' && *(sStart+1)=='>' )
-            {
-                // Structure element dereference
-                sStart += 2;
-                *sExpr = sStart;
-
-                // The type definition should dereference a pointer to type descriptor
-                pDef = GET_STRING( pType1->dDef );
-                if( *pDef=='*' )
-                {
-                    pDef++;
-                    item->pType = Type2Typedef(pDef);
-
-                    // Do actual dereference
-                    subitem.pData = fnPtr(subitem.pData);
-                }
-                else
-                    error = ERR_NOTAPOINTER;
-            }
-            else
-            if( *sStart=='[' )
-            {
-                // Element of an array dereference
-
-                // Evaluate the subexpression which gives the array index
-                ;
-            }
-
-            // Return the typed token of the symbol class
-            item->bType = EXTYPE_SYMBOL;
-            item->Data = subitem.Data;
-            item->pData = subitem.pData;
-            item->pType = subitem.pType;
-            if( subitem.pData = &subitem.Data )
-                item->pData = &item->Data;
-
-            *sExpr = sStart;
-            return( !error );
-        }
-    }
-    else
-    // If everything else fails, it's gotta be a hex number
-    {
-        if( !GetHex(&value, &sStart) )
-        {
-            // Jibberish in the expression
-            *sExpr = sStart;
-
-            error = ERR_SYNTAX;
-
-            return(FALSE);
-        }
-    }
-End:
-    fDecimal = FALSE;
-    *sExpr = sStart;
-
-    item->Data = value;
-    item->pData = &item->Data;
-
-    return( TRUE );
-}
-
-
-/******************************************************************************
-*                                                                             *
-*   void Execute( TStack *Values, int Operation )                             *
-*                                                                             *
-*******************************************************************************
-*
-*   Evaluates numbers on the stack depending on the operation opcode.
-*
-*   Where:
-*       Values stack
-*       Operation is a code of the operation to be performed on a stack values.
-*
-*   Returns:
-*       Operates on stacks Values and Operators and updates them accordingly.
-*
-******************************************************************************/
-static void Execute( TStack *Values, int Operation )
-{
-    TExItem item1, item2, itemTop;
-
-    // Most operations require 2 parameters. Just some are unary (one operand)
-    switch( Operation )
-    {
-        case OP_BITWISE_NOT:
-        case OP_UNARY_MINUS:
-        case OP_UNARY_PLUS:
-//        case OP_PTR:
-//        case OP_DOT:
-        case OP_AT:
-        case OP_LINE_NUMBER:
-            Pop(Values, &item1);
-            break;
-
-        default:
-            Pop(Values, &item2);
-            Pop(Values, &item1);
-    }
-
-    // If the left side is symbol, there are only certain operations allowed on it:
-    if( item1.bType==EXTYPE_SYMBOL )
-    {
-        if( Operation!=OP_AT && item2.bType!=EXTYPE_LITERAL )
-            deb.error = ERR_INVALIDOP;
-
-        switch( Operation )
-        {
-            case OP_AT:                 // @symbol
-                itemTop.bType = EXTYPE_LITERAL;
-                itemTop.Data  = item1.pData;
-                itemTop.pData = &item1.Data;
-                itemTop.pType = NULL;
-                break;
-
-            case OP_PLUS:               // symbol + 1
-                itemTop.bType = EXTYPE_LITERAL;
-                itemTop.Data  = (DWORD) item1.pData + item2.Data;
-                itemTop.pData = &item1.Data;
-                itemTop.pType = NULL;
-                break;
-
-            case OP_MINUS:              // Symbol - 1
-                itemTop.bType = EXTYPE_LITERAL;
-                itemTop.Data  = (DWORD) item1.pData - item2.Data;
-                itemTop.pData = &item1.Data;
-                itemTop.pType = NULL;
-                break;
-
-            default:
-                deb.error = ERR_INVALIDOP;
-                break;
-        }
-
-        Push(Values, &itemTop);
-
-        return;
-    }
-
-    // Perform the operation
-    switch( Operation )
-    {
-        //--------------------------------------------------------------------
-        case OP_BOOL_OR:
-            itemTop.Data = item1.Data || item2.Data;
-            break;
-        //--------------------------------------------------------------------
-        case OP_BOOL_AND:
-            itemTop.Data = item1.Data && item2.Data;
-            break;
-        //--------------------------------------------------------------------
-        case OP_OR:
-            itemTop.Data = item1.Data | item2.Data;
-            break;
-        //--------------------------------------------------------------------
-        case OP_XOR:
-            itemTop.Data = item1.Data ^ item2.Data;
-            break;
-        //--------------------------------------------------------------------
-        case OP_AND:
-            itemTop.Data = item1.Data & item2.Data;
-            break;
-        //--------------------------------------------------------------------
-        case OP_EQ:
-            itemTop.Data = item1.Data == item2.Data;
-            break;
-        //--------------------------------------------------------------------
-        case OP_NE:
-            itemTop.Data = item1.Data != item2.Data;
-            break;
-        //--------------------------------------------------------------------
-        case OP_L:
-            itemTop.Data = item1.Data < item2.Data;
-            break;
-        //--------------------------------------------------------------------
-        case OP_LE:
-            itemTop.Data = item1.Data <= item2.Data;
-            break;
-        //--------------------------------------------------------------------
-        case OP_G:
-            itemTop.Data = item1.Data > item2.Data;
-            break;
-        //--------------------------------------------------------------------
-        case OP_GE:
-            itemTop.Data = item1.Data >= item2.Data;
-            break;
-        //--------------------------------------------------------------------
-        case OP_SHL:
-            itemTop.Data = item1.Data << item2.Data;
-            break;
-        //--------------------------------------------------------------------
-        case OP_SHR:
-            itemTop.Data = item1.Data >> item2.Data;
-            break;
-        //--------------------------------------------------------------------
-        case OP_PLUS:
-            itemTop.Data = item1.Data + item2.Data;
-            break;
-        //--------------------------------------------------------------------
-        case OP_MINUS:
-            itemTop.Data = item1.Data - item2.Data;
-            break;
-        //--------------------------------------------------------------------
-        case OP_TIMES:
-            itemTop.Data = item1.Data * item2.Data;
-            break;
-        //--------------------------------------------------------------------
-        case OP_DIV:
-            if( item2.Data )
-                itemTop.Data = item1.Data / item2.Data;
-            else
-                deb.error = ERR_DIV0;
-            break;
-        //--------------------------------------------------------------------
-        case OP_MOD:
-            if( item2.Data )
-                itemTop.Data = item1.Data % item2.Data;
-            else
-                deb.error = ERR_DIV0;
-            break;
-        //--------------------------------------------------------------------
-        case OP_NOT:
-            itemTop.Data = !item1.Data;
-            break;
-        //--------------------------------------------------------------------
-        case OP_BITWISE_NOT:
-            itemTop.Data = ~item1.Data;
-            break;
-        //--------------------------------------------------------------------
-        case OP_UNARY_MINUS:
-            itemTop.Data = (unsigned)-(signed)item1.Data;
-            break;
-        //--------------------------------------------------------------------
-        case OP_UNARY_PLUS:
-            // We dont do anything special for unary plus
-            itemTop.Data = item1.Data;
-            break;
-        //--------------------------------------------------------------------
-        case OP_DOT:
-            itemTop.Data = item1.Data;          // TEST
-            break;
-        //--------------------------------------------------------------------
-        case OP_PTR:
-            itemTop.Data = fnPtr(item1.Data);
-            break;
-        //--------------------------------------------------------------------
-        case OP_LINE_NUMBER:
-            itemTop.Data = SymLinNum2Address(item1.Data);   // TEST
-            break;
-        //--------------------------------------------------------------------
-        case OP_SELECTOR:   // Selector:offset
-            // The left side contains the selector token, the right side offset
-            // We merge them into one address-type token
-            itemTop.bType = EXTYPE_ADDRESS;
-            itemTop.pData = *(DWORD *)item1.pData;      // Selector
-            itemTop.Data  = *(DWORD *)item2.pData;      // Offset
-            itemTop.pType = item1.pType;                // Name of the selector or NULL
-
-            // Selector has to be the valid size
-            if(*(DWORD *)item1.pData > 0xFFFF)
-                error = ERR_SELECTOR;
-
-            // Do a separate ending since we did many things differently
-            Push(Values, &itemTop);
-
-            return;
-        //--------------------------------------------------------------------
-    }
-
-    // The final type is copied from the first item (given they were the same)
-    itemTop.pType = item1.pType;
-    itemTop.bType = item1.bType;
-
-    // At the end, we always push the resulting value onto the stack
-    itemTop.pData = &itemTop.Data;
-
-    Push(Values, &itemTop);
-}
-
-
-/******************************************************************************
-*                                                                             *
 *   BYTE TableMatch( char *sTable, char **sToken )                            *
-*                                                                             *
 *******************************************************************************
 *
 *   Returns a matching string from a token table or 0 if there was no match.
@@ -1112,11 +738,8 @@ static BYTE TableMatch( char **sToken )
     return( 0 );
 }
 
-
 /******************************************************************************
-*
 *   BOOL NextToken(char **ppNext)
-*
 *******************************************************************************
 *
 *   Parses the input string - detects the next valid token start
@@ -1143,16 +766,647 @@ static BOOL NextToken(char **ppNext)
     return( TRUE );
 }
 
+
+/******************************************************************************
+*                                                                             *
+*   BOOL GetValue( TExItem *item, char **sExpr, int nTokenLen )               *
+*                                                                             *
+*******************************************************************************
+*
+*   Evaluates a string token into an item structure. Advances the pointer.
+*
+*   Where:
+*       item is the item to fill in with the value token
+*       sExpr is an address of a pointer to a string containing expression
+*       nTokenLen is the number of characters that the token has
+*
+*   Returns:
+*       TRUE - token is evaluated into item structure, *sExpr is advanced
+*       FALSE - error evaluating a token, (item may be changed)
+*
+******************************************************************************/
+static BOOL GetValue( TExItem *item, char **sExpr, int nTokenLen )
+{
+    static char enumdef[] = { 1 /*TYPE_INT*/, 0 };
+    TRegister *pReg;                    // Register structure for CPU register compares
+    TADDRDESC Addr;                     // Address structure for breakpoint evaluation
+    char *pToken = *sExpr;              // Start of the token pointer
+    int n;                              // Temp variable to use locally
+
+    memset(item, 0, sizeof(TExItem));   // Zero out the item to avoid stale data
+
+    // Set up the default type to integer
+    item->Type.maj = 0;
+    item->Type.min = 0;   // Canonical int
+    item->Type.pName = "";
+    item->Type.pDef = enumdef;
+
+    //----------------------------------------------------------------------------------
+    // If we switched to decimal radix, try a decimal number first
+    //----------------------------------------------------------------------------------
+    if( fDecimal==TRUE && GetDecB(&item->Data, &pToken) )   // pToken may be updated
+    {
+        // Read in a decimal literal number
+        item->bType = EXTYPE_LITERAL;   // This was a literal type
+        item->pData = (BYTE *)&item->Data;
+    }
+    else
+    //----------------------------------------------------------------------------------
+    // Check if the first two characters represent a hex number
+    //----------------------------------------------------------------------------------
+    if( *pToken=='0' && tolower(*(pToken+1))=='x' )
+    {
+        pToken += 2;                    // Skip the 0x prefix
+
+        GetHex(&item->Data, &pToken);   // Ignore exit value - it has to be hex
+
+        item->bType = EXTYPE_LITERAL;   // This was a literal type
+        item->pData = (BYTE *)&item->Data;
+    }
+    else
+    //----------------------------------------------------------------------------------
+    // Check for character constants: '1', '12', '123', '1234'
+    //----------------------------------------------------------------------------------
+    if( *pToken=='\'' )
+    {
+        n = 4;
+        pToken++;
+
+        while(*pToken && *pToken!='\'' && n--)
+        {
+            item->Data <<= 8;
+            item->Data |= *pToken++;
+        }
+        if( *pToken!='\'' )             // Non-terminated character constant 'abc'
+            deb.error = ERR_SYNTAX;
+
+        item->bType = EXTYPE_LITERAL;   // This was a literal type
+        item->pData = (BYTE *)&item->Data;
+    }
+    else
+    //----------------------------------------------------------------------------------
+    // Check if the first two characters represent a character literal
+    //----------------------------------------------------------------------------------
+    if( *pToken=='\\' )                                 // \DEC or \xHEX
+    {
+        pToken++;
+
+        if( *pToken=='x' || *pToken=='X' )              // \xHEX or \XHEX
+        {
+            pToken++;
+            GetHex(&item->Data, &pToken);
+        }
+        else
+        {
+            GetDecB(&item->Data, &pToken);
+        }
+
+        item->bType = EXTYPE_LITERAL;   // This was a literal type
+        item->pData = (BYTE *)&item->Data;
+    }
+    else
+    //----------------------------------------------------------------------------------
+    // The literal value may be the explicit CPU register
+    //----------------------------------------------------------------------------------
+    if( (pReg = IsRegister(pToken, nTokenLen)) != 0 )
+    {
+        item->Data = *(UINT *)((UINT) deb.r + pReg->offset);
+        item->Data = (item->Data & pReg->Mask) >> pReg->rShift;
+        pToken += pReg->nameLen;
+
+        item->bType = EXTYPE_REGISTER;   // This was a register type
+        item->pData = (BYTE *)((UINT) deb.r + pReg->offset);
+    }
+    else
+    //----------------------------------------------------------------------------------
+    // Check if it is a breakpoint token 'bpN' or 'bpNN'
+    //----------------------------------------------------------------------------------
+    if( tolower(*pToken)=='b' && tolower(*(pToken+1))=='p' && isxdigit(*(pToken+2))
+      && (nTokenLen==3 || (nTokenLen==4 && isxdigit(*(pToken+3)))))
+    {
+        pToken += 2;                                // Advance the pointer to the HEX bp number
+        GetHex(&n, &pToken);                        // Read in the breakpoint number
+
+        if( EvalBreakpointAddress(&Addr, n) )
+        {
+            // Store the resulting value as a literal number
+            item->bType = EXTYPE_LITERAL;           // This was a literal type
+            item->Data  = Addr.offset;              // Store only offset value
+            item->pData = (BYTE *)&item->Data;
+        }
+        else
+            deb.error = ERR_BPNUM;
+    }
+    else
+    //----------------------------------------------------------------------------------
+    // The literal value may be a built-in function with 0 parameters
+    //----------------------------------------------------------------------------------
+    if( (n = EvalGetFunc(&pToken, nTokenLen, 0)) != 0 )
+    {
+        // Functons with 0 parameters are treated differently from functions with 1 parameter
+
+        // Call the function directly and return the value
+        item->bType = EXTYPE_LITERAL;   // This was a literal type
+        item->Data  = (*Func[n-1].funct)(0);
+        item->pData = (BYTE *)&item->Data;
+
+        pToken += nTokenLen;
+    }
+    else
+    //----------------------------------------------------------------------------------
+    // Check for the symbol name
+    //----------------------------------------------------------------------------------
+    if( FindSymbol(item, pToken, &nTokenLen) )
+    {
+        // Symbol was found. Get the canonical version of its type
+
+        TypedefCanonical(&item->Type);
+
+        pToken += nTokenLen;
+    }
+    else
+    //----------------------------------------------------------------------------------
+    // If everything else fails, it's gotta be a hex number
+    //----------------------------------------------------------------------------------
+    if( CheckHex(pToken, nTokenLen) )
+    {
+        GetHex(&item->Data, &pToken);
+
+        item->bType = EXTYPE_LITERAL;   // This was a literal type
+        item->pData = (BYTE *)&item->Data;
+    }
+    else
+    {
+        // Token is nothing that we can recognize at this point
+        return( FALSE );
+    }
+
+    fDecimal = FALSE;
+    *sExpr = pToken;
+
+    return( TRUE );
+}
+
+/******************************************************************************
+*                                                                             *
+*   BOOL EvalGetTypeCast( TExItem *item, char **sExpr, int nTokenLen )        *
+*                                                                             *
+*******************************************************************************
+*
+*   Evaluates a string token into a typedef cast. This is used for type casting
+*   (overloading) of one symbol type or a value with another.
+*
+*   Where:
+*       item is the item to fill in with the value token
+*       sExpr is an address of a pointer to a string containing expression
+*
+*   Returns:
+*       TRUE - token is evaluated into item structure, *sExpr is advanced
+*       FALSE - error evaluating a token, (item may be changed)
+*
+******************************************************************************/
+static BOOL EvalGetTypeCast( TExItem *Item, char **sExpr, int nTokenLen )
+{
+    TSYMTYPEDEF1 *pType1;
+
+    // Get the type of the given token
+    if( (pType1 = Type2Typedef(*sExpr, nTokenLen)) )
+    {
+        // Type was found. Copy its descriptor into the item and get the canonical version of it
+        memcpy(&Item->Type, pType1, sizeof(TSYMTYPEDEF1));
+
+        TypedefCanonical(&Item->Type);
+
+        Item->bType = EXTYPE_SYMBOL;    // This item is a symbol type now...
+
+        return( TRUE );
+    }
+
+    return( FALSE );
+}
+
+/******************************************************************************
+*                                                                             *
+*   BOOL EvalGetArray( TStack *Values, TOpStack *Operators, TExItem *Item )   *
+*                                                                             *
+*******************************************************************************
+*
+*   This function is used when closing on an array brackets []
+*   The resulting item has to represent an array type, which is then evaluated
+*   and the array member that is indexed is placed instead of the original
+*   symbol.
+*
+*   Where:
+*       Values - operands stack
+*       Operators - operators stack
+*       Item - Final item that is to be generated
+*
+*   Returns:
+*       TRUE - We successfully evalated an array type
+*       FALSE - We could not evaluate the array type
+*
+******************************************************************************/
+static BOOL EvalGetArray( TStack *Values, TOpStack *Operators, TExItem *Item )
+{
+    TSYMTYPEDEF1 *pType1;               // Type of the array element
+    TExItem item1, item2;               // Array item and the index item
+    UINT index, nSize;                  // Actual index of an array and its size
+    char *pDef;                         // Pointer to the type definition
+
+    // The last operand is the index (item2); the one before is the array (item1)
+    Pop(Values, &item2);
+    Pop(Values, &item1);
+
+    // Check that the operand 1 is a valid symbol array
+    if( item1.bType==EXTYPE_SYMBOL && item1.Type.pDef && *item1.Type.pDef=='a' )
+    {
+        // Check that the operand 2 is a valid literal or register type
+        if( item2.bType==EXTYPE_LITERAL || item2.bType==EXTYPE_REGISTER )
+        {
+            GlobalReadDword(&index, (DWORD) item2.pData);   // Read the actual index
+
+            // Get the type of the array element
+            if( (pDef = strrchr(item1.Type.pDef, '(')) )
+            {
+                // Find the type of the element
+                if( (pType1 = Type2Typedef(pDef, 0)) )
+                {
+                    nSize = GetTypeSize(pType1);
+
+                    // Advance the pointer (address) by index * size bytes
+
+                    item1.pData = item1.pData + index * nSize;
+
+                    // Change the final type to that of the element
+
+                    memcpy(&item1.Type, pType1, sizeof(TSYMTYPEDEF1));
+
+                    TypedefCanonical(&item1.Type);
+
+                    // Push the final resulting, coalesced array subtype
+
+                    Push(Values, &item1);
+
+                    return( TRUE );
+                }
+            }
+        }
+    }
+    deb.error = ERR_NOTARRAY;
+
+    return( FALSE );
+}
+
 /******************************************************************************
 *
-*   BOOL Evaluate2(char *pExpr, char **ppNext)
+*   BOOL GetValueStructureMember(TStack *Values, TOpStack *Operators, TExItem *Item, char **sExpr, int nTokenLen )
 *
 *******************************************************************************
 *
-*   Debuger command to evaluate an expression
+*   This function is used to try to evaluate a structure member before the
+*   operation -> or . is being pushed on the stack. The member can not be
+*   recognized later since it is not in the list of root symbols.
+*
+*   Where:
+*       Values - stack for operands
+*       Operators - stack for operators
+*       Item - resulting item that needs to be filled up
+*       sExpr - points to the address of the structure member
+*       nTokenLen - length of the structure member token string
+*
+*   Returns:
+*       TRUE - New Item is a coalesced structure and its member
+*       FALSE - Did not evaluate into the structure and its member
 *
 ******************************************************************************/
-BOOL Evaluate2(TExItem *pItem, char *pExpr, char **ppNext)
+static BOOL GetValueStructureMember(TStack *Values, TOpStack *Operators, TExItem *Item, char **sExpr, int nTokenLen )
+{
+    TExItem *pLastItem;
+    TExItem LastItem;
+    char *pType;
+    BYTE bOp;                           // Last operator value
+    UINT nOffset;                       // Offset of the element within that structure
+
+    // Peek the data type of the last value - it has to be a symbol type with a structure definiton
+    if( (pLastItem = Peek(Values)) )
+    {
+        if( pLastItem->bType==EXTYPE_SYMBOL )
+        {
+            if( pLastItem->Type.pDef && *pLastItem->Type.pDef=='s' )
+            {
+                // We got the base type to be a symbol with a structure, compare the token with each of the
+                // elements of that structure to see if we can resolve this indirection in place
+
+                if( (pType = Type2Element(&pLastItem->Type, *sExpr, nTokenLen)) )
+                {
+                    // Found the structure element. Pop the base type since we will be adjusting few things
+                    Pop(Values, &LastItem);
+
+                    bOp = PopOp(Operators);             // Pop the operator -> or .
+
+                    // Fill the resulting type, that is the type of the structure element
+                    EvalGetTypeCast(Item, &pType, nTokenLen);
+
+                    // Read the offset of this element from the definition string, and add it to the structure address
+                    pType = strchr(pType, ')') + 2;
+                    GetDecB(&nOffset, &pType); pType = NULL;
+
+                    Item->pData = LastItem.pData + nOffset/8;
+
+                    // The resulting item has the new name and new type - resolve new type to its canonical definition
+
+                    Item->bType = EXTYPE_SYMBOL;        // The resulting item is a symbol
+
+                    *sExpr += nTokenLen;                // Adjust the pointer to the expression string to past this token
+
+                    return( TRUE );
+                }
+            }
+        }
+    }
+
+    return( FALSE );
+}
+
+/******************************************************************************
+*                                                                             *
+*   void Execute( TStack *Values, int Operation )                             *
+*                                                                             *
+*******************************************************************************
+*
+*   Evaluates numbers on the stack depending on the operation opcode.
+*
+*   Where:
+*       Values stack
+*       Operation is a code of the operation to be performed on a stack values.
+*
+*   Returns:
+*       Operates on stacks Values and Operators and updates them accordingly.
+*
+******************************************************************************/
+static void Execute( TStack *Values, int Operation )
+{
+    TExItem item1, item2, itemTop;
+    DWORD Data1, Data2;                 // Actual data from 2 operands
+
+    // Most operations require 2 parameters. Just some are unary (one operand)
+    switch( Operation )
+    {
+        case OP_UNARY_AT:               // @symbol
+        case OP_UNARY_AND:              // &symbol
+        case OP_UNARY_PTR:              // *symbol
+
+        case OP_BITWISE_NOT:            // !
+        case OP_UNARY_MINUS:            // -(num)
+        case OP_UNARY_PLUS:             // +(num)
+        case OP_LINE_NUMBER:            // .(num)
+
+            Pop(Values, &item1);
+
+            // Get the data value to simplyfy the expressions
+            GlobalReadDword(&Data1, (DWORD)item1.pData);
+
+            break;
+
+        default:
+            Pop(Values, &item2);
+            Pop(Values, &item1);
+
+            // Get the data values to simplyfy the expressions
+            GlobalReadDword(&Data1, (DWORD)item1.pData);
+            GlobalReadDword(&Data2, (DWORD)item2.pData);
+    }
+
+    // By default, use the data type of the first operand
+    memcpy(&itemTop.Type, &item1.Type, sizeof(TSYMTYPEDEF1));
+
+    // If the left side is symbol containing the complex definition,
+    // there are only certain operations allowed on it:
+
+    if( item1.bType==EXTYPE_SYMBOL && item1.Type.pDef && *item1.Type.pDef>TYPEDEF__LAST )
+    {
+        switch( Operation )
+        {
+            // ------------------------- UNARY OPERATIONS -------------------------
+
+            case OP_UNARY_AT:           // @symbol -> makes an address type
+                itemTop.bType = EXTYPE_ADDRESS;
+                itemTop.wSel  = deb.r->ds;              // Get the current data selector
+                itemTop.Data  = (DWORD) item1.pData;
+                itemTop.pData = (BYTE*) &itemTop.Data;
+                break;
+
+            case OP_UNARY_AND:          // &symbol -> makes a literal type
+                itemTop.bType = EXTYPE_LITERAL;
+                itemTop.Data  = (DWORD) item1.pData;
+                itemTop.pData = (BYTE*) &itemTop.Data;
+                break;
+
+            case OP_UNARY_PTR:          // *symbol -> increases the pointer level of the symbol (canonical form)
+                CopyItem(&itemTop, &item1);
+                itemTop.Type.maj++;
+                break;
+
+            // ------------------------- BINARY OPERATIONS -------------------------
+
+            case OP_TYPECAST:           // Assign type of a symbol
+                // Data is held in the item2, and the type in item1; form the final item
+                memcpy(&itemTop.Type, &item1.Type, sizeof(TSYMTYPEDEF1));   // Just use the type from the casting item
+                itemTop.bType = EXTYPE_SYMBOL;                              // Making it a symbol type
+                if( item2.bType==EXTYPE_SYMBOL )                            // If the casted item is a symbol
+                    itemTop.pData = item2.pData;                            // Just take the pointer to it
+                else                                                        // Othervise, for all other types
+                    itemTop.pData = (BYTE *)Data2;                          // take the address of a symbol from the data
+                break;
+
+            case OP_PLUS:               // symbol + 1
+                itemTop.bType = EXTYPE_LITERAL;
+                itemTop.Data  = (DWORD) item1.pData + Data2;
+                itemTop.pData = (BYTE*) &itemTop.Data;
+                break;
+
+            case OP_MINUS:              // Symbol - 1
+                itemTop.bType = EXTYPE_LITERAL;
+                itemTop.Data  = (DWORD) item1.pData - Data2;
+                itemTop.pData = (BYTE*) &itemTop.Data;
+                break;
+
+            default:
+                deb.error = ERR_INVALIDOP;
+                break;
+        }
+
+        Push(Values, &itemTop);
+
+        return;
+    }
+
+    // Perform the operation
+    switch( Operation )
+    {
+        //--------------------------------------------------------------------
+        case OP_BOOL_OR:
+            itemTop.Data = Data1 || Data2;
+            break;
+        //--------------------------------------------------------------------
+        case OP_BOOL_AND:
+            itemTop.Data = Data1 && Data2;
+            break;
+        //--------------------------------------------------------------------
+        case OP_OR:
+            itemTop.Data = Data1 | Data2;
+            break;
+        //--------------------------------------------------------------------
+        case OP_XOR:
+            itemTop.Data = Data1 ^ Data2;
+            break;
+        //--------------------------------------------------------------------
+        case OP_AND:
+            itemTop.Data = Data1 & Data2;
+            break;
+        //--------------------------------------------------------------------
+        case OP_EQ:
+            itemTop.Data = Data1 == Data2;
+            break;
+        //--------------------------------------------------------------------
+        case OP_NE:
+            itemTop.Data = Data1 != Data2;
+            break;
+        //--------------------------------------------------------------------
+        case OP_L:
+            itemTop.Data = (DWORD)((signed)Data1 < (signed)Data2);
+            break;
+        //--------------------------------------------------------------------
+        case OP_LE:
+            itemTop.Data = (DWORD)((signed)Data1 <= (signed)Data2);
+            break;
+        //--------------------------------------------------------------------
+        case OP_G:
+            itemTop.Data = (DWORD)((signed)Data1 > (signed)Data2);
+            break;
+        //--------------------------------------------------------------------
+        case OP_GE:
+            itemTop.Data = (DWORD)((signed)Data1 >= (signed)Data2);
+            break;
+        //--------------------------------------------------------------------
+        case OP_SHL:
+            itemTop.Data = Data1 << Data2;
+            break;
+        //--------------------------------------------------------------------
+        case OP_SHR:
+            itemTop.Data = Data1 >> Data2;
+            break;
+        //--------------------------------------------------------------------
+        case OP_PLUS:
+            itemTop.Data = Data1 + Data2;
+            break;
+        //--------------------------------------------------------------------
+        case OP_MINUS:
+            itemTop.Data = Data1 - Data2;
+            break;
+        //--------------------------------------------------------------------
+        case OP_TIMES:
+            itemTop.Data = Data1 * Data2;
+            break;
+        //--------------------------------------------------------------------
+        case OP_DIV:
+            if( Data2 )
+                itemTop.Data = Data1 / Data2;
+            else
+                deb.error = ERR_DIV0;
+            break;
+        //--------------------------------------------------------------------
+        case OP_MOD:
+            if( Data2 )
+                itemTop.Data = Data1 % Data2;
+            else
+                deb.error = ERR_DIV0;
+            break;
+        //--------------------------------------------------------------------
+        case OP_NOT:
+            itemTop.Data = (DWORD)(!(signed)Data1);
+            break;
+        //--------------------------------------------------------------------
+        case OP_BITWISE_NOT:
+            itemTop.Data = ~Data1;
+            break;
+        //--------------------------------------------------------------------
+        case OP_UNARY_MINUS:
+            itemTop.Data = (DWORD)(-(signed)Data1);
+            break;
+        //--------------------------------------------------------------------
+        case OP_UNARY_PLUS:
+            // We dont do anything special for unary plus
+            itemTop.Data = Data1;
+            break;
+        //--------------------------------------------------------------------
+        case OP_DOT:
+            itemTop.Data = Data1;          // TEST  type.element or eax.4
+            break;
+        //--------------------------------------------------------------------
+        case OP_PTR:
+            itemTop.Data = fnPtr(Data1);    // TEST type->element or eax->4
+            break;
+        //--------------------------------------------------------------------
+        case OP_LINE_NUMBER:
+            itemTop.Data = SymLinNum2Address(Data1);   // TEST
+            break;
+        //--------------------------------------------------------------------
+        case OP_SELECTOR:   // Selector:offset
+            // The left side contains the selector token, the right side offset
+            // We merge them into one address-type token
+            itemTop.bType = EXTYPE_ADDRESS;
+            itemTop.wSel  = Data1;                      // Selector
+            itemTop.Data  = Data2;                      // Offset
+            itemTop.pData = (BYTE*) &itemTop.Data;
+            if(Data1 > 0xFFFF)                          // Selector has to be the valid size
+                deb.error = ERR_SELECTOR;
+
+            // Do a separate ending since we changed the item type
+            Push(Values, &itemTop);
+
+            return;
+        //--------------------------------------------------------------------
+        case OP_FUNCTION1:
+            // Function with 1 parameter; however, it uses the 2 parameter path here
+            // since the bottom (first) parameter is the function index
+            if( Data1<=MAX_FUNCTION )
+            {
+                // Call the function with the second parameter as argument
+                itemTop.Data = (*Func[Data1-1].funct)(Data2);
+            }
+            break;
+    }
+
+    // The final type is a literal item
+    itemTop.bType = EXTYPE_LITERAL;
+    itemTop.pData = (BYTE*) &itemTop.Data;
+
+    // At the end, we always push the resulting value onto the stack
+
+    Push(Values, &itemTop);
+}
+
+/******************************************************************************
+*
+*   BOOL Evaluate(TExItem *pItem, char *pExpr, char **ppNext, BOOL fSymbolsValueOf)
+*
+*******************************************************************************
+*
+*   Evaluates an expression.
+*
+*   Where:
+*       pItem - the expression item to fill in with the result of evaluation
+*       pExpr - expression string
+*       ppNext - optional variable to store the end of the expression
+*       fSymbolsValueOf - if set to TRUE, symbols will tend to evaluate as value-of instead of address-of
+*
+*   Returns:
+*       TRUE - expression evaluated ok and the item is stored
+*       FALSE - error evalauting expression; deb.error has the error code
+*
+******************************************************************************/
+BOOL Evaluate(TExItem *pItem, char *pExpr, char **ppNext, BOOL fSymbolsValueOf)
 {
     TOpStack Operators = { 0, };        // Operators stack, initialized to 0 elements
     TStack   Values    = { 0, };        // Values stack, initialized to 0 elements
@@ -1160,8 +1414,10 @@ BOOL Evaluate2(TExItem *pItem, char *pExpr, char **ppNext)
     char *myNext;                       // This pointer is used if ppNext==NULL
     BYTE NewOp;
     BOOL fUnary = TRUE;                 // Possible unary operator at the beginning
+    int nTokenLen;                      // Length of the input token
+    int nFunc1;                         // Temp index of the function
 
-    error = 0;                          // Reset the error variable to no error
+    deb.error = 0;                      // Reset the error variable to no error
     fDecimal = FALSE;                   // Do not expect decimal number at first
 
     // If the ppNext is NULL, we will use local pointer instead
@@ -1180,7 +1436,7 @@ BOOL Evaluate2(TExItem *pItem, char *pExpr, char **ppNext)
     // Precondition: both input arguments are now valid
 
     // Loop for every token in the input string, bail out on any kind of error
-    while( NextToken(&pExpr) && !error )
+    while( NextToken(&pExpr) && !deb.error )
     {
         // See if the new token is an operator
         if( (NewOp = TableMatch( &pExpr)) )
@@ -1194,6 +1450,8 @@ BOOL Evaluate2(TExItem *pItem, char *pExpr, char **ppNext)
                 case OP_PLUS:   NewOp = OP_UNARY_PLUS,  fDecimal = TRUE; break;
                 case OP_MINUS:  NewOp = OP_UNARY_MINUS, fDecimal = TRUE; break;
                 case OP_DOT:    NewOp = OP_LINE_NUMBER, fDecimal = TRUE; break;
+                case OP_AND:    NewOp = OP_UNARY_AND;                    break;
+                case OP_TIMES:  NewOp = OP_UNARY_PTR;                    break;
                 };
 
                 // Dont expect unary next time around
@@ -1205,17 +1463,43 @@ BOOL Evaluate2(TExItem *pItem, char *pExpr, char **ppNext)
                 continue;
             }
 
+            // Left bracket is simply pushed onto the stack as a placeholder
+            if( NewOp==OP_BRACKET_START )
+            {
+                PushOp(&Operators, OP_BRACKET_START);
+
+                continue;
+            }
+
+            // Right bracket needs stack unwinding
+            if( NewOp==OP_BRACKET_END )
+            {
+                while( PeekOp(&Operators)!=OP_BRACKET_START && !deb.error)
+                {
+                    Execute(&Values, PopOp(&Operators));
+                }
+
+                // Here we have to find left bracket, otherwise it's syntax error
+                if( PopOp(&Operators)!=OP_BRACKET_START )
+                    deb.error = ERR_SYNTAX;
+
+                // Evaluate the array index
+                EvalGetArray(&Values, &Operators, &Item);
+
+                continue;
+            }
+
             // Right parenthesis needs stack unwinding
             if( NewOp==OP_PAREN_END )
             {
-                while( PeekOp(&Operators)!=OP_PAREN_START && !error)
+                while( PeekOp(&Operators)!=OP_PAREN_START && !deb.error)
                 {
                     Execute(&Values, PopOp(&Operators));
                 }
 
                 // Here we have to find left paren, otherwise it's syntax error
                 if( PopOp(&Operators)!=OP_PAREN_START )
-                    error = ERR_SYNTAX;
+                    deb.error = ERR_SYNTAX;
 
                 continue;
             }
@@ -1244,9 +1528,46 @@ BOOL Evaluate2(TExItem *pItem, char *pExpr, char **ppNext)
             continue;
         }
 
-        // Get the next token - it should be an operand
-        if( !GetValue(&Item, &pExpr) )
-            break;
+        // Find the length of the token in the input buffer (We assume it is a token)
+        nTokenLen = GetTokenLen(pExpr);
+
+        // Special case are structure elements as in X->Y or X.Y, where we wont be able to find
+        // Y in a symbol database since it is just a part of X's definition string.
+        // So, we peek the operator and do slightly more checking for them.
+        if( !((PeekOp(&Operators)==OP_PTR || PeekOp(&Operators)==OP_DOT)
+           && GetValueStructureMember(&Values, &Operators, &Item, &pExpr, nTokenLen)) )
+        {
+            // Get the next token - it should be an operand
+            if( !GetValue(&Item, &pExpr, nTokenLen) )
+            {
+                // If the token was not an operand, check if it is a type case
+                if( EvalGetTypeCast(&Item, &pExpr, nTokenLen) )
+                {
+                    // The token was a type cast. Insert the type case operand and we'll proceed to push the item
+                    PushOp(&Operators, OP_TYPECAST);
+
+                    pExpr += nTokenLen;
+                }
+                else
+                {
+                    // If the token was not a type cast, check if it is an internal function with 1 argument
+                    if( (nFunc1 = EvalGetFunc(&pExpr, nTokenLen, 1)) )
+                    {
+                        // The token was a function that takes 1 parameter. Insert the function token,
+                        // then push the index of the function
+                        PushOp(&Operators, OP_FUNCTION1);
+
+                        Item.bType = EXTYPE_LITERAL;        // Function index is a literal number
+                        Item.Data  = nFunc1;                // Store the index
+                        Item.pData = (BYTE*) &Item.Data;    // and the pointer to it
+
+                        pExpr += nTokenLen;
+                    }
+                    else
+                        break;
+                }
+            }
+        }
 
         Push(&Values, &Item);
         fUnary = FALSE;                 // After the first value no more unary (until left paren)
@@ -1259,7 +1580,7 @@ BOOL Evaluate2(TExItem *pItem, char *pExpr, char **ppNext)
     }
 
     // At this point the opeator stack should be empty, and the value stack should have only value in it
-    if( IsEmptyOp(&Operators) && Values.Top==1 && !error)
+    if( IsEmptyOp(&Operators) && Values.Top==1 && !deb.error)
     {
         // Success!
         *ppNext = pExpr;
@@ -1268,108 +1589,17 @@ BOOL Evaluate2(TExItem *pItem, char *pExpr, char **ppNext)
 
         return( TRUE );
     }
+    else
+    // If something was wrong, and error was not assigned, set the syntax error
+        if( !deb.error )
+            deb.error = ERR_SYNTAX;
 
     return( FALSE );
 }
 
-
-/******************************************************************************
-*
-*   BOOL EvaluateSubexpression(TExItem *pItem, char *pExpr, char **ppNext)
-*
-*******************************************************************************
-*
-*   This is a helper function that performs the same operation as its
-*   regular evaluate, but it also expects (and discards) wrapping set of
-*   parenthesis. It is used by the evaluator itself to evaluate subexpressions
-*   given in function enclosures.
-*
-******************************************************************************/
-static BOOL EvaluateSubexpression(TExItem *pItem, char *pExpr, char **ppNext)
-{
-    char *pStart, *pEnd;                // Start and end of sub-expression
-    int nLevel = 1;                     // Level of nested parenthesis
-    BOOL fResult;                       // Result of evaluation
-
-    // Scope the start and end of subexpression - we need to have matching parenthesis
-    pStart = pExpr;
-    while( *pStart==' ' ) pStart++;
-    if( *pStart != '(' )
-        return( FALSE );
-
-    pEnd = ++pStart;
-
-    // Find the matching end of the subexpression caring for the nested parenthesis
-    while( *pEnd && nLevel )
-    {
-        if( *pEnd=='(' )
-            nLevel++;
-        else
-        if( *pEnd==')' )
-            nLevel--;
-
-        pEnd++;
-    }
-
-    // Make sure it's not empty string
-    if( *--pEnd != ')' )
-        return( FALSE );
-
-    // Terminate the ending of the subexpression and get its evaluation
-    *pEnd = 0;
-
-    fResult = Evaluate2(pItem, pStart, ppNext);
-
-    // Restore the original expression string
-    *pEnd = ')';
-
-    // If there were no errors, assign the next pointer to after the closing bracket
-    if( fResult )
-        *ppNext = pEnd + 1;
-
-    return( fResult );
-}
-
-void Test(char *str, DWORD result)
-{
-    BOOL ret;
-    char *args = str;
-    TExItem Item;
-
-    ret = Evaluate2(&Item, args, &args);
-
-    if( ret==TRUE )
-    {
-        if( *(DWORD *)Item.pData==result )
-            dprinth(1, "%s = (%s) %d OK", str, Item.pType, result);
-        else
-            dprinth(1, "%s INCORRECT: Got %d, expected %d\n", str, *(DWORD *)Item.pData, result);
-    }
-    else
-    {
-        dprinth(1, "%s  FAILED\n", str);
-    }
-}
-
-void PrintError()
-{
-    // Evaluation returned an intrinsic error
-    switch( error )
-    {
-        case ERR_TOO_COMPLEX:       dprinth(1, "Expression too complex!\n"); break;
-        case ERR_TOO_BIG:           dprinth(1, "Number too large!\n");       break;
-        case ERR_NOTAPOINTER:       dprinth(1, "Not a pointer!\n");          break;
-        case ERR_ELEMENTNOTFOUND:   dprinth(1, "Element not found!\n");      break;
-        case ERR_ADDRESS:           dprinth(1, "Expecting value, not address!\n"); break;
-        case ERR_SELECTOR:          dprinth(1, "Invalid selector value!\n"); break;
-        default:
-            dprinth(1, "Unknown error %d!\n", error);
-    }
-}
-
 /******************************************************************************
 *                                                                             *
-*   BOOL EvalGetValue(DWORD *pValue, char *pExpr, char **ppNext)              *
+*   BOOL Expression(DWORD *pValue, char *pExpr, char **ppNext)                *
 *                                                                             *
 *******************************************************************************
 *
@@ -1388,11 +1618,11 @@ void PrintError()
 *       FALSE - error evaluating expression
 *
 ******************************************************************************/
-BOOL EvalGetValue(DWORD *pValue, char *pExpr, char **ppNext)
+BOOL Expression(DWORD *pValue, char *pExpr, char **ppNext)
 {
     TExItem Item;                         // Store the result of the evaluation
 
-    if( Evaluate2(&Item, pExpr, ppNext) )
+    if( Evaluate(&Item, pExpr, ppNext, FALSE) )
     {
         // Literal contains the value in the *pData
         // Register contains the register value in the *pData
@@ -1407,30 +1637,10 @@ BOOL EvalGetValue(DWORD *pValue, char *pExpr, char **ppNext)
         }
 
         // Expecting value, not address
-        error = ERR_ADDRESS;
+        deb.error = ERR_ADDRESS;
     }
 
-    PrintError();
-
     return( FALSE );
-}
-
-
-/******************************************************************************
-*                                                                             *
-*
-*                                                                             *
-*******************************************************************************
-*
-*   Expands symbol one level
-*
-******************************************************************************/
-void ExpandPrintSymbol(TExItem *pItem)
-{
-    char *buf[MAX_STRING+1];
-
-
-    dprinth(1, "%s", buf);
 }
 
 
@@ -1443,16 +1653,17 @@ void ExpandPrintSymbol(TExItem *pItem)
 *   Debuger command to evaluate an expression
 *
 ******************************************************************************/
-BOOL cmdEvaluate2(char *args, int subClass)
+BOOL cmdEvaluate(char *args, int subClass)
 {
     static char buf[MAX_STRING];        // Temp output buffer
     TExItem Item;                         // Store the result of the evaluation
     DWORD Data;                         // Temp data store
     int i;                              // Temp store
 
+
     if( *args )
     {
-        if( Evaluate2(&Item, args, NULL) )
+        if( Evaluate(&Item, args, NULL, TRUE) )
         {
             switch( Item.bType )
             {
@@ -1488,7 +1699,7 @@ BOOL cmdEvaluate2(char *args, int subClass)
                 case EXTYPE_SYMBOL:
                 {
                     // Print the expanded symbol
-                    ExpandPrintSymbol(&Item);
+                    ExpandPrintSymbol(&Item, args);
                 }
                 break;
 
@@ -1499,12 +1710,7 @@ BOOL cmdEvaluate2(char *args, int subClass)
                 //-----------------------------------------------------------------
                 case EXTYPE_ADDRESS:
                 {
-                    i = sprintf(buf, " Address: ");
-
-                    if( Item.pType )
-                        i += sprintf(buf+i, "(%s) ", Item.pType);
-
-                    i += sprintf(buf+i, "%04X:%08X", (WORD)Item.pData, Item.Data);
+                    i = sprintf(buf, " Address: %04X:%08X", (int)Item.pData, Item.Data);
 
                     dprinth(1, "%s", buf);
                 }
@@ -1513,98 +1719,10 @@ BOOL cmdEvaluate2(char *args, int subClass)
 
             return( TRUE );
         }
-
-        PrintError();
     }
     else
         deb.error = ERR_EXP_WHAT;
 
-    return( TRUE );
-}
-
-
-/******************************************************************************
-*                                                                             *
-*   BOOL cmdEvaluate(char *args, int subClass)                                *
-*                                                                             *
-*******************************************************************************
-*
-*   Debuger command to evaluate an expression
-*
-******************************************************************************/
-BOOL cmdEvaluate_OLD(char *args, int subClass)
-{
-    static char buf[MAX_STRING];        // Temp output buffer
-    TSYMBOL Symbol;
-    int i;
-    DWORD value;
-    char *pType;
-    TExItem Item;
-    BOOL ret;
-
-    if( *args=='?' )
-    {
-        char t[80];
-        // Test
-
-        Test("0", 0);
-        Test("1+4", 1+4);
-        Test("1+3*2-1", 1+3*2-1);
-        Test("4*2-1+8*4-3", 4*2-1+8*4-3);
-
-        Test("-23*2+(-3-1)", -23*2+(-3-1));
-        Test("(4*5-1)*2/3", (4*5-1)*2/3);
-
-        return( TRUE );
-    }
-
-    ret = Evaluate2(&Item, args, &args);
-
-    dprinth(1, "[%s] Data=%X (%d)", ret? "OK":"ERROR", Item.Data, Item.Data);
-
-#if 0
-    if( SymName2LocalSymbol(&Symbol, args)==TRUE )
-    {
-        dprinth(1, "%08X %08X %s %s", Symbol.Address, Symbol.Data, Symbol.pName, Symbol.pType );
-    }
-    else
-    {
-        dprinth(1, "FALSE");
-    }
-#endif
-
-#if 0
-    if( *args )
-    {
-        memset(&Symbol, 0, sizeof(Symbol));
-
-        if( EvaluateEx(&Symbol, args, &args) && (deb.error==NOERROR) )
-        {
-            if( !*args )
-            {
-                i = sprintf(buf, " Hex=%08X  Dec=%010u  ", Symbol.Data, Symbol.Data );
-
-                // Print negative decimal only if it is a negative number
-                if( (signed)Symbol.Data<0 )
-                    i += sprintf(buf+i, "(%d)  ", (signed)Symbol.Data);
-
-                // Print ASCII representation of that number
-                i += sprintf(buf+i, "\"%c%c%c%c\"",
-                        ((Symbol.Data>>24) & 0xFF) >= ' '? ((Symbol.Data>>24) & 0xFF) : '.',
-                        ((Symbol.Data>>16) & 0xFF) >= ' '? ((Symbol.Data>>16) & 0xFF) : '.',
-                        ((Symbol.Data>> 8) & 0xFF) >= ' '? ((Symbol.Data>> 8) & 0xFF) : '.',
-                        ((Symbol.Data>> 0) & 0xFF) >= ' '? ((Symbol.Data>> 0) & 0xFF) : '.' );
-
-                dprinth(1, "%s", buf);
-                dprinth(1, "Type: <%s>", Symbol.pType);
-            }
-            else
-                dprinth(1, "Syntax error at ->\"%s\"", args);
-        }
-    }
-    else
-        deb.error = ERR_EXP_WHAT;
-#endif
     return( TRUE );
 }
 

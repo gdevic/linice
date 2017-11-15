@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       10/16/00                                                      *
 *                                                                             *
-*   Copyright (c) 2001 - 2001 Goran Devic                                     *
+*   Copyright (c) 2001 Goran Devic                                            *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -60,7 +60,7 @@ static char *pSrcEipLine = NULL;        // Cache pointer to source line for repe
 *                                                                             *
 ******************************************************************************/
 
-extern void SetNonStickyBreakpoint(TADDRDESC Addr);
+extern void SetOneTimeBreakpoint(TADDRDESC Addr);
 
 // From linux/reboot.h
 
@@ -177,7 +177,7 @@ BOOL cmdGo(char *args, int subClass)
         // If we specified break address, set a one-time bp
         if( fBreak )
         {
-            SetNonStickyBreakpoint(BpAddr);
+            SetOneTimeBreakpoint(BpAddr);
         }
     }
 
@@ -195,7 +195,7 @@ BOOL cmdGo(char *args, int subClass)
 
 /******************************************************************************
 *                                                                             *
-*   BOOL RepeatTrace(void)                                                    *
+*   BOOL RepeatSrcTrace(void)                                                 *
 *                                                                             *
 *******************************************************************************
 *
@@ -206,7 +206,7 @@ BOOL cmdGo(char *args, int subClass)
 *       FALSE - Break into the debugger
 *
 ******************************************************************************/
-BOOL RepeatTrace(void)
+BOOL RepeatSrcTrace(void)
 {
     // If the new context is in the same function line as the cached originator,
     // continue running, otherwise break.
@@ -279,7 +279,7 @@ BOOL cmdTrace(char *args, int subClass)
         {
             if( Expression(&count, args, &args) && !*args && count )
             {
-                deb.TraceCount = count;
+                deb.nTraceCount = count;
             }
             else
             {
@@ -290,13 +290,6 @@ BOOL cmdTrace(char *args, int subClass)
         }
     }
 
-    // Depending on the source mode, we can simply use Trace flag or we need
-    // to scan a block of instructions
-
-    // First, set the current symbol content to make sure our cs:eip is at the
-    // right place, since we may have it set differenly
-    SetSymbolContext(deb.r->cs, deb.r->eip);
-
     if( (deb.eSrc==SRC_ON) && deb.pFnScope && deb.pFnLin )
     {
         // SOURCE CODE ACTIVE
@@ -305,7 +298,7 @@ BOOL cmdTrace(char *args, int subClass)
         deb.fSrcTrace = TRUE;           // We are doing source trace
     }
 
-    // Common case - Use CPU Trace Flag
+    // Common case - Use CPU Trace Flag - We are executing a trace command
 
     deb.fTrace = TRUE;
 
@@ -330,18 +323,18 @@ BOOL cmdTrace(char *args, int subClass)
 ******************************************************************************/
 BOOL MultiTrace(void)
 {
-    // Assume deb.TraceCount > 0
+    // Assume deb.nTraceCount > 0
     // If the counter is not yet 0 (or yet 0), we will most likely loop
-    if( --deb.TraceCount )
+    if( --deb.nTraceCount )
     {
         // Trace again without stopping, but first we need to check if the user has pressed
         // ESC key to stop tracing
 
         if( GetKey(FALSE)==ESC )
         {
-            dprinth(1, "Break. 0x%X trace iterations left.", deb.TraceCount );
+            dprinth(1, "Break. 0x%X trace iterations left.", deb.nTraceCount );
 
-            deb.TraceCount = 0;     // Multi-trace off
+            deb.nTraceCount = 0;     // Multi-trace off
         }
         else
         {
@@ -386,16 +379,6 @@ static BOOL ArmStep()
 
     Dis.bFlags &= SCAN_MASK;            // Mask the scan bits
 
-    // If we are in the "P RET" mode ("step until return"), and the current
-    // instruction _is_ a return, clear that mode and quit stepping
-
-    if( deb.fStepRet && Dis.bFlags==SCAN_RET )
-    {
-        deb.fStepRet = FALSE;           // Dont loop any more
-
-        return( FALSE );                // Signal that we did not arm it
-    }
-
     if( Dis.bFlags==SCAN_CALL || Dis.bFlags==SCAN_INT )
     {
         // Call and INT instructions we skip
@@ -403,16 +386,29 @@ static BOOL ArmStep()
         // Set a non-sticky breakpoint at the next instruction
         BpAddr.sel    = deb.r->cs;
         BpAddr.offset = deb.r->eip + Dis.bInstrLen;
-        SetNonStickyBreakpoint(BpAddr);
+        SetOneTimeBreakpoint(BpAddr);
 
         deb.fTrace = FALSE;             // This time we are not using CPU trace facility
     }
     else
     {
+        // If we are in the "P RET" mode ("step until return"), and the current
+        // instruction _is_ a return, clear that mode and quit stepping
+
+        if( deb.fStepRet && Dis.bFlags==SCAN_RET )
+        {
+            deb.fStepRet = FALSE;           // Dont loop any more
+
+            return( FALSE );                // Signal that we did not arm it
+        }
         // All other instructions we single step
 
         deb.fTrace = TRUE;              // Use CPU Trace Flag
     }
+
+    // Common case - We are executing a step command
+
+    deb.fStep = TRUE;
 
     return( TRUE );                     // Signal that we armed the step
 }
@@ -420,7 +416,7 @@ static BOOL ArmStep()
 
 /******************************************************************************
 *                                                                             *
-*   BOOL RepeatStep(void)                                                     *
+*   BOOL RepeatSrcStep(void)                                                  *
 *                                                                             *
 *******************************************************************************
 *
@@ -431,7 +427,7 @@ static BOOL ArmStep()
 *       FALSE - Break into the debugger
 *
 ******************************************************************************/
-BOOL RepeatStep(void)
+BOOL RepeatSrcStep(void)
 {
     // If the new context is in the same function line as the cached originator,
     // continue running, otherwise break.
@@ -467,7 +463,7 @@ BOOL cmdStep(char *args, int subClass)
     if( *args != 0 )
     {
         // Argument must be 'RET' - step until the ret instruction
-        if( strnicmp(args, "ret", 3)==0 )
+        if( !stricmp(args, "ret") )
         {
             deb.fStepRet = TRUE;
         }

@@ -82,7 +82,7 @@ int main(int argc, char* argv[])
 
     // Print the basic banner
     printf("\nLinice Debugger Win32 Symbol Translator/Checker Version %d.%02d\n", LINSYMVER >> 8, LINSYMVER & 0xFF);
-    printf("(C) Goran Devic, 2000-2003\n\n");
+    printf("Linice and Linsym (C) 2000-2004 by Goran Devic.  All Rights Reserved.");
 
     // Parse the arguments and pick up the options
     nVerbose = 1;                       // Default verbose level of 1

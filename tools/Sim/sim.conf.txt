@@ -1,0 +1,15 @@
+Regs.eax = 00000000
+Regs.ebx = 00000000
+Regs.ecx = 00000000
+Regs.edx = 00000000
+Regs.esi = 00000000
+Regs.edi = 00000000
+Regs.esp = 01121000
+Regs.ebp = 00000000
+Regs.eip = 0804848C
+Regs.cs = 0010
+Regs.ds = 0018
+Regs.es = 0000
+Regs.fs = 0000
+Regs.gs = 0000
+Regs.ss = 0018

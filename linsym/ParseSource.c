@@ -38,8 +38,7 @@
 
 #include "loader.h"                     // Include global protos
 
-
-extern int dfs;
+extern PSTR dfs;                        // Global pointer to strings (to append)
 
 //****************************************************************************
 //
@@ -370,7 +369,11 @@ static BOOL WriteSourceFile(int fd, int fs, char *ptr, WORD file_id)
                     return( TRUE );
             }
             else
+            {
+                printf("Unable to open source file %s. Skipping...\n", pTmp);
+
                 return( TRUE );
+            }
         }
     }
 
@@ -398,15 +401,15 @@ static BOOL WriteSourceFile(int fd, int fs, char *ptr, WORD file_id)
     pHeader->h.dwSize    = dwSize;
     pHeader->file_id     = file_id;
     pHeader->nLines      = nLines;
-    pHeader->dSourcePath = dfs;
-    pHeader->dSourceName = dfs;
+    pHeader->pSourcePath = dfs;
+    pHeader->pSourceName = dfs;
 
 	// Find the name proper (without the path)
 	pName = strrchr(pTmp, '/');
 	if(pName==NULL)
 		pName = strrchr(pTmp, '\\');
 	if(pName!=NULL)
-        pHeader->dSourceName += pName - pTmp + 1;
+        pHeader->pSourceName += pName - pTmp + 1;
 
     // Write the string - source path and name
 	write(fs, pTmp, strlen(pTmp)+1);
@@ -452,7 +455,7 @@ static BOOL WriteSourceFile(int fd, int fs, char *ptr, WORD file_id)
         {
             // Size of the line is not zero - store it
 
-            pHeader->dLineArray[i] = dfs;
+            pHeader->pLineArray[i] = dfs;
             // Write the number of spaces as the first byte of line string
             write(fs, &bSpaces, 1);
 
@@ -464,7 +467,7 @@ static BOOL WriteSourceFile(int fd, int fs, char *ptr, WORD file_id)
         {
             // Size of the line is zero - point to the start of the strings area
 
-            pHeader->dLineArray[i] = 0;
+            pHeader->pLineArray[i] = 0;
         }
     }
 

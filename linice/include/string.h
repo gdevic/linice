@@ -90,6 +90,7 @@ extern char * strupr( char *s );
 
 // Some more exotic functions borrowed from other languages
 extern char *substr(char *s, int i, int j);
+extern int strccpy(char *s1, char *s2, char c);
 
 
 #endif // _STRING_H_

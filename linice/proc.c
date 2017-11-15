@@ -99,14 +99,14 @@ static int ProcRead(char *buf, char **start, off_t offset, int len, int *unused,
     // Print the number of interrupts that we trapped
 
     len += sprintf(buf+len, "Host ints:      Linice ints:\n");
-    len += sprintf(buf+len, " int1:  %5d     %5d\n", pIce->nIntsPass[0x01], pIce->nIntsIce[0x01]);
-    len += sprintf(buf+len, " int3:  %5d     %5d\n", pIce->nIntsPass[0x03], pIce->nIntsIce[0x03]);
-    len += sprintf(buf+len, " timer: %5d     %5d\n", pIce->nIntsPass[0x20], pIce->nIntsIce[0x20]);
-    len += sprintf(buf+len, " kbd:   %5d     %5d\n", pIce->nIntsPass[0x21], pIce->nIntsIce[0x21]);
-    len += sprintf(buf+len, " com2:  %5d     %5d\n", pIce->nIntsPass[0x23], pIce->nIntsIce[0x23]);
-    len += sprintf(buf+len, " com1:  %5d     %5d\n", pIce->nIntsPass[0x24], pIce->nIntsIce[0x24]);
-    len += sprintf(buf+len, " ps/2:  %5d     %5d\n", pIce->nIntsPass[0x2C], pIce->nIntsIce[0x2C]);
-    len += sprintf(buf+len, " PF:    %5d     %5d\n", pIce->nIntsPass[0x0E], pIce->nIntsIce[0x0E]);
+    len += sprintf(buf+len, " int1:  %5d     %5d\n", deb.nIntsPass[0x01], deb.nIntsIce[0x01]);
+    len += sprintf(buf+len, " int3:  %5d     %5d\n", deb.nIntsPass[0x03], deb.nIntsIce[0x03]);
+    len += sprintf(buf+len, " timer: %5d     %5d\n", deb.nIntsPass[0x20], deb.nIntsIce[0x20]);
+    len += sprintf(buf+len, " kbd:   %5d     %5d\n", deb.nIntsPass[0x21], deb.nIntsIce[0x21]);
+    len += sprintf(buf+len, " com2:  %5d     %5d\n", deb.nIntsPass[0x23], deb.nIntsIce[0x23]);
+    len += sprintf(buf+len, " com1:  %5d     %5d\n", deb.nIntsPass[0x24], deb.nIntsIce[0x24]);
+    len += sprintf(buf+len, " ps/2:  %5d     %5d\n", deb.nIntsPass[0x2C], deb.nIntsIce[0x2C]);
+    len += sprintf(buf+len, " PF:    %5d     %5d\n", deb.nIntsPass[0x0E], deb.nIntsIce[0x0E]);
 
     ice_mod_dec_use_count();
 

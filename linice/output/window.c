@@ -156,7 +156,7 @@ void RecalculateDrawWindows()
     // This prevent from us from calling all these drawing functions when the
     // debugger is not active, in which case we would not have the right memory
     // access set up
-    if( pIce->fRunningIce==TRUE )
+    if( deb.fRunningIce==TRUE )
     {
         // Draw the screen
         dputc(DP_CLS);

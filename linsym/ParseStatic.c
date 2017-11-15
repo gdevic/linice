@@ -1,10 +1,10 @@
 /******************************************************************************
 *                                                                             *
-*   Module:     ParseFunctionLines.c                                          *
+*   Module:     ParseStatic.c                                                 *
 *                                                                             *
-*   Date:       09/05/00                                                      *
+*   Date:       02/12/04                                                      *
 *                                                                             *
-*   Copyright (c) 2001 Goran Devic                                            *
+*   Copyright (c) 2004 Goran Devic                                            *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -28,7 +28,7 @@
 *                                                                             *
 *   DATE     DESCRIPTION OF CHANGES                               AUTHOR      *
 * --------   ---------------------------------------------------  ----------- *
-* 09/05/00   Initial version                                      Goran Devic *
+* 02/12/04   Initial version                                      Goran Devic *
 * --------   ---------------------------------------------------  ----------- *
 *******************************************************************************
 *   Include Files                                                             *
@@ -38,36 +38,93 @@
 
 #include "loader.h"                     // Include global protos
 
-extern PSTR dfs;                        // Global pointer to strings (to append)
+extern PSTR dfs;
 
 extern WORD GetFileId(char *pSoDir, char *pSo);
-extern BOOL GlobalsName2Address(DWORD *p, char *pName);
+
 
 /******************************************************************************
 *                                                                             *
-*   BOOL ParseFunctionLines(int fd, int fs, BYTE *pBuf)                       *
+*   BOOL StoreStaticVariableData(int fd, FILE *fStatics, int nStatics, int file_id)
 *                                                                             *
 *******************************************************************************
 *
-*   Loads and parses function lines tokens.
+*   Reads the temp file containing the data for the static array and writes out
+*   the static array.
+*
+*   Where:
+*       fd - symbol table file descriptor (to write to)
+*       fStatics - temp file handle containing static data
+*       nStatics - number of static data
+*       file_id  - file id of the static blob
+*
+*   Returns:
+*       TRUE - stored zero or more static data
+*       FALSE - error (can't allocate memory)
+*
+******************************************************************************/
+static BOOL StoreStaticVariableData(int fd, FILE *fStatics, int nStatics, int file_id)
+{
+    TSYMSTATIC *pStatic;                // Pointer to the buffer
+    TSYMSTATIC1 *pStatic1;              // Pointer to the element
+
+    // Rewind the temporary file
+    fseek(fStatics, 0L, SEEK_SET);
+
+    if( !nStatics )
+        return( TRUE );
+
+    // Allocate buffer to read all of the static data
+    if( (pStatic = malloc(sizeof(TSYMSTATIC) + (nStatics-1) * sizeof(TSYMSTATIC1))) )
+    {
+        VERBOSE2 printf("Storing static %d data for file_id=%d\n", nStatics, file_id);
+
+        // Stuff the header of the static symbol data sturcture
+        pStatic->h.hType = HTYPE_STATIC;
+        pStatic->h.dwSize = sizeof(TSYMSTATIC) + (nStatics-1) * sizeof(TSYMSTATIC1);
+        pStatic->nStatics = nStatics;
+        pStatic->file_id  = file_id;
+
+        // Read in the data from the temp file and store it in the array
+        pStatic1 = &pStatic->list[0];
+
+        while( nStatics-- )
+        {
+            fscanf(fStatics, "%08X %d %d\n", &pStatic1->dwAddress, (int *) &pStatic1->pName, (int *) &pStatic1->pDef);
+
+            pStatic1++;
+        }
+
+        // Write out the complete array into the output handle
+        write(fd, (void *) pStatic, pStatic->h.dwSize);
+
+        // Free the buffer and rewind the temp file so we can reuse it
+        free(pStatic);
+        fseek(fStatics, 0L, SEEK_SET);
+    }
+    else
+        fprintf(stderr, "Unable to allocate memory\n");
+
+    return( FALSE );
+}
+
+/******************************************************************************
+*                                                                             *
+*   BOOL ParseStatic(int fd, int fs, BYTE *pBuf)                              *
+*                                                                             *
+*******************************************************************************
+*
+*   Loads and parses static symbols from various ELF sections.
 *
 *   Where:
 *       fd - symbol table file descriptor (to write to)
 *       fs - strings file (to write to)
 *       pBuf - buffer containing the ELF file
 *
-*   Returns:
-*       TRUE - Function lines parsed and stored
-*       FALSE - Critical error
-*
 ******************************************************************************/
-BOOL ParseFunctionLines(int fd, int fs, BYTE *pBuf)
+BOOL ParseStatic(int fd, int fs, BYTE *pBuf)
 {
-    TSYMFNLIN  Header;                  // Function line section header
-    TSYMFNLIN1 list;                    // Line record
     WORD file_id = 0;                   // Current file ID number
-    long fileOffset = 0;                // Temp file offset position
-    int nLines = 0;                     // Number of lines described in a function
     int nCurrentSection;                // Current string section offset
     int nSectionSize;                   // Current section string size
 
@@ -81,17 +138,18 @@ BOOL ParseFunctionLines(int fd, int fs, BYTE *pBuf)
     Elf32_Shdr *SecSymtab = NULL;       // Section .SYMTAB
     Elf32_Shdr *SecStrtab = NULL;       // Section .STRTAB
 
-    struct stat fd_stat;                // ELF file stats
     StabEntry *pStab;                   // Pointer to a stab entry
     char *pStr;                         // Pointer to a stab string
     char *pSoDir = "";                  // Source code directory
     char *pSo = "";                     // Current source file
-    int i;
+    int i, nLen;
+    FILE *fStatics;                     // Temp file descriptor for static descriptors
+    int nStatics;                       // Number of static symbols in one file
+
 
     VERBOSE2 printf("=============================================================================\n");
-    VERBOSE2 printf("||         PARSE FUNCTION LINES                                            ||\n");
+    VERBOSE2 printf("||         PARSE STATIC                                                    ||\n");
     VERBOSE2 printf("=============================================================================\n");
-    VERBOSE1 printf("Parsing function lines.\n");
 
     pElfHeader = (Elf32_Ehdr *) pBuf;
 
@@ -118,11 +176,17 @@ BOOL ParseFunctionLines(int fd, int fs, BYTE *pBuf)
             SecStrtab = SecCurr;
     }
 
+    // Create a temp file to store static definitions
+    fStatics = tmpfile();
+
+    // Reset the static symbol counter
+    nStatics = 0;
+
     //=========================
     // Parse STABS
     //=========================
     // We parse STABS exactly as we do a generic ELF section parsing,
-    // but here we extract only basic function parameters and line numbers
+    // but here we extract only static symbols
 
     if( SecStab && SecStabstr )
     {
@@ -147,70 +211,38 @@ BOOL ParseFunctionLines(int fd, int fs, BYTE *pBuf)
                     VERBOSE2 printf("HdrSym size: %lX\n", pStab->n_value);
                 break;
 
-                case N_FUN:
-                    VERBOSE2 printf("FUN---");
-                    if( *pStr==0 )
-                    {
-                        // Function end
-                        VERBOSE2 printf("END--------- +%lX\n\n", pStab->n_value);
+                case N_STSYM:
+                    VERBOSE2 printf("STSYM: file_id=%d  %s\n", file_id, pStr);
 
-                        // At this point we know the total size of the header
-                        // as well as the function ending address. Fill in the
-                        // missing information and rewrite the header
-                        Header.h.dwSize     = sizeof(TSYMFNLIN) + sizeof(TSYMFNLIN1) * (nLines-1);
-                        Header.dwEndAddress = Header.dwStartAddress + pStab->n_value - 1;
-                        Header.nLines       = nLines;
+                    // Found a static symbol, write out the address and offsets to name and definition
 
-                        lseek(fd, fileOffset, SEEK_SET);
+                    //--------------------------------------------------------------------------------
+                    // Print the address and the offset to the name (first)
+                    fprintf(fStatics, "%08X %d ", (DWORD) pStab->n_value, (int) dfs);
 
-                        write(fd, &Header, sizeof(TSYMFNLIN)-sizeof(TSYMFNLIN1));
-                        lseek(fd, 0, SEEK_END);
-                    }
-                    else
-                    {
-                        // We will write a header but later, on an function end,
-                        // rewind and rewite it with the complete information
-                        // This we do so we can simply keep adding file lines as
-                        // TSYMFNLIN1 array...
-                        Header.h.hType        = HTYPE_FUNCTION_LINES;
-                        Header.h.dwSize       = 0;      // To be written later
-                        Header.dwStartAddress = pStab->n_value;
-                        Header.dwEndAddress   = 0;      // To be written later
-                        Header.nLines         = 0;      // To be written later
+                    nLen = strchr(pStr, ':') - pStr;        // Get the length of the symbol name part
 
-                        // If the start address is not defined (0?) and this is an object file
-                        // (kernel module), we can search the global symbols for the address
-                        if( Header.dwStartAddress==0 && GlobalsName2Address(&Header.dwStartAddress, pStr) )
-                            ;
+                    write(fs, pStr, nLen);                  // Write the name into strings
+                    dfs += nLen;
 
-                        // Print function start & name
-                        VERBOSE2 printf("START-%08X--%s\n", Header.dwStartAddress, pStr);
+                    // Write terminate string with 0
+                    write(fs, "", 1);               // This will append 0
+                    dfs += 1;
 
-                        nLines = 0;
+                    //--------------------------------------------------------------------------------
+                    // Print the offset to the definition
+                    fprintf(fStatics, "%d\n", (int) dfs);   // End up with the offset to the definition
 
-                        // Get the current file position so we can come back later
+                    pStr = pStr + nLen + 1;                 // Point to the definition string
+                    nLen = strlen(pStr) + 1;                // Add 1 for the zero-termination
 
-                        // Get the file stats
-                        fstat(fd, &fd_stat);
+                    write(fs, pStr, nLen);
+                    dfs += nLen;
 
-                        fileOffset = fd_stat.st_size;
 
-                        // Write the header first time
-                        write(fd, &Header, sizeof(TSYMFNLIN)-sizeof(TSYMFNLIN1));
-                    }
-                break;
+                    // Increment the number of static symbols
+                    nStatics++;
 
-                case N_SLINE:
-                    VERBOSE2 printf("SLINE  line: %2d -> +%lX  file_id: %d\n", pStab->n_desc, pStab->n_value, file_id);
-
-                    // Write out one line record
-                    list.file_id = file_id;
-                    list.line    = pStab->n_desc;
-                    list.offset  = (WORD) pStab->n_value;
-
-                    write(fd, &list, sizeof(TSYMFNLIN1));
-
-                    nLines++;
                 break;
 
                 case N_SO:
@@ -220,6 +252,12 @@ BOOL ParseFunctionLines(int fd, int fs, BYTE *pBuf)
                         // Empty name - end of source file
                         VERBOSE2 printf("End of source. Text section offset: %08lX\n", pStab->n_value);
                         VERBOSE2 printf("=========================================================\n");
+
+                        // Dump the static data that we found
+                        StoreStaticVariableData(fd, fStatics, nStatics, file_id);
+
+                        // Reset the static symbol counter
+                        nStatics = 0;
                     }
                     else
                     {
@@ -262,7 +300,8 @@ BOOL ParseFunctionLines(int fd, int fs, BYTE *pBuf)
         return( TRUE );
     }
     else
-        printf("No STAB section in the file\n");
+        fprintf(stderr, "No STAB section in the file\n");
 
     return( FALSE );
 }
+

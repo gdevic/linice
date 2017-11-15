@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       10/25/00                                                      *
 *                                                                             *
-*   Copyright (c) 2001 - 2001 Goran Devic                                     *
+*   Copyright (c) 2000 Goran Devic                                            *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -266,7 +266,7 @@ BOOL cmdGdt(char *args, int subClass)
         // Display just the given selector or, if the selector given is larger
         // than PAGE_OFFSET, display the GDT from that address
 
-        sel = Evaluate(args, &args);
+        Expression(&sel, args, &args);
         if( sel < ice_page_offset() )
         {
             PrintGDT(1, pDesc->base, sel);
@@ -328,7 +328,7 @@ BOOL cmdIdt(char *args, int subClass)
         // Display just the given int number or, if the selector given is larger
         // than PAGE_OFFSET, display the IDT starting from that address
 
-        intnum = Evaluate(args, &args);
+        Expression(&intnum, args, &args);
         if( intnum < ice_page_offset() )
         {
             PrintIDT(1, pDesc->base, intnum);
@@ -430,69 +430,34 @@ BOOL cmdCpu(char *args, int subClass)
 *                                                                             *
 *******************************************************************************
 *
-*   Display list of kernel loadable modules or more information about a single
-*   module.
+*   Display list of kernel loadable modules
+*
 *       if no name is given, list all loaded modules
-*       if a partial name is given (module*) display those modules
+*       if a partial name is given, display only those modules
 *       if a full name is given, display extended info for that module
 *
 ******************************************************************************/
 BOOL cmdModule(char *args, int subClass)
 {
-    int nLine = 1;                      // Line counter
-    int nLen = 0;                       // Assume every module
-    int count;                          // Generic counter
-    BOOL fExact = FALSE;                // Assume all modules
-    const char *pModName;               // Pointer to a module name
-    void *pmodule, *pExact = NULL;      // Kernel pmodule pointer and exact module
-    struct module_symbol* pSym;         // Module symbols for extra info
-
     TMODULE Mod;                        // Current module internal structure
-    TMODULE Exact;                      // Module information that matched user query
+    void *pmodule;                      // Kernel pmodule pointer
+    int nLine = 1;                      // Line counter
 
-    // Get the pointer to the module structure (internal)
-    pmodule = ice_get_module(NULL, &Mod);
-
-    if( pmodule==NULL )
+    if( pmodule )
     {
-        dprinth(1, "module_list symbol not found.. Module info not available");
-    }
-    else
-    {
-        if( *args )
-        {
-            // Module name or a partial name is given
-            if( args[strlen(args)-1]=='*' )
-                nLen = strlen(args)-1;
-            else
-                nLen = strlen(args), fExact=TRUE;
-        }
-
         // Display all modules matching search criteria
         dprinth(nLine++, "%c%cModule   Name              Size   Syms Deps init()   cleanup() Use Flags:",
             DP_SETCOLINDEX, COL_BOLD);
 
-        while( pmodule )
-        {
-            // Get the pointer to a module name. We do it using a temp pointer
-            // in order to fake the kernel name from NULL to "kernel"
-            if( Mod.name && *Mod.name )
-                pModName = Mod.name;
-            else
-                pModName = "kernel";
+        // Get the pointer to the module structure (internal) and loop
+        pmodule = ice_get_module(NULL, &Mod);
 
-            // This little argument gymnastic lets us separate different ways we
-            // specify module(s) as parameter to this command (all/single/single extra)
-            if( nLen != 0 )
+        do
+        {
+            // If we specified a partial module name, match it here
+            if( *args )
             {
-                if( fExact && strcmp(pModName, args)!=0 )
-                    continue;
-                if( fExact && strcmp(pModName, args)==0 )
-                {
-                    pExact = pmodule;
-                    memcpy(&Exact, &Mod, sizeof(TMODULE));
-                }
-                if( !fExact && strnicmp(pModName, args, nLen)!=0 )
+                if( strnicmp(Mod.name, args, strlen(args)) )
                     continue;
             }
 
@@ -500,9 +465,9 @@ BOOL cmdModule(char *args, int subClass)
             if( bits[0]==0 )
                 strcat(bits, "UNINIT");
 
-            if(!dprinth(nLine++, "%08X %-16s  %-6d  %-4d %-3d %08X %08X   %d   %2X  %s",
+            if(!dprinth(nLine++, "%08X %-16s  %-6d %-4d %-3d %08X %08X   %d   %2X  %s",
                     (DWORD) pmodule,
-                    pModName,
+                    Mod.name,
                     Mod.size,
                     Mod.nsyms,
                     Mod.ndeps,
@@ -512,44 +477,9 @@ BOOL cmdModule(char *args, int subClass)
                     Mod.flags,
                     bits ))
                 break;
-
-            // Get the next module in the linked list
-            pmodule = ice_get_module(pmodule, &Mod);
         }
-
-        // For a single module, display additional info
-        if( fExact && pExact )
-        {
-            // We will display a list of exported symbols for this module
-            pSym = Exact.syms;
-            if( pSym )
-            {
-                count = Exact.nsyms;
-
-                if( Exact.name )
-                    pModName = Exact.name;
-                else
-                    pModName = "kernel";
-
-                // Do some basic sanity check
-                if( Exact.nsyms>0 && Exact.nsyms<2000 )
-                {
-                    for(count=0; count<Exact.nsyms; count++ )
-                    {
-                        // TODO: Check the validity of these pointers before using them!
-
-                        if(!dprinth(nLine++, "%02X) %08X  %s!%s", count, pSym->value, pModName, pSym->name))
-                            break;
-
-                        pSym++;
-                    }
-                }
-            }
-
-
-            // TODO: What additional info would we like to see???
-            ;
-        }
+        // Get the next module in the linked list while looping
+        while( (pmodule = ice_get_module(pmodule, &Mod)) );
     }
 
     return( TRUE );
@@ -558,16 +488,16 @@ BOOL cmdModule(char *args, int subClass)
 
 /******************************************************************************
 *                                                                             *
-*   BOOL FindModule(const char *name, TMODULE *pMod)                          *
+*   BOOL FindModule(TMODULE *pMod, char *pName, int nNameLen)                 *
 *                                                                             *
 *******************************************************************************
 *
 *   Searches for a module with a given name.
 *
 *   Where:
-*       name is the module name
 *       pMod is the address of the structure to store module members
-*           Note: This structure will be modified even if a module was not found!!
+*       pName is the module name
+*       nNameLen is the length of the module name string
 *
 *   Returns:
 *       TRUE - module with a given name was found
@@ -575,7 +505,7 @@ BOOL cmdModule(char *args, int subClass)
 *       FALSE - module with a given name was not found
 *
 ******************************************************************************/
-BOOL FindModule(const char *name, TMODULE *pMod)
+BOOL FindModule(TMODULE *pMod, char *pName, int nNameLen)
 {
     void *pmodule;                      // Kernel pmodule pointer
 
@@ -584,7 +514,7 @@ BOOL FindModule(const char *name, TMODULE *pMod)
 
     while( pmodule )
     {
-        if( !strcmp(pMod->name, name) )
+        if( pMod->name[nNameLen]=='\0' && !strnicmp(pMod->name, pName, nNameLen) )
             return( TRUE );
 
         // Get the next module in the linked list
@@ -606,12 +536,12 @@ BOOL FindModule(const char *name, TMODULE *pMod)
 ******************************************************************************/
 BOOL cmdVer(char *args, int subClass)
 {
-    dprinth(1, "Linice (C) 2000-2002 by Goran Devic.  All Rights Reserved.");
+    dprinth(1, "Linice (C) 2000-2004 by Goran Devic.  All Rights Reserved.");
     dprinth(1, "Version: %d.%d", LINICEVER >> 8, LINICEVER & 0xFF);
 
     if( *args )
     {
-        dprinth(1, "Symbol check: %d", CheckSymtab(pIce->pSymTabCur));
+        dprinth(1, "Symbol check: %d", CheckSymtab(deb.pSymTabCur));
         dprinth(1, "OS Page Offset: %08X", ice_page_offset());
     }
 
@@ -790,7 +720,7 @@ BOOL cmdTss(char *args, int subClass)
     {
         // Get the Task Register selector from the user argument
 
-        tr = Evaluate(args, &args);
+        Expression(&tr, args, &args);
 
         if( tr>=4096 )
         {

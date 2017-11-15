@@ -20,7 +20,7 @@
 
     Module Description:
 
-        This header file contains global Ice data structures
+        This header file contains global LinIce data structures
 
 *******************************************************************************
 *                                                                             *
@@ -35,6 +35,8 @@
 ******************************************************************************/
 #ifndef _ICE_H_
 #define _ICE_H_
+
+#pragma warning( disable : 4133 )
 
 #include "intel.h"                      // Include Intel x86 specific defines
 #include "ice-limits.h"                 // Include our limits
@@ -62,153 +64,126 @@
 
 typedef struct
 {
-    BYTE *hSymbolBufferHeap;            // Handle to symbol buffer memory pool heap
-    DWORD nSymbolBufferSize;            // Symbol buffer size
-    DWORD nSymbolBufferAvail;           // Symbol buffer size available
-    DWORD nXDrawSize;                   // DrawSize parameter
-    BYTE *pXDrawBuffer;                 // Backstore buffer pointer, if XInitPacket accepted
-    BYTE *pXFrameBuffer;                // Mapped X frame buffer
-    TSYMTAB *pSymTab;                   // Linked list of symbol tables
-    TSYMTAB *pSymTabCur;                // Pointer to the current symbol table
-    DWORD nVars;                        // Number of user variables
-    DWORD nMacros;                      // Number of macros
-    BYTE *hHeap;                        // Handle to internal memory heap
+    // Define the constant state of the machine
 
-    BYTE *pHistoryBuffer;               // Pointer to a history buffer
-    DWORD nHistorySize;                 // History buffer size
-
-    BOOL fKbdBreak;                     // Schedule break into the ICE
-    BOOL fRunningIce;                   // Is ICE running?
-    DWORD eDebuggerState;               // Debugger state number
-#define DEB_STATE_BREAK             0   //  Default state
-#define DEB_STATE_DELAYED_TRACE     1
-#define DEB_STATE_DELAYED_ARM       2
-#define MAX_DEBUGGER_STATE          3
-
-    char keyFn[4][12][MAX_STRING];      // Key assignments for function keys
-                                        // Fn:0 Shift:1 Alt:2 Control:3
-
-    BYTE col[6];                        // Color attributes (1-5)
-#define COL_NORMAL          1
-#define COL_BOLD            2
-#define COL_REVERSE         3
-#define COL_HELP            4
-#define COL_LINE            5
-
-    // Statistics variables
-    int nIntsPass[0x40];                // Number of interrupts received
-    int nIntsIce[0x40];                 // While debugger run
-
-    // Timers - decremented by the timer interrupt down to zero
-    //  0 - serial polling
-    //  1 - cursor carret blink
-    DWORD timer[2];
-
-} TICE, *PTICE;
-
-extern TICE Ice;                        // Global data structure
-extern PTICE pIce;                      // and a pointer to it
-
-/////////////////////////////////////////////////////////////////
-// STRUCTURE DESCRIBING THE LIVE DEBUGEE
-/////////////////////////////////////////////////////////////////
-// Define structure that holds debugee state after an interrupt
-
-typedef struct tagTRegs
-{
-    DWORD   esp;
-    DWORD   ss;
-    DWORD   es;
-    DWORD   ds;
-    DWORD   fs;
-    DWORD   gs;
-    DWORD   edi;
-    DWORD   esi;
-    DWORD   ebp;
-    DWORD   temp;
-    DWORD   ebx;
-    DWORD   edx;
-    DWORD   ecx;
-    DWORD   eax;
-    DWORD   ChainAddress;
-    DWORD   ErrorCode;
-    DWORD   eip;
-    DWORD   cs;
-    DWORD   eflags;
-} TREGS, *PTREGS;
-
-
-// Root structure describing the debugee state
-
-typedef struct
-{
-    TDescriptor idt;                    // Linux idt descriptor
-    TDescriptor gdt;                    // Linux gdt descriptor
-    PTREGS r;                           // pointer to live registers
-    TREGS  r_prev;                      // previous registers (for color coding of changes)
-    TSysreg sysReg;                     // System registers
+    BOOL fSmp;                          // Is this machine SMP enabled?
     BOOL fIoApic;                       // Are we using IO APIC?
     TIOAPIC0 IoApic0;                   // Initial content of the first IO APIC register
     TIOAPIC1 IoApic1;                   // Initial content of the second IO APIC register
-    TIOAPICREDIR IoApicRedir[MAX_IOAPICREG];
-                                        // Initial content of IO APIC redirection registers
-    BOOL fSmp;                          // Is this machine a SMP enabled?
-    int cpu;                            // CPU number that the debugger uses
-    int nInterrupt;                     // Interrupt that occurred
-    int bpIndex;                        // Index of the breakpoint that hit (default -1)
+    TIOAPICREDIR IoApicRedir[MAX_IOAPICREG]; // Initial content of IO APIC redirection registers
+
+    // Define the pseudo-constant state -- that changes only if the user manually modifies the state
+
+    WCHAR BreakKey;                     // Key combination for break
+    char keyFn[4][12][MAX_STRING];      // Key assignments for function keys
+                                        // Fn:0 Shift:1 Alt:2 Control:3
+    BYTE col[6];                        // Color attributes (1-5)
+#   define COL_NORMAL          1
+#   define COL_BOLD            2
+#   define COL_REVERSE         3
+#   define COL_HELP            4
+#   define COL_LINE            5
+
+    ENUM eSrc;                          // 0=Source off; 1=Source on; 2=Mixed:
+#   define SRC_OFF          0
+#   define SRC_ON           1
+#   define SRC_MIXED        2
+
+    BOOL fCode;                         // Code - is SET CODE ON?
+    BOOL fAltscr;                       // Is alternate screen enabled?
+    BOOL fFaults;                       // Is break on faults enables?
+    BOOL fI1Here;                       // Break on INT1
+    BOOL fI1Kernel;                     // Break on INT1 only in kernel code
+    BOOL fI3Here;                       // Break on INT3
+    BOOL fI3Kernel;                     // Break on INT3 only in kernel code
+    BOOL fLowercase;                    // Display lowercase
+    BOOL fSymbols;                      //
+    BOOL fFlash;                        // Restore screen during P and T commands
+    BOOL fPause;                        // Pause after a screenful of scrolling info
+    BOOL fOvertype;                     // Cursor shape is overtype? (or insert)
+    BOOL fCodeEdit;                     // Cursor is in the code window
+    UINT nCodeEditY;                    // Effective code edit cursor Y offset within the code window
+    TADDRDESC CodeEditAddress;          // Address selected by the code edit cursor
+    UINT FrameX;                        // X-Window frame origin X coordinate
+    UINT FrameY;                        // X-Window frame origin X coordinate
+    UINT nFont;                         // Font number for hi-res display
+    UINT nTabs;                         // Tabs value for source display
+
+    BOOL fRedraw;                       // Request to redraw the screen after the current command
+
+    // Define the Linice high-level data structures and pointers
+
+    TSYMTAB *pSymTab;                   // Linked list of symbol tables
+    TSYMTAB *pSymTabCur;                // Pointer to the current symbol table
+
+    UINT nSymbolBufferSize;             // Symbol buffer size
+    UINT nSymbolBufferAvail;            // Symbol buffer size available
+    BYTE *hSymbolBufferHeap;            // Handle to symbol buffer memory pool heap
+
+    UINT nHistorySize;                  // History buffer size
+    BYTE *pHistoryBuffer;               // Pointer to a history buffer
+
+    UINT nXDrawSize;                    // DrawSize parameter
+    BYTE *pXDrawBuffer;                 // Backstore buffer pointer, if XInitPacket accepted
+    BYTE *pXFrameBuffer;                // Mapped X frame buffer
+
+    UINT nVars;                         // Number of user variables
+    UINT nMacros;                       // Number of macros
+    BYTE *hHeap;                        // Handle to internal memory heap
 
     TLIST Watch;                        // Watch window data list
     TLIST Local;                        // Locals window data list
     TLIST Stack;                        // Stack window data list
 
-    int DumpSize;                       // Dx dump value size
+    UINT nDumpSize;                     // Last Dx dump value size
     TADDRDESC dataAddr;                 // Data - current display address
 
-    BOOL fCode;                         // Code - is SET CODE ON ?
-    TADDRDESC codeTopAddr;              // Address of the top machine code instr. in the code window
-    TADDRDESC codeBottomAddr;           // Address of the last line
+    DWORD error;                        // Error code
+    DWORD memaccess;                    // Last memaccess code, or memaccess error code
+
+    // Define the particular state of the machine at the time of break
+
+    UINT nScheduleKbdBreakTimeout;      // Schedule break into the ICE within that many time slices
+    BOOL fRunningIce;                   // Is ICE running?
+    BOOL fDelayedArm;                   // Delayed breakpoint arm is requested
+    BOOL fTrace;                        // Trace command in progress
+    BOOL fSrcTrace;                     // Source is on and we issued a trace command (T)
+    UINT nTraceCount;                   // Single trace instr. count to go
+    BOOL fStep;                         // Step command in progress
+    BOOL fStepRet;                      // Single step until RET instruction (P RET)
+    BOOL fSrcStep;                      // Source is on and we issued a step command (P)
+
+    // Define the current context evaluated at the time of break
+
+    TDescriptor idt;                    // Linux idt descriptor
+    TDescriptor gdt;                    // Linux gdt descriptor
+    PTREGS r;                           // pointer to live registers
+    TREGS  r_prev;                      // previous registers (for color coding of changes)
+    TSysreg sysReg;                     // System registers
+
+    UINT cpu;                           // CPU number that the debugger uses
+    UINT nInterrupt;                    // Interrupt that occurred
+    int bpIndex;                        // Index of the breakpoint that hit (default -1)
+
     TSYMFNSCOPE *pFnScope;              // Pointer to a current function scope descriptor
     TSYMFNLIN *pFnLin;                  // Pointer to a current function line descriptor
     TSYMSOURCE *pSource;                // Current source file in the code window
     char *pSrcEipLine;                  // Pointer to the current source line
+    TADDRDESC codeTopAddr;              // Address of the top machine code instr. in the code window
+    TADDRDESC codeBottomAddr;           // Address of the last line
     WORD codeFileTopLine;               // Line number of the top of code window source file
     WORD codeFileEipLine;               // Line number of the current EIP in the windows source file
     WORD codeFileXoffset;               // X offset of the source code text
-    int eSrc;                           // 0=Source off; 1=Source on; 2=Mixed:
-#   define SRC_OFF          0
-#   define SRC_ON           1
-#   define SRC_MIXED        2
 
-    BOOL fAltscr;
-    BOOL fFaults;
-    BOOL fI1Here;                       // Break on INT1
-    BOOL fI1Kernel;                     // Break on INT1 only in kernel code
-    BOOL fI3Here;                       // Break on INT3
-    BOOL fI3Kernel;                     // Break on INT3 only in kernel code
-    BOOL fLowercase;
-    BOOL fSymbols;
-    BOOL fFlash;                        // Restore screen during P and T commands
-    BOOL fPause;                        // Pause after a screenful of scrolling info
-    DWORD dwTabs;                       // Tabs value for source display
-    BYTE fOvertype;                     // Cursor shape is overtype? (or insert)
-    DWORD FrameX;                       // X-Window frame origin X coordinate
-    DWORD FrameY;                       // X-Window frame origin X coordinate
-    DWORD nFont;                        // Font number for hi-res display
+    // Statistics and timing variables
 
-    BOOL fTrace;                        // Trace command in progress
-    BOOL fDelayedTrace;                 // Delayed trace request
-    DWORD TraceCount;                   // Single trace instr. count to go
+    UINT nIntsPass[0x40];               // Number of interrupts received
+    UINT nIntsIce[0x40];                // While debugger run
 
-    BOOL fStepRet;                      // Single step until RET instruction (P RET)
-
-    BOOL fSrcStep;                      // Source is on and we issued a step command (P)
-    BOOL fSrcTrace;                     // Source is on and we issued a trace command (T)
-
-    BOOL fRedraw;                       // Request to redraw the screen after the current command
-    DWORD error;                        // Error code
-    DWORD memaccess;                    // Last memaccess code, or memaccess error code
-
-    CHAR BreakKey;                      // Key combination for break
+    // Timers - decremented by the timer interrupt down to zero
+    //  0 - serial polling
+    //  1 - cursor carret blink
+    UINT timer[2];
 
 } TDEB, *PTDEB;
 
@@ -222,11 +197,11 @@ typedef struct
 {
     // These are set by the user
     BOOL fVisible;                      // Whether a frame is visible or not
-    DWORD nLines;                       // How many lines a frame occupies
+    UINT nLines;                        // How many lines a frame occupies
 
     // The following are calculated on a fly
-    DWORD Top;                          // Top coordinate holding the header line
-    DWORD Bottom;                       // Bottom coordinate (inclusive)
+    UINT Top;                           // Top coordinate holding the header line
+    UINT Bottom;                        // Bottom coordinate (inclusive)
 
 } TFRAME, *PTFRAME;
 
@@ -253,12 +228,12 @@ typedef BOOL (*TFNCOMMAND)(char *args, int subClass);
 typedef struct
 {
     char *sCmd;                         // Command name
-    DWORD nLen;                         // Length of the command string in characters
+    UINT nLen;                          // Length of the command string in characters
     int subClass;                       // Optional command argument (subclass)
     TFNCOMMAND pfnCommand;              // Pointer to a function for the command
     char *sSyntax;                      // Syntax string
     char *sExample;                     // Example string
-    DWORD iHelp;                        // Index to description string
+    UINT iHelp;                         // Index to description string
 
 } TCommand;
 
@@ -268,6 +243,8 @@ extern char *sHelp[];                   // Help lines
 /////////////////////////////////////////////////////////////////
 // INTERNAL SYMBOL STRUCTURE
 /////////////////////////////////////////////////////////////////
+
+// TODO - this structure needs to go!
 
 typedef struct
 {
@@ -340,11 +317,9 @@ extern PTOUT pOut;                      // Pointer to a current output device
 *                                                                             *
 ******************************************************************************/
 
-#define MAX_INPUT_QUEUE         32      // Set max input queue size
+extern WCHAR GetKey( BOOL fBlock );     // Read a key code from the input queue
 
-extern CHAR GetKey( BOOL fBlock );      // Read a key code from the input queue
-
-extern void PutKey( CHAR Key );
+extern void PutKey( WCHAR Key );
 
 extern int dprint( char *format, ... );
 extern BOOL dprinth( int nLineCount, char *format, ... );
@@ -392,7 +367,6 @@ extern BOOL VerifySelector(WORD Sel);
 // Command parser helpers:
 extern BOOL Expression(DWORD *value, char *sExpr, char **psNext );
 extern WORD evalSel;               // Selector result of the expression (optional)
-extern int Evaluate( char *sExpr, char **psNext );
 extern DWORD GetDec(char **psString);
 
 extern int GetOnOff(char *args);
@@ -406,7 +380,7 @@ extern char *SymAddress2FunctionName(WORD wSel, DWORD dwOffset);
 extern char *SymAddress2Name(WORD wSel, DWORD dwOffset);
 extern DWORD SymLinNum2Address(DWORD line);
 extern TSYMFNLIN *SymAddress2FnLin(WORD wSel, DWORD dwOffset);
-extern BOOL FillLocalScope(TSYMFNSCOPE *pFnScope, DWORD dwOffset);
+extern BOOL FillLocalScope(TSYMFNSCOPE *pFnScope, DWORD dwEIP);
 extern char *SymFnLin2Line(WORD *pLineNumber, TSYMFNLIN *pFnLin, DWORD dwAddress);
 extern char *SymFnLin2LineExact(WORD *pLineNumber, TSYMFNLIN *pFnLin, DWORD dwAddress);
 extern TSYMFNSCOPE *SymAddress2FnScope(WORD wSel, DWORD dwOffset);

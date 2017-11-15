@@ -194,13 +194,13 @@ static void SetCursorPos(void)
 static void SerialSprint(char *s)
 {
     BYTE c;
-    DWORD dwTabs;
+    UINT nTabs;
 
     while( (c = *s++) != 0 )
     {
         if( c==DP_TAB )
         {
-            for(dwTabs=deb.dwTabs; dwTabs; dwTabs--)
+            for(nTabs=deb.nTabs; nTabs; nTabs--)
                 SerialSprint(" ");
         }
         else
@@ -326,9 +326,9 @@ static void SerialSprint(char *s)
                     if( TVT.lastColor != TVT.col )
                     {
                         sprintf(sBuf+1, "[%d;%d;%dm",
-                            boldTab[pIce->col[TVT.col] & 0x0F],
-                            colorTab[pIce->col[TVT.col] >> 4] + 40,
-                            colorTab[pIce->col[TVT.col] & 0x0F] + 30);
+                            boldTab[deb.col[TVT.col] & 0x0F],
+                            colorTab[deb.col[TVT.col] >> 4] + 40,
+                            colorTab[deb.col[TVT.col] & 0x0F] + 30);
                         SerialOutString(sBuf);
                         TVT.lastColor = TVT.col;
                     }

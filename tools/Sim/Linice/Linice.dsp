@@ -41,7 +41,7 @@ RSC=rc.exe
 # PROP Intermediate_Dir "Release"
 # PROP Target_Dir ""
 # ADD BASE CPP /nologo /W3 /GX /O2 /D "WIN32" /D "NDEBUG" /D "_MBCS" /D "_LIB" /YX /FD /c
-# ADD CPP /nologo /Zp1 /MT /W3 /GX /Op- /Oy- /Ob0 /X /I "$(LINICE_ROOT)\include" /I "$(LINICE_ROOT)\linice\include" /I "$(LINICE_ROOT)\bin" /D "NDEBUG" /D "WIN32" /D "_MBCS" /D "_LIB" /D "MODULE" /D "SIM" /FD /c
+# ADD CPP /nologo /Zp1 /MT /W3 /GX /X /I "$(LINICE_ROOT)\include" /I "$(LINICE_ROOT)\linice\include" /I "$(LINICE_ROOT)\bin" /D "NDEBUG" /D "WIN32" /D "_MBCS" /D "_LIB" /D "MODULE" /D "SIM" /FD /c
 # SUBTRACT CPP /Ot /Oa /Ow /Og /Oi /Os /YX
 # ADD BASE RSC /l 0x409 /d "NDEBUG"
 # ADD RSC /l 0x409 /d "NDEBUG"
@@ -107,15 +107,15 @@ SOURCE="$(LINICE_ROOT)\include\ice-types.h"
 # End Source File
 # Begin Source File
 
-SOURCE=$(LINICE_ROOT)\include\loader.h
+SOURCE="$(LINICE_ROOT)\include\loader.h"
 # End Source File
 # Begin Source File
 
-SOURCE=$(LINICE_ROOT)\include\stab_gnu.h
+SOURCE="$(LINICE_ROOT)\include\stab_gnu.h"
 # End Source File
 # Begin Source File
 
-SOURCE=$(LINICE_ROOT)\include\stabs.h
+SOURCE="$(LINICE_ROOT)\include\stabs.h"
 # End Source File
 # End Group
 # Begin Group "linice"
@@ -126,35 +126,35 @@ SOURCE=$(LINICE_ROOT)\include\stabs.h
 # PROP Default_Filter ""
 # Begin Source File
 
-SOURCE=$(LINICE_ROOT)\linice\include\clib.h
+SOURCE="$(LINICE_ROOT)\linice\include\clib.h"
 # End Source File
 # Begin Source File
 
-SOURCE=$(LINICE_ROOT)\linice\include\ctype.h
+SOURCE="$(LINICE_ROOT)\linice\include\ctype.h"
 # End Source File
 # Begin Source File
 
-SOURCE=$(LINICE_ROOT)\linice\include\debug.h
+SOURCE="$(LINICE_ROOT)\linice\include\debug.h"
 # End Source File
 # Begin Source File
 
-SOURCE=$(LINICE_ROOT)\linice\include\disassembler.h
+SOURCE="$(LINICE_ROOT)\linice\include\disassembler.h"
 # End Source File
 # Begin Source File
 
-SOURCE=$(LINICE_ROOT)\linice\include\disassemblerdata.h
+SOURCE="$(LINICE_ROOT)\linice\include\disassemblerdata.h"
 # End Source File
 # Begin Source File
 
-SOURCE=$(LINICE_ROOT)\linice\include\disassemblerdefines.h
+SOURCE="$(LINICE_ROOT)\linice\include\disassemblerdefines.h"
 # End Source File
 # Begin Source File
 
-SOURCE=$(LINICE_ROOT)\linice\include\errno.h
+SOURCE="$(LINICE_ROOT)\linice\include\errno.h"
 # End Source File
 # Begin Source File
 
-SOURCE=$(LINICE_ROOT)\linice\include\font.h
+SOURCE="$(LINICE_ROOT)\linice\include\font.h"
 # End Source File
 # Begin Source File
 
@@ -162,19 +162,19 @@ SOURCE="$(LINICE_ROOT)\linice\include\ibm-pc.h"
 # End Source File
 # Begin Source File
 
-SOURCE=$(LINICE_ROOT)\linice\include\ice.h
+SOURCE="$(LINICE_ROOT)\linice\include\ice.h"
 # End Source File
 # Begin Source File
 
-SOURCE=$(LINICE_ROOT)\linice\include\intel.h
+SOURCE="$(LINICE_ROOT)\linice\include\intel.h"
 # End Source File
 # Begin Source File
 
-SOURCE=$(LINICE_ROOT)\linice\include\ioctl.h
+SOURCE="$(LINICE_ROOT)\linice\include\ioctl.h"
 # End Source File
 # Begin Source File
 
-SOURCE=$(LINICE_ROOT)\linice\include\lists.h
+SOURCE="$(LINICE_ROOT)\linice\include\lists.h"
 # End Source File
 # Begin Source File
 
@@ -186,19 +186,19 @@ SOURCE="$(LINICE_ROOT)\linice\include\module-symbols.h"
 # End Source File
 # Begin Source File
 
-SOURCE=$(LINICE_ROOT)\linice\include\pcihdr.h
+SOURCE="$(LINICE_ROOT)\linice\include\pcihdr.h"
 # End Source File
 # Begin Source File
 
-SOURCE=$(LINICE_ROOT)\linice\include\queue.h
+SOURCE="$(LINICE_ROOT)\linice\include\queue.h"
 # End Source File
 # Begin Source File
 
-SOURCE=$(LINICE_ROOT)\linice\include\stdarg.h
+SOURCE="$(LINICE_ROOT)\linice\include\stdarg.h"
 # End Source File
 # Begin Source File
 
-SOURCE=$(LINICE_ROOT)\linice\include\string.h
+SOURCE="$(LINICE_ROOT)\linice\include\string.h"
 # End Source File
 # End Group
 # Begin Group "command"
@@ -206,31 +206,31 @@ SOURCE=$(LINICE_ROOT)\linice\include\string.h
 # PROP Default_Filter "c"
 # Begin Source File
 
-SOURCE=$(LINICE_ROOT)\linice\command\blockops.c
+SOURCE="$(LINICE_ROOT)\linice\command\blockops.c"
 # End Source File
 # Begin Source File
 
-SOURCE=$(LINICE_ROOT)\linice\command\breakpoints.c
+SOURCE="$(LINICE_ROOT)\linice\command\breakpoints.c"
 # End Source File
 # Begin Source File
 
-SOURCE=$(LINICE_ROOT)\linice\command\code.c
+SOURCE="$(LINICE_ROOT)\linice\command\code.c"
 # End Source File
 # Begin Source File
 
-SOURCE=$(LINICE_ROOT)\linice\command\command.c
+SOURCE="$(LINICE_ROOT)\linice\command\command.c"
 # End Source File
 # Begin Source File
 
-SOURCE=$(LINICE_ROOT)\linice\command\customization.c
+SOURCE="$(LINICE_ROOT)\linice\command\customization.c"
 # End Source File
 # Begin Source File
 
-SOURCE=$(LINICE_ROOT)\linice\command\data.c
+SOURCE="$(LINICE_ROOT)\linice\command\data.c"
 # End Source File
 # Begin Source File
 
-SOURCE=$(LINICE_ROOT)\linice\command\debugger.c
+SOURCE="$(LINICE_ROOT)\linice\command\debugger.c"
 # End Source File
 # Begin Source File
 
@@ -238,59 +238,55 @@ SOURCE="$(LINICE_ROOT)\linice\command\disassembler-bytelen.c"
 # End Source File
 # Begin Source File
 
-SOURCE=$(LINICE_ROOT)\linice\command\disassembler.c
+SOURCE="$(LINICE_ROOT)\linice\command\disassembler.c"
 # End Source File
 # Begin Source File
 
-SOURCE=$(LINICE_ROOT)\linice\command\edlin.c
+SOURCE="$(LINICE_ROOT)\linice\command\edlin.c"
 # End Source File
 # Begin Source File
 
-SOURCE=$(LINICE_ROOT)\linice\command\eval.c
+SOURCE="$(LINICE_ROOT)\linice\command\evalex.c"
 # End Source File
 # Begin Source File
 
-SOURCE=$(LINICE_ROOT)\linice\command\evalex.c
+SOURCE="$(LINICE_ROOT)\linice\command\flow.c"
 # End Source File
 # Begin Source File
 
-SOURCE=$(LINICE_ROOT)\linice\command\flow.c
+SOURCE="$(LINICE_ROOT)\linice\command\ioport.c"
 # End Source File
 # Begin Source File
 
-SOURCE=$(LINICE_ROOT)\linice\command\ioport.c
+SOURCE="$(LINICE_ROOT)\linice\command\lists.c"
 # End Source File
 # Begin Source File
 
-SOURCE=$(LINICE_ROOT)\linice\command\lists.c
+SOURCE="$(LINICE_ROOT)\linice\command\locals.c"
 # End Source File
 # Begin Source File
 
-SOURCE=$(LINICE_ROOT)\linice\command\locals.c
+SOURCE="$(LINICE_ROOT)\linice\command\page.c"
 # End Source File
 # Begin Source File
 
-SOURCE=$(LINICE_ROOT)\linice\command\page.c
+SOURCE="$(LINICE_ROOT)\linice\command\pci.c"
 # End Source File
 # Begin Source File
 
-SOURCE=$(LINICE_ROOT)\linice\command\pci.c
+SOURCE="$(LINICE_ROOT)\linice\command\registers.c"
 # End Source File
 # Begin Source File
 
-SOURCE=$(LINICE_ROOT)\linice\command\registers.c
+SOURCE="$(LINICE_ROOT)\linice\command\sysinfo.c"
 # End Source File
 # Begin Source File
 
-SOURCE=$(LINICE_ROOT)\linice\command\sysinfo.c
+SOURCE="$(LINICE_ROOT)\linice\command\watch.c"
 # End Source File
 # Begin Source File
 
-SOURCE=$(LINICE_ROOT)\linice\command\watch.c
-# End Source File
-# Begin Source File
-
-SOURCE=$(LINICE_ROOT)\linice\command\windowcontrol.c
+SOURCE="$(LINICE_ROOT)\linice\command\windowcontrol.c"
 # End Source File
 # End Group
 # Begin Group "input"
@@ -298,19 +294,19 @@ SOURCE=$(LINICE_ROOT)\linice\command\windowcontrol.c
 # PROP Default_Filter "c"
 # Begin Source File
 
-SOURCE=$(LINICE_ROOT)\linice\input\input.c
+SOURCE="$(LINICE_ROOT)\linice\input\input.c"
 # End Source File
 # Begin Source File
 
-SOURCE=$(LINICE_ROOT)\linice\input\keyboard.c
+SOURCE="$(LINICE_ROOT)\linice\input\keyboard.c"
 # End Source File
 # Begin Source File
 
-SOURCE=$(LINICE_ROOT)\linice\input\mouse.c
+SOURCE="$(LINICE_ROOT)\linice\input\mouse.c"
 # End Source File
 # Begin Source File
 
-SOURCE=$(LINICE_ROOT)\linice\input\vt100.c
+SOURCE="$(LINICE_ROOT)\linice\input\vt100.c"
 # End Source File
 # End Group
 # Begin Group "output"
@@ -318,108 +314,116 @@ SOURCE=$(LINICE_ROOT)\linice\input\vt100.c
 # PROP Default_Filter "c"
 # Begin Source File
 
-SOURCE=$(LINICE_ROOT)\linice\output\font.c
+SOURCE="$(LINICE_ROOT)\linice\output\font.c"
 # End Source File
 # Begin Source File
 
-SOURCE=$(LINICE_ROOT)\linice\output\lfb.c
+SOURCE="$(LINICE_ROOT)\linice\output\lfb.c"
 # End Source File
 # Begin Source File
 
-SOURCE=$(LINICE_ROOT)\linice\output\mda.c
+SOURCE="$(LINICE_ROOT)\linice\output\mda.c"
 # End Source File
 # Begin Source File
 
-SOURCE=$(LINICE_ROOT)\linice\output\output.c
+SOURCE="$(LINICE_ROOT)\linice\output\output.c"
 # End Source File
 # Begin Source File
 
-SOURCE=$(LINICE_ROOT)\linice\output\vga.c
+SOURCE="$(LINICE_ROOT)\linice\output\vga.c"
 # End Source File
 # Begin Source File
 
-SOURCE=$(LINICE_ROOT)\linice\output\vt100o.c
+SOURCE="$(LINICE_ROOT)\linice\output\vt100o.c"
 # End Source File
 # Begin Source File
 
-SOURCE=$(LINICE_ROOT)\linice\output\window.c
+SOURCE="$(LINICE_ROOT)\linice\output\window.c"
 # End Source File
 # End Group
 # Begin Source File
 
-SOURCE=$(LINICE_ROOT)\linice\apic.c
+SOURCE="$(LINICE_ROOT)\linice\apic.c"
 # End Source File
 # Begin Source File
 
-SOURCE=$(LINICE_ROOT)\linice\ctype.c
+SOURCE="$(LINICE_ROOT)\linice\capture.c"
 # End Source File
 # Begin Source File
 
-SOURCE=$(LINICE_ROOT)\linice\driver.c
+SOURCE="$(LINICE_ROOT)\linice\context.c"
 # End Source File
 # Begin Source File
 
-SOURCE=$(LINICE_ROOT)\linice\errors.c
+SOURCE="$(LINICE_ROOT)\linice\ctype.c"
 # End Source File
 # Begin Source File
 
-SOURCE=$(LINICE_ROOT)\linice\history.c
+SOURCE="$(LINICE_ROOT)\linice\driver.c"
 # End Source File
 # Begin Source File
 
-SOURCE=$(LINICE_ROOT)\linice\init.c
+SOURCE="$(LINICE_ROOT)\linice\errors.c"
 # End Source File
 # Begin Source File
 
-SOURCE=$(LINICE_ROOT)\linice\interrupt.c
+SOURCE="$(LINICE_ROOT)\linice\history.c"
 # End Source File
 # Begin Source File
 
-SOURCE=$(LINICE_ROOT)\linice\malloc.c
+SOURCE="$(LINICE_ROOT)\linice\init.c"
 # End Source File
 # Begin Source File
 
-SOURCE=$(LINICE_ROOT)\linice\memaccess.c
+SOURCE="$(LINICE_ROOT)\linice\interrupt.c"
 # End Source File
 # Begin Source File
 
-SOURCE=$(LINICE_ROOT)\linice\printf.c
+SOURCE="$(LINICE_ROOT)\linice\malloc.c"
 # End Source File
 # Begin Source File
 
-SOURCE=$(LINICE_ROOT)\linice\proc.c
+SOURCE="$(LINICE_ROOT)\linice\memaccess.c"
 # End Source File
 # Begin Source File
 
-SOURCE=$(LINICE_ROOT)\linice\queue.c
+SOURCE="$(LINICE_ROOT)\linice\printf.c"
 # End Source File
 # Begin Source File
 
-SOURCE=$(LINICE_ROOT)\linice\serial.c
+SOURCE="$(LINICE_ROOT)\linice\proc.c"
 # End Source File
 # Begin Source File
 
-SOURCE=$(LINICE_ROOT)\linice\string.c
+SOURCE="$(LINICE_ROOT)\linice\queue.c"
 # End Source File
 # Begin Source File
 
-SOURCE=$(LINICE_ROOT)\linice\symbols.c
+SOURCE="$(LINICE_ROOT)\linice\serial.c"
 # End Source File
 # Begin Source File
 
-SOURCE=$(LINICE_ROOT)\linice\symbolTable.c
+SOURCE="$(LINICE_ROOT)\linice\string.c"
 # End Source File
 # Begin Source File
 
-SOURCE=$(LINICE_ROOT)\linice\syscall.c
+SOURCE="$(LINICE_ROOT)\linice\symbols.c"
 # End Source File
 # Begin Source File
 
-SOURCE=$(LINICE_ROOT)\linice\capture.c
+SOURCE="$(LINICE_ROOT)\linice\symbolTable.c"
 # End Source File
 # Begin Source File
 
-SOURCE=$(LINICE_ROOT)\linice\types.c
+SOURCE="$(LINICE_ROOT)\linice\syscall.c"
+# End Source File
+# Begin Source File
+
+SOURCE="$(LINICE_ROOT)\linice\types.c"
+# End Source File
+# Begin Source File
+
+SOURCE="$(LINICE_ROOT)\linice\typesprint.c"
 # End Source File
 # End Group
 # Begin Group "bin"
@@ -427,7 +431,7 @@ SOURCE=$(LINICE_ROOT)\linice\types.c
 # PROP Default_Filter "c;h"
 # Begin Source File
 
-SOURCE=$(LINICE_ROOT)\bin\iceface.h
+SOURCE="$(LINICE_ROOT)\bin\iceface.h"
 # End Source File
 # End Group
 # End Target

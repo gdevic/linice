@@ -151,7 +151,7 @@ void GetDataLine(PTADDRDESC pAddr)
 
     pos = sprintf(buf, "%04X:%08X ", pAddr->sel, pAddr->offset - DATA_BYTES);
 
-    switch( deb.DumpSize )
+    switch( deb.nDumpSize )
     {
     //=========================================================
         case 1:             // BYTE
@@ -232,7 +232,7 @@ void DataDraw(BOOL fForce, DWORD newOffset)
     if( pWin->d.fVisible==TRUE )
     {
         dprint("%c%c%c%c", DP_SAVEXY, DP_SETCURSORXY, 0+1, pWin->d.Top+1);
-        PrintLine(" Data                                               %s", sSize[deb.DumpSize-1]);
+        PrintLine(" Data                                               %s", sSize[deb.nDumpSize-1]);
     }
     else
         if( fForce==FALSE )
@@ -307,7 +307,7 @@ static BOOL DataGetSet(int cmd, TADDRDESC *pAddr, int pos, char key)
             // Read bytes first
             temp = pAddr->offset;
 
-            for(i=0; i<DataField[deb.DumpSize].FWidth; i++ )
+            for(i=0; i<DataField[deb.nDumpSize].FWidth; i++ )
             {
                 MyData.byte[i] = AddrGetByte(pAddr);
                 pAddr->offset++;
@@ -316,7 +316,7 @@ static BOOL DataGetSet(int cmd, TADDRDESC *pAddr, int pos, char key)
             pAddr->offset = temp;
 
             // Translate into ASCII representation
-            switch( deb.DumpSize )
+            switch( deb.nDumpSize )
             {
                 case 1:     // BYTE
                     sprintf(sField, "%02X", MyData.byte[0]);
@@ -333,7 +333,7 @@ static BOOL DataGetSet(int cmd, TADDRDESC *pAddr, int pos, char key)
             break;
 
         case DATAGETSET_WRITE: // Write out a field from the internal ASCII buffer
-            switch( deb.DumpSize )
+            switch( deb.nDumpSize )
             {
                 case 1:     // BYTE
                 case 2:     // WORD
@@ -341,7 +341,7 @@ static BOOL DataGetSet(int cmd, TADDRDESC *pAddr, int pos, char key)
 
                     temp = pAddr->offset;
 
-                    for(i=deb.DumpSize-1; i>=0; i--)
+                    for(i=deb.nDumpSize-1; i>=0; i--)
                     {
                         bValue = ReadByte(&sField[i*2]);
                         AddrSetByte(pAddr, bValue, TRUE);
@@ -381,7 +381,7 @@ static void DataEdit()
     BOOL fContinue = TRUE;              // Continuation flag
     int xOrig, yOrig, iOrig;            // Cursor temporary store and insert state store
     int xCur = 0, yCur = 0;             // Current cursor coordinates
-    CHAR Key;                           // Current key pressed
+    WCHAR Key;                          // Current key pressed
     TDataField *pDataDesc;              // Pointer to data type descriptor
     int index;                          // Current index of the data (x-direction)
     BOOL fAscii = FALSE;                // Edit mode: data or ASCII
@@ -405,11 +405,11 @@ static void DataEdit()
     DP_SETCURSORXY, 1+0, 1+pOut->sizeY-1,
     DP_SETCOLINDEX, COL_HELP,
     24, 25, 26, 27,
-    deb.DumpSize > 4? "":"Tab: Toggle ASCII",
+    deb.nDumpSize > 4? "":"Tab: Toggle ASCII",
     DP_RESTOREXY);
 
     // Set up initial parameters to edit in DATA mode the first field
-    pDataDesc = &DataField[deb.DumpSize];
+    pDataDesc = &DataField[deb.nDumpSize];
     index = 0;
 
     xCur = pDataDesc->xStart[index];
@@ -621,7 +621,7 @@ static void DataEdit()
                             if( yCur==pWin->d.Top+1 )
                             {
                                 // Scroll whole window one field to the left (decrement address)
-                                deb.dataAddr.offset -= deb.DumpSize;
+                                deb.dataAddr.offset -= deb.nDumpSize;
                             }
                             else
                             {
@@ -741,7 +741,7 @@ static void DataEdit()
                             if( yCur==pWin->d.Bottom )
                             {
                                 // Scroll whole window one field to the right (increment address)
-                                deb.dataAddr.offset += deb.DumpSize;
+                                deb.dataAddr.offset += deb.nDumpSize;
                             }
                             else
                             {
@@ -806,22 +806,23 @@ BOOL cmdDdump(char *args, int subClass)
 
     // If data size was explicitly specified, set it as default
     if( subClass )
-        deb.DumpSize = subClass;
+        deb.nDumpSize = subClass;
 
     if( *args!=0 )
     {
         // Argument present: D <address> [L <len>]
         evalSel = deb.dataAddr.sel;
-        offset = Evaluate(args, &args);
-
-        // Verify the selector value
-        if( VerifySelector(evalSel) )
+        if( Expression(&offset, args, &args) )
         {
-            deb.dataAddr.offset = offset;
-            deb.dataAddr.sel = evalSel;
+            // Verify the selector value
+            if( VerifySelector(evalSel) )
+            {
+                deb.dataAddr.offset = offset;
+                deb.dataAddr.sel = evalSel;
+            }
+            else
+                return( TRUE );
         }
-        else
-            return( TRUE );
     }
     else
     {
@@ -860,9 +861,9 @@ BOOL cmdEdit(char *args, int subClass)
     // different from the default, then set it to be the current format
     if( subClass )
     {
-        if( deb.DumpSize != subClass )
+        if( deb.nDumpSize != subClass )
         {
-            deb.DumpSize = subClass;
+            deb.nDumpSize = subClass;
 
             RecalculateDrawWindows();
         }
@@ -934,11 +935,11 @@ BOOL cmdEdit(char *args, int subClass)
 ******************************************************************************/
 BOOL cmdFormat(char *args, int subClass)
 {
-    switch( deb.DumpSize )
+    switch( deb.nDumpSize )
     {
-        case 1:     deb.DumpSize = 2;   break;
-        case 2:     deb.DumpSize = 4;   break;
-        case 4:     deb.DumpSize = 1;   break;
+        case 1:     deb.nDumpSize = 2;   break;
+        case 2:     deb.nDumpSize = 4;   break;
+        case 4:     deb.nDumpSize = 1;   break;
     }
 
     DataDraw(TRUE, deb.dataAddr.offset);

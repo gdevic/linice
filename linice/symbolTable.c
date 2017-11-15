@@ -65,10 +65,12 @@
 extern BYTE *ice_malloc(DWORD size);
 extern void ice_free(BYTE *p);
 extern void ice_free_heap(BYTE *pHeap);
-extern BOOL FindModule(const char *name, TMODULE *pMod);
+extern BOOL FindModule(TMODULE *pMod, char *pName, int nNameLen);
 
 BOOL SymbolTableRemove(char *pTableName, TSYMTAB *pRemove);
 void SymTabRelocate(TSYMTAB *pSymTab, int pReloc[], int factor);
+void SymTabMakePointers(TSYMTAB *pSymTab, DWORD dStrings);
+
 
 /******************************************************************************
 *                                                                             *
@@ -113,6 +115,7 @@ int UserAddSymbolTable(void *pSymUser)
     TSYMTAB SymHeader;
     TSYMTAB *pSymTab;                   // Symbol table in debugger buffer
     TSYMPRIV *pPriv;
+    DWORD dStrings;                     // Offset to strings (to adjust)
     BYTE *pInitFunctionOffset;
     DWORD dwInitFunctionSymbol;
     DWORD dwDataReloc;
@@ -124,7 +127,7 @@ int UserAddSymbolTable(void *pSymUser)
     if( ice_copy_from_user(&SymHeader, pSymUser, sizeof(TSYMTAB))==0 )
     {
         // Check if we should allocate memory for the symbol table from the allowed pool
-        if( pIce->nSymbolBufferAvail >= SymHeader.dwSize )
+        if( deb.nSymbolBufferAvail >= SymHeader.dwSize )
         {
             // Allocate memory for complete symbol table from the private pool
             pSymTab = (TSYMTAB *) ice_malloc((unsigned int)SymHeader.dwSize);
@@ -143,6 +146,9 @@ int UserAddSymbolTable(void *pSymUser)
                     if( ice_copy_from_user(pSymTab, pSymUser, SymHeader.dwSize)==0 )
                     {
                         // Make sure we are really loading a symbol table
+
+                        // TODO: Here we also want to check the CRC or something like that for a table being loaded
+
                         if( !strcmp(pSymTab->sSig, SYMSIG) )
                         {
                             // Compare the symbol table version - major number has to match
@@ -158,23 +164,27 @@ int UserAddSymbolTable(void *pSymUser)
                                 // Link the private data structure to the symbol table
                                 pSymTab->pPriv = pPriv;
 
-                                pIce->nSymbolBufferAvail -= SymHeader.dwSize;
+                                deb.nSymbolBufferAvail -= SymHeader.dwSize;
 
                                 // Link this symbol table in the linked list and also make it current
-                                pSymTab->pPriv->next = (struct TSYMTAB *) pIce->pSymTab;
+                                pSymTab->pPriv->next = (struct TSYMTAB *) deb.pSymTab;
 
-                                pIce->pSymTab = pSymTab;
-                                pIce->pSymTabCur = pIce->pSymTab;
+                                deb.pSymTab = pSymTab;
+                                deb.pSymTabCur = deb.pSymTab;
 
                                 // Initialize elements of the private symbol table structure
 
-                                pPriv->pStrings = (char*)((DWORD) pSymTab + pSymTab->dStrings);
+                                dStrings = (DWORD) pSymTab + pSymTab->dStrings;
+
+                                // Relocate all strings within this symbol table to pointers (from offsets)
+
+                                SymTabMakePointers(deb.pSymTabCur, dStrings);
 
                                 // If the symbol table being loaded describes a kernel module, we need to
                                 // see if that module is already loaded, and if so, relocate its symbols
 
                                 // Try to find if a module with that symbol name has already been loaded
-                                if( FindModule(pSymTab->sTableName, &Mod) )
+                                if( FindModule(&Mod, pSymTab->sTableName, strlen(pSymTab->sTableName)) )
                                 {
                                     // Module is already loaded - we need to relocate symbol table based on it
 
@@ -343,7 +353,7 @@ BOOL SymbolTableRemove(char *pTableName, TSYMTAB *pRemove)
     BOOL fMatch = FALSE;
 
     // Traverse the linked list of symbol tables and find which one matched
-    pSym = pIce->pSymTab;
+    pSym = deb.pSymTab;
     while( pSym )
     {
         if( pTableName!=NULL )
@@ -361,21 +371,13 @@ BOOL SymbolTableRemove(char *pTableName, TSYMTAB *pRemove)
             dprinth(1, "Removing symbol table `%s'", pSym->sTableName);
 
             // Found it - unlink, free and return success
-            if( pSym==pIce->pSymTab )
-                pIce->pSymTab = (TSYMTAB *) pSym->pPriv->next;     // First in the linked list
+            if( pSym==deb.pSymTab )
+                deb.pSymTab = (TSYMTAB *) pSym->pPriv->next;     // First in the linked list
             else
                 pPrev->pPriv->next = pSym->pPriv->next;       // Not the first in the linked list
 
-            //------------------------------------------------------------------
-            // Symbol table dependency:
-            // Find all the pointers that were addressing elements within this
-            // table and zero them so they are not dangling
-            //------------------------------------------------------------------
-
-
-
             // Add the memory block to the free pool
-            pIce->nSymbolBufferAvail += pSym->dwSize;
+            deb.nSymbolBufferAvail += pSym->dwSize;
 
             // Release the private symbol table data
             ice_free((BYTE *)pSym->pPriv);
@@ -384,7 +386,17 @@ BOOL SymbolTableRemove(char *pTableName, TSYMTAB *pRemove)
             ice_free((BYTE *)pSym);
 
             // Leave no dangling pointers...
-            pIce->pSymTabCur = pIce->pSymTab;
+            deb.pSymTabCur = deb.pSymTab;
+
+            //------------------------------------------------------------------
+            // Symbol table dependency:
+            // Find all the pointers that were addressing elements within this
+            // table and zero them so they are not dangling
+            //------------------------------------------------------------------
+            // The best way to do that is to recalculate context and repaint
+            SetSymbolContext(deb.r->cs, deb.r->eip);
+
+            deb.fRedraw = TRUE;
 
             return(TRUE);
         }
@@ -411,7 +423,7 @@ BOOL SymbolTableRemove(char *pTableName, TSYMTAB *pRemove)
 ******************************************************************************/
 BOOL cmdTable(char *args, int subClass)
 {
-    TSYMTAB *pSymTab = pIce->pSymTab;
+    TSYMTAB *pSymTab = deb.pSymTab;
     int nLine = 2;
 
     if( pSymTab==NULL )
@@ -436,9 +448,9 @@ BOOL cmdTable(char *args, int subClass)
 
                     dprinth(nLine++, "Removing all symbol tables...");
 
-                    while( pIce->pSymTab )
+                    while( deb.pSymTab )
                     {
-                        SymbolTableRemove(NULL, pIce->pSymTab);
+                        SymbolTableRemove(NULL, deb.pSymTab);
                     }
                 }
                 else
@@ -460,7 +472,7 @@ BOOL cmdTable(char *args, int subClass)
                     // Compare internal table name to our argument string
                     if( !stricmp(pSymTab->sTableName, args) )
                     {
-                        pIce->pSymTabCur = pSymTab;
+                        deb.pSymTabCur = pSymTab;
 
                         return(TRUE);
                     }
@@ -482,14 +494,14 @@ BOOL cmdTable(char *args, int subClass)
             {
                 // Print a symbol table name. If a table is current, highlight it.
                 dprinth(nLine++, " %c%c%6d  %s",
-                    DP_SETCOLINDEX, pSymTab==pIce->pSymTabCur? COL_BOLD:COL_NORMAL,
+                    DP_SETCOLINDEX, pSymTab==deb.pSymTabCur? COL_BOLD:COL_NORMAL,
                     pSymTab->dwSize, pSymTab->sTableName);
                 pSymTab = (TSYMTAB *) pSymTab->pPriv->next;
             }
         }
     }
 
-    dprinth(nLine, "%d bytes of symbol table memory available", pIce->nSymbolBufferAvail);
+    dprinth(nLine, "%d bytes of symbol table memory available", deb.nSymbolBufferAvail);
 
     return( TRUE );
 }
@@ -513,7 +525,7 @@ BOOL cmdTable(char *args, int subClass)
 ******************************************************************************/
 TSYMTAB *SymTabFind(char *name)
 {
-    TSYMTAB *pSymTab = pIce->pSymTab;   // Pointer to all symbol tables
+    TSYMTAB *pSymTab = deb.pSymTab;   // Pointer to all symbol tables
 
     // Make sure name is given as a valid pointer
     if( name!=NULL )
@@ -637,8 +649,8 @@ void SymTabRelocate(TSYMTAB *pSymTab, int pReloc[], int factor)
     TSYMGLOBAL1 *pGlobal;               // Single global item
     TSYMFNLIN   *pFnLin;                // Function lines section pointer
     TSYMFNSCOPE *pFnScope;              // Function scope section pointer
-//  TSYMSTATIC  *pStatic;               // Static symbols section pointer
-//  TSYMSTATIC1 *pStatic1;              // Single static item
+    TSYMSTATIC  *pStatic;               // Static symbols section pointer
+    TSYMSTATIC1 *pStatic1;              // Single static item
 
     if( pSymTab )
     {
@@ -652,7 +664,7 @@ void SymTabRelocate(TSYMTAB *pSymTab, int pReloc[], int factor)
                 case HTYPE_GLOBALS:
 
                     pGlobals = (TSYMGLOBAL *) pHead;
-                    pGlobal  = &pGlobals->global[0];
+                    pGlobal  = &pGlobals->list[0];
 
                     for(count=0; count<pGlobals->nGlobals; count++, pGlobal++ )
                     {
@@ -693,16 +705,14 @@ void SymTabRelocate(TSYMTAB *pSymTab, int pReloc[], int factor)
                     break;
 
                 case HTYPE_STATIC:
-// TODO
-#if 0
+
                     pStatic  = (TSYMSTATIC *) pHead;
                     pStatic1 = &pStatic->list[0];
 
                     for(count=0; count<pStatic->nStatics; count++, pStatic1++ )
                     {
-                        pStatic1->dwAddress += offData * factor;
+                        pStatic1->dwAddress += pReloc[1] * factor;
                     }
-#endif
                     break;
 
                 case HTYPE_TYPEDEF:
@@ -724,3 +734,124 @@ void SymTabRelocate(TSYMTAB *pSymTab, int pReloc[], int factor)
     }
 }
 
+
+/******************************************************************************
+*                                                                             *
+*   void SymTabMakePointers(TSYMTAB *pSymTab, DWORD dStrings)                 *
+*                                                                             *
+*******************************************************************************
+*
+*   This function is called only once upon symbol table load. It traverses
+*   over all elements of a given table and adjusts pointers to strings since
+*   they are only relative offsets in the raw symbol table file.
+*
+*   Where:
+*       pSymTab is the pointer to a symbol table to adjust
+*       dStrings is the offset adjustment
+*
+******************************************************************************/
+static void SymTabMakePointers(TSYMTAB *pSymTab, DWORD dStrings)
+{
+    TSYMHEADER *pHead;                  // Generic section header
+    UINT count;                         // Generic counter
+
+    TSYMFNSCOPE  *pFnScope;             // Function scope section pointer
+    TSYMFNSCOPE1 *pFnScope1;            // Single function scope item
+    TSYMGLOBAL   *pGlobals;             // Globals section pointer
+    TSYMGLOBAL1  *pGlobal;              // Single global item
+    TSYMSTATIC   *pStatic;              // Static symbols section pointer
+    TSYMSTATIC1  *pStatic1;             // Single static item
+    TSYMSOURCE   *pSource;              // Source section header
+    TSYMFNLIN    *pFnLin;               // Function lines section pointer
+    TSYMFNLIN1   *pFnLin1;              // Single function line item
+    TSYMTYPEDEF  *pType;                // Type section pointer
+    TSYMTYPEDEF1 *pType1;               // Single type item
+
+    if( pSymTab )
+    {
+        pHead = pSymTab->header;
+
+        // Loop over the complete symbol table and adjust all pointers as appropriate
+        while( pHead->hType != HTYPE__END )
+        {
+            switch( pHead->hType )
+            {
+                case HTYPE_FUNCTION_SCOPE:
+
+                    pFnScope  = (TSYMFNSCOPE *) pHead;
+                    pFnScope1 = &pFnScope->list[0];
+
+                    for(count=0; count<pFnScope->nTokens; count++, pFnScope1++)
+                    {
+                        pFnScope1->pName += dStrings;
+                    }
+
+                    break;
+
+                case HTYPE_GLOBALS:
+
+                    pGlobals = (TSYMGLOBAL *) pHead;
+                    pGlobal  = &pGlobals->list[0];
+
+                    for(count=0; count<pGlobals->nGlobals; count++, pGlobal++ )
+                    {
+                        pGlobal->pName += dStrings;
+                        pGlobal->pDef  += dStrings;
+                    }
+                    break;
+
+                case HTYPE_STATIC:
+
+                    pStatic  = (TSYMSTATIC *) pHead;
+                    pStatic1 = &pStatic->list[0];
+
+                    for(count=0; count<pStatic->nStatics; count++, pStatic1++ )
+                    {
+                        pStatic1->pName += dStrings;
+                        pStatic1->pDef  += dStrings;
+                    }
+                    break;
+
+                case HTYPE_SOURCE:
+
+                    pSource = (TSYMSOURCE *) pHead;
+
+                    pSource->pSourcePath += dStrings;
+                    pSource->pSourceName += dStrings;
+
+                    for(count=0; count<pSource->nLines; count++)
+                    {
+                        pSource->pLineArray[count] += dStrings;
+                    }
+
+                    break;
+
+                case HTYPE_FUNCTION_LINES:
+                    break;
+
+                case HTYPE_TYPEDEF:
+
+                    pType  = (TSYMTYPEDEF *) pHead;
+                    pType1 = &pType->list[0];
+
+                    for(count=0; count<pType->nTypedefs; count++, pType1++)
+                    {
+                        pType1->pName += dStrings;
+                        pType1->pDef  += dStrings;
+                    }
+
+                    break;
+
+                case HTYPE_IGNORE:
+                    break;
+
+                default:
+                    // We could catch a corrupted symbols error here if we want to...
+                    break;
+            }
+
+            // Next section
+            pHead = (TSYMHEADER*)((DWORD)pHead + pHead->dwSize);
+        }
+    }
+}

@@ -9,6 +9,7 @@ typedef signed long SWORD;
 SWORD global_sword;
 
 static SWORD static_variable_app22;
+static SWORD static_variable_app23 = 23;
 
 static int fnStatic2(int arg)
 {

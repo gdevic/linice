@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       02/26/96                                                      *
 *                                                                             *
-*   Copyright (c) 1996-2001 Goran Devic                                       *
+*   Copyright (c) 1996, 2001 Goran Devic                                      *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -117,7 +117,7 @@ void ice_free(BYTE *p)
 ******************************************************************************/
 char *_kMallocHeap(int size)
 {
-    return( _kMalloc(pIce->hHeap, size) );
+    return( _kMalloc(deb.hHeap, size) );
 }
 
 /******************************************************************************
@@ -127,7 +127,7 @@ char *_kMallocHeap(int size)
 ******************************************************************************/
 void _kFreeHeap(void *mPtr)
 {
-    _kFree(pIce->hHeap, mPtr);
+    _kFree(deb.hHeap, mPtr);
 }
 
 

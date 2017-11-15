@@ -344,7 +344,7 @@ void SerialOut(BYTE data)
     BYTE status;
 
     // If the transmitter buffer is empty, send a byte. Otherwise, poll it
-    pIce->timer[0] = 50;                // 1/2 second
+    deb.timer[0] = 50;                // 1/2 second
     do
     {
         status = inp(Serial.port + 5);
@@ -357,7 +357,7 @@ void SerialOut(BYTE data)
             return;
         }
     }
-    while( pIce->timer[0] );
+    while( deb.timer[0] );
 }
 #else
 void SerialOut(BYTE data)
@@ -380,8 +380,8 @@ void SerialOut(BYTE data)
         // If we got ahead with the head, poll until we transmit a byte out
         // Use the debugger timer to time out after a while
         //
-        pIce->timer[0] = 50;            // 1/2 second
-        while( (Serial.head + 1)==Serial.tail && pIce->timer[0]) ;
+        deb.timer[0] = 50;            // 1/2 second
+        while( (Serial.head + 1)==Serial.tail && deb.timer[0]) ;
 
         LocalCLI();
 

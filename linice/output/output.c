@@ -211,7 +211,7 @@ BOOL dprinth( int nLineCount, char *format, ... )
 {
     static char printBuf[1024];
 
-    CHAR Key;
+    WCHAR Key;
     char *pBuf = printBuf;
     int written;
     va_list arg;

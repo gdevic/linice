@@ -169,7 +169,7 @@ BYTE GetAux()
 ******************************************************************************/
 void KeyboardHandler(void)
 {
-    CHAR AsciiCode;
+    WCHAR AsciiCode;
     BYTE ScanCode;
     BYTE Code, fPressed;
     TMPACKET mPacket;
@@ -314,7 +314,7 @@ void KeyboardHandler(void)
 ******************************************************************************/
 void LiniceHandleScancode(BYTE scancode, BOOL fPressed)
 {
-    static CHAR Key = 0;
+    static WCHAR Key = 0;
     BYTE code = scancode & 0x7F;
 
     // Keep track of the CTRL and ALT keys since the break combination
@@ -351,7 +351,7 @@ void LiniceHandleScancode(BYTE scancode, BOOL fPressed)
         // into the debugger on another PIC interrupt (that will happen within
         // 10 ms on Linux anyways).
 
-        pIce->fKbdBreak = TRUE;
+        deb.nScheduleKbdBreakTimeout = 2;
     }
     else
     {

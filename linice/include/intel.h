@@ -62,7 +62,37 @@
 
 #ifndef SIM
 #define PACKED __attribute__((packed))
+#else
+#define PACKED
 #endif // SIM
+
+/////////////////////////////////////////////////////////////////
+// STRUCTURE DESCRIBING THE LIVE DEBUGEE
+/////////////////////////////////////////////////////////////////
+// Define structure that holds CPU register state after an interrupt
+
+typedef struct tagTRegs
+{
+    DWORD   esp;
+    DWORD   ss;
+    DWORD   es;
+    DWORD   ds;
+    DWORD   fs;
+    DWORD   gs;
+    DWORD   edi;
+    DWORD   esi;
+    DWORD   ebp;
+    DWORD   temp;
+    DWORD   ebx;
+    DWORD   edx;
+    DWORD   ecx;
+    DWORD   eax;
+    DWORD   ChainAddress;
+    DWORD   ErrorCode;
+    DWORD   eip;
+    DWORD   cs;
+    DWORD   eflags;
+} TREGS, *PTREGS;
 
 ///////////////////////////////////////////////////////////////////////////////
 // Defines of the Intel processor

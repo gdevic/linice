@@ -146,5 +146,11 @@
 //
 #define MAX_ARRAY_EXPAND    99
 
+//////////////////////////////////////////////////////////////////////
+// Number of characters in the keyboard input queue
+//
+#define MAX_INPUT_QUEUE     32
+
+
 #endif //  _ICE_LIMITS_H_
 

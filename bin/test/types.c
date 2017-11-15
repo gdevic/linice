@@ -40,7 +40,13 @@ typedef struct TagRecord
 
 // Array of structures
 TRecord Rec[10];
-struct TagRecord Rec2[10];
+TRecord Rec2[2][3];
+TRecord Rec3[2][3][4];
+TRecord *Recp[1];
+TRecord *Recp2[2][2];
+TRecord *Recp3[2][3][4];
+
+struct TagRecord RecX[10];
 
 // Union
 union number
@@ -93,7 +99,6 @@ int main()
         func(&Rec[i], ppChar);
         pFunction(&Rec[i], ppChar);
 
-        Rec2[i].dwValue = i*100;
 
         a_int2[i][0] = i;
         a_int2[i][1] = 10-i;

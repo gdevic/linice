@@ -137,7 +137,6 @@ int APIENTRY WinMain( HINSTANCE this_inst, HINSTANCE prev_inst, LPSTR cmdline, i
 
     SimInst = this_inst;
 
-
     // Init the sim state
     SimInit();
 
@@ -332,7 +331,7 @@ void WinPaint(HWND hWnd)
     else
         TextOut(hdc, (x % 80)*8, (x/80) * -font.lfHeight, " ", 1);
 
-//    ReleaseDC(hWnd, hdc); 
+//    ReleaseDC(hWnd, hdc);
     EndPaint(hWnd, &ps);
 }
 
@@ -377,7 +376,11 @@ LONG WindowProc( HWND hWnd, unsigned Msg, UINT wParam, LONG lParam )
             break;
 
         case IDM_INT1:
-                SimINT1();
+                CreateSimINT(1);
+            break;
+
+        case IDM_INT3:
+                CreateSimINT(3);
             break;
 
         case IDM_SETCPUREGS:
@@ -561,6 +564,8 @@ LRESULT CALLBACK SetCPURegsWnd(HWND hDlg, UINT message, WPARAM wParam, LPARAM lP
                 GetDlgItemText(hDlg, IDC_FS, buf, sizeof(buf)); sscanf(buf,"%X", &Regs.fs);
                 GetDlgItemText(hDlg, IDC_GS, buf, sizeof(buf)); sscanf(buf,"%X", &Regs.gs);
                 GetDlgItemText(hDlg, IDC_SS, buf, sizeof(buf)); sscanf(buf,"%X", &Regs.ss);
+
+                ConfigurationSave();
 
                 // NOTE - This case falls-through ...
 

@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       10/18/00                                                      *
 *                                                                             *
-*   Copyright (c) 2001 - 2001 Goran Devic                                     *
+*   Copyright (c) 2000 Goran Devic                                            *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -140,6 +140,22 @@ BOOL cmdWc(char *args, int subClass)
         // No arguments - toggle open/close window
 
         pWin->c.fVisible = !pWin->c.fVisible;
+    }
+
+    // If we were in the code edit mode, adjust it accordingly
+    if( deb.fCodeEdit )
+    {
+        // If the code window is now closed, deactivate code edit mode
+        if( pWin->c.fVisible==FALSE )
+        {
+            deb.fCodeEdit = FALSE;
+        }
+        else
+        {
+            // The code window is still open, but we may want to check the Y size
+            if( deb.nCodeEditY > pWin->c.nLines-2 )
+                deb.nCodeEditY = pWin->c.nLines-2;
+        }
     }
 
     // Repaint all windows

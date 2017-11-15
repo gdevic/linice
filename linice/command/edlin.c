@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       09/10/00                                                      *
 *                                                                             *
-*   Copyright (c) 1997, 2001 Goran Devic                                      *
+*   Copyright (c) 1997, 2000 Goran Devic                                      *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -119,9 +119,10 @@ static DWORD hView;                     // Handle to a history view
 *                                                                             *
 ******************************************************************************/
 
-extern void XWinControl(CHAR Key);
-extern void FocusInPlace(TLIST *pList, TFRAME *pFrame, BOOL fCanDel);
+extern void XWinControl(WCHAR Key);
+extern void FocusInPlace(TLIST *pList, TFRAME *pFrame);
 extern void CodeScroll(int Xdir, int Ydir);
+extern void CodeCursorScroll(int Ydir);
 extern char *MacroExpand(char *pCmd);
 
 /******************************************************************************
@@ -266,11 +267,12 @@ static void NextHistoryLine()
 void EdLin( char *sCmdLine )
 {
     DWORD newOffset;
-    CHAR Key;
+    WCHAR Key;
     int i, map;
     char *pMacro;                       // Macro string that we found to match
     char *pSource;                      // String source to copy from a Fn key
     BOOL fSilent;                       // Echo the line or not - used with F-keys
+    BOOL fInCodeWindow;                 // Cursor is effectively in the code window
 
     yCur = pOut->y;                     // Store line editor Y coordinate
     fCmdBuf = FALSE;                    // We did not scroll history buffer yet
@@ -390,6 +392,15 @@ void EdLin( char *sCmdLine )
 
         dprint("%c%c%c%c%c%s", DP_SETCURSORXY, 1+0, 1+pOut->sizeY-1, DP_SETCOLINDEX, COL_HELP, sHelpLine);
 
+        // Special mode is code edit mode (EC command) where the cursor is in the code window
+        // However, this pseudo-mode can be evident only before a single key is pressed, after
+        // which the cursor moves down to the edit line
+
+        if( deb.fCodeEdit && xCur==1 && sCmd[1]==' ')
+            fInCodeWindow = TRUE;
+        else
+            fInCodeWindow = FALSE;
+
         // Print current edited line and position the cursor
 
         dprint("%c%c%c%s%c%c%c",
@@ -397,6 +408,15 @@ void EdLin( char *sCmdLine )
             DP_SETCURSORXY, 1+xCur, 1+yCur );
 
         // Wait for the input character and process it
+
+        // If we are in the code edit mode, with the cursor at the start of the empty line,
+        // display it in the code window instead
+        if( fInCodeWindow )
+        {
+            // Code edit mode and the cursor is at the starting position
+            // We add 1 since the setcursor is 1-based, then 1 to skip over the code window header line
+            dprint("%c%c%c", DP_SETCURSORXY, 1+0, 1+pWin->c.Top + deb.nCodeEditY + 1);
+        }
 
         Key = GetKey( TRUE );
 
@@ -419,21 +439,24 @@ void EdLin( char *sCmdLine )
 
             Key = (Key & 0xFF) - F1;
 
-            if( pIce->keyFn[map][Key][0]=='^' )
+            if( deb.keyFn[map][Key][0]=='^' )
             {
                 // First character was ^ execute immediately and silently.
                 // Now, we should really preserve the current line for the next edit pass,
                 // but I can't think of an elegant way to do that yet
 
+                // TODO - It is possible to run a macro while typing another line.
+                //        In this case it executes silently and returns to the original edited line in place
+
                 fSilent = TRUE;
                 ClearLine();     // Clear the current command line and reset the cursor
 
                 // Copy the string into our edit line but skip leading ^
-                pSource = pIce->keyFn[map][Key] + 1;
+                pSource = deb.keyFn[map][Key] + 1;
             }
             else
                 // Copy the string into our edit line
-                pSource = pIce->keyFn[map][Key];
+                pSource = deb.keyFn[map][Key];
         }
 
         do
@@ -472,19 +495,20 @@ void EdLin( char *sCmdLine )
                 case CHAR_ALT + 'w':
 #endif // SIM
                     // Temporary switch to manage watch window
-                    // We can delete a watch item
 
-                    FocusInPlace(&deb.Watch, &pWin->w, TRUE);
+                    FocusInPlace(&deb.Watch, &pWin->w);
 
                     break;
 
                 //======================== LOCALS WINDOW =======================
-
+#ifdef SIM // We cannot handle ALT key
+                case CHAR_CTRL + 'l':
+#else
                 case CHAR_ALT + 'l':
+#endif // SIM
                     // Temporary switch to manage locals window
-                    // We cannot delete a local variable item
 
-                    FocusInPlace(&deb.Local, &pWin->l, FALSE);
+                    FocusInPlace(&deb.Local, &pWin->l);
 
                     break;
 
@@ -621,31 +645,51 @@ void EdLin( char *sCmdLine )
 
                 case UP:
                     // UP key retrieves the previous line from the history buffer
+                    // If the effective code edit mode, it moves cursor / scrolls code window
 
-                    PrevHistoryLine();
+                    if( fInCodeWindow )
+                        CodeCursorScroll(-1);
+                    else
+                        PrevHistoryLine();
 
                     break;
 
                 case DOWN:
                     // DOWN key retrieves the next line from the history buffer
+                    // If the effective code edit mode, it moves cursor / scrolls code window
 
-                    NextHistoryLine();
+                    if( fInCodeWindow )
+                        CodeCursorScroll(1);
+                    else
+                        NextHistoryLine();
 
                     break;
 
                 case PGUP:
                     // PGUP key scrolls history buffer one screenful up
+                    // If the effective code edit mode, it scrolls code window up one page
 
-                    fCmdBuf = TRUE;
-                    hView = HistoryDisplay(hView, -1);
+                    if( fInCodeWindow )
+                        CodeScroll(0, -2);
+                    else
+                    {
+                        fCmdBuf = TRUE;
+                        hView = HistoryDisplay(hView, -1);
+                    }
 
                     break;
 
                 case PGDN:
                     // PGDOWN key scrolls history buffer one screenful down
+                    // If the effective code edit mode, it scrolls code window down one page
 
-                    fCmdBuf = TRUE;
-                    hView = HistoryDisplay(hView, 1);
+                    if( fInCodeWindow )
+                        CodeScroll(0, 2);
+                    else
+                    {
+                        fCmdBuf = TRUE;
+                        hView = HistoryDisplay(hView, 1);
+                    }
 
                     break;
 
@@ -862,7 +906,7 @@ BOOL cmdFkey(char *args, int subClass)
 
                     if( *args=='=' ) args++;
 
-                    ptr = pIce->keyFn[map][key];
+                    ptr = deb.keyFn[map][key];
 
                     // If we provided definition, copy it into the store space,
                     // if we did not, delete previous definition
@@ -901,9 +945,9 @@ BOOL cmdFkey(char *args, int subClass)
             for(key=0; key<12; key++)
             {
                 // Print out only defined keys
-                if( *pIce->keyFn[map][key] )
+                if( *deb.keyFn[map][key] )
                 {
-                    sprintf(sBuf, "%cf%-2d = %s", cMap[map], key+1, pIce->keyFn[map][key]);
+                    sprintf(sBuf, "%cf%-2d = %s", cMap[map], key+1, deb.keyFn[map][key]);
 
                     // Get rid of newline character at the end
                     if( (ptr = strchr(sBuf, 0x0A)) ) *ptr = 0;

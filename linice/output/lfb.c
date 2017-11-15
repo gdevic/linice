@@ -172,41 +172,41 @@ int XInitPacket(TXINITPACKET *pXInit)
 
     // If the buffer size is specified, use it. Otherwise, use what came with main init packet
     if( pXInit->dwDrawSize )
-        pIce->nXDrawSize = pXInit->dwDrawSize;
+        deb.nXDrawSize = pXInit->dwDrawSize;
 
     // Catch unreasonable large buffer size requests
-    if( pIce->nXDrawSize > MAX_XWIN_BUFFER )
+    if( deb.nXDrawSize > MAX_XWIN_BUFFER )
     {
-        pIce->nXDrawSize = MAX_XWIN_BUFFER;
+        deb.nXDrawSize = MAX_XWIN_BUFFER;
     }
 
     // Make sure the size is enough for the starting buffer 80x25 and the selected font
     dwSize = (80+2) * 8 * pXInit->bpp * (25+2) * Font[deb.nFont].ysize;
 
-    if( pIce->nXDrawSize < dwSize )
+    if( deb.nXDrawSize < dwSize )
     {
-        pIce->nXDrawSize = dwSize;
+        deb.nXDrawSize = dwSize;
     }
 
-    dprinth(1, "XWIN: Received XInitPacket.. Using buffer size of %d (%d Kb)", pIce->nXDrawSize, pIce->nXDrawSize/1024);
+    dprinth(1, "XWIN: Received XInitPacket.. Using buffer size of %d (%d Kb)", deb.nXDrawSize, deb.nXDrawSize/1024);
 
     // If we already allocated buffers etc., need to release before reallocating
-    if( pIce->pXDrawBuffer != NULL )
+    if( deb.pXDrawBuffer != NULL )
     {
-        ice_free_heap(pIce->pXDrawBuffer);
+        ice_free_heap(deb.pXDrawBuffer);
 
-        if( pIce->pXFrameBuffer != NULL )
-            ice_iounmap(pIce->pXFrameBuffer);
+        if( deb.pXFrameBuffer != NULL )
+            ice_iounmap(deb.pXFrameBuffer);
 
-        pIce->pXDrawBuffer = NULL;
-        pIce->pXFrameBuffer = NULL;
+        deb.pXDrawBuffer = NULL;
+        deb.pXFrameBuffer = NULL;
     }
 
     // Allocate memory that will be used to save the content of the framebuffer
     // over the area of drawing
-    if( (pIce->pXDrawBuffer = ice_malloc(pIce->nXDrawSize)) != NULL)
+    if( (deb.pXDrawBuffer = ice_malloc(deb.nXDrawSize)) != NULL)
     {
-        INFO(("XWIN: Allocated %d for backing store buffer\n", (int)pIce->nXDrawSize));
+        INFO(("XWIN: Allocated %d for backing store buffer\n", (int)deb.nXDrawSize));
 
         // Find the physical address of the frame buffer in user address space
         physicalAddress = UserVirtToPhys(pXInit->pFrameBuf);
@@ -215,9 +215,9 @@ int XInitPacket(TXINITPACKET *pXInit)
         dwMappingSize = pXInit->stride * pXInit->yres;
 
         // Map the graphics card physical memory into the kernel address space
-        pIce->pXFrameBuffer = ice_ioremap(physicalAddress, dwMappingSize);
+        deb.pXFrameBuffer = ice_ioremap(physicalAddress, dwMappingSize);
 
-        if( pIce->pXFrameBuffer )
+        if( deb.pXFrameBuffer )
         {
             memset(&dga, 0, sizeof(dga));
             memset(&outDga, 0, sizeof(outDga));
@@ -279,14 +279,14 @@ int XInitPacket(TXINITPACKET *pXInit)
 
             dprinth(1, "XWIN: User virtual address = %08X", pXInit->pFrameBuf);
             dprinth(1, "XWIN: Physical address     = %08X", physicalAddress);
-            dprinth(1, "XWIN: Kernel address       = %08X (%08X)", pIce->pXFrameBuffer, dwMappingSize);
+            dprinth(1, "XWIN: Kernel address       = %08X (%08X)", deb.pXFrameBuffer, dwMappingSize);
             dprinth(1, "XWIN: Desktop %d x %d, stride=%d  bpp=%d", dga.xres, dga.yres, dga.stride, dga.bpp * 8);
 
             // Switch output to this driver and schedule a clean break into debugger
 
             pOut = &outDga;
 
-            pIce->fKbdBreak = TRUE;
+            deb.nScheduleKbdBreakTimeout = 2;
 
             return( 0 );                // Return success
         }
@@ -298,7 +298,7 @@ int XInitPacket(TXINITPACKET *pXInit)
 
             dprinth(1, "XWIN: Unable to map frame buffer (size=%d)!", dwMappingSize);
 
-            ice_free_heap(pIce->pXDrawBuffer);
+            ice_free_heap(deb.pXDrawBuffer);
         }
     }
     else
@@ -307,12 +307,12 @@ int XInitPacket(TXINITPACKET *pXInit)
 
         pOut = &outVga;
 
-        dprinth(1, "XWIN: Unable to allocate %d for backing store buffer!", pIce->nXDrawSize);
+        dprinth(1, "XWIN: Unable to allocate %d for backing store buffer!", deb.nXDrawSize);
 
     }
 
-    pIce->pXDrawBuffer = NULL;
-    pIce->pXFrameBuffer = NULL;
+    deb.pXDrawBuffer = NULL;
+    deb.pXFrameBuffer = NULL;
 
     return( -1 );                       // Return error!
 }
@@ -344,8 +344,8 @@ static void DgaPrintCharacter32(DWORD ptr, BYTE c, int col)
     }
 
     // Cache the current colors for foreground and background
-    pixelFore = dga.pixelFore[pIce->col[col] & 0xF];
-    pixelBack = dga.pixelBack[(pIce->col[col] >> 4) & 0x7];
+    pixelFore = dga.pixelFore[deb.col[col] & 0xF];
+    pixelBack = dga.pixelBack[(deb.col[col] >> 4) & 0x7];
 
     // Get the address of the start of a character
     pChar = (BYTE *)(dga.pFont->Bitmap + c * dga.pFont->ysize);
@@ -403,8 +403,8 @@ static void DgaPrintCharacter16(DWORD ptr, BYTE c, int col)
     }
 
     // Cache the current colors for foreground and background
-    pixelFore = (WORD)(dga.pixelFore[pIce->col[col] & 0xF] & 0xFFFF);
-    pixelBack = (WORD)(dga.pixelBack[(pIce->col[col] >> 4) & 0x7] & 0xFFFF);
+    pixelFore = (WORD)(dga.pixelFore[deb.col[col] & 0xF] & 0xFFFF);
+    pixelBack = (WORD)(dga.pixelBack[(deb.col[col] >> 4) & 0x7] & 0xFFFF);
 
     // Get the address of the start of a character
     pChar = (BYTE *)(dga.pFont->Bitmap + c * dga.pFont->ysize);
@@ -459,7 +459,7 @@ static void DgaPrintCharacter(DWORD x, DWORD y, BYTE c, int col)
         if( y <= (dga.yres - dga.pFont->ysize) / dga.pFont->ysize )
         {
             // Calculate the address in the frame buffer to print a character
-            address = (DWORD) pIce->pXFrameBuffer + dga.dwFrameOffset +
+            address = (DWORD) deb.pXFrameBuffer + dga.dwFrameOffset +
                 y * dga.stride * dga.pFont->ysize +
                 x * dga.bpp * 8;
 
@@ -485,8 +485,8 @@ static void DgaCls16()
     DWORD y;
     WORD pixelBack;
 
-    pixelBack = (WORD)(dga.pixelBack[(pIce->col[dga.col] >> 4) & 0x7] & 0xFFFF);
-    address = pIce->pXFrameBuffer + dga.dwFrameOffset;
+    pixelBack = (WORD)(dga.pixelBack[(deb.col[dga.col] >> 4) & 0x7] & 0xFFFF);
+    address = deb.pXFrameBuffer + dga.dwFrameOffset;
 
     for(y=0; y<pOut->sizeY * dga.pFont->ysize; y++)
     {
@@ -512,8 +512,8 @@ static void DgaCls32()
     DWORD y;
     DWORD pixelBack;
 
-    pixelBack = dga.pixelBack[(pIce->col[dga.col] >> 4) & 0x7];
-    address = pIce->pXFrameBuffer + dga.dwFrameOffset;
+    pixelBack = dga.pixelBack[(deb.col[dga.col] >> 4) & 0x7];
+    address = deb.pXFrameBuffer + dga.dwFrameOffset;
 
     for(y=0; y<pOut->sizeY * dga.pFont->ysize; y++)
     {
@@ -543,16 +543,16 @@ static void MoveBackground(BOOL fSave)
     BYTE *pBuf;
 
     // Make sure we have draw buffer allocated and that it is the right size
-    if( pIce->pXDrawBuffer )
+    if( deb.pXDrawBuffer )
     {
         // Calculate required size in bytes of the window area
         // We are adding border (2 characters)
         size = (outDga.sizeX+2) * 8 * dga.bpp * // X size of the font is always 8 pixels
                (outDga.sizeY+2) * dga.pFont->ysize;
-        if( size <= pIce->nXDrawSize )
+        if( size <= deb.nXDrawSize )
         {
-            pBuf = pIce->pXDrawBuffer;
-            address = (DWORD) pIce->pXFrameBuffer + dga.dwFrameOffset;
+            pBuf = deb.pXDrawBuffer;
+            address = (DWORD) deb.pXFrameBuffer + dga.dwFrameOffset;
 
             // Move the window area, line by line, in the required direction
             for(y=0; y<(outDga.sizeY+2) * dga.pFont->ysize; y++)
@@ -567,7 +567,7 @@ static void MoveBackground(BOOL fSave)
             }
         }
         else
-            dprinth(1, "XWIN: Backing store buffer too small (need %d, have %d)", size, pIce->nXDrawSize);
+            dprinth(1, "XWIN: Backing store buffer too small (need %d, have %d)", size, deb.nXDrawSize);
     }
     else
         dprinth(1, "XWIN: Backing store buffer not allocated");
@@ -632,18 +632,18 @@ static BOOL DgaResize(int x, int y, int nFont)
 
     dwSize = (x+2) * 8 * dga.bpp * (y+2) * fontY;
 
-    if( dwSize > pIce->nXDrawSize )
+    if( dwSize > deb.nXDrawSize )
     {
         // New window size needs more buffer. Print out the required size
         // and scale down to use what we currently have allocated.
 
-        dprinth(1, "That size would need %d of backing store buffer out of %d allocated.", dwSize, pIce->nXDrawSize);
+        dprinth(1, "That size would need %d of backing store buffer out of %d allocated.", dwSize, deb.nXDrawSize);
 
         // We know we are changing only one variable at a time (lines, width or font)
         if( x != outDga.sizeX )
         {
             // Changing X size (command WIDTH)
-            x = pIce->nXDrawSize / (8 * dga.bpp * (outDga.sizeY+2) * fontY);
+            x = deb.nXDrawSize / (8 * dga.bpp * (outDga.sizeY+2) * fontY);
             x -= 2;                     // Account for 2 border edges
 
             dwSize = (x+2) * 8 * dga.bpp * (y+2) * fontY;
@@ -654,7 +654,7 @@ static BOOL DgaResize(int x, int y, int nFont)
         if( y != outDga.sizeY )
         {
             // Changing Y size (command LINES)
-            y = pIce->nXDrawSize / ((outDga.sizeX+2) * 8 * dga.bpp * fontY);
+            y = deb.nXDrawSize / ((outDga.sizeX+2) * 8 * dga.bpp * fontY);
             y -= 2;                     // Account for 2 border edges
 
             dwSize = (x+2) * 8 * dga.bpp * (y+2) * fontY;
@@ -765,7 +765,7 @@ static void ScrollUp()
 static void DgaSprint(char *s)
 {
     BYTE c;
-    DWORD dwTabs;
+    UINT nTabs;
 
     // Warning: this function is being reentered
     while( (c = *s++) != 0 )
@@ -774,7 +774,7 @@ static void DgaSprint(char *s)
         {
             if( c==DP_TAB )
             {
-                for(dwTabs=deb.dwTabs; dwTabs; dwTabs--)
+                for(nTabs=deb.nTabs; nTabs; nTabs--)
                     DgaSprint(" ");
             }
             else
@@ -927,7 +927,7 @@ static void DgaSprint(char *s)
 
 /******************************************************************************
 *                                                                             *
-*   void XWinControl(CHAR Key)                                                *
+*   void XWinControl(WCHAR Key)                                               *
 *                                                                             *
 *******************************************************************************
 *
@@ -938,7 +938,7 @@ static void DgaSprint(char *s)
 *       Key is the key code used to move/center the window
 *
 ******************************************************************************/
-void XWinControl(CHAR Key)
+void XWinControl(WCHAR Key)
 {
     // Ignore this call if the LFB is not the default current output driver
 

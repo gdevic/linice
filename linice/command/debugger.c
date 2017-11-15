@@ -64,22 +64,19 @@ static char sCmd[MAX_STRING];
 extern void EdLin( char *sCmdLine );
 extern void GetSysreg( TSysreg * pSys );
 extern void SetSysreg( TSysreg * pSys );
-extern BOOL NonStickyBreakpointCheck(TADDRDESC Addr);
-extern void ClearNonStickyBreakpoint();
 extern void ArmBreakpoints(void);
-extern void *DisarmBreakpoints(void);
-extern BOOL EvalBreakpoint(void *pBp);
-extern int  BreakpointCheck(TADDRDESC Addr);
-extern char *Index2String(DWORD index);
+extern void DisarmBreakpoints(void);
+extern BOOL EvalBreakpoint(void);
 extern BOOL cmdStep(char *args, int subClass);
 extern BOOL MultiTrace(void);
-extern BOOL RepeatTrace(void);
-extern BOOL RepeatStep(void);
+extern BOOL RepeatSrcTrace(void);
+extern BOOL RepeatSrcStep(void);
+extern void DebPrintErrorString();
 
 
 /******************************************************************************
 *                                                                             *
-*   void DebuggerEnter * (void)                                               *
+*   void DebuggerEnterBreak(void)                                             *
 *                                                                             *
 *******************************************************************************
 *
@@ -87,26 +84,18 @@ extern BOOL RepeatStep(void);
 *
 ******************************************************************************/
 /*
-    INT 1
+    Interrupt 1
             * Single step trap (TR)
             * BP due to hardware debug DR0-DR3
-            * single, non-sticky debugger breakpoint DRx
-            * single, non-sticky user breakpoint (HERE command - execute to..)
-            * User INT 1 in kernel
-            * User INT 1 in app
+            * INT 1 (Two-byte opcode)
 
-    INT 3
-            * BPX user breakpoint
-            * single, non-sticky debugger breakpoint
-            * single, non-sticky user breakpoint (HERE)
-            * User INT3  (1-byte opcode) in kernel/app
-            * User INT 3 (2-byte opcode) in kernel/app
-
+    Interrupt 3
+            * INT3  (1-byte opcode 0xCC)
+            * INT 3 (2-byte opcode)
 */
 
 void DebuggerEnterBreak(void)
 {
-    void *pBp = NULL;                   // Pointer to a breakpoint that hit
     BOOL fAcceptNext;                   // Flag to continue looping inside debugger
 
     // Abort possible single step trace state
@@ -114,64 +103,66 @@ void DebuggerEnterBreak(void)
 
     //-----------------------------------------------------------------------
     {
-        // Read in all the system state registers
-        GetSysreg(&deb.sysReg);
-
-        // Adjust system registers to running the debugger:
-        //  CR0[16] Write Protect -> 0   so we can write to user pages
-        SET_CR0( deb.sysReg.cr0 & ~BITMASK(WP_BIT));
+        deb.bpIndex = -1;                   // Reset the index to signal no breakpoint hit
 
         // Disarm all breakpoints and adjust counters.
-        // We dont do this if we are in the single step mode
+        // We dont need to disarm breakpoints if we are in the CPU trace mode
+
         if( !deb.fTrace )
-            pBp = DisarmBreakpoints();
+            DisarmBreakpoints();
 
         {
             // Set the content variables used in debugging with symbols. We need this
             // context for the next few step and trace tests
             SetSymbolContext(deb.r->cs, deb.r->eip);
 
-            // If we are in the "P RET" cycling-step mode, call the P command handler
-            // to manage the exit from this kind of loop (hitting RET instruction).
-            // We exit if we actually hit RET command in this mode.
-            if( deb.fStepRet && cmdStep("", NULL)==FALSE )
-                goto P_RET_Continuation;
+            // We can check for repeating instructions only if we did not hit any official breakpoint
+            if( deb.bpIndex==-1 )
+            {
+                // If we are in the "P RET" cycling-step mode, call the P command handler
+                // to manage the exit from this kind of loop (hitting RET instruction).
+                // We exit if we actually hit RET command in this mode.
+                if( deb.fStepRet && cmdStep("", NULL)==FALSE )
+                    goto P_RET_Continuation;
 
-            // If we are in the SRC mode, and doing a step or trace over the source lines,
-            // we may need to repeatedly issue trace to get to the next line or a function
-            if( deb.fSrcTrace && RepeatTrace() )
-                goto P_RET_Continuation;
+                // If we are in the SRC mode, and doing a step or trace over the source lines,
+                // we may need to repeatedly issue trace to get to the next line or a function
+                if( deb.fSrcTrace && RepeatSrcTrace() )
+                    goto P_RET_Continuation;
 
-            if( deb.fSrcStep && RepeatStep() )
-                goto P_RET_Continuation;
+                if( deb.fSrcStep && RepeatSrcStep() )
+                    goto P_RET_Continuation;
 
-            // If the multiple-step trace is on, we wanted more than a single instruction,
-            // (because a trace count is specified) so we will count down a number of instructions
-            if( deb.TraceCount && MultiTrace() )
-                goto T_count_continuation;
-
+                // If the multiple-step trace is on, we wanted more than a single instruction,
+                // (because a trace count is specified) so we will count down a number of instructions
+                if( deb.nTraceCount && MultiTrace() )
+                    goto T_count_continuation;
+            }
             // ===================================================================================
             {
-                // Reset various trace state flags
-                deb.fTrace = FALSE;
-                deb.TraceCount = 0;
-                deb.fSrcStep = FALSE;
-                deb.fSrcTrace = FALSE;
-
+                // This function will cause evaluation of a breakpoint condition, and
+                // possibly the action. The action taken may end in a continuation of
+                // execution, in which case we jump forward
+                if( EvalBreakpoint()==FALSE )
                 {
-                    // Enable output driver and save background
-                    dputc(DP_ENABLE_OUTPUT);
-                    dputc(DP_SAVEBACKGROUND);
-
+                    // Enable output driver and save background if flash is on or we are not in step or trace
+                    if( deb.fFlash || !(deb.fStep || deb.fTrace) )
+                    {
+                        dputc(DP_ENABLE_OUTPUT);
+                        dputc(DP_SAVEBACKGROUND);
+                    }
                     // Recalculate window locations based on visibility and number of lines
                     // and repaint all windows
                     RecalculateDrawWindows();
-
-                    // This function will cause evaluation of a breakpoint condition, and
-                    // possibly the action. The action taken may end in continuation of
-                    // execution, in which case we jump forward
-                    if( EvalBreakpoint(pBp)==FALSE )
                     {
+                        // Reset various trace state flags
+                        deb.fTrace = FALSE;
+                        deb.nTraceCount = 0;
+                        deb.fSrcTrace = FALSE;
+
+                        deb.fStep = FALSE;
+                        deb.fSrcStep = FALSE;
+
                         //========================================================================
                         // MAIN COMMAND PROMPT LOOP
                         //========================================================================
@@ -179,7 +170,6 @@ void DebuggerEnterBreak(void)
                         {
                             EdLin( sCmd );
 
-                            deb.error = NOERROR;                        // Clear the error code
                             fAcceptNext = CommandExecute( sCmd+1 );     // Skip the prompt
 
                             // Redraw the debugger screen if we were requested to do so
@@ -189,18 +179,24 @@ void DebuggerEnterBreak(void)
                                 deb.fRedraw = FALSE;
                             }
 
-                            // If there was an error processing the commands, print it
+                            // Print the possible error message that occurred during the command run
                             if( deb.error )
-                                dprinth(1, "%s", Index2String(deb.error) );
+                            {
+                                DebPrintErrorString();
+                                deb.error = NOERROR;
+                            }
 
                         } while( fAcceptNext );
 
                         //========================================================================
                     }
 
-                    // Restore background and disable output driver
-                    dputc(DP_RESTOREBACKGROUND);
-                    dputc(DP_DISABLE_OUTPUT);
+                    // Restore background and disable output driver if flash is on or we are not in step or trace
+                    if( deb.fFlash || !(deb.fStep || deb.fTrace) )
+                    {
+                        dputc(DP_RESTOREBACKGROUND);
+                        dputc(DP_DISABLE_OUTPUT);
+                    }
                 }
             }
         }
@@ -213,13 +209,11 @@ void DebuggerEnterBreak(void)
 P_RET_Continuation:
 T_count_continuation:
 
-        // Arm all breakpoints by inserting INT3 opcode
-        // We dont arm them if we are in single step (Trace) mode!
+        // Arm all breakpoints
+        // We dont arm breakpoints if we are in the CPU trace mode
+
         if( !deb.fTrace )
             ArmBreakpoints();
-
-        // Restore system registers
-        SetSysreg(&deb.sysReg);
     }
 
     // If the fTrace signal flag is set, set it in the eflags register. This
@@ -227,57 +221,49 @@ T_count_continuation:
     if( deb.fTrace )
         deb.r->eflags |= TF_MASK;
 
+    // We can not execute HLT instruction in trace mode, so if the instruction is HLT, advance the EIP
+    if( deb.fTrace )
+    {
+        // Make sure the address is valid
+        if( GetByte(deb.r->cs, deb.r->eip)==0xF4)
+        {
+            deb.r->eip++;                   // Advance EIP if the current instruction is HLT (0xF4)
+        }
+    }
+
     // Set RESUME flag on the eflags and return to the client. This way we dont
-    // break on the same condition, if the hardware bp would trigger it at this address
+    // break on the same condition, if a hardware bp would trigger it at this address
     deb.r->eflags |= RF_MASK;
 
     return;
 }
 
-void DebuggerEnterDelayedTrace(void)
-{
-    // Delayed Trace - set the Trace flag for this run
-    deb.r->eflags |= TF_MASK;
-    deb.fTrace = TRUE;
 
-    // Exit delayed Trace mode on a next turn
-    deb.fDelayedTrace = FALSE;
-
-    // Set RESUME flag on the eflags and return to the client. This way we dont
-    // break on the same condition, if the hardware bp would trigger it at this address
-    deb.r->eflags |= RF_MASK;
-
-    // Set the debugger state back to the normal
-    pIce->eDebuggerState = DEB_STATE_BREAK;
-
-    return;
-}
-
+/******************************************************************************
+*                                                                             *
+*   void DebuggerEnterDelayedArm(void)                                        *
+*                                                                             *
+*******************************************************************************
+*
+*   Alternate entry point - this state will restart the debugee execution
+*   but it will restore all the breakpoints first.
+*
+******************************************************************************/
 void DebuggerEnterDelayedArm(void)
 {
     // Delayed arm - arm breakpoints and continue
 
-    {
-        // Read in all the system state registers
-        GetSysreg(&deb.sysReg);
+    ArmBreakpoints();
 
-        // Adjust system registers to running the debugger:
-        //  CR0[16] Write Protect -> 0   so we can write to user pages
-        SET_CR0( deb.sysReg.cr0 & ~BITMASK(WP_BIT));
-
-        {
-            ArmBreakpoints();
-        }
-
-        // Restore system registers
-        SetSysreg(&deb.sysReg);
-    }
-
-    // Set the debugger state back to the normal
-    pIce->eDebuggerState = DEB_STATE_BREAK;
-
-    // Clear trace flag
+    // Clear the trace flag that was set in order for us to be here
     deb.r->eflags &= ~TF_MASK;
+
+    // If the fTrace signal flag is set, set it in the eflags register. This
+    // signals a single step over one machine instruction
+    if( deb.fTrace )
+        deb.r->eflags |= TF_MASK;
+
+    deb.fDelayedArm = FALSE;
 
     return;
 }

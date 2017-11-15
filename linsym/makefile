@@ -20,6 +20,7 @@ clean:
 		ParseFunctionLines.o	\
 		ParseFunctionScope.o	\
 		ParseGlobal.o	\
+		ParseStatic.o	\
 		ParseSource.o	\
 		ParseTypedefs.o	\
 		ParseReloc.o	\
@@ -47,6 +48,9 @@ ParseFunctionScope.o:	ParseFunctionScope.c
 
 ParseGlobal.o:	ParseGlobal.c
 	$(CC) $(CFLAGS) -c ParseGlobal.c
+
+ParseStatic.o:	ParseStatic.c
+	$(CC) $(CFLAGS) -c ParseStatic.c
 
 ParseSource.o:	ParseSource.c
 	$(CC) $(CFLAGS) -c ParseSource.c

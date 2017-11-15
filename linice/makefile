@@ -45,14 +45,15 @@ clean:
 			capture.o	\
 			malloc.o	\
 			memaccess.o	\
-			eval.o		\
 			evalex.o	\
 			init.o		\
 			errors.o		\
 			syscall.o		\
 			symbolTable.o	\
 			symbols.o	\
+			context.o	\
 			types.o	\
+			typesprint.o	\
 			string.o 	\
 			printf.o 	\
 			ctype.o		\
@@ -123,8 +124,14 @@ symbolTable.o:		symbolTable.c
 symbols.o:		symbols.c
 	$(CC) $(CFLAGS) -c symbols.c
 
+conetext.o:		conetext.c
+	$(CC) $(CFLAGS) -c conetext.c
+
 types.o:		types.c
 	$(CC) $(CFLAGS) -c types.c
+
+typesprint.o:		typesprint.c
+	$(CC) $(CFLAGS) -c typesprint.c
 
 string.o:		string.c
 	$(CC) $(CFLAGS) -c string.c
@@ -164,9 +171,6 @@ edlin.o:	command/edlin.c
 
 command.o:	command/command.c
 	$(CC) $(CFLAGS) -c command/command.c
-
-eval.o:		command/eval.c
-	$(CC) $(CFLAGS) -c command/eval.c
 
 evalex.o:	command/evalex.c
 	$(CC) $(CFLAGS) -c command/evalex.c

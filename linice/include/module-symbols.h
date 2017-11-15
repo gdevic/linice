@@ -57,13 +57,8 @@ typedef struct
 {
     struct TSYMTAB *next;               // Next symbol structure in a list
 
-    char *pStrings;                     // Pointer to strings
-
     int reloc[MAX_SYMRELOC];            // Current relocated offset for each symbol section
 
 } TSYMPRIV;
-
-
-#define GET_STRING(offset) (pIce->pSymTabCur->pPriv->pStrings + (offset))
 
 #endif //  _MODULE_SYMBOLS_H_

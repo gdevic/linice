@@ -107,11 +107,11 @@ int InitPacket(PTINITPACKET pInit)
 
     if( pInit->nSize == sizeof(TINITPACKET) )
     {
-        if( pIce->pHistoryBuffer == NULL )
+        if( deb.pHistoryBuffer == NULL )
         {
             // Allocate heap for the history buffer
 
-            if( (pIce->pHistoryBuffer = ice_malloc(pInit->nHistorySize)) != NULL)
+            if( (deb.pHistoryBuffer = ice_malloc(pInit->nHistorySize)) != NULL)
             {
                 INFO(("Allocated %d Kb for history pool\n", pInit->nHistorySize / 1024));
 
@@ -133,7 +133,7 @@ int InitPacket(PTINITPACKET pInit)
 
                 // Initialize history buffer so we can start using it
 
-                pIce->nHistorySize = pInit->nHistorySize;
+                deb.nHistorySize = pInit->nHistorySize;
                 ClearHistory();
 
                 // Link the VGA to be the initial output device
@@ -168,14 +168,14 @@ int InitPacket(PTINITPACKET pInit)
                 deb.Local.ID = LIST_ID_LOCALS;
 
                 // Adjust all output driver coordinates - we won't print anything since
-                // we are not yet in the debugger (pIce->fRunningIce is false)
+                // we are not yet in the debugger (deb.fRunningIce is false)
                 RecalculateDrawWindows();
                 pOut->y = pWin->h.Top + 1;          // Force it into the history buffer
 
                 // Initialize default data pointer
                 deb.dataAddr.sel = GetKernelDS();
                 deb.dataAddr.offset = 0;
-                deb.DumpSize = 1;           // Dump bytes
+                deb.nDumpSize = 1;                  // Dump bytes
 
                 // Initialize default code pointer
                 deb.codeTopAddr.sel = GetKernelCS();
@@ -186,9 +186,9 @@ int InitPacket(PTINITPACKET pInit)
                 // Initialize the default break key
                 deb.BreakKey = CHAR_CTRL | 'Q';
 
-                deb.dwTabs = 4;                     // Initial TABS value
+                deb.nTabs = 4;                      // Initial TABS value
 
-                pIce->nXDrawSize = pInit->nDrawSize;
+                deb.nXDrawSize = pInit->nDrawSize;
 
                 // Initialize interrupt handling subsystem
 
@@ -196,29 +196,29 @@ int InitPacket(PTINITPACKET pInit)
 
                 // Allocate heap for the symbol table
 
-                if( pIce->hSymbolBufferHeap == NULL )
+                if( deb.hSymbolBufferHeap == NULL )
                 {
-                    if( (pIce->hSymbolBufferHeap = ice_init_heap(pInit->nSymbolSize)) != NULL )
+                    if( (deb.hSymbolBufferHeap = ice_init_heap(pInit->nSymbolSize)) != NULL )
                     {
                         INFO(("Allocated %d Kb for symbol pool\n", pInit->nSymbolSize / 1024));
 
-                        pIce->nSymbolBufferSize = pIce->nSymbolBufferAvail = pInit->nSymbolSize;
+                        deb.nSymbolBufferSize = deb.nSymbolBufferAvail = pInit->nSymbolSize;
 
                         // Allocate heap for debuggers internal use
 
-                        if( pIce->hHeap == NULL )
+                        if( deb.hHeap == NULL )
                         {
-                            if( (pIce->hHeap = ice_init_heap(MAX_HEAP)) != NULL )
+                            if( (deb.hHeap = ice_init_heap(MAX_HEAP)) != NULL )
                             {
                                 // Allocate space for user variables and macros
 
                                 if( InitUserVars(pInit->nVars) )
                                 {
-                                    pIce->nVars = pInit->nVars;
+                                    deb.nVars = pInit->nVars;
 
                                     if( InitMacros(pInit->nMacros) )
                                     {
-                                        pIce->nMacros = pInit->nMacros;
+                                        deb.nMacros = pInit->nMacros;
 
                                         // Initialize command line editor
 
@@ -237,15 +237,15 @@ int InitPacket(PTINITPACKET pInit)
 
                                         // Set up default output colors
 
-                                        pIce->col[COL_NORMAL]  = 0x07;
-                                        pIce->col[COL_BOLD]    = 0x0B;
-                                        pIce->col[COL_REVERSE] = 0x71;
-                                        pIce->col[COL_HELP]    = 0x30;
-                                        pIce->col[COL_LINE]    = 0x02;
+                                        deb.col[COL_NORMAL]  = 0x07;
+                                        deb.col[COL_BOLD]    = 0x0B;
+                                        deb.col[COL_REVERSE] = 0x71;
+                                        deb.col[COL_HELP]    = 0x30;
+                                        deb.col[COL_LINE]    = 0x02;
 
                                         // Copy keyboard F-key assignments
 
-                                        memcpy(pIce->keyFn , pInit->keyFn , sizeof(pIce->keyFn));
+                                        memcpy(deb.keyFn , pInit->keyFn , sizeof(deb.keyFn));
 
                                         // Hook system call table so we can monitor system calls
                                         HookSyscall();
@@ -271,7 +271,7 @@ int InitPacket(PTINITPACKET pInit)
                                             // Enter the debugger if the init string did not end with command 'X'
                                             // Schedule the debugger entry the same way hotkey does:
 
-                                            pIce->fKbdBreak = TRUE;
+                                            deb.nScheduleKbdBreakTimeout = 2;
                                         }
                                         retval = 0;
                                     }
@@ -295,7 +295,7 @@ int InitPacket(PTINITPACKET pInit)
                         }
                         else
                         {
-                            ERROR(("pIce->hHeap != NULL\n"));
+                            ERROR(("deb.hHeap != NULL\n"));
                         }
                     }
                     else
@@ -306,7 +306,7 @@ int InitPacket(PTINITPACKET pInit)
                 }
                 else
                 {
-                    ERROR(("pIce->hSymbolBufferHeap != NULL\n"));
+                    ERROR(("deb.hSymbolBufferHeap != NULL\n"));
                 }
 
                 // Restore background and disable output driver
@@ -322,7 +322,7 @@ int InitPacket(PTINITPACKET pInit)
         }
         else
         {
-            ERROR(("pIce->hHistoryBuffer != NULL\n"));
+            ERROR(("deb.hHistoryBuffer != NULL\n"));
         }
     }
 

@@ -49,29 +49,46 @@
 // Message indices
 //
 ///////////////////////////////////////////////////////////////////////////////
-#define NOERROR                     0   // "NOERROR"
-#define ERR_SYNTAX                  1   // "Syntax error"
-#define ERR_COMMAND                 2   // "Unknown command or macro"
-#define ERR_NOT_IMPLEMENTED         3   // "Not yet implemented"
-#define ERR_MEMORY                  4   // "Out of memory"
 
-#define ERR_BPDUP                   5   // "Duplicate breakpoint"
-#define ERR_BP_TOO_MANY             6   // "No more breakpoints available"
-#define ERR_DRUSED                  7   // "Debug register is already being used"
-#define ERR_DRUSEDUP                8   // "All debug registers used"
+// Error code defines - to add an error code, add it to the end of this list,
+//                      following the definition and string in the errors.c
 
-#define ERR_EXP_WHAT                9   // "Expression?? What expression?"
+enum
+{
+    NOERROR = 0,
+    ERR_SYNTAX,
+    ERR_COMMAND,
+    ERR_NOT_IMPLEMENTED,
+    ERR_MEMORY,
 
-#define ERR_INT_OUTOFMEM            10  // "Internal error: out of memory"
-#define ERR_DIV0                    11  // "Division by zero"
+    ERR_BPDUP,
+    ERR_BP_TOO_MANY,
+    ERR_DRUSED,
+    ERR_DRUSEDUP,
+    ERR_DRINVALID,
 
-#define MSG_LAST                    12  //  - Last message index -
+    ERR_EXP_WHAT,
 
-#define ERR_BPINT                   100 // "Invalid interrupt number"
-#define ERR_BPIO                    101 // "Invalid port number"
-#define ERR_BPMWALIGN               102 // "BPMW address must be on WORD boundary"
-#define ERR_BPMDALIGN               103 // "BPMD address must be on DWORD boundary"
-#define ERR_BPNUM                   104 // "Invalid breakpoint number %d"
+    ERR_INT_OUTOFMEM,
+    ERR_DIV0,
+
+    ERR_BPINT,
+    ERR_BPIO,
+    ERR_BPMWALIGN,
+    ERR_BPMDALIGN,
+    ERR_BPNUM,
+
+    ERR_TOO_COMPLEX,
+    ERR_TOO_BIG,
+    ERR_NOTAPOINTER,
+    ERR_ELEMENTNOTFOUND,
+    ERR_ADDRESS,
+    ERR_SELECTOR,
+    ERR_INVALIDOP,
+    ERR_NOTARRAY,
+
+} ERRORS;
+
 
 ///////////////////////////////////////////////////////////////////////////////
 //

@@ -38,7 +38,7 @@
 
 #include "loader.h"                     // Include global protos
 
-extern int dfs;
+extern PSTR dfs;                        // Global pointer to strings (to append)
 
 extern BOOL GlobalsName2Address(DWORD *p, char *pName);
 extern char *GlobalsSection2Address(DWORD *p, WORD wAttribute, char *pSectionName);

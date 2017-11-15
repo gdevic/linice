@@ -75,7 +75,7 @@
 void VT100Input(BYTE data)
 {
     static BOOL fESC = FALSE;
-    CHAR key = 0;
+    WCHAR key = 0;
 
     // Are we are expecting another byte following the ESC code?
     if( fESC )

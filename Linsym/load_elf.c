@@ -48,13 +48,19 @@
 *                                                                             *
 ******************************************************************************/
 
+#ifdef WIN32
+#define FILE_MODE       _S_IREAD | _S_IWRITE
+#else
+#define FILE_MODE       S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH
+#endif
+
 /******************************************************************************
 *                                                                             *
 *   Functions                                                                 *
 *                                                                             *
 ******************************************************************************/
 
-int dfs;                                // Top offset into strings file
+PSTR dfs;                               // Global pointer to strings (to append)
 
 extern BOOL ParseDump(BYTE *pElf);
 extern BOOL DumpElfHeader(Elf32_Ehdr *pElf);
@@ -62,6 +68,7 @@ extern BOOL StoreGlobalSyms(BYTE *pElf);
 extern BOOL StoreSourceFiles(BYTE *pElf);
 extern BOOL ParseSource(int fd, int fs);
 extern BOOL ParseGlobals(int fd, int fs, BYTE *pElf);
+extern BOOL ParseStatic(int fd, int fs, BYTE *pElf);
 extern BOOL ParseFunctionLines(int fd, int fs, BYTE *pElf);
 extern BOOL ParseFunctionScope(int fd, int fs, BYTE *pElf);
 extern BOOL ParseTypedefs(int fd, int fs, BYTE *pElf);
@@ -222,7 +229,10 @@ BOOL ElfToSym(BYTE *pElf, char *pSymName, char *pTableName)
         // Create and truncate the symbol file name
         VERBOSE1 printf("Creating symbol file: %s\n", pSymName);
 
-        fd = open(pSymName, O_WRONLY | O_CREAT | O_TRUNC | O_BINARY);
+        // Delete the file if it already exists. We do that so not to inherit permissions
+        unlink(pSymName);
+
+        fd = open(pSymName, O_WRONLY | O_CREAT | O_TRUNC | O_BINARY, FILE_MODE);
         if( fd>0 )
         {
             // First parse and load all global symbols so we can refer to them later
@@ -266,7 +276,7 @@ BOOL ElfToSym(BYTE *pElf, char *pSymName, char *pTableName)
                         // safely use offset 0 to represent a non-string and invalid value
                         // We write { 0, 0 } so we can use it to address source line + bSpaces
                         write(fs, "\0", 2);
-                        dfs = 2;                // Start with the offset 2 of the strings
+                        dfs = (PSTR) 2;         // Start with the offset 2 of the strings
 
                         PushString(fd, "Symbol information for Linice kernel level debugger");
                         PushString(fd, "Copyright 2000-2003 by Goran Devic");
@@ -275,68 +285,74 @@ BOOL ElfToSym(BYTE *pElf, char *pSymName, char *pTableName)
                         // Also write out globals symbol table section
                         if( ParseGlobals(fd, fs, pElf) )
                         {
-                            // Parse all referenced source files and store them into symbol file
-                            if( ParseSource(fd, fs) )
+                            // Parse static symbol definition
+                            if( ParseStatic(fd, fs, pElf) )
                             {
-                                // Function lines will parse ELF file and extract tokens
-                                if( ParseFunctionLines(fd, fs, pElf) )
+                                // Parse all referenced source files and store them into symbol file
+                                if( ParseSource(fd, fs) )
                                 {
-                                    // Function variables and their scopes
-                                    if( ParseFunctionScope(fd, fs, pElf) )
+                                    // Function lines will parse ELF file and extract tokens
+                                    if( ParseFunctionLines(fd, fs, pElf) )
                                     {
-                                        // Type definitions bound to each major source file
-                                        if( ParseTypedefs(fd, fs, pElf) )
+                                        // Function variables and their scopes
+                                        if( ParseFunctionScope(fd, fs, pElf) )
                                         {
-                                            // Relocation information, written only for object files (kernel modules)
-                                            if( ParseReloc(fd, fs, pElf) )
+                                            // Type definitions bound to each major source file
+                                            if( ParseTypedefs(fd, fs, pElf) )
                                             {
-                                                // Add the terminating section HTYPE__END
-                                                write(fd, &HeaderEnd, sizeof(HeaderEnd));
-
-                                                // Copy all strings at the end of the headers
-
-                                                // Rewind the strings file
-                                                lseek(fs, 0, SEEK_SET);
-                                                pBuf = (char *) malloc(dfs);
-                                                if( pBuf!=NULL )
+                                                // Relocation information, written only for object files (kernel modules)
+                                                if( ParseReloc(fd, fs, pElf) )
                                                 {
-                                                    // Store the offset to the strings (current top of the fd file)
-                                                    SymTab.dStrings = lseek(fd, 0, SEEK_CUR);
+                                                    // Add the terminating section HTYPE__END
+                                                    write(fd, &HeaderEnd, sizeof(HeaderEnd));
 
-                                                    read(fs, pBuf, dfs);
-                                                    write(fd, pBuf, dfs);
+                                                    // Copy all strings to the end of the headers (append)
 
-                                                    // Total size is headers + strings
-                                                    SymTab.dwSize = SymTab.dStrings + dfs;
+                                                    // Rewind the strings file and read them all into a buffer
+                                                    lseek(fs, 0, SEEK_SET);
+                                                    pBuf = (char *) malloc((UINT) dfs);
+                                                    if( pBuf!=NULL )
+                                                    {
+                                                        // Store the offset to the strings (current top of the fd file)
+                                                        SymTab.dStrings = lseek(fd, 0, SEEK_CUR);
 
-                                                    // Write out the symbol header
-                                                    lseek(fd, 0, SEEK_SET);
-                                                    write(fd, &SymTab, sizeof(TSYMTAB)-sizeof(TSYMHEADER));
+                                                        read(fs, pBuf, (UINT) dfs);
+                                                        write(fd, pBuf, (UINT) dfs);
 
-                                                    // Close the symbol file
-                                                    close(fd);
+                                                        // Total size is headers + strings
+                                                        SymTab.dwSize = SymTab.dStrings + (UINT) dfs;
 
-                                                    free(pBuf);
+                                                        // Write out the symbol header
+                                                        lseek(fd, 0, SEEK_SET);
+                                                        write(fd, &SymTab, sizeof(TSYMTAB)-sizeof(TSYMHEADER));
 
-                                                    return( TRUE );
+                                                        // Close the symbol file
+                                                        close(fd);
+
+                                                        free(pBuf);
+
+                                                        return( TRUE );
+                                                    }
+                                                    else
+                                                        fprintf(stderr, "Unable to allocate memory\n");
                                                 }
                                                 else
-                                                    fprintf(stderr, "Unable to allocate memory\n");
+                                                    fprintf(stderr, "Error parsing relocation data\n");
                                             }
                                             else
-                                                fprintf(stderr, "Error parsing relocation data\n");
+                                                fprintf(stderr, "Error parsing typedefs\n");
                                         }
                                         else
-                                            fprintf(stderr, "Error parsing typedefs\n");
+                                            fprintf(stderr, "Error parsing function scope\n");
                                     }
                                     else
-                                        fprintf(stderr, "Error parsing function scope\n");
+                                        fprintf(stderr, "Error parsing function lines\n");
                                 }
                                 else
-                                    fprintf(stderr, "Error parsing function lines\n");
+                                    fprintf(stderr, "Error writing source files\n");
                             }
                             else
-                                fprintf(stderr, "Error writing source files\n");
+                                fprintf(stderr, "Error writing statics section\n");
                         }
                         else
                             fprintf(stderr, "Error writing globals section\n");

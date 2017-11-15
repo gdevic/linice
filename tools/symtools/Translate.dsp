@@ -115,6 +115,10 @@ SOURCE=..\..\linsym\ParseGlobal.c
 # End Source File
 # Begin Source File
 
+SOURCE=..\..\linsym\ParseStatic.c
+# End Source File
+# Begin Source File
+
 SOURCE=..\..\linsym\ParseReloc.c
 # End Source File
 # Begin Source File

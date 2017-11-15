@@ -58,18 +58,7 @@ extern DWORD IceIntHandlers[0x30];
 extern DWORD IceIntHandler80;
 
 extern void DebuggerEnterBreak(void);
-extern void DebuggerEnterDelayedTrace(void);
 extern void DebuggerEnterDelayedArm(void);
-
-typedef void (*TDEBUGGER_STATE_FN)(void);
-
-TDEBUGGER_STATE_FN DebuggerEnter[MAX_DEBUGGER_STATE] =
-{
-    DebuggerEnterBreak,
-    DebuggerEnterDelayedTrace,
-    DebuggerEnterDelayedArm
-};
-
 
 // From apic.c
 
@@ -107,7 +96,6 @@ extern void KeyboardHandler(void);
 extern void SerialHandler(int port);
 extern void MouseHandler(void);
 
-extern DWORD TestAndReset(DWORD *pSpinlock);
 extern DWORD SpinlockTest(DWORD *pSpinlock);
 extern void  SpinlockSet(DWORD *pSpinlock);
 extern void  SpinlockReset(DWORD *pSpinlock);
@@ -218,7 +206,7 @@ void HookDebuger(void)
 
     HookIdt(pIdt, 0x01, 0x1);          // Int 1
     HookIdt(pIdt, 0x03, 0x3);          // Int 3
-    HookIdt(pIdt, 0x08, 0x8);          // Double-fault
+//    HookIdt(pIdt, 0x08, 0x8);          // Double-fault
     //
     // TODO: Hooking GPF breaks X on 2.4.x kernel
     //
@@ -317,14 +305,14 @@ DWORD InterruptHandler( DWORD nInt, PTREGS pRegs )
 
     // Depending on the execution context, branch
 
-    if( SpinlockTest(&pIce->fRunningIce) )
+    if( SpinlockTest(&deb.fRunningIce) )
     {
         //---------------------------------------------
         //  Exception occurred during the Linice run
         //---------------------------------------------
         chain = 0;                      // By default, do not chain from this handler
 
-        pIce->nIntsIce[nInt & 0x3F]++;
+        deb.nIntsIce[nInt & 0x3F]++;
 
         // Handle some limited number of interrupts, puke on the rest
 
@@ -334,8 +322,8 @@ DWORD InterruptHandler( DWORD nInt, PTREGS pRegs )
 
             case 0x20:      // Timer
                 // Put all required timers here
-                if( pIce->timer[0] )   pIce->timer[0]--;        // Serial polling
-                if( pIce->timer[1] )   pIce->timer[1]--;        // Cursor carret blink
+                if( deb.timer[0] )   deb.timer[0]--;        // Serial polling
+                if( deb.timer[1] )   deb.timer[1]--;        // Cursor carret blink
                 break;
 
             case 0x21:      // Keyboard interrupt
@@ -409,14 +397,14 @@ DWORD InterruptHandler( DWORD nInt, PTREGS pRegs )
         //---------------------------------------------
         //  Exception occurred during the debugee run
         //---------------------------------------------
-        pIce->nIntsPass[nInt & 0x3F]++;
+        deb.nIntsPass[nInt & 0x3F]++;
 
         chain = GET_IDT_BASE( &LinuxIdt[ReverseMapIrq(nInt)] );
 
         // We break into the debugger for all interrupts except the
         // timer, in which case we need to check for the keyboard activation flag
 
-        if( nInt!=0x20 || (nInt==0x20 && TestAndReset(&pIce->fKbdBreak)) )
+        if( nInt!=0x20 || (nInt==0x20 && deb.nScheduleKbdBreakTimeout && !(--deb.nScheduleKbdBreakTimeout)) )
         {
             // Store the CPU number that we happen to be using
             deb.cpu = ice_smp_processor_id();
@@ -424,7 +412,7 @@ DWORD InterruptHandler( DWORD nInt, PTREGS pRegs )
             // Limit all IRQ's to the current CPU
             IoApicClamp( deb.cpu );
 
-            SpinlockSet(&pIce->fRunningIce);
+            SpinlockSet(&deb.fRunningIce);
 
             // Acknowledge the interrupt controller
             IntAck(nInt);
@@ -439,60 +427,73 @@ DWORD InterruptHandler( DWORD nInt, PTREGS pRegs )
             // issues an execute instruction
             //
             {
-                // Store the address of the registers into the debugee state structure
-                // and the current interrupt number
+                // Read in all the system state registers
+                GetSysreg(&deb.sysReg);
 
-                deb.r = pRegs;
-                deb.nInterrupt = nInt;
+                // Adjust system registers to running the debugger:
+                //  CR0[16] Write Protect -> 0   so we can write to user pages
+                SET_CR0( deb.sysReg.cr0 & ~BITMASK(WP_BIT));
 
-                // Get the current GDT table
-                GET_GDT(deb.gdt);
+                {
+                    // Store the address of the registers into the debugee state structure
+                    // and the current interrupt number
 
-                // Restore original Linux IDT table since we may want to examine it
-                // using the debugger
-                UnHookDebuger();
+                    deb.r = pRegs;
+                    deb.nInterrupt = nInt;
 
-                // Switch to our private IDT that is already hooked
-                SET_IDT(IceIdtDescriptor);
+                    // Get the current GDT table
+                    GET_GDT(deb.gdt);
 
-                // Be sure to enable interrupts so we can operate
-                LocalSTI();
+                    // Restore original Linux IDT table since we may want to examine it
+                    // using the debugger
+                    UnHookDebuger();
 
-                // Now that we have enabled local interrupts, we can send a message to
-                // all other CPUs to interrupt what they've been doing and start spinning
-                // on our `in debugger' semaphore. That we do so they dont execute other
-                // code in the 'background'
-                //
-                smpSpinOtherCpus();
+                    // Switch to our private IDT that is already hooked
+                    SET_IDT(IceIdtDescriptor);
 
-                // Call the debugger entry function of the current state
-                if( pIce->eDebuggerState < MAX_DEBUGGER_STATE )
-                    (DebuggerEnter[pIce->eDebuggerState])();
-                else
-                    (DebuggerEnter[DEB_STATE_BREAK])();
+                    // Be sure to enable interrupts so we can operate
+                    LocalSTI();
 
-                // We are ready to continue execution of the system. The controlling CPU
-                // had been armed, but other CPUs also need to have their debug registers
-                // set up
-        //        smpSetSysRegs();
+                    // Now that we have enabled local interrupts, we can send a message to
+                    // all other CPUs to interrupt what they've been doing and start spinning
+                    // on our `in debugger' semaphore. That we do so they dont execute other
+                    // code in the 'background'
+                    //
+                    smpSpinOtherCpus();
 
-                // Disable interrupts so we can mess with IDT
-                LocalCLI();
+                    // Call the debugger entry function for the current state
+                    //
+                    if( deb.fDelayedArm )
+                        DebuggerEnterDelayedArm();
+                    else
+                        DebuggerEnterBreak();
 
-                // Load debugee IDT
-                SET_IDT(deb.idt);
+                    // We are ready to continue execution of the system. The controlling CPU
+                    // had been armed, but other CPUs also need to have their debug registers
+                    // set up
+            //        smpSetSysRegs();
 
-                // Hook again the debugee IDT
-                HookDebuger();
+                    // Disable interrupts so we can mess with IDT
+                    LocalCLI();
+
+                    // Load debugee IDT
+                    SET_IDT(deb.idt);
+
+                    // Hook again the debugee IDT
+                    HookDebuger();
+
+                }
+
+                // Restore system registers
+                SetSysreg(&deb.sysReg);
             }
-
 
             chain = 0;          // Continue into the debugee, do not chain
 
             // Restore the state of the PIC1
 //                    outp(0x21, savePIC1);
 
-            SpinlockReset(&pIce->fRunningIce);
+            SpinlockReset(&deb.fRunningIce);
 
             IoApicUnclamp();
         }

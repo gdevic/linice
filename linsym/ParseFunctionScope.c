@@ -38,8 +38,7 @@
 
 #include "loader.h"                     // Include global protos
 
-
-extern int dfs;
+extern PSTR dfs;                        // Global pointer to strings (to append)
 
 extern WORD GetFileId(char *pSoDir, char *pSo);
 extern BOOL GlobalsName2Address(DWORD *p, char *pName);
@@ -182,7 +181,7 @@ BOOL ParseFunctionScope(int fd, int fs, BYTE *pBuf)
                         Header.h.dwSize = 0;      // To be written later
 
                         // Copy the function name into the strings
-                        Header.dName          = dfs;
+                        Header.pName          = dfs;
                         write(fs, pStr, strlen(pStr)+1);
                         dfs += strlen(pStr)+1;
 
@@ -254,8 +253,8 @@ BOOL ParseFunctionScope(int fd, int fs, BYTE *pBuf)
 
                     // Write out one token record
                     list.TokType = TOKTYPE_PARAM;
-                    list.p1      = pStab->n_value;
-                    list.p2      = dfs;
+                    list.param   = pStab->n_value;
+                    list.pName   = dfs;
                     write(fs, pStr, strlen(pStr)+1);
                     dfs += strlen(pStr)+1;
 
@@ -271,8 +270,8 @@ BOOL ParseFunctionScope(int fd, int fs, BYTE *pBuf)
 
                     // Write out one token record
                     list.TokType = TOKTYPE_RSYM;
-                    list.p1      = pStab->n_value;
-                    list.p2      = dfs;
+                    list.param   = pStab->n_value;
+                    list.pName   = dfs;
                     write(fs, pStr, strlen(pStr)+1);
                     dfs += strlen(pStr)+1;
 
@@ -294,8 +293,8 @@ BOOL ParseFunctionScope(int fd, int fs, BYTE *pBuf)
 
                     // Write out one token record
                     list.TokType = TOKTYPE_LSYM;
-                    list.p1      = pStab->n_value;
-                    list.p2      = dfs;
+                    list.param   = pStab->n_value;
+                    list.pName   = dfs;
                     write(fs, pStr, strlen(pStr)+1);
                     dfs += strlen(pStr)+1;
 
@@ -315,8 +314,8 @@ BOOL ParseFunctionScope(int fd, int fs, BYTE *pBuf)
 
                         // Write out one token record
                         list.TokType = TOKTYPE_LCSYM;
-                        list.p1      = pStab->n_value;
-                        list.p2      = dfs;
+                        list.param   = pStab->n_value;
+                        list.pName   = dfs;
                         write(fs, pStr, strlen(pStr)+1);
                         dfs += strlen(pStr)+1;
 
@@ -332,8 +331,8 @@ BOOL ParseFunctionScope(int fd, int fs, BYTE *pBuf)
 
                     // Write out one token record
                     list.TokType = TOKTYPE_LBRAC;
-                    list.p1      = pStab->n_value;
-                    list.p2      = 0;   // Not used
+                    list.param   = pStab->n_value;
+                    list.pName   = 0;   // Not used
 
                     write(fd, &list, sizeof(TSYMFNSCOPE1));
 
@@ -346,8 +345,8 @@ BOOL ParseFunctionScope(int fd, int fs, BYTE *pBuf)
 
                     // Write out one token record
                     list.TokType = TOKTYPE_RBRAC;
-                    list.p1      = pStab->n_value;
-                    list.p2      = 0;   // Not used
+                    list.param   = pStab->n_value;
+                    list.pName   = 0;   // Not used
 
                     write(fd, &list, sizeof(TSYMFNSCOPE1));
 
