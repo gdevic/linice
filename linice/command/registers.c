@@ -1,10 +1,10 @@
 /******************************************************************************
 *                                                                             *
-*   Module:     debug.c                                                       *
+*   Module:     registers.c                                                   *
 *                                                                             *
-*   Date:       03/01/01                                                      *
+*   Date:       11/15/00                                                      *
 *                                                                             *
-*   Copyright (c) 2001 Goran Devic                                            *
+*   Copyright (c) 2000 Goran Devic                                            *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -12,21 +12,23 @@
 
     Module Description:
 
-        This module defines functions that help us debugging linice
+        This module contains code that prints and edits registers
 
 *******************************************************************************
 *                                                                             *
-*   Major changes:                                                            *
+*   Changes:                                                                  *
 *                                                                             *
 *   DATE     DESCRIPTION OF CHANGES                               AUTHOR      *
 * --------   ---------------------------------------------------  ----------- *
-* 03/01/01   Initial version                                      Goran Devic *
+* 11/15/00   Original                                             Goran Devic *
 * --------   ---------------------------------------------------  ----------- *
 *******************************************************************************
 *   Include Files                                                             *
 ******************************************************************************/
 
-#include "debug.h"                      // Include our own include file
+#include "module-header.h"              // Versatile module header file
+
+#include "clib.h"                       // Include C library header file
 
 /******************************************************************************
 *                                                                             *
@@ -40,21 +42,46 @@
 *                                                                             *
 ******************************************************************************/
 
+typedef struct
+{
+    DWORD x;
+    DWORD y;
+    
+} TRegfield;
+
+static const TRegfield regfield[23] = {
+{4, 0}, {19, 0}, {34, 0}, {49, 0}, {64, 0}, 
+{4, 1}, {19, 1}, {34, 1}, {49, 1},
+{60, 1}, {62, 1}, {64, 1}, {66, 1}, {68, 1}, {70, 1}, {72, 1}, {74, 1}, 
+{3, 2}, {13, 2}, {23, 2}, {33, 2}, {43, 2}, {53, 2} };
+
+
 /******************************************************************************
 *                                                                             *
-*   void dprintf(char *str, ...)                                              *
+*   Functions                                                                 *
 *                                                                             *
-*******************************************************************************
-*
-*
-*
 ******************************************************************************/
-void dprintf(char *format, ...)
+
+#if 0
+void RegDraw(void)
 {
-    va_list arg;
+    dprinth(0, "EAX=%08X   EBX=%08X   ECX=%08X   EDX=%08X   ESI=%08X\n",
+            deb.r->eax, deb.r->ebx, deb.r->ecx, deb.r->edx, deb.r->esi );
 
-    va_start( arg, format );
+    dprinth(1, "EDI=%08X   EBP=%08X   ESP=%08X   EIP=%08X   %c %c %c %c %c %c %c %c\n",
+            deb.r->edi, deb.r->ebp, deb.r->esp, deb.r->eip,
+            (deb.r->eflags & OF_MASK)? 'O' : 'o',
+            (deb.r->eflags & DF_MASK)? 'D' : 'd',
+            (deb.r->eflags & IF_MASK)? 'I' : 'i',
+            (deb.r->eflags & SF_MASK)? 'S' : 's',
+            (deb.r->eflags & ZF_MASK)? 'Z' : 'z',
+            (deb.r->eflags & AF_MASK)? 'A' : 'a',
+            '?',
+            (deb.r->eflags & CF_MASK)? 'C' : 'c' );
 
-    return _print( format, arg );
+    dprinth(2, "CS=%04X   DS=%04X   SS=%04X   ES=%04X   FS=%04X   GS=%04X\n",
+            deb.r->pmCS, deb.r->pmDS, deb.r->ss, deb.r->pmES, deb.r->pmFS, deb.r->pmGS );
 }    
 
+
+#endif

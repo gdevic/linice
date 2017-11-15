@@ -21,18 +21,19 @@
 *   DATE     DESCRIPTION OF CHANGES                               AUTHOR      *
 * --------   ---------------------------------------------------  ----------- *
 * 11/01/00   Original                                             Goran Devic *
+* 03/10/01   Second revision                                      Goran Devic *
 * --------   ---------------------------------------------------  ----------- *
 *******************************************************************************
 *   Include Files                                                             *
 ******************************************************************************/
 
+#include "module-header.h"              // Versatile module header file
+
+#include <asm-i386/page_offset.h>       // We need page offset
+
 #include "clib.h"                       // Include C library header file
-
-#include "intel.h"                      // Include Intel defines
-
-#include "i386.h"                       // Include assembly code
-
-#include "ice.h"                        // Include global structures
+#include "ice.h"                        // Include main debugger structures
+#include "debug.h"                      // Include our dprintk()
 
 /******************************************************************************
 *                                                                             *
@@ -40,16 +41,18 @@
 *                                                                             *
 ******************************************************************************/
 
+TOUT outVga;
+
 /******************************************************************************
 *                                                                             *
 *   Local Defines, Variables and Macros                                       *
 *                                                                             *
 ******************************************************************************/
 
-#define LINUX_VGA_TEXT  0xC00B8000
+#define LINUX_VGA_TEXT  (PAGE_OFFSET_RAW + 0xB8000)
 
-#define SIZEX           80
-#define SIZEY           25
+#define MAX_SIZEX       80
+#define MAX_SIZEY       60
 
 //---------------------------------------------------
 // VGA registers and memory to save
@@ -61,7 +64,7 @@ typedef struct
     DWORD baseCRTC;
     BYTE CRTC[0x19];                    // CRTC Registers
     
-    WORD textbuf[ SIZEX * SIZEY ];
+    WORD textbuf[ MAX_SIZEX * MAX_SIZEY ];
 
 } TVgaState;
 
@@ -81,13 +84,9 @@ static const int crtc_enable[0x19] = {
 
 typedef struct
 {
-    DWORD   sizeX, sizeY;               // Screen size
-    DWORD   x, y;                       // X, Y printing location
-    WORD    attr;                       // Current write attribute
-    BYTE *  pText;                      // Address of the VGA text buffer
-
-    DWORD   ScrollTop;                  // Y top for autoscroll
-    DWORD   ScrollBottom;               // Y bottom for autoscroll
+    BYTE *pText;                        // Address of the VGA text buffer
+    BYTE savedX, savedY;                // Last recently saved cursor coordinates
+    BYTE scrollTop, scrollBottom;       // Scroll region top and bottom coordinates
     
 } TVga;
 
@@ -111,19 +110,17 @@ static TVga vga;
 ******************************************************************************/
 void VgaInit(void)
 {
-    memset(&vgaState, 0, sizeof(vgaState));
-    memset(&vga, 0, sizeof(vga));
+    ice_memset(&vga, 0, sizeof(vga));
 
     // Set default parameters
 
-    vga.sizeY = SIZEY;
-    vga.sizeX = SIZEX;
-    vga.attr  = 0x0700;
+    outVga.x = 0;
+    outVga.y = 0;
+    outVga.width = 80;
+    outVga.height = 25;
+
     vga.pText = (BYTE *) LINUX_VGA_TEXT;
-
-    // Set text VGA to be the default output
-
-    pfnPutChar = vga_putchar;
+    vga.sprint = VgaSprint;
 }    
 
 
@@ -199,306 +196,125 @@ static void RestoreBackground(void)
 
 /******************************************************************************
 *                                                                             *
-*   vga_putchar( char c )                                                     *
+*   static void ScrollUp()                                                    *
 *                                                                             *
 *******************************************************************************
 *
-*   Output a character on a VGA text mode screen.  Take care of other
-*   special control codes.
+*   Scrolls up a region
 *
 ******************************************************************************/
-void vga_putchar( char c )
+static void ScrollUp()
 {
-    static int xSave[4], ySave[4];
-    static int iSave = 0;
-    static int nRetainCount = 0;
-    static BYTE bRetain[5];
-    DWORD yTop, yBottom;
-
-
-    // If the retained count is not zero, decrement it, and if it reached
-    // zero now, we can execute special code command
-
-    if( nRetainCount )
+    if( (vga.scrollTop < vga.scrollBottom) && (vga.scrollBottom < outVga.height) )
     {
-        // Store additional character in a buffer
+        // Scroll up all requested lines
+        memmove(vga.pText + (vga.scrollTop * vga.width) * 2,
+                vga.pText + ((vga.scrollTop + 1) * vga.width) * 2,
+                vga.width * 2 * (vga.scrollBottom - vga.scrollTop));
 
-        bRetain[ nRetainCount-- ] = c;
+        // Clear the last line
+        memset(vga.pText + (vga.scrollBottom * outVga.height) * 2,
+               0,
+               outVga.width * 2 );
+    }
+}    
 
-        if( nRetainCount==0 )
+
+/******************************************************************************
+*                                                                             *
+*   VgaSprint(char *s)                                                        *
+*                                                                             *
+*******************************************************************************
+*
+*   String output to a VGA text buffer.
+*
+******************************************************************************/
+void VgaSprint(char *s)
+{
+    while( *s )
+    {
+        switch( *s++ )
         {
-            switch( bRetain[0] )
-            {
-                case DP_SETWRITEATTR:
+            case DP_SAVEBACKGROUND:
+                    SaveBackground();
+                break;
 
-                    // Set the attribute for writing text out
+            case DP_RESTOREBACKGROUND:
+                    RestoreBackground();
+                break;
 
-                    vga.attr = (WORD) bRetain[1] << 8;
+            case DP_CLS:
+                    // Clear the screen and reset the cursor coordinates
+                    memset(vga.pText, 0, outVga.height * outVga.width * 2);
+                    outVga.x = 0;
+                    outVga.y = 0;
+                break;
 
-                    break;
+            case DP_SETCURSORXY:
+                    outVga.x = (*s++)-1;
+                    outVga.y = (*s++)-1;
+                break;
 
-                case DP_SETLOCATTR:
+            case DP_SAVEXY:
+                    vga.savedX = outVga.x;
+                    vga.savedY = outVga.y;
+                break;
 
-                    // Set attribute patch at the given coordinate
-                    // bRetain[0]  - command code
-                    // bRetain[1]  - length of a patch in characters
-                    // bRetain[2]  - attribute value
-                    // bRetain[3]  - y coordinate
-                    // bRetain[4]  - x coordinate
+            case DP_RESTOREXY:
+                    outVga.x = vga.savedX;
+                    outVga.y = vga.savedY;
+                break;
 
-                    if( bRetain[3]==0xFF )
-                        bRetain[3] = vga.y;
+            case DP_SETSCROLLREGIONYY:
+                    vga.scrollTop = (*s++)-1;
+                    vga.scrollBottom = (*s++)-1;
+                break;
 
-                    if( bRetain[4]==0xFF )
-                        bRetain[4] = vga.x;
-
-                    while( bRetain[1]-- )
-                    {
-                        *(BYTE *)(vga.pText + (bRetain[1] + bRetain[4] + bRetain[3] * vga.sizeX) * 2 + 1) = bRetain[2];
-                    }
-
-                    break;
-
-                case DP_SETCURSOR:
-
-                    // Set the write cursor location
-                    // bRetain[0]  - command code
-                    // bRetain[1]  - y coordinate
-                    // bRetain[2]  - x coordinate
-
-                    if( bRetain[1]==0xFF )
-                        bRetain[1] = vga.y;
-
-                    if( bRetain[2]==0xFF )
-                        bRetain[2] = vga.x;
-
-                    vga.x = bRetain[2];
-                    vga.y = bRetain[1];
-
-                    break;
-
-                case DP_SETLINES:
-
-                    // Set the number of lines of a text display
-                    // bRetain[0]  - command code
-                    // bRetain[1]  - Number of lines
-
-                    vga.sizeY = bRetain[1];
-
-                    break;
-
-                case DP_SCROLLUP:
-     
+            case DP_SCROLLUP:
                     // Scroll a portion of the screen up and clear the bottom line
-                    // bRetain[0]  - command code
-                    // bRetain[1]  - Y bottom coordinate
-                    // bRetain[2]  - Y top coordinate
+                    ScrollUp();
+                break;
 
-                    yTop = bRetain[2];
-                    yBottom = bRetain[1];
-
-                    if( (yTop < yBottom) && (yBottom < vga.sizeY) )
-                    {
-                        // Scroll up all requested lines
-                        memmove(vga.pText + (yTop * vga.sizeX) * 2,
-                                vga.pText + ((yTop + 1) * vga.sizeX) * 2,
-                                vga.sizeX * 2 * (yBottom - yTop));
-    
-                        // Clear the last line
-                        memset_w(vga.pText + (yBottom * vga.sizeX) * 2,
-                                 vga.attr,
-                                 vga.sizeX );
-                    }
-
-                    break;
-
-                case DP_SCROLLDOWN:
-     
+            case DP_SCROLLDOWN:
                     // Scroll a portion of the screen down and clear the top line
-                    // bRetain[0]  - command code
-                    // bRetain[1]  - Y bottom coordinate
-                    // bRetain[2]  - Y top coordinate
-
-                    yTop = bRetain[2];
-                    yBottom = bRetain[1];
-
-                    if( (yTop < yBottom) && (yBottom < vga.sizeY) )
+                    if( (vga.scrollTop < vga.scrollBottom) && (vga.scrollBottom < outVga.height) )
                     {
                         // Scroll down all requested lines
-                        memmove(vga.pText + ((yTop + 1) * vga.sizeX) * 2,
-                                vga.pText + (yTop * vga.sizeX) * 2,
-                                vga.sizeX * 2 * (yBottom - yTop));
-    
+                        memmove(vga.pText + ((vga.scrollTop + 1) * outVga.width) * 2,
+                                vga.pText + (vga.scrollTop * outVga.width) * 2,
+                                outVga.width * 2 * (vga.scrollBottom - vga.scrollTop));
+
                         // Clear the first line
-                        memset_w(vga.pText + (yTop * vga.sizeX) * 2,
-                                 vga.attr,
-                                 vga.sizeX );
+                        memset(vga.pText + (vga.scrollTop * outVga.width) * 2,
+                               0,
+                               outVga.width * 2 );
                     }
+                break;
 
-                    break;
+            case DP_SETWRITEATTR:
+                    s++;            // NOT IMPLEMENTED YET
+                break;
 
-                case DP_SETSCROLLREGION:
+            case '\n':
+                    // Go to a new line, possible autoscroll
+                    outVga.x = 0;
+    
+                    // Check if we are on the last line of autoscroll
+                    if( vga.scrollBottom==vga.y )
+                        ScrollUp();
+                    else
+                        outVga.y++;
+                break;
 
-                    // Set an autoscroll region for the print output.  Whenever
-                    // the last character is on the bScrollBottom line and it
-                    // causes the next char to slide to a new line, this
-                    // region is scrolled up by one line.
-                    // bRetain[0]  - command code
-                    // bRetain[1]  - Y bottom coordinate
-                    // bRetain[2]  - Y top coordinate
+            default:
+                    // All printable characters
+                    *(WORD *)(vga.pText + (outVga.x +  outVga.y * outVga.width) * 2) = (WORD) c + 0x0700;
 
-                    vga.ScrollTop = bRetain[2];
-                    vga.ScrollBottom = bRetain[1];
-
-                    break;
-            }
+                    // Advance the print position
+                    if( outVga.x < outVga.width )
+                        outVga.x++;
+                break;
         }
-
-        return;
-    }
-
-    // Evaluate any character that may be a special sequence or code
-
-    switch( c )
-    {
-        case DP_SETWRITEATTR:
-        case DP_SETLINES:
-
-            // We need an additional byte to set the working attribute (a)
-            // Set the number of lines - need additional byte
-
-            nRetainCount = 1;
-            bRetain[0] = c;
-
-            break;
-
-        case DP_SETCURSOR:
-        case DP_SCROLLUP:
-        case DP_SCROLLDOWN:
-        case DP_SETSCROLLREGION:
-
-            // Additional 2 bytes are needed for cursor coordinates (x,y)
-            // Additional 2 bytes are needed for scroll up/down (yTop, yBottom)
-            // Additional 2 bytes are needed to set the autoscroll region (yTop, yBottom)
-
-            nRetainCount = 2;
-            bRetain[0] = c;
-
-            break;
-
-        case DP_SETLOCATTR:
-
-            // We need 4 additional bytes to set arbitrary attribute patch (x,y,a,len)
-
-            nRetainCount = 4;
-            bRetain[0] = c;
-
-            break;
-
-        case DP_CLS:
-
-            // Clear the screen and reset the cursor coordinates
-
-            memset_w(vga.pText, vga.attr, vga.sizeX * vga.sizeY);
-            vga.x = 0;
-            vga.y = 0;
-
-            break;
-
-        case DP_SAVEBACKGROUND:
-
-            // Save content of the background
-
-            SaveBackground();
-
-            break;
-
-        case DP_RESTOREBACKGROUND:
-
-            // Restore saved content of the background
-
-            RestoreBackground();
-
-            break;
-
-        case DP_SAVEXY:
-
-            // Save cursor location
-
-            xSave[iSave] = vga.x;
-            ySave[iSave] = vga.y;
-            iSave = (iSave + 1) & 3;
-
-            break;
-
-        case DP_RESTOREXY:
-
-            // Restore saved cursor location
-
-            iSave = (iSave - 1) & 3;
-            vga.x = xSave[iSave];
-            vga.y = ySave[iSave];
-
-            break;
-
-        case '\n':
-
-            // Go to a new line, possible autoscroll. Clear to the end of the current line
-
-            if( vga.x < vga.sizeX )
-                memset_w(vga.pText + (vga.x + vga.y * vga.sizeX) * 2,
-                         vga.attr,
-                         vga.sizeX - vga.x );
-            vga.x = 0;
-
-            // Check if we are on the last line of autoscroll
-            if( (vga.ScrollTop < vga.ScrollBottom) && (vga.ScrollBottom==vga.y) )
-            {
-                // Scroll up all austoscroll lines
-                memmove(vga.pText + (vga.ScrollTop * vga.sizeX) * 2,
-                        vga.pText + ((vga.ScrollTop + 1) * vga.sizeX) * 2,
-                        vga.sizeX * 2 * (vga.ScrollBottom - vga.ScrollTop));
-
-                // Clear the last line
-                memset_w(vga.pText + (vga.ScrollBottom * vga.sizeX) * 2,
-                         vga.attr,
-                         vga.sizeX );
-            }
-            else
-                vga.y++;
-
-            nCharsWritten++;
-
-            break;
-
-        case '\r':
-
-            // Clear to the end of the current line and reset X
-
-            if( vga.x < vga.sizeX )
-                memset_w(vga.pText + (vga.x + vga.y * vga.sizeX) * 2,
-                         vga.attr,
-                         vga.sizeX - vga.x );
-            vga.x = 0;
-            nCharsWritten++;
-
-            break;
-
-        default:
-
-            // All printable characters
-
-            *(WORD *)(vga.pText + (vga.x +  vga.y * vga.sizeX) * 2) = (WORD) c + vga.attr;
-
-            // Advance the print position
-
-            if( vga.x < vga.sizeX )
-                vga.x++;
-
-            nCharsWritten++;
-
-            break;
     }
 }
-
 

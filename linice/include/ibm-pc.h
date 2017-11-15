@@ -1,12 +1,10 @@
 /******************************************************************************
 *                                                                             *
-*   Module:     i386.h                                                        *
+*   Module:     ibm-pc.h                                                      *
 *                                                                             *
-*   Revision:   1.00                                                          *
+*   Date:       03/11/01                                                      *
 *                                                                             *
-*   Date:       10/25/2000                                                    *
-*                                                                             *
-*   Copyright (c) 2000 Goran Devic                                            *
+*   Copyright (c) 1997, 2001 Goran Devic                                      *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -14,28 +12,31 @@
 
     Module Description:
 
-        This header file contains global exports from the i386.asm module.
-
+        This is a header file containing generic IBM PC hardware defines
 
 *******************************************************************************
 *                                                                             *
 *   Changes:                                                                  *
 *                                                                             *
 *   DATE     DESCRIPTION OF CHANGES                               AUTHOR      *
-* --------   ---------------------------------------------        ----------- *
-* 10/25/00   Original                                             Goran Devic *
-* --------   ---------------------------------------------        ----------- *
+* --------   ---------------------------------------------------  ----------- *
+* 03/11/01   Original                                             Goran Devic *
+* --------   ---------------------------------------------------  ----------- *
 *******************************************************************************
 *   Important Defines                                                         *
 ******************************************************************************/
-#ifndef _I386_H_
-#define _I386_H_
+#ifndef _IBM_PC_H_
+#define _IBM_PC_H_
 
 /******************************************************************************
 *                                                                             *
 *   Global Defines, Variables and Macros                                      *
 *                                                                             *
 ******************************************************************************/
+
+///////////////////////////////////////////////////////////////////////////////
+// Defines of the generic IBM hardware 
+///////////////////////////////////////////////////////////////////////////////
 
 //-----------------------------------------------------------------------------
 // PIC1 - Programmable Interrupt Controller defines (8259)
@@ -75,29 +76,4 @@
 #define PORT_DUMMY          0x80
 
 
-// Array of pointers to interrupt handlers
-
-extern DWORD IceIntHandlers[];
-
-/******************************************************************************
-*                                                                             *
-*   Extern functions                                                          *
-*                                                                             *
-******************************************************************************/
-
-extern void GetIDT(TDescriptor *p);
-extern void GetGDT(TDescriptor *p);
-extern void outp(int port, int value);
-extern BYTE inp(int port);
-extern BYTE ReadCRTC(DWORD BasePort, DWORD index);
-extern void WriteCRTC(DWORD BasePort, DWORD index, DWORD value);
-extern void DisableInterrupts();
-extern void EnableInterrupts();
-extern void IssueInt3();
-extern DWORD GetByte(DWORD offset);
-extern void memset_w(BYTE *dest, WORD fill, DWORD words);
-extern void HaltCpu(void);
-extern void GetSysreg(TSysreg *);
-
-
-#endif //  _I386_H_
+#endif //  _IBM_PC_H_

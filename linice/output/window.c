@@ -1,10 +1,10 @@
 /******************************************************************************
 *                                                                             *
-*   Module:     initial.c                                                     *
+*   Module:     window.c                                                      *
 *                                                                             *
-*   Date:       10/26/00                                                      *
+*   Date:       03/11/01                                                      *
 *                                                                             *
-*   Copyright (c) 1997, 2000 Goran Devic                                      *
+*   Copyright (c) 1997, 2001 Goran Devic                                      *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -12,29 +12,25 @@
 
     Module Description:
 
-        This module contains initial load/unload code
+        This module contains functions for windowing.  All command
+        windows are abstracted here.
 
 *******************************************************************************
 *                                                                             *
 *   Changes:                                                                  *
 *                                                                             *
-*   DATE     DESCRIPTION OF CHANGES                               AUTHOR      *
-* --------   ---------------------------------------------------  ----------- *
-* 10/26/00   Original                                             Goran Devic *
-* --------   ---------------------------------------------------  ----------- *
+*   DATE     REV   DESCRIPTION OF CHANGES                         AUTHOR      *
+* --------   ----  ---------------------------------------------  ----------- *
+* 03/11/01         Original                                       Goran Devic *
+* --------   ----  ---------------------------------------------  ----------- *
 *******************************************************************************
 *   Include Files                                                             *
 ******************************************************************************/
 
-#include <linux/module.h>               // Include module header file
+#include "module-header.h"              // Versatile module header file
 
 #include "clib.h"                       // Include C library header file
-
-#include "intel.h"                      // Include Intel defines
-
-#include "i386.h"                       // Include assembly code
-
-#include "ice.h"                        // Include global structures
+#include "ice.h"                        // Include main debugger structures
 
 /******************************************************************************
 *                                                                             *
@@ -42,16 +38,14 @@
 *                                                                             *
 ******************************************************************************/
 
-int errno = 0;                          // Needed by the C library
-
-TDeb deb;                               // Debugee state structure
-
-
 /******************************************************************************
 *                                                                             *
 *   Local Defines, Variables and Macros                                       *
 *                                                                             *
 ******************************************************************************/
+
+static int avail;                       // Counting lines: available left
+static int total;                       // Counting lines: total count
 
 /******************************************************************************
 *                                                                             *
@@ -59,113 +53,96 @@ TDeb deb;                               // Debugee state structure
 *                                                                             *
 ******************************************************************************/
 
-extern void BuildCommandHelpIndex();
-
-void *ice_malloc(size_t size)
+static void AdjustTopBottom(PTWND pWnd)
 {
-    return( NULL );
+    if( pWnd->fVisible )
+    {
+        pWnd->Top = avail;
+        pWnd->Bottom = pWnd->Top + pWnd->nLines - 1;
+        avail += pWnd->nLines;
+        total -= pWnd->nLines;
+    }
 }    
 
+static void AdjustToFit(int excess)
+{
+    int newSize;
+    int active = 0;
+
+    if( pWin->r.fVisible )  active++;
+    if( pWin->d.fVisible )  active++;
+    if( pWin->c.fVisible )  active++;
+
+    newSize = (pOut->height - 5) / (active + 1);
+
+    if( pWin->d.fVisible )  pWin->d.nLines = newSize;
+    if( pWin->c.fVisible )  pWin->c.nLines = newSize;
+
+    pWin->h.nLines = 0;         // This one will be adjusted later
+}    
 
 /******************************************************************************
 *                                                                             *
-*   int init_module(void)                                                     *
+*   int WindowIsSizeValid()                                                   *
 *                                                                             *
 *******************************************************************************
 *
-*   This function is called when a module gets loaded.
+*   Calculates if the current window size assignment is valid for the current
+*   window height.
 *
 *   Returns:
-*       0 to load module
-*       non-zero if a module should not be loaded
+*       >=0 if all windows can fit on the screen
+*       < 0 with the number of lines not fitting current window height
 *
 ******************************************************************************/
-int init_module(void)
+int WindowIsSizeValid()
 {
-    printk("<1>LinIce Copyright 2000 by Goran Devic\n");
+    int less = pOut->height;
+    
+    if( pWin->r.fVisible )  less -= pWin.r.nLines;
+    if( pWin->d.fVisible )  less -= pWin.d.nLines;
+    if( pWin->c.fVisible )  less -= pWin.c.nLines;
+    if( pWin->h.fVisible )  less -= pWin.h.nLines;
 
-#if DBG
-    printk("<1>Debug build\n");
-    ASSERT(sizeof(TSS_Struct) == 104);
-    ASSERT(sizeof(TDescriptor) == 6);
-#endif
-
-    // Build the help index table for commands
-
-    BuildCommandHelpIndex();
-
-    // Initialize deb data structure
-
-    memset(&deb, 0, sizeof(deb));
-
-    deb.fInt1Here = TRUE;
-    deb.fInt3Here = TRUE;
-    deb.fSetCode  = TRUE;
-
-    // Set initial window visibility
-    deb.wr.fVisible = TRUE;
-    deb.wd.fVisible = TRUE;
-    deb.wc.fVisible = TRUE;
-
-    deb.wr.nLines = 3;
-    deb.wd.nLines = 5;
-    deb.wc.nLines = 5;
-
-    deb.nLines = 25;        // Set 25 line display
-
-    deb.dumpMode = DD_BYTE; // Initially dump bytes
-    deb.dumpSel = 0x18;     // Linux data selector :-)
-    deb.dumpOffset = 0;     // Start at offset 0
-
-    deb.codeMode = DC_ASM;
-
-    // Initialize VGA text display subsystem
-
-    deb.colors[0] = 0x07;
-    deb.colors[1] = 0x0B;
-    deb.colors[2] = 0x71;
-    deb.colors[3] = 0x30;
-    deb.colors[4] = 0x02;
-
-    VgaInit();
-
-    // Store the current kernel IDT descriptor record so the 
-    // hook functions can use it. We assume IDT does not change.
-    GetIDT(&deb.idt);
-    deb.pIdt = (TIDT_Gate *) GET_DESC_BASE(&deb.idt);
-
-    // Save the IDT array while it is still pristine
-    SaveIDT();
-
-    // Hook the debugee IDT to break on selected interrupts/faults/traps
-    HookDebuger();
-
-    // Fix for now - disable PS/2 mouse until we have code to handle it
-    // since it screws up our keyboard handler
-    outp(0x64, 0xa7);
-
-    // Issue INT 3 to initially stop inside the debugger
-    IssueInt3();
-
-    return( 0 );
+    return( less );
 }    
-
 
 /******************************************************************************
 *                                                                             *
-*   void cleanup_module(void)                                                 *
+*   void RecalculateDrawWindows()                                             *
 *                                                                             *
 *******************************************************************************
 *
-*   This function is called when a module gets unloaded.
+*   Recalculates windowing parameters and redraws the complete screen.
+*   If the initial window sizes are not valid, it scales them down so the
+*   window configuration can fit on the current screen.
 *
 ******************************************************************************/
-void cleanup_module(void)
+void RecalculateDrawWindows()
 {
-    // Unhook all the interrupts on exit.
+    int excess;
 
-    RestoreIDT();
+    avail = 0;
+    total = pOut->height;
 
-    printk("<1>LinIce unloaded.\n");
+    if( (excess = WindowIsSizeValid()) < 0 )
+        AdjustToFit( -excess );
+
+    AdjustTopBottom(pWin->r);
+    AdjustTopBottom(pWin->d);
+    AdjustTopBottom(pWin->c);
+
+    // The last one is the history window, and we will let this one slide
+    pWin->h.nLines = total - 1;
+    AdjustTopBottom(pWin->h);
+
+    // Draw the screen
+    dputc(DP_CLS);
+
+    if( pWin->r.fVisible )  (pWin->r.draw)();
+    if( pWin->d.fVisible )  (pWin->d.draw)();
+    if( pWin->c.fVisible )  (pWin->c.draw)();
+    (pWin->h.draw)();
+    
+
 }    
-

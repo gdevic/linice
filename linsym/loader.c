@@ -53,7 +53,9 @@ extern char **environ;
 *                                                                             *
 ******************************************************************************/
 
-extern void OpInstall();
+extern void OptInstall();
+extern void OptAddSymbolTable(char *sName);
+extern void OptRemoveSymbolTable(char *sName);
 
 /******************************************************************************
 *                                                                             *
@@ -146,10 +148,12 @@ void OptHelp()
 {
     printf("LOADER linice loader/symbol translator\n");
     printf("Arguments:\n");
-    printf("   -i --install    loads debugger into the memory\n");
-    printf("   -u --uninstall  removes debugger from the memory\n");
-    printf("   -h --help       this help\n");
-    printf("   -v --version    print version number\n");
+    printf("   -i --install          loads debugger into the memory\n");
+    printf("   -s --symbol <name>    adds a symbol table\n");
+    printf("   -r --remove <name>    removes a symbol table\n");
+    printf("   -u --uninstall        removes debugger from the memory\n");
+    printf("   -h --help             this help\n");
+    printf("   -v --version          print version number\n");
 }    
 
 /******************************************************************************
@@ -180,6 +184,8 @@ void OptVersion()
 *   Command line options:
 *       -h  or  --help           prints short help
 *       -i  or  --install        installs debugger module (same as `insmod linice.o')
+*       -s  or  --symbol         adds a symbol table (made by 'nm' command) <name>
+*       -r  or  --remove         removes a symbol table <name>
 *       -u  or  --uninstall      removes the debugger module (same as `rmmod linice')
 *       -v  or  --version        prints linice version
 *
@@ -210,6 +216,12 @@ int main(int argn, char *argp[])
 
                 if( (strcmp(ptr, "u")==0) || (strcmp(ptr, "-uninstall")==0) )
                     OptUninstall();
+
+                if( (strcmp(ptr, "s")==0) || (strcmp(ptr, "-symbol")==0) )
+                    OptAddSymbolTable(argp[++i]);
+
+                if( (strcmp(ptr, "r")==0) || (strcmp(ptr, "-remove")==0) )
+                    OptRemoveSymbolTable(argp[++i]);
 
                 if( (strcmp(ptr, "h")==0) || (strcmp(ptr, "-help")==0) )
                     OptHelp();

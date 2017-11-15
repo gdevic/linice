@@ -2,11 +2,9 @@
 *                                                                             *
 *   Module:     Eval.c                                                        *
 *                                                                             *
-*   Revision:   1.00                                                          *
-*                                                                             *
 *   Date:       5/15/97                                                       *
 *                                                                             *
-*   Copyright (c) 1997, 2000 Goran Devic                                      *
+*   Copyright (c) 1997, 2001 Goran Devic                                      *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -47,20 +45,21 @@
 *                                                                             *
 *   Changes:                                                                  *
 *                                                                             *
-*   DATE     REV   DESCRIPTION OF CHANGES                         AUTHOR      *
-* --------   ----  ---------------------------------------------  ----------- *
-* 05/15/97   1.00  Original                                       Goran Devic *
-* 05/18/97   1.01  Added bitwise, boolean operators               Goran Devic *
-* 05/20/97   1.02  Literal handling                               Goran Devic *
-* 09/10/97   1.03  Literal function may call evaluator            Goran Devic *
-* --------   ----  ---------------------------------------------  ----------- *
+*   DATE     DESCRIPTION OF CHANGES                               AUTHOR      *
+* --------   ---------------------------------------------------  ----------- *
+* 05/15/97   Original                                             Goran Devic *
+* 05/18/97   Added bitwise, boolean operators                     Goran Devic *
+* 05/20/97   Literal handling                                     Goran Devic *
+* 09/10/97   Literal function may call evaluator                  Goran Devic *
+* 03/11/01   Modified for LinIce                                  Goran Devic *
+* --------   ---------------------------------------------------  ----------- *
 *******************************************************************************
 *   Include Files                                                             *
 ******************************************************************************/
 
-#include <linux/fs.h>                   // Include file operations file
+#include "module-header.h"              // Versatile module header file
 
-#include "clib.h"                       // Include our own C library header
+#include "clib.h"                       // Include C library header file
 
 /******************************************************************************
 *                                                                             *
@@ -214,10 +213,10 @@ static int GetValue( char **sExpr )
     char ch;
 
     // Check if the first character is a literal
-    if( ice_isalpha(*sStart) || ice_strchr(sLiteral,*sEnd)!=NULL )
+    if( isalpha(*sStart) || strchr(sLiteral,*sEnd)!=NULL )
     {
         // Find the end of a literal
-        while( ice_isalnum(*sEnd) || ice_strchr(sLiteral,*sEnd)!=NULL )
+        while( isalnum(*sEnd) || strchr(sLiteral,*sEnd)!=NULL )
             sEnd++;
 
         // The following line may also increase the level of recursion
@@ -255,11 +254,11 @@ static int GetValue( char **sExpr )
     do
     {
         // Break out if the current character is not alphanumeric
-        if( !ice_isalnum( *sEnd ) )
+        if( !isalnum( *sEnd ) )
             break;
 
         // Last char can be 'h' to set base to 16 or 'w' to set base to 2
-        ch = ice_tolower(*sEnd);
+        ch = tolower(*sEnd);
         if( ch=='h' )
         {
             base = 16;
@@ -282,7 +281,7 @@ static int GetValue( char **sExpr )
             {
                 // If the next character is also alphanumeric, then this
                 // 'd' cannot be a decimal designator
-                if( !ice_isalnum( *(sEnd+1) ) )
+                if( !isalnum( *(sEnd+1) ) )
                 {
                     base = 10;
                     fSkipBaseChar = 1;
@@ -294,7 +293,7 @@ static int GetValue( char **sExpr )
             if( ch=='w' )
                 // If the next character is also alphanumeric, then this
                 // 'b' cannot be a binary designator
-                if( !ice_isalnum( *(sEnd+1) ) )
+                if( !isalnum( *(sEnd+1) ) )
                 {
                     base = 2;
                     fSkipBaseChar = 1;
@@ -310,7 +309,7 @@ static int GetValue( char **sExpr )
     while( sStart < sEnd )
     {
         value *= base;
-        value += (*sStart > '9')? ice_tolower(*sStart) - 'a' + 10 : *sStart - '0';
+        value += (*sStart > '9')? tolower(*sStart) - 'a' + 10 : *sStart - '0';
         sStart++;
     }
 
@@ -352,9 +351,9 @@ static int TableMatch( char **sTable, char **sToken )
     // Find the matching substring in a table
     while( sRef != NULL )
     {
-        if( !ice_strncmp( sRef, *sToken, ice_strlen(sRef) ) )
+        if( !strncmp( sRef, *sToken, strlen(sRef) ) )
         {
-            *sToken += ice_strlen( sRef );
+            *sToken += strlen( sRef );
 
             return( index + 1 );
         }
@@ -459,7 +458,7 @@ static void Execute( TStack *Values, int Operation )
 
 /******************************************************************************
 *                                                                             *
-*   int nEvaluate( char *sExpr, char **psNext )                               *
+*   int Evaluate( char *sExpr, char **psNext )                                *
 *                                                                             *
 *******************************************************************************
 *
@@ -477,7 +476,7 @@ static void Execute( TStack *Values, int Operation )
 *       *psNext, if not NULL, is set to the end of the expression
 *
 ******************************************************************************/
-int nEvaluate( char *sExpr, char **psNext )
+int Evaluate( char *sExpr, char **psNext )
 {
     TStack Values, Operators;
     int NewOp, OldOp, Operator;
@@ -492,7 +491,7 @@ int nEvaluate( char *sExpr, char **psNext )
     }
 
     // Loop for any new term and stop when hit one of delimiter characters
-    while( ice_strchr(sDelim,*sExpr)==NULL )
+    while( strchr(sDelim,*sExpr)==NULL )
     {
         NewOp = TableMatch( sTokens, &sExpr);
 
@@ -543,3 +542,25 @@ int nEvaluate( char *sExpr, char **psNext )
     return( Pop( &Values ) );
 }
 
+
+/******************************************************************************
+*                                                                             *
+*   BOOL cmdEvaluate(char **args, int subClass)                               *
+*                                                                             *
+*******************************************************************************
+*
+*   Debuger command to evaluate an expression
+*
+******************************************************************************/
+BOOL cmdEvaluate(char **args, int subClass)
+{
+    int value;
+
+    nEvalDefaultBase = 16;
+
+    value = Evaluate( *args, args );
+
+    dprint(" Decimal=%d  Hex=%08X\n", value, value);
+
+    return( TRUE );
+}    

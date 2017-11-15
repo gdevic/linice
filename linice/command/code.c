@@ -1,10 +1,10 @@
 /******************************************************************************
 *                                                                             *
-*   Module:     unassemble.c                                                  *
+*   Module:     code.c                                                        *
 *                                                                             *
 *   Date:       11/16/00                                                      *
 *                                                                             *
-*   Copyright (c) 2000 Goran Devic                                            *
+*   Copyright (c) 2000 - 2001 Goran Devic                                     *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -12,7 +12,7 @@
 
     Module Description:
 
-        This module contains unassemble functions
+        This module contains disassembly command
 
 *******************************************************************************
 *                                                                             *
@@ -21,18 +21,15 @@
 *   DATE     DESCRIPTION OF CHANGES                               AUTHOR      *
 * --------   ---------------------------------------------------  ----------- *
 * 11/16/00   Original                                             Goran Devic *
+* 03/11/01   Second edition                                       Goran Devic *
 * --------   ---------------------------------------------------  ----------- *
 *******************************************************************************
 *   Include Files                                                             *
 ******************************************************************************/
 
+#include "module-header.h"              // Versatile module header file
+
 #include "clib.h"                       // Include C library header file
-
-#include "intel.h"                      // Include Intel defines
-
-#include "i386.h"                       // Include assembly code
-
-#include "ice.h"                        // Include global structures
 
 /******************************************************************************
 *                                                                             *
@@ -56,7 +53,7 @@ static char sLine[160];
 *                                                                             *
 ******************************************************************************/
 
-extern BYTE Disassembler( TDisassembler *pDis );
+//extern BYTE Disassembler( TDisassembler *pDis );
 
 
 /******************************************************************************
@@ -65,6 +62,7 @@ extern BYTE Disassembler( TDisassembler *pDis );
 *                                                                             *
 ******************************************************************************/
 
+#if 0
 static DWORD GetDisLine(DWORD addr)
 {
     static char *hex = "0123456789abcdef";
@@ -103,7 +101,7 @@ static DWORD GetDisLine(DWORD addr)
 }    
 
 
-void PrintCode()
+void CodeDraw()
 {
     DWORD lines = deb.wc.nLines;        // Get the number of lines to draw
     DWORD nLen, addr;
@@ -135,3 +133,5 @@ BOOL CmdUnassemble(char *args)
     return( TRUE );
 }    
 
+
+#endif

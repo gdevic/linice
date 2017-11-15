@@ -26,13 +26,11 @@
 *   Include Files                                                             *
 ******************************************************************************/
 
+#include "module-header.h"              // Versatile module header file
+
 #include "clib.h"                       // Include C library header file
-
-#include "intel.h"                      // Include Intel defines
-
-#include "i386.h"                       // Include assembly code
-
-#include "ice.h"                        // Include global structures
+#include "ice.h"                        // Include main debugger structures
+#include "debug.h"                      // Include our dprintk()
 
 /******************************************************************************
 *                                                                             *
@@ -40,13 +38,14 @@
 *                                                                             *
 ******************************************************************************/
 
+#define HISTORY_BUFFER      (pIce->pHistoryBuffer)
+#define MAX_HISTORY_BUF     (pIce->nHistorySize)
+
 /******************************************************************************
 *                                                                             *
 *   Local Defines, Variables and Macros                                       *
 *                                                                             *
 ******************************************************************************/
-
-#define MAX_HISTORY_BUF     (16 * 1024)
 
 typedef struct tagLine
 {
@@ -57,13 +56,9 @@ typedef struct tagLine
     
 } PACKED TLine;
 
-static BYTE HistoryBuf[MAX_HISTORY_BUF] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, };
-
-static TLine *pHead = (TLine *) HistoryBuf;
-static TLine *pTail = (TLine *) HistoryBuf;
-
-static DWORD avail = MAX_HISTORY_BUF;
-
+static TLine *pHead;
+static TLine *pTail;
+static DWORD avail;
 
 /******************************************************************************
 *                                                                             *
@@ -88,7 +83,8 @@ static DWORD avail = MAX_HISTORY_BUF;
 ******************************************************************************/
 void ClearHistory(void)
 {
-    pHead = pTail = (TLine *) HistoryBuf;
+    pHead = pTail = (TLine *) HISTORY_BUFFER;
+    memset(pHead, 0, sizeof(TLine));
     avail = MAX_HISTORY_BUF;
     pHead->next = pHead->prev = NULL;
 }    
@@ -105,7 +101,7 @@ void ClearHistory(void)
 *       sLine is the line to store
 *
 ******************************************************************************/
-void AddHistory(char *sLine)
+void HistoryAdd(char *sLine)
 {
     DWORD size;
 
@@ -129,12 +125,12 @@ void AddHistory(char *sLine)
     // If the new line record can not fit at the end of the buffer, wrap 
     // around by changing previous line `next` pointer
 
-    if( (BYTE *)pHead + size + 32 >= HistoryBuf + MAX_HISTORY_BUF )
+    if( (BYTE *)pHead + size + 32 >= HISTORY_BUFFER + MAX_HISTORY_BUF )
     {
         TLine * prev_save;
 
         prev_save = pHead->prev;
-        pHead = (TLine *) HistoryBuf;
+        pHead = (TLine *) HISTORY_BUFFER;
         prev_save->next = pHead;
         pHead->prev = prev_save;
         pHead->next = NULL;
@@ -164,7 +160,7 @@ void AddHistory(char *sLine)
 *   Use this handle in PrintCmd()
 *
 ******************************************************************************/
-DWORD GetCmdViewTop(void)
+DWORD HistoryGetTop(void)
 {
     TLine *p;
     DWORD nLines;
@@ -197,7 +193,7 @@ DWORD GetCmdViewTop(void)
 *           1   page down
 *
 ******************************************************************************/
-DWORD PrintCmd(DWORD hView, int nDir)
+DWORD HistoryDisplay(DWORD hView, int nDir)
 {
     TLine *p;
     TLine *pView = (TLine *) hView;
@@ -242,7 +238,7 @@ DWORD PrintCmd(DWORD hView, int nDir)
     if( nDir )
         dputc(DP_SAVEXY);
 
-    dprint("%c%c%c", DP_SETCURSOR, 0, deb.wcmd.yTop);
+    dprint("%c%c%c", DP_SETCURSORXY, 1+0, 1+deb.wcmd.yTop);
 
     p = pView;
     nLines = deb.wcmd.nLines;
@@ -259,41 +255,8 @@ DWORD PrintCmd(DWORD hView, int nDir)
 }    
 
 
-#if 0
-static DWORD Check(void)
+void HistoryDraw(void)
 {
-    TLine *p;
-
-    dprint("%c%c%c%c", DP_SAVEXY, DP_SETCURSOR, 0, deb.nLines + 1);
-    dprint("av=%d  tail=%08X  head=%08X\n", avail, (DWORD)pTail, (DWORD)pHead);
-
-    p = pTail;
-
-    do
-    {
-        dprint("(%08X) %08X %08X %2d %s\n", (DWORD) p, p->prev, p->next, p->bSize, p->line);
-        p = p->next;
-    }
-    while( p!=pHead );
-    dprint(" %08X  %08X %08X %2d %s\n", (DWORD) p, p->prev, p->next, p->bSize, p->line);
-
-    dputc(DP_RESTOREXY);
+    HistoryDisplay(NULL, 0);
 }    
 
-static void DumpHistory(void)
-{
-    DWORD count = 1;
-    TLine *p;
-
-    dprint("%c%c%c", DP_SETSCROLLREGION, 255, 255 );
-
-    p = pTail;
-    while( p != pHead )
-    {
-        dprint("%02X %s\n", count, p->line );
-        count++;
-        p = p->next;
-    }
-}    
-
-#endif

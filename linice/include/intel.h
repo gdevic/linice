@@ -1,22 +1,20 @@
-         
 /******************************************************************************
 *                                                                             *
-*   Module:     Intel.h                                                       *
-*                                                                             *
-*   Revision:   1.00                                                          *
+*   Module:     intel.h                                                       *
 *                                                                             *
 *   Date:       9/4/97                                                        *
 *                                                                             *
-*   Copyright (c) 1997, 2000 Goran Devic                                      *
+*   Copyright (c) 1997, 2001 Goran Devic                                      *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
 *******************************************************************************
-.- 
+
     Module Description:
 
         This is a header file containing Intel-processor specific stuff.
 
+        Also, generic IBM-PC constant defines are here.
 
 *******************************************************************************
 *                                                                             *
@@ -32,7 +30,6 @@
 ******************************************************************************/
 #ifndef _INTEL_H_
 #define _INTEL_H_
-
 
 /******************************************************************************
 *                                                                             *
@@ -124,7 +121,7 @@ typedef struct
     WORD    limit;                      // [0:15]  limit field
     DWORD   base;                       // [16:47] base address field
 
-} PACKED TDescriptor;
+} PACKED TDescriptor, *PTDescriptor;
 
 #define GET_DESC_BASE(p)        (p)->base
 #define SET_DESC_BASE(p, v)     (p)->base = (v)
@@ -142,7 +139,7 @@ typedef struct
     DWORD  present      :  1;           // Present
     DWORD  offsetHigh   : 16;           // Target handler offset [31:16]
 
-} TIDT_Gate;
+} TIDT_Gate, *PTIDT_Gate;
 
 #define INT_TYPE_TASK       0x5         // Task gate
 #define INT_TYPE_INT16      0x6         // 16 bit interrupt gate
@@ -169,7 +166,7 @@ typedef struct
     DWORD granularity   :1;             // Granularity of limit: 1=page, 0=byte
     DWORD baseHigh      :8;             // Base [31:24]
 
-} TGDT_Gate;
+} TGDT_Gate, *PTGDT_Gate;
 
 #define GET_GDT_BASE(pGDT_Gate)           ( (pGDT_Gate)->baseLow + ((pGDT_Gate)->baseMid << 16) + ((pGDT_Gate)->baseHigh << 24) )
 
@@ -214,8 +211,6 @@ typedef struct
 //-----------------------------------------------------------------------------
 // Miscellaneous
 //-----------------------------------------------------------------------------
-
-#define INT3                0xCC
 
 //-----------------------------------------------------------------------------
 // EFLAGS Bits

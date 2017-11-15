@@ -1,64 +1,64 @@
 /******************************************************************************
-*
-*   Module:     input.c
-*
-*   Date:       08/03/96
-*
-*   Copyright (c) 1996-2001 Goran Devic                                    
-*                                                            
-*   Author:     Goran Devic
-*
+*                                                                             *
+*   Module:     input.c                                                       *
+*                                                                             *
+*   Date:       09/04/97                                                      *
+*                                                                             *
+*   Copyright (c) 1997, 2001 Goran Devic                                      *
+*                                                                             *
+*   Author:     Goran Devic                                                   *
+*                                                                             *
 *******************************************************************************
 
     Module Description:
 
-		This module contains control functions for input
-
-	TODO:
-		Instead of cli/sti, use some sort of semaphores
+        This module contains control functions for input.
+        All input comes through this module.
 
 *******************************************************************************
-*
-*   Changes:
-*
-*   DATE     REV   DESCRIPTION OF CHANGES                          AUTHOR
-* --------   ----  ---------------------------------------------   -----------
-* 08/03/96   1.00  Original                                        Goran Devic
-* 10/26/00         Modified for LinIce                             Goran Devic
-* --------   ----  ---------------------------------------------   -----------
+*                                                                             *
+*   Changes:                                                                  *
+*                                                                             *
+*   DATE     DESCRIPTION OF CHANGES                               AUTHOR      *
+* --------   ---------------------------------------------------  ----------- *
+* 09/04/97   Original                                             Goran Devic *
+* 10/26/00   Modified for LinIce                                  Goran Devic *
+* 03/10/01   Second revision                                      Goran Devic *
+* --------   ---------------------------------------------------  ----------- *
 *******************************************************************************
-*   Include Files
+*   Include Files                                                             *
 ******************************************************************************/
+
+#include "module-header.h"              // Versatile module header file
 
 #include "clib.h"                       // Include C library header file
-
-#include "intel.h"                      // Include Intel defines
-
-#include "i386.h"                       // Include assembly code
-
-#include "ice.h"                        // Include global structures
-
-/******************************************************************************
-*   Global Variables
-******************************************************************************/
-
-// We define character type as a 16-bit unsigned int so we can pack
-// shift state with it in the top bits
-
-typedef unsigned short int CHAR;
-
-#define NEXT_KQUEUE(i) (((i)+1 >= MAX_INPUT)? 0 : (i)+1)
-
-static volatile CHAR kQueue[ MAX_INPUT ];   // Input code circular queue
-static volatile int head = 0, tail = 0;     // Head and Tail of that queue
+#include "ioctl.h"                      // Include our own IOCTL numbers
+#include "ice.h"                        // Include main debugger structures
+#include "debug.h"                      // Include our dprintk()
 
 
 /******************************************************************************
-*   Local Defines, Variables and Macros
+*                                                                             *
+*   Global Variables                                                          *
+*                                                                             *
 ******************************************************************************/
 
 /******************************************************************************
-*   Functions
+*                                                                             *
+*   Local Defines, Variables and Macros                                       *
+*                                                                             *
+******************************************************************************/
+
+#define NEXT_KQUEUE(i) (((i)+1 >= MAX_INPUT_QUEUE)? 0 : (i)+1)
+
+static volatile CHAR kQueue[ MAX_INPUT_QUEUE ];   // Input code circular queue
+static volatile int head = 0, tail = 0;           // Head and Tail of that queue
+
+
+/******************************************************************************
+*                                                                             *
+*   Functions                                                                 *
+*                                                                             *
 ******************************************************************************/
 
 /******************************************************************************
@@ -91,7 +91,10 @@ CHAR GetKey( BOOL fBlock )
 
     // Poll for the input character
 
-    while( head == tail ) {;}
+    while( head == tail )
+    {
+        ;
+    }
 
     // Get a character from the queue - make it uninterruptible (atomic)
 
@@ -113,11 +116,11 @@ CHAR GetKey( BOOL fBlock )
 *                                                                             *
 *******************************************************************************
 *
-*	This function serves input module (keyboard, serial) with the enqueue
-*	input character.
+*   This function serves input module (keyboard, serial) with the enqueue
+*   input character.
 *
 *   Where:
-*		Key is the key code to enque
+*       Key is the key code to enque
 *
 *   Returns:
 *
@@ -137,10 +140,10 @@ CHAR PutKey( CHAR Key )
         kQueue[ tail ] = Key;
         tail = bNext;
     }
-	else
-	{
-		// Hmmm. Not good.
-	}
+    else
+    {
+        // Hmmm. Not good.
+    }
 
     EnableInterrupts();
 

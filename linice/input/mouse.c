@@ -1,10 +1,10 @@
 /******************************************************************************
 *                                                                             *
-*   Module:     registers.c                                                   *
+*   Module:     mouse.c                                                       *
 *                                                                             *
-*   Date:       11/15/00                                                      *
+*   Date:       03/11/01                                                      *
 *                                                                             *
-*   Copyright (c) 2000 Goran Devic                                            *
+*   Copyright (c) 1996-2001 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -12,7 +12,7 @@
 
     Module Description:
 
-        This module contains code that prints and edits registers
+          This module contains the low-level PS/2 mouse input handler code.
 
 *******************************************************************************
 *                                                                             *
@@ -20,19 +20,18 @@
 *                                                                             *
 *   DATE     DESCRIPTION OF CHANGES                               AUTHOR      *
 * --------   ---------------------------------------------------  ----------- *
-* 11/15/00   Original                                             Goran Devic *
+* 03/11/01   Original                                             Goran Devic *
 * --------   ---------------------------------------------------  ----------- *
 *******************************************************************************
 *   Include Files                                                             *
 ******************************************************************************/
 
+#include "module-header.h"              // Versatile module header file
+
 #include "clib.h"                       // Include C library header file
+#include "ice.h"                        // Include main debugger structures
+#include "ibm-pc.h"                     // Include hardware defines
 
-#include "intel.h"                      // Include Intel defines
-
-#include "i386.h"                       // Include assembly code
-
-#include "ice.h"                        // Include global structures
 
 /******************************************************************************
 *                                                                             *
@@ -46,45 +45,23 @@
 *                                                                             *
 ******************************************************************************/
 
-typedef struct
-{
-    DWORD x;
-    DWORD y;
-    
-} TRegfield;
-
-static const TRegfield regfield[23] = {
-{4, 0}, {19, 0}, {34, 0}, {49, 0}, {64, 0}, 
-{4, 1}, {19, 1}, {34, 1}, {49, 1},
-{60, 1}, {62, 1}, {64, 1}, {66, 1}, {68, 1}, {70, 1}, {72, 1}, {74, 1}, 
-{3, 2}, {13, 2}, {23, 2}, {33, 2}, {43, 2}, {53, 2} };
-
+/******************************************************************************
+*   Functions
+******************************************************************************/
 
 /******************************************************************************
 *                                                                             *
-*   Functions                                                                 *
+*   void MouseHandler(void)                                                   *
 *                                                                             *
+*******************************************************************************
+*
+*   This handler is used when the debugger has control.
+*
+*   This is a low-level PS/2 mouse handler.
+*
 ******************************************************************************/
-
-void PrintRegisters(void)
+void MouseHandler(void)
 {
-    dputc(DP_SETWRITEATTR);dputc(deb.colors[COL_NORMAL]);
-
-    dprint("EAX=%08X   EBX=%08X   ECX=%08X   EDX=%08X   ESI=%08X\n",
-            deb.r->eax, deb.r->ebx, deb.r->ecx, deb.r->edx, deb.r->esi );
-
-    dprint("EDI=%08X   EBP=%08X   ESP=%08X   EIP=%08X   %c %c %c %c %c %c %c %c\n",
-            deb.r->edi, deb.r->ebp, deb.r->esp, deb.r->eip,
-            (deb.r->eflags & OF_MASK)? 'O' : 'o',
-            (deb.r->eflags & DF_MASK)? 'D' : 'd',
-            (deb.r->eflags & IF_MASK)? 'I' : 'i',
-            (deb.r->eflags & SF_MASK)? 'S' : 's',
-            (deb.r->eflags & ZF_MASK)? 'Z' : 'z',
-            (deb.r->eflags & AF_MASK)? 'A' : 'a',
-            '?',
-            (deb.r->eflags & CF_MASK)? 'C' : 'c' );
-
-    dprint("CS=%04X   DS=%04X   SS=%04X   ES=%04X   FS=%04X   GS=%04X\n",
-            deb.r->pmCS, deb.r->pmDS, deb.r->ss, deb.r->pmES, deb.r->pmFS, deb.r->pmGS );
-}    
+    ;
+}
 

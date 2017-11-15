@@ -26,29 +26,19 @@
 *   Include Files                                                             *
 ******************************************************************************/
 
-#include <linux/autoconf.h>
-
-#if defined(CONFIG_MODVERSIONS) && !defined(MODVERSIONS)
-#define MODVERSIONS
-#endif
-
-#ifdef MODVERSIONS
-#include <linux/modversions.h>
-#endif
-
-#ifdef CONFIG_SMP
-#define __SMP__ 1
-#endif
+#include "module-header.h"              // Versatile module header file
 
 #include <linux/kernel.h>               // Include this only in this file
-
 #include <linux/module.h>               // Include required module include
+#include <linux/types.h>                // Include kernel data types
+#include <linux/times.h>
 #include <asm/uaccess.h>                // User space memory access functions
 #include <linux/fs.h>                   // Include file operations file
 #include <asm/unistd.h>                 // Include system call numbers
 
-#include "ioctl.h"                      // Include our own IOCTL numbers
-#include "versions.h"                   // Deal with different kernel versions
+#include "ice-ioctl.h"                  // Include our own IOCTL numbers
+#include "clib.h"                       // Include C library header file
+#include "ice.h"                        // Include main debugger structures
 #include "debug.h"                      // Include our dprintk()
 
 /******************************************************************************
@@ -57,10 +47,20 @@
 *                                                                             *
 ******************************************************************************/
 
-MODULE_AUTHOR("Goran Devic");
-MODULE_DESCRIPTION("Linux kernel debugger");
+TINITPACKET Init;                       // Init packet
+
+TICE Ice;                               // The main debugger structure
+PTICE pIce;                             // And a pointer to it
+
+TDEB deb;                               // Live debugee state structure
+
+TWINDOWS Win;                           // Output windowing structure
+PTWINDOWS pWin;                         // And a pointer to it
 
 //=============================================================================
+MODULE_AUTHOR("Goran Devic");
+MODULE_DESCRIPTION("Linux kernel debugger");
+//
 // Define parameters for the module:
 //  linice=<string>                     What???
 //  ice_debug_level=[0 - 1]             Set the level for the output messages:
@@ -77,9 +77,9 @@ int ice_debug_level = 1;                // default value
 
 static int major_device_number;
 
-static int IceOpen(struct inode *inode, struct file *file);
-static DEV_CLOSE_RET IceClose(struct inode *inode, struct file *file);
-static int IceIOCTL(struct inode *inode, struct file *file, unsigned int ioctl, unsigned long param);
+static int DriverOpen(struct inode *inode, struct file *file);
+static DEV_CLOSE_RET DriverClose(struct inode *inode, struct file *file);
+static int DriverIOCTL(struct inode *inode, struct file *file, unsigned int ioctl, unsigned long param);
 
 
 struct file_operations ice_fops = {
@@ -88,11 +88,11 @@ struct file_operations ice_fops = {
     NULL,               /* write   */
     NULL,               /* readdir */
     NULL,               /* select  */
-    IceIOCTL,           /* ioctl   */
+    DriverIOCTL,        /* ioctl   */
     NULL,               /* mmap    */
-    IceOpen,            /* open    */
+    DriverOpen,         /* open    */
     FLUSH_FOPS(NULL)    /* flush   */
-    IceClose,           /* close   */
+    DriverClose,        /* close   */
 };
 
 /******************************************************************************
@@ -107,6 +107,11 @@ typedef asmlinkage int (*PFNUNLINK)(const char *filename);
 
 static PFNMKNOD sys_mknod;
 static PFNUNLINK sys_unlink;
+
+extern int InitPacket(PTINITPACKET pInit);
+                                 
+extern void ice_free(BYTE *p);
+extern void ice_free_heap(BYTE *pHeap);
 
 
 /******************************************************************************
@@ -124,6 +129,13 @@ int init_module(void)
     int val;
 
     INFO(("init_module\n"));
+
+    // Clean up structures
+    memset(&Ice, 0, sizeof(TICE));
+    pIce = &Ice;
+
+    memset(&Win, 0, sizeof(TWINDOWS));
+    pWin = &Win;
 
     // Register driver
 
@@ -191,7 +203,6 @@ void cleanup_module(void)
     INFO(("cleanup_module\n"));
 
     // Delete a devce node in the /dev/ directory
-
     if(sys_unlink != 0)
     {
         // Dont perform argument validity checking..
@@ -203,14 +214,20 @@ void cleanup_module(void)
     }
 
     // Unregister driver
-
     unregister_chrdev(major_device_number, "ice");
     
+    // Free memory structures
+    if( pIce->pHistoryBuffer != NULL )
+        ice_free(pIce->pHistoryBuffer);
+
+    if( pIce->hSymbolBuffer != NULL )
+        ice_free_heap(pIce->hSymbolBuffer);
+
     return;
 }
 
 
-static int IceOpen(struct inode *inode, struct file *file)
+static int DriverOpen(struct inode *inode, struct file *file)
 {
     INFO(("IceOpen\n"));
 
@@ -220,7 +237,7 @@ static int IceOpen(struct inode *inode, struct file *file)
 }
 
 
-static DEV_CLOSE_RET IceClose(struct inode *inode, struct file *file)
+static DEV_CLOSE_RET DriverClose(struct inode *inode, struct file *file)
 {
     INFO(("IceClose\n"));
 
@@ -229,36 +246,32 @@ static DEV_CLOSE_RET IceClose(struct inode *inode, struct file *file)
     return DEV_CLOSE_RET_VAL;
 }
 
-static int IceIOCTL(struct inode *inode, struct file *file, unsigned int ioctl, unsigned long param)
+static int DriverIOCTL(struct inode *inode, struct file *file, unsigned int ioctl, unsigned long param)
 {
-    INFO(("IceIOCTL %d:%d\n", ioctl, (int)param));
+    int retval = -EINVAL;
 
-    // Make sure it is for us
-    if(_IOC_TYPE(ioctl) == ICE_IOCTL_MAGIC)
+    INFO(("IceIOCTL %X param %X\n", ioctl, (int)param));
+
+    switch(ioctl)
     {
-        switch(ioctl)
-        {
-            case ICE_IOCTL_LOAD:
-                break;
+        case ICE_IOCTL_INIT:
+            INFO(("ICE_IOCTL_INIT\n"));
 
-            case ICE_IOCTL_UNLOAD:
-                break;
+            // Copy the init block to the driver
+            if( copy_from_user(&Init, (void *)param, sizeof(TINITPACKET))==0 )
+            {
+                retval = InitPacket(&Init);
+            }
+            else
+                retval = -EFAULT;       // Faulty memory access
+        break;
 
-            case ICE_IOCTL_BREAK:
-                break;
+        case ICE_IOCTL_ADD_SYM:         // Add a symbol table
+            break;
 
-            case ICE_IOCTL_LOAD_SYM:
-                break;
-
-            case ICE_IOCTL_UNLOAD_SYM:
-                break;
-        }
-
-        return 0;
+        case ICE_IOCTL_REMOVE_SYM:      // Remove a symbol table
+            break;
     }
 
-    return -EINVAL;
+    return( retval );
 }
-
-
-

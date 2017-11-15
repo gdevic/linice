@@ -1,6 +1,6 @@
 /******************************************************************************
 *                                                                             *
-*   Module:     dump.c                                                        *
+*   Module:     data.c                                                        *
 *                                                                             *
 *   Date:       11/15/00                                                      *
 *                                                                             *
@@ -21,18 +21,15 @@
 *   DATE     DESCRIPTION OF CHANGES                               AUTHOR      *
 * --------   ---------------------------------------------------  ----------- *
 * 11/15/00   Original                                             Goran Devic *
+* 03/11/01   Second edition                                       Goran Devic *
 * --------   ---------------------------------------------------  ----------- *
 *******************************************************************************
 *   Include Files                                                             *
 ******************************************************************************/
 
+#include "module-header.h"              // Versatile module header file
+
 #include "clib.h"                       // Include C library header file
-
-#include "intel.h"                      // Include Intel defines
-
-#include "i386.h"                       // Include assembly code
-
-#include "ice.h"                        // Include global structures
 
 /******************************************************************************
 *                                                                             *
@@ -63,6 +60,8 @@ static BOOL fValid[16];
 *                                                                             *
 ******************************************************************************/
 
+#if 0
+
 static void PrintAscii()
 {
     int i;
@@ -83,7 +82,7 @@ static void PrintAscii()
 }    
 
 
-void PrintData(void)
+void DataDraw(void)
 {
     DWORD lines;
     int i;
@@ -188,3 +187,5 @@ void PrintData(void)
     }
 }    
 
+
+#endif

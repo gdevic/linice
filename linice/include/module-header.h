@@ -1,6 +1,6 @@
 /******************************************************************************
 *                                                                             *
-*   Module:     versions.h                                                    *
+*   Module:     module-header.h                                               *
 *                                                                             *
 *   Date:       03/03/01                                                      *
 *                                                                             *
@@ -36,26 +36,15 @@
 *                                                                             *
 ******************************************************************************/
 
-#include <linux/autoconf.h>
+#include <autoconf.h>                   // Include our linux configuration
+#include <version.h>                    // Include KERNEL_VERSION macro
 
 //-----------------------------------------------------------------------------
-// Deal with CONFIG_MODVERSIONS
+// We had to have this kernel compiled with loadable modules
 
-#if defined(CONFIG_MODVERSIONS) && !defined(MODVERSIONS)
-#define MODVERSIONS
+#ifndef CONFIG_MODULES
+#error "This kernel is not compiled with CONFIG_MODULES option."
 #endif
-
-#ifdef MODVERSIONS
-#include <linux/modversions.h>
-#endif
-
-#ifdef CONFIG_SMP
-#define __SMP__ 1
-#endif
-
-#include <linux/kernel.h>
-#define __NO_VERSION__
-#include <linux/module.h>  
 
 //-----------------------------------------------------------------------------
 // In 2.2.3 /usr/include/linux/version.h includes a macro for this, 
@@ -64,6 +53,47 @@
 #ifndef KERNEL_VERSION
 #define KERNEL_VERSION(a,b,c) ((a)*65536+(b)*256+(c))
 #endif
+
+//-----------------------------------------------------------------------------
+// Define major kernel versions
+
+#ifdef KERNEL_VERSION
+#  if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 1, 0)
+#    define KERNEL_2_1
+#  endif
+#  if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 2, 0)
+#    define KERNEL_2_2
+#  endif
+#  if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 3, 1)
+#    define KERNEL_2_3_1
+#  endif
+#endif
+
+
+//-----------------------------------------------------------------------------
+// Are we SMP?  Linux 2.2.x has this in the autoconf file, but prior versions 
+// need it hand coded. 
+
+#ifdef __SMP__
+#undef __SMP__
+#endif
+
+#if defined(CONFIG_SMP) && !defined(SUPPORT_SMP)
+#  error "SMP detected. Please uncomment SMP=1 in the Makefile."
+#elif defined(KERNEL_2_1) && defined(SUPPORT_SMP)
+#  define __SMP__ 1
+#  define SMP_GLOBAL_VMLOCK
+#endif
+
+#if defined(CONFIG_MODVERSIONS) && defined(KERNEL_2_1)
+#define MODVERSIONS
+#include <linux/modversions.h>
+#endif
+
+#ifndef __KERNEL__
+#define __KERNEL__
+#endif
+
 
 //-----------------------------------------------------------------------------
 // Deal with the different function prototype for different kernel versions

@@ -1,10 +1,10 @@
 /******************************************************************************
 *                                                                             *
-*   Module:     debugger.c                                                    *
+*   Module:     symbols.c                                                     *
 *                                                                             *
-*   Date:       10/31/00                                                      *
+*   Date:       03/09/01                                                      *
 *                                                                             *
-*   Copyright (c) 2000 Goran Devic                                            *
+*   Copyright (c) 2001 Goran Devic                                            *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -12,25 +12,33 @@
 
     Module Description:
 
-        This module contains debugger main loop.
+        This module contains code to load and unload symbol tables.
+        They are preprocessed here into constant images that are loaded
+        into ice and used there without much processing.
 
 *******************************************************************************
 *                                                                             *
-*   Changes:                                                                  *
+*   Major changes:                                                            *
 *                                                                             *
 *   DATE     DESCRIPTION OF CHANGES                               AUTHOR      *
 * --------   ---------------------------------------------------  ----------- *
-* 10/31/00   Original                                             Goran Devic *
+* 03/09/01   Initial version                                      Goran Devic *
 * --------   ---------------------------------------------------  ----------- *
 *******************************************************************************
 *   Include Files                                                             *
 ******************************************************************************/
 
-#include "module-header.h"              // Versatile module header file
+#include <unistd.h>                     // Include standard UNIX header file
+#include <string.h>                     // Include strings header file
+#include <sys/types.h>                  // Include file operations
+#include <sys/stat.h>                   // Include file operations
+#include <sys/ioctl.h>                  // Include ioctl header file
+#include <fcntl.h>                      // Include file control file
+#include <stdio.h>                      // Include standard io file
 
-#include "clib.h"                       // Include C library header file
-#include "ice.h"                        // Include main debugger structures
-#include "debug.h"                      // Include our dprintk()
+#include "ioctl.h"                      // Include shared header file
+
+#define stricmp     strcasecmp          // Weird gnu c call..
 
 /******************************************************************************
 *                                                                             *
@@ -44,39 +52,54 @@
 *                                                                             *
 ******************************************************************************/
 
-extern void RecalculateDrawWindows();
-extern void EdLin( char *sCmdLine );
+extern int system2(char *command);
+
 
 /******************************************************************************
 *                                                                             *
-*   void DebuggerEnter(void)                                                  *
+*   void OptAddSymbolTable(char *sName)                                       *
 *                                                                             *
 *******************************************************************************
 *
-*   Debugger main loop
+*   Loads a symbol table, processesit and use IOCTL call to load it into
+*   the ice.
 *
 ******************************************************************************/
-void DebuggerEnter(void)
+void OptAddSymbolTable(char *sName)
 {
-    char sCmd[MAX_STRING];
-    BOOL fContinue = TRUE;
+}
 
-    dputc(DP_SAVEBACKGROUND);
+/******************************************************************************
+*                                                                             *
+*   void OptRemoveSymbolTable(char *sName)                                    *
+*                                                                             *
+*******************************************************************************
+*
+*   Unloads a symbol table of a specified name from the debugger.
+*
+*   Where:
+*       sName is the short name of the symbol table to remove
+*
+******************************************************************************/
+void OptRemoveSymbolTable(char *sName)
+{
+    int hIce;
 
-    HistoryAdd("LinIce (C) 2000 by Goran Devic");
-
-    // Recalculate window locations based on visibility and number of lines
-    // and repaint all windows
-
-    RecalculateDrawWindows();
-
-    while( fContinue )
+    //====================================================================
+    // Send the name down to the module
+    //====================================================================
+    hIce = open("/dev/"DEVICE_NAME, O_RDONLY);
+    if( hIce>=0 )
     {
-        EdLin( sCmd );
-        
-        fContinue = CommandExecute( sCmd );
+        int status;
+
+        status = ioctl(hIce, ICE_IOCTL_REMOVE_SYM, sName);
+        close(hIce);
+
+        printf("IOCTL=%d\n", status);
     }
-
-    dputc(DP_RESTOREBACKGROUND);
-}    
-
+    else
+    {
+        printf("Error opening device!\n");
+    }
+}

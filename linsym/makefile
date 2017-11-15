@@ -14,8 +14,9 @@ clean:
 	rm -f ../bin/linsym
 	rm -f *.o *~ core
 
-../bin/linsym:  install.o	\
-			    loader.o
+../bin/linsym:	install.o	\
+		loader.o	\
+		symbols.o
 	$(CC) $^ -o linsym.o
 	cp linsym.o ../bin/linsym
 	chmod +x ../bin/linsym
@@ -25,5 +26,8 @@ install.o:	install.c
 
 loader.o:		loader.c
 	$(CC) $(CFLAGS) -c loader.c
+
+symbols.o:		symbols.c
+	$(CC) $(CFLAGS) -c symbols.c
 
 
