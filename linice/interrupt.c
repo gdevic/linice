@@ -34,6 +34,7 @@
 #include "intel.h"
 #include "ibm-pc.h"
 #include "debug.h"                      // Include our dprintk()
+#include "intel.h"                      // Include processor specific stuff
 
 /******************************************************************************
 *                                                                             *
@@ -83,7 +84,7 @@ extern void MouseHandler(void);
 *
 *   Where:
 *       pGate is the pointer to an int entry to hook
-*       nIntNumber is the interrupt number function to hook 
+*       nIntNumber is the interrupt number function to hook
 *
 ******************************************************************************/
 static void HookIdt(PTIDT_Gate pGate, int nIntNumber)
@@ -98,7 +99,7 @@ static void HookIdt(PTIDT_Gate pGate, int nIntNumber)
     pGate->type       = INT_TYPE_INT32;
     pGate->dpl        = 0;
     pGate->present    = TRUE;
-}    
+}
 
 
 /******************************************************************************
@@ -112,7 +113,7 @@ static void HookIdt(PTIDT_Gate pGate, int nIntNumber)
 ******************************************************************************/
 void InterruptInit(void)
 {
-    GetIDT(&deb.idt);
+    GET_IDT(&deb.idt);
 
     // Copy original Linux IDT to our copy of it
 
@@ -128,12 +129,12 @@ void InterruptInit(void)
 
     // These are BAD if they happen:
     HookIdt(&IceIdt[0x00], 0x0);        // Divide error
-    HookIdt(&IceIdt[0x01], 0x1);        // INT 1       
-    HookIdt(&IceIdt[0x03], 0x3);        // INT 3       
+    HookIdt(&IceIdt[0x01], 0x1);        // INT 1
+    HookIdt(&IceIdt[0x03], 0x3);        // INT 3
     HookIdt(&IceIdt[0x04], 0x4);        // Overflow error
     HookIdt(&IceIdt[0x06], 0x6);        // Invalid opcode
     HookIdt(&IceIdt[0x08], 0x8);        // Double-fault
-    HookIdt(&IceIdt[0x0A], 0xA);        // Invalid TSS 
+    HookIdt(&IceIdt[0x0A], 0xA);        // Invalid TSS
     HookIdt(&IceIdt[0x0B], 0xB);        // Segment not present
     HookIdt(&IceIdt[0x0C], 0xC);        // Stack exception
     HookIdt(&IceIdt[0x0D], 0xD);        // GP fault
@@ -145,7 +146,7 @@ void InterruptInit(void)
     HookIdt(&IceIdt[0x23], 0x23);       // COM2
     HookIdt(&IceIdt[0x24], 0x24);       // COM1
     HookIdt(&IceIdt[0x2C], 0x2C);       // PS/2 Mouse
-}    
+}
 
 
 /******************************************************************************
@@ -169,7 +170,7 @@ void HookDebuger(void)
     HookIdt(&pIdt[0x0D], 0xD);          // GP fault
     HookIdt(&pIdt[0x0E], 0xE);          // Page fault
     HookIdt(&pIdt[0x80], 0x80);         // System call interrupt
-}    
+}
 
 
 /******************************************************************************
@@ -186,7 +187,7 @@ void UnHookDebuger(void)
     // Copy back the original Linux IDT
 
     memcpy(deb.idt.base, LinuxIdt, deb.idt.limit+1);
-}    
+}
 
 
 /******************************************************************************
@@ -195,7 +196,7 @@ void UnHookDebuger(void)
 *                                                                             *
 *******************************************************************************
 *
-*   This is a panic handler. It does the best to try to print some info, 
+*   This is a panic handler. It does the best to try to print some info,
 *   and then hungs the system.
 *
 ******************************************************************************/
@@ -213,7 +214,7 @@ void Panic(void)
 
     cli();
     while( TRUE );
-}    
+}
 
 
 /******************************************************************************
@@ -298,10 +299,10 @@ DWORD InterruptHandler( DWORD nInt, PTREGS pRegs )
         //---------------------------------------------
 
         pIce->fRunningIce = TRUE;
-                
+
         // Get the current GDT table
 
-        GetGDT(&deb.gdt);
+        GET_GDT(&deb.gdt);
 
         // Restore original Linux IDT table since we may want to examine it
         // using the debugger
@@ -309,8 +310,8 @@ DWORD InterruptHandler( DWORD nInt, PTREGS pRegs )
         UnHookDebuger();
 
         // Switch to our private IDT that is already hooked
-        
-        LoadIDT(&IceIdtDescriptor);
+
+        SET_IDT(&IceIdtDescriptor);
 
         // Be sure to enable interrupts so we can operate
 
@@ -326,7 +327,7 @@ DWORD InterruptHandler( DWORD nInt, PTREGS pRegs )
 
         // Load debugee IDT
 
-        LoadIDT(&deb.idt);
+        SET_IDT(&deb.idt);
 
         // Hook again the debugee IDT
 
@@ -339,5 +340,5 @@ DWORD InterruptHandler( DWORD nInt, PTREGS pRegs )
     // points to...
 
     return( 0 );
-}    
+}
 

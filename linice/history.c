@@ -53,7 +53,7 @@ typedef struct tagLine
     struct tagLine *prev;           // Previous line record
     BYTE bSize;                     // Size of the whole record
     char line[1];                   // ASCIIZ line itself
-    
+
 } PACKED TLine;
 
 static TLine *pHead;
@@ -87,7 +87,7 @@ void ClearHistory(void)
     memset(pHead, 0, sizeof(TLine));
     avail = MAX_HISTORY_BUF;
     pHead->next = pHead->prev = NULL;
-}    
+}
 
 /******************************************************************************
 *                                                                             *
@@ -110,7 +110,7 @@ void HistoryAdd(char *sLine)
 
     size = strlen(sLine) + 1 + sizeof(TLine) - 1;
 
-    // Give it some hefty margin since lines at the end of the buffer 
+    // Give it some hefty margin since lines at the end of the buffer
     // can not be split
 
     while( avail < size + 512 )
@@ -122,7 +122,7 @@ void HistoryAdd(char *sLine)
         pTail->prev = NULL;
     }
 
-    // If the new line record can not fit at the end of the buffer, wrap 
+    // If the new line record can not fit at the end of the buffer, wrap
     // around by changing previous line `next` pointer
 
     if( (BYTE *)pHead + size + 32 >= HISTORY_BUFFER + MAX_HISTORY_BUF )
@@ -147,7 +147,7 @@ void HistoryAdd(char *sLine)
     pHead->next->prev = pHead;
     pHead = pHead->next;
     pHead->next = NULL;
-}    
+}
 
 
 /******************************************************************************
@@ -166,7 +166,7 @@ DWORD HistoryGetTop(void)
     DWORD nLines;
 
     // Backtrack so many lines in the history buffer
-    nLines = deb.wcmd.nLines;
+    nLines = pWin->h.nLines;
 
     p = pHead;
 
@@ -174,7 +174,7 @@ DWORD HistoryGetTop(void)
         p = p->prev;
 
     return( (DWORD) p );
-}    
+}
 
 
 /******************************************************************************
@@ -199,7 +199,7 @@ DWORD HistoryDisplay(DWORD hView, int nDir)
     TLine *pView = (TLine *) hView;
     DWORD nLines;
 
-    nLines = deb.wcmd.nLines;
+    nLines = pWin->h.nLines;
 
     if( nDir==0 )
     {
@@ -224,9 +224,9 @@ DWORD HistoryDisplay(DWORD hView, int nDir)
         // This is quite convoluted: if we are anywhere within the last
         // screenful, reset the view to the top line of it..
 
-        nLines = deb.wcmd.nLines;
+        nLines = pWin->h.nLines;
         p = pHead;
-    
+
         while( (p!=pTail) && nLines-- )
         {
             if( p==pView )
@@ -238,10 +238,10 @@ DWORD HistoryDisplay(DWORD hView, int nDir)
     if( nDir )
         dputc(DP_SAVEXY);
 
-    dprint("%c%c%c", DP_SETCURSORXY, 1+0, 1+deb.wcmd.yTop);
+    dprint("%c%c%c", DP_SETCURSORXY, 1+0, 1+pWin->h.Top);
 
     p = pView;
-    nLines = deb.wcmd.nLines;
+    nLines = pWin->h.nLines;
     while( p != pHead && nLines-- )
     {
         dprint("%s\n", p->line);
@@ -252,11 +252,11 @@ DWORD HistoryDisplay(DWORD hView, int nDir)
         dputc(DP_RESTOREXY);
 
     return( (DWORD) pView );
-}    
+}
 
 
 void HistoryDraw(void)
 {
     HistoryDisplay(NULL, 0);
-}    
+}
 

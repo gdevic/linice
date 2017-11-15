@@ -35,6 +35,7 @@
 #include "ioctl.h"                      // Include our own IOCTL numbers
 #include "ice.h"                        // Include main debugger structures
 #include "debug.h"                      // Include our dprintk()
+#include "intel.h"                      // Include processor specific stuff
 
 
 /******************************************************************************
@@ -98,13 +99,13 @@ CHAR GetKey( BOOL fBlock )
 
     // Get a character from the queue - make it uninterruptible (atomic)
 
-    DisableInterrupts();
+    CLI();
 
     c = kQueue[ head ];
 
     head = NEXT_KQUEUE( head );
 
-    EnableInterrupts();
+    STI();
 
     return( c );
 }
@@ -127,11 +128,12 @@ CHAR GetKey( BOOL fBlock )
 ******************************************************************************/
 CHAR PutKey( CHAR Key )
 {
+    int bNext;
     CHAR c;
 
     // Store a code into the input queue - make it uninterruptible (atomic)
 
-    DisableInterrupts();
+    CLI();
 
     bNext = NEXT_KQUEUE( tail );
 
@@ -145,7 +147,7 @@ CHAR PutKey( CHAR Key )
         // Hmmm. Not good.
     }
 
-    EnableInterrupts();
+    STI();
 
     return( c );
 }

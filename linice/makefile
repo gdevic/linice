@@ -19,23 +19,26 @@ clean:
 
 ../bin/linice.o:	driver.o	\
 			malloc.o	\
+			memaccess.o	\
 			eval.o		\
 			init.o		\
 			edlin.o		\
 			debugger.o	\
+			disassembler.o	\
 			i386.o		\
 			interrupt.o	\
 			command.o	\
 			registers.o	\
 			data.o		\
 			code.o		\
-			history		\
+			history.o	\
 			input.o		\
 			keyboard.o	\
 			serial_in.o	\
 			output.o	\
 			window.o	\
-			vga.o
+			vga.o		\
+            serial_out.o
 	$(LD) -r $^ -o linice.o
 	cp linice.o ../bin/linice.o
 	cp linice.dat ../bin/linice.dat
@@ -46,6 +49,9 @@ driver.o:	driver.c
 malloc.o:	malloc.c
 	$(CC) $(CFLAGS) -c malloc.c
 
+memaccess.o:	memaccess.c
+	$(CC) $(CFLAGS) -c memaccess.c
+
 init.o:		init.c
 	$(CC) $(CFLAGS) -c init.c
 
@@ -55,8 +61,14 @@ i386.o:		i386.asm
 interrupt.o:		interrupt.c
 	$(CC) $(CFLAGS) -c interrupt.c
 
+history.o:	history.c
+	$(CC) $(CFLAGS) -c history.c
+
 debugger.o:	command/debugger.c
 	$(CC) $(CFLAGS) -c command/debugger.c
+
+disassembler.o:	command/disassembler.c
+	$(CC) $(CFLAGS) -c command/disassembler.c
 
 edlin.o:	command/edlin.c
 	$(CC) $(CFLAGS) -c command/edlin.c
@@ -75,9 +87,6 @@ data.o:		command/data.c
 
 code.o:		command/code.c
 	$(CC) $(CFLAGS) -c command/code.c
-
-history.o:	history.c
-	$(CC) $(CFLAGS) -c history.c
 
 input.o:	input/input.c
 	$(CC) $(CFLAGS) -c input/input.c
@@ -99,5 +108,8 @@ window.o:	output/window.c
 
 vga.o:		output/vga.c
 	$(CC) $(CFLAGS) -c output/vga.c
+
+serial_out.o:	output/serial.c
+	$(CC) $(CFLAGS) -c output/serial.c -o serial_out.o
 
 

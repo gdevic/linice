@@ -1,10 +1,10 @@
 /******************************************************************************
 *                                                                             *
-*   Module:     code.c                                                        *
+*   Module:     memaccess.c                                                   *
 *                                                                             *
-*   Date:       11/16/00                                                      *
+*   Date:       03/30/01                                                      *
 *                                                                             *
-*   Copyright (c) 2000 - 2001 Goran Devic                                     *
+*   Copyright (c) 2001 Goran Devic                                            *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -12,7 +12,7 @@
 
     Module Description:
 
-        This module contains disassembly command
+        This module contains code for memory access
 
 *******************************************************************************
 *                                                                             *
@@ -20,8 +20,7 @@
 *                                                                             *
 *   DATE     DESCRIPTION OF CHANGES                               AUTHOR      *
 * --------   ---------------------------------------------------  ----------- *
-* 11/16/00   Original                                             Goran Devic *
-* 03/11/01   Second edition                                       Goran Devic *
+* 03/30/01   Original                                             Goran Devic *
 * --------   ---------------------------------------------------  ----------- *
 *******************************************************************************
 *   Include Files                                                             *
@@ -31,7 +30,6 @@
 
 #include "clib.h"                       // Include C library header file
 #include "ice.h"                        // Include main debugger structures
-#include "disassembler.h"               // Include disassembler
 
 /******************************************************************************
 *                                                                             *
@@ -45,87 +43,27 @@
 *                                                                             *
 ******************************************************************************/
 
-#define CODE_BYTES         8
-
-static char buf[MAX_STRING];
-static char disasm[MAX_STRING];
-
-
-/******************************************************************************
-*                                                                             *
-*   External Functions                                                        *
-*                                                                             *
-******************************************************************************/
-
 /******************************************************************************
 *                                                                             *
 *   Functions                                                                 *
 *                                                                             *
 ******************************************************************************/
 
-static DWORD GetCodeLine(PTADDRDESC pAddr)
+BOOL AddrIsPresent(PTADDRDESC pAddr)
 {
-    TDISASM dis;
-    int i, pos;
+    DWORD fPresent;
 
-    pos = sprintf(buf, "%04X:%08X ", pAddr->sel, pAddr->offset);
+    fPresent = GetByte(pAddr->sel, pAddr->offset);
 
-    dis.dwFlags  = DIS_DATA32 | DIS_ADDRESS32;
-    dis.wSel = pAddr->sel;
-    dis.dwOffset = pAddr->offset;
-    dis.szDisasm = disasm;
-
-    // Disassemble and store into the line buffer
-    Disassembler( &dis );
-
-    // If CODE was ON, print the code bytes
-    if( deb.fCodeOn )
-    {
-        for( i=0; i<dis.bInstrLen && i<CODE_BYTES; i++ )
-        {
-            pos += sprintf(buf+pos, "%02X ", dis.bCodes[i]);
-        }
-
-        // Append spaces
-        while( i-- > 0 )
-        {
-            pos += sprintf(buf+pos, "   ");
-        }
-    }
-
-    return( dis.bInstrLen );
+    return( fPresent <= 0xFF );
 }
 
-
-static void PrintCodeLines(int lines)
+BYTE AddrGetByte(PTADDRDESC pAddr)
 {
-    int nLen;
-    TADDRDESC Addr;
+    BYTE value;
 
-    Addr = deb.codeAddr;                // Copy the current code address
+    value = (GetByte(pAddr->sel, pAddr->offset) & 0xFF);
 
-    while( lines-- > 0 )
-    {
-        nLen = GetCodeLine(&Addr);
-        dprinth(lines, "%s%s", buf, disasm);
-
-        // Advance code offset for the next line
-        Addr.offset += nLen;
-    }
-}
-
-void CodeDraw()
-{
-    dprint("-Code---------------------------------------------------------------------------\n");
-
-    PrintCodeLines(pWin->c.nLines - 1);
-}
-
-
-BOOL cmdUnassemble(char *args)
-{
-    PrintCodeLines(8);
-
-    return( TRUE );
+    return( value );
 }
 

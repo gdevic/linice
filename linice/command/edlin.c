@@ -10,7 +10,7 @@
 *                                                                             *
 *******************************************************************************
 
-    Module Description:       
+    Module Description:
 
     This module contains the code for the command line editor.
 
@@ -53,7 +53,7 @@
 *                                                                             *
 ******************************************************************************/
 
-#define MAX_CMD     (pOut->width)
+#define MAX_CMD     (pOut->sizeX)
 
 /******************************************************************************
 *                                                                             *
@@ -86,9 +86,9 @@ static int  iWriteHistory = 0;          // Index which history line to update
 static char sHistory[MAX_HISTORY][80] = {
 // 12345678901234567890123456789012345678901234567890123456789012345678901234567890
 { "                                                                               \0" },
-          { "\0" }, { "\0" }, { "\0" }, { "\0" }, { "\0" }, { "\0" }, { "\0" }, 
-{ "\0" }, { "\0" }, { "\0" }, { "\0" }, { "\0" }, { "\0" }, { "\0" }, { "\0" }, 
-{ "\0" }, { "\0" }, { "\0" }, { "\0" }, { "\0" }, { "\0" }, { "\0" }, { "\0" }, 
+          { "\0" }, { "\0" }, { "\0" }, { "\0" }, { "\0" }, { "\0" }, { "\0" },
+{ "\0" }, { "\0" }, { "\0" }, { "\0" }, { "\0" }, { "\0" }, { "\0" }, { "\0" },
+{ "\0" }, { "\0" }, { "\0" }, { "\0" }, { "\0" }, { "\0" }, { "\0" }, { "\0" },
 { "\0" }, { "\0" }, { "\0" }, { "\0" }, { "\0" }, { "\0" }, { "\0" }, { "\0" } };
 
 
@@ -326,11 +326,11 @@ void EdLin( char *sCmdLine )
 
         // Print (new) help line
 
-        dprint("%c%c%c%s", DP_SETCURSORXY, 1+0, 1+pOut->height-1, sHelpLine);
+        dprint("%c%c%c%s", DP_SETCURSORXY, 1+0, 1+pOut->sizeY-1, sHelpLine);
 
         // Print current edited line and position the cursor
 
-        dprint("%c%c%c%s%c%c%c", 
+        dprint("%c%c%c%s%c%c%c",
             DP_SETCURSORXY, 1+0, 1+yCur, sCmd,
             DP_SETCURSORXY, 1+xCur, 1+yCur );
 

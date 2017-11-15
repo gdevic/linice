@@ -27,13 +27,12 @@
 *   Include Files                                                             *
 ******************************************************************************/
 
+#include "module-header.h"              // Versatile module header file
+
 #include "clib.h"                       // Include C library header file
+#include "ice.h"                        // Include main debugger structures
+#include "ibm-pc.h"                     // Include hardware defines
 
-#include "intel.h"                      // Include Intel defines
-
-#include "i386.h"                       // Include assembly code
-
-#include "ice.h"                        // Include global structures
 
 /******************************************************************************
 *                                                                             *

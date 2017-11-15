@@ -17,7 +17,7 @@
 
     If the first character of a string is '@', a line will be stored in the
     history buffer as well.
-    
+
 
 *******************************************************************************
 *                                                                             *
@@ -70,9 +70,9 @@ void dputc(char c)
     WORD printBuf = c;
 
     pOut->sprint((char *) printBuf);
-}    
+}
 
-    
+
 /******************************************************************************
 *                                                                             *
 *   int dprint( char *format, ... )                                           *
@@ -154,7 +154,7 @@ BOOL dprinth( int nLineCount, char *format, ... )
         // print the help line and wait for a keypress
         if( (nLineCount % pWin->h.nLines)==0 )
         {
-            dprint("%c%c%c    Press any key to continue; Esc to cancel\r", DP_SETCURSORXY, 1+0, 1+pOut->height-1);
+            dprint("%c%c%c    Press any key to continue; Esc to cancel\r", DP_SETCURSORXY, 1+0, 1+pOut->sizeY-1);
             Key = GetKey(TRUE);
             if( Key==ESC )
                 return( FALSE );

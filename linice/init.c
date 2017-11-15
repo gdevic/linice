@@ -34,7 +34,7 @@
 #include "ice-ioctl.h"                  // Include our own IOCTL numbers
 
 #include "debug.h"                      // Include our dprintk()
-#include "asm.h"
+#include "intel.h"                      // Include processor specific stuff
 
 /******************************************************************************
 *                                                                             *
@@ -49,8 +49,28 @@ typedef struct
 } TDEFAULTFKEY, *PTDEFAULTFKEY;
 
 TDEFAULTFKEY defaultFKEY[] = {
+    { F2,  "wr" },
+    { F3,  "src" },
+    { F4,  "rs" },
+    { F5,  "x" },
+    { F6,  "ec" },
     { F7,  "here" },
+    { F8,  "t" },
+    { F9,  "bpx" },
+    { F10, "p" },
+
+    { SF3, "format" },
+
+    { CF8, "xt" },
+    { CF9, "trace" },
+    { CF10,"xp" },
+    { CF11,"show" },
+
+    { AF2, "wd" },
+    { AF3, "wc" },
+    { AF4, "ww" },
     { AF5, "cls" },
+
     { 0, NULL }
 };
 
@@ -220,4 +240,4 @@ int InitPacket(PTINITPACKET pInit)
     }
 
     return( retval );
-}   
+}

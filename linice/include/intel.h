@@ -14,8 +14,6 @@
 
         This is a header file containing Intel-processor specific stuff.
 
-        Also, generic IBM-PC constant defines are here.
-
 *******************************************************************************
 *                                                                             *
 *   Changes:                                                                  *
@@ -30,6 +28,9 @@
 ******************************************************************************/
 #ifndef _INTEL_H_
 #define _INTEL_H_
+
+#include <asm/io.h>     // Include defines for I/O, memory access
+#include <asm/msr.h>    // Access to machine-specific registers
 
 /******************************************************************************
 *                                                                             *
@@ -49,8 +50,6 @@
 #undef HIWORD
 #define LOWORD(i)       ((WORD)((i)&0xFFFF))
 #define HIWORD(i)       ((WORD)(((i)>>16) & 0xFFFF))
-
-#define TOPNIBBLE(i)    (((i)>>4)&0xF)
 
 ///////////////////////////////////////////////////////////////////////////////
 // Define gcc packed structure
@@ -234,7 +233,7 @@ typedef struct
 #define VIF_BIT             19
 #define VIP_BIT             20
 #define ID_BIT              21
-             
+
 #undef TF_MASK
 #undef IF_MASK
 #undef IOPL_MASK
@@ -323,7 +322,7 @@ typedef struct
 //-----------------------------------------------------------------------------
 // System Registers Defines
 //-----------------------------------------------------------------------------
-typedef struct 
+typedef struct
 {
     DWORD cr0;
     DWORD cr2;
@@ -338,6 +337,61 @@ typedef struct
     DWORD dr7;
 
 } TSysreg;
+
+
+/******************************************************************************
+*                                                                             *
+*   Extern functions                                                          *
+*                                                                             *
+******************************************************************************/
+
+#define SET_IDT(_idt)    asm("lidt  %0" : : "m" (_idt))
+#define SET_GDT(_gdt)    asm("lgdt  %0" : : "m" (_gdt))
+#define SET_TR(_tr)      asm("ltr   %0" : : "m" (_tr))
+#define SET_LDT(_tr)     asm("lldt  %0" : : "m" (_tr))
+
+#define GET_IDT(_idt)    asm("sidt  %0" : : "m" (_idt))
+#define GET_GDT(_gdt)    asm("sgdt  %0" : : "m" (_gdt))
+#define GET_TR(_tr)      asm("str   %0" : : "m" (_tr))
+#define GET_LDT(_tr)     asm("sldt  %0" : : "m" (_tr))
+
+#define GET_CR0(_reg)    __asm__ __volatile__("movl %%cr0,%0":"=r" (_reg));
+#define SET_CR0(_reg)    __asm__ __volatile__("movl %0,%%cr0"::"r" (_reg) );
+#define GET_CR2(_reg)    __asm__ __volatile__("movl %%cr2,%0":"=r" (_reg));
+#define SET_CR2(_reg)    __asm__ __volatile__("movl %0,%%cr2"::"r" (_reg) );
+#define GET_CR3(_reg)    __asm__ __volatile__("movl %%cr3,%0":"=r" (_reg));
+#define SET_CR3(_reg)    __asm__ __volatile__("movl %0,%%cr3"::"r" (_reg) );
+#define GET_CR4(_reg)    __asm__ __volatile__("movl %%cr4,%0":"=r" (_reg));
+#define SET_CR4(_reg)    __asm__ __volatile__("movl %0,%%cr4"::"r" (_reg) );
+
+#define GET_DR0(_reg)    __asm__("movl %%dr0,%0":"=r" (_reg));
+#define SET_DR0(_reg)    __asm__("movl %0,%%dr0"::"r" (_reg) );
+#define GET_DR1(_reg)    __asm__("movl %%dr1,%0":"=r" (_reg));
+#define SET_DR1(_reg)    __asm__("movl %0,%%dr1"::"r" (_reg) );
+#define GET_DR2(_reg)    __asm__("movl %%dr2,%0":"=r" (_reg));
+#define SET_DR2(_reg)    __asm__("movl %0,%%dr2"::"r" (_reg) );
+#define GET_DR3(_reg)    __asm__("movl %%dr3,%0":"=r" (_reg));
+#define SET_DR3(_reg)    __asm__("movl %0,%%dr3"::"r" (_reg) );
+#define GET_DR6(_reg)    __asm__("movl %%dr6,%0":"=r" (_reg));
+#define SET_DR6(_reg)    __asm__("movl %0,%%dr6"::"r" (_reg) );
+#define GET_DR7(_reg)    __asm__("movl %%dr7,%0":"=r" (_reg));
+#define SET_DR7(_reg)    __asm__("movl %0,%%dr7"::"r" (_reg) );
+
+#define INT1()           __asm__("int $1" ::);
+#define INT3()           __asm__("int $3" ::);
+
+#define CLI()            __asm__("cli" ::);
+#define STI()            __asm__("sti" ::);
+
+#define CLTS()           __asm__("clts" ::);
+
+#define FNCLEX()         __asm__("fnclex" ::);
+
+extern unsigned char inp(unsigned short port);
+
+#define outp(port,value) __asm__ __volatile__("outb %b0,%w1\n\t":: "a" (value) , "d" (port) );
+#define outw(port,value) __asm__ __volatile__("outw %w0,%w1\n\t":: "a" (value) , "d" (port) );
+#define outd(port,value) __asm__ __volatile__("outl %w0,%w1\n\t":: "a" (value) , "d" (port) );
 
 
 // Restore packing value

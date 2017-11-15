@@ -32,6 +32,7 @@
 #include "clib.h"                       // Include C library header file
 #include "ice.h"                        // Include main debugger structures
 #include "ibm-pc.h"                     // Include hardware defines
+#include "intel.h"                      // Include processor specific stuff
 
 
 /******************************************************************************
@@ -218,11 +219,11 @@ void KeyboardHandler(void)
             else
             {
                 // Caps Lock key inverts the caps state of the alphabetical characters
-                if( ice_isalpha(AsciiCode) && fCapsLock )
+                if( isalpha(AsciiCode) && fCapsLock )
                     AsciiCode ^= 0x20;
 
                 // Shift key also inverts the caps state of the alphabetical characters
-                if( ice_isalpha(AsciiCode) && fShift )
+                if( isalpha(AsciiCode) && fShift )
                     AsciiCode ^= 0x20;
                 else
                 if( fShift )

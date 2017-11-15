@@ -30,6 +30,7 @@
 #include "module-header.h"              // Versatile module header file
 
 #include "clib.h"                       // Include C library header file
+#include "ice.h"                        // Include main debugger structures
 
 /******************************************************************************
 *                                                                             *
@@ -43,16 +44,20 @@
 *                                                                             *
 ******************************************************************************/
 
+// If you change this, make sure it is divisible by 4
+#define DATA_BYTES         16           // So many bytes per line
+
 static union
 {
-    BYTE byte[16];
-    WORD word[8];
-    DWORD dword[4];
+    BYTE byte[DATA_BYTES];
+    WORD word[DATA_BYTES/2];
+    DWORD dword[DATA_BYTES/4];
 
 } MyData;
 
-static BOOL fValid[16];
+static BOOL fValid[DATA_BYTES];
 
+static char buf[MAX_STRING];
 
 /******************************************************************************
 *                                                                             *
@@ -60,132 +65,122 @@ static BOOL fValid[16];
 *                                                                             *
 ******************************************************************************/
 
-#if 0
-
-static void PrintAscii()
+static int PrintAscii(int pos)
 {
     int i;
 
-    dputc(' ');
+    buf[pos++] = ' ';
 
-    for( i=0; i<16; i++)
+    for( i=0; i<DATA_BYTES; i++, pos++)
     {
         if( (fValid[i]==TRUE) && isprint(MyData.byte[i]) )
-            dputc( MyData.byte[i] );
+            buf[pos] = MyData.byte[i];
         else
-            dputc('.');
+            buf[pos] = '.';
     }
 
-    // Finish the line
+    return( i + 1 );
+}
 
-    dputc('\n');
-}    
+void GetDataLine(PTADDRDESC pAddr)
+{
+    int i, pos;
+
+    // Fetch a lineful of bytes at a time and get their present flags
+    for( i=0; i<DATA_BYTES; i++)
+    {
+        fValid[i] = AddrIsPresent(pAddr);
+        if( fValid[i]==TRUE )
+            MyData.byte[i] = AddrGetByte(pAddr);
+    }
+
+    pos = sprintf(buf, "%04X:%08X ", pAddr->sel, pAddr->offset);
+
+    switch( deb.DumpSize )
+    {
+    //=========================================================
+        case 1:             // BYTE
+    //=========================================================
+
+            for( i=0; i<DATA_BYTES; i++)
+            {
+                if( fValid[i]==TRUE )
+                    pos += sprintf(buf+pos, "%02X ", MyData.byte[i]);
+                else
+                    pos += sprintf(buf+pos, "?? ");
+            }
+
+            // ... and the ASCII representation
+            pos += PrintAscii(pos);
+
+        break;
+
+    //=========================================================
+        case 2:             // WORD
+    //=========================================================
+
+            for( i=0; i<DATA_BYTES/2; i++)
+            {
+                if( fValid[i]==TRUE )
+                    pos += sprintf(buf+pos, "%04X ", MyData.word[i]);
+                else
+                    pos += sprintf(buf+pos, "???? ");
+            }
+
+            // ... and the ASCII representation
+            pos += PrintAscii(pos);
+
+        break;
+
+    //=========================================================
+        case 4:             // DWORD
+    //=========================================================
+
+            for( i=0; i<DATA_BYTES/4; i++)
+            {
+                if( fValid[i]==TRUE )
+                    pos += sprintf(buf+pos, "%08X ", MyData.dword[i]);
+                else
+                    pos += sprintf(buf+pos, "???????? ");
+            }
+
+            // ... and the ASCII representation
+            pos += PrintAscii(pos);
+
+        break;
+    }
+}
+
+
+void PrintDataLines(int lines)
+{
+    TADDRDESC Addr;
+
+    Addr = deb.dataAddr;                // Copy the current data address
+
+    while( lines-- > 0 )
+    {
+        GetDataLine(&Addr);
+        dprinth(lines, buf);
+
+        // Advance data offset for the next line
+        Addr.offset += DATA_BYTES;
+    }
+}
 
 
 void DataDraw(void)
 {
-    DWORD lines;
-    int i;
-    DWORD value;
-    WORD sel;
-    DWORD offset;
-
-    lines = deb.wd.nLines;
-    sel = deb.dumpSel;
-    offset = deb.dumpOffset;
-
-    // Print the data window header
-
-    dputc(DP_SETWRITEATTR);dputc(deb.colors[COL_LINE]);
     dprint("-Data---------------------------------------------------------------------------\n");
-    dputc(DP_SETWRITEATTR);dputc(deb.colors[COL_NORMAL]);
-    
-    while( lines-- )
-    {
-        // Fill up our data buffer
 
-        for( i=0; i<16; i++)
-        {
-            if( (value = GetByte(offset + i)) <= 0xFF )
-            {
-                MyData.byte[i] = value;
-                fValid[i] = TRUE;
-            }
-            else
-                fValid[i] = FALSE;
-        }
+    PrintDataLines(pWin->d.nLines - 1);
+}
 
 
-        dprint("%04X:%08X ", sel, offset);
+BOOL cmdData(char *args)
+{
+    PrintDataLines(8);
 
-        switch( deb.dumpMode )
-        {
-        //=========================================================
-            case DD_BYTE:
-        //=========================================================
+    return( TRUE );
+}
 
-                // Print the data...
-
-                for( i=0; i<16; i++)
-                {
-                    if( fValid[i]==TRUE )
-                        dprint("%02X ", MyData.byte[i]);
-                    else
-                        dprint("?? ");
-                }
-
-                // ... and the ASCII representation
-                PrintAscii();
-
-            break;
-
-        //=========================================================
-            case DD_WORD:
-        //=========================================================
-
-                // Print the data...
-
-                for( i=0; i<8; i++)
-                {
-                    if( fValid[i]==TRUE )
-                        dprint("%04X ", MyData.word[i]);
-                    else
-                        dprint("???? ");
-                }
-
-                // ... and the ASCII representation
-                PrintAscii();
-
-            break;
-
-        //=========================================================
-            case DD_DWORD:
-        //=========================================================
-
-                // Print the data...
-
-                for( i=0; i<4; i++)
-                {
-                    if( fValid[i]==TRUE )
-                        dprint("%08X ", MyData.dword[i]);
-                    else
-                        dprint("???????? ");
-                }
-
-                // ... and the ASCII representation
-                PrintAscii();
-
-            break;
-
-            default:
-                
-                break;
-
-        }
-
-        offset += 16;
-    }
-}    
-
-
-#endif

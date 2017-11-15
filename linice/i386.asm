@@ -19,6 +19,10 @@
 ;==============================================================================
 
 global  IceIntHandlers
+
+global  ReadCRTC
+global  WriteCRTC
+global  inp
 global  GetByte
 
 ;==============================================================================
@@ -43,7 +47,7 @@ TempESP:        dd      0
 
 ;==============================================================================
 ;
-;           I N T E R R U P T   H A N D L E R S 
+;           I N T E R R U P T   H A N D L E R S
 ;
 ;==============================================================================
 
@@ -146,8 +150,8 @@ IceIntHandlers:
 ; 50             ---- | VM fs
 ; 4C             ---- | VM ds
 ; 48             ---- | VM es             esp from tss * -|-              esp is from interrupted kernel (*)
-; 44             ---- | VM ss                        ---- | PM ss                                    
-; 40             VM esp                              PM esp                                          
+; 44             ---- | VM ss                        ---- | PM ss
+; 40             VM esp                              PM esp
 ; 3C             VM eflags                           PM eflags                        PM eflags
 ; 38             ---- | VM cs                        ---- | PM cs                     ---- | PM cs
 ; 34             VM eip                              PM eip                           PM eip
@@ -224,7 +228,7 @@ entry:
 
 ; Push interrupt number on the stack and call our C handler
 
-        push    ecx             
+        push    ecx
         cld                                     ; Set the direction bit
         call    InterruptHandler
         add     esp, 8
@@ -298,69 +302,110 @@ exit:
 ;
 ;==============================================================================
 
+MISC_INPUT              equ     03CCh
+CRTC_INDEX_MONO         equ     03B4h
+CRTC_INDEX_COLOR        equ     03D4h
+
+
+GetCRTCAddr:
+        push    ax
+        mov     dx, MISC_INPUT
+        in      al, (dx)
+        mov     dx, CRTC_INDEX_MONO
+        test    al, 1
+        jz      @mono
+        mov     dx, CRTC_INDEX_COLOR
+@mono:  pop     ax
+        ret
+
 ;==============================================================================
 ;
-;   BYTE ReadCRTC(WORD wBaseCRTC, BYTE index)
+;   BYTE ReadCRTC(BYTE index)
 ;
-;   This VGA helper function reads a CRTC value from the specified index.
+;   This VGA helper function reads a CRTC value from a specified CRTC index
+;   register.
 ;
 ;   Where:
-;       [ebp + 8]   base port number
-;       [ebp +12]   byte index of a CRTC register
+;       [ebp + 8]   byte index of a CRTC register
 ;
 ;==============================================================================
 ReadCRTC:
         push    ebp
         mov     ebp, esp
-        mov     edx, [ebp+8]
-        mov     eax, [ebp+12]
-        out     dx, al
+        call    GetCRTCAddr
+        mov     eax, [ebp+8]
+        out     (dx), al
         inc     dx
-        in      al, dx
+        in      al, (dx)
         pop     ebp
         ret
 
 ;==============================================================================
 ;
-;   void WriteCRTC(WORD wBaseCRTC, BYTE index, BYTE value)
+;   void WriteCRTC(int index, int value)
 ;
-;   This VGA helper function writes a CRTC value to the specified index register
+;   This VGA helper function writes a CRTC value into a specified CRTC index
+;   register
 ;
 ;   Where:
-;       [ebp + 8]   base port number
-;       [ebp +12]   byte index of a CRTC register
-;       [ebp +16]   new value
+;       [ebp + 8]   byte index of a CRTC register
+;       [ebp +12]   new value
 ;
 ;==============================================================================
 WriteCRTC:
         push    ebp
         mov     ebp, esp
-        mov     edx, [ebp+8]
-        mov     eax, [ebp+12]
-        out     dx, al
+        call    GetCRTCAddr
+        mov     eax, [ebp+8]
+        out     (dx), al
         inc     dx
-        mov     eax, [ebp+16]
-        out     dx, al
+        mov     eax, [ebp+12]
+        out     (dx), al
         pop     ebp
         ret
-        
+
 ;==============================================================================
 ;
-;   int GetByte( DWORD absOffset )
-;
-;   Reads a byte from an absolute memory location offset
-;   Returns a BYTE if the address is present, or value greater than 0xFF
-;   address is not present
+;   BYTE inp( WORD port )
 ;
 ;   Where:
-;       [ebp + 8 ]        offset
+;       [ebp + 8]   port index
+;   Returns:
+;       al - in(port)
+;
+;==============================================================================
+inp:
+        push    ebp
+        mov     ebp, esp
+        push    edx
+        mov     dx, [ebp+8]
+        xor     eax, eax
+        in      al, (dx)
+        pop     edx
+        pop     ebp
+        ret
+
+;==============================================================================
+;
+;   int GetByte( WORD sel, DWORD offset )
+;
+;   Reads a byte from a memory location sel:offset
+;   Returns a BYTE if the address is present, or value greater than 0xFF
+;   if the address is not present
+;
+;   Where:
+;       [ebp + 8 ]      selector
+;       [ebp + 12 ]     offset
 ;
 ;==============================================================================
 GetByte:
         push    ebp
+        push    gs
         mov     ebp, esp
 
-        mov     ebx, [ebp+8]           ; Get the offset
+        mov     ax, [ebp + 8]           ; Get the selector
+        mov     gs, ax                  ; Store it in the GS
+        mov     ebx, [ebp + 12]         ; Get the offset off that selector
 
         ; Get the byte from the memory, possibly page faulting
         ; if the memory address was not valid.  Anyhow, since
@@ -368,12 +413,12 @@ GetByte:
         ; in EAX register in that case
 
         xor     eax, eax
-        mov     al, [ebx]
-;        mov     al, gs:[ebx]
+        mov     al, [ds:ebx]
         nop
         nop
         nop
 
+        pop     gs
         pop     ebp
         ret
 

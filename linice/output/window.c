@@ -53,16 +53,16 @@ static int total;                       // Counting lines: total count
 *                                                                             *
 ******************************************************************************/
 
-static void AdjustTopBottom(PTWND pWnd)
+static void AdjustTopBottom(PTFRAME pFrame)
 {
-    if( pWnd->fVisible )
+    if( pFrame->fVisible )
     {
-        pWnd->Top = avail;
-        pWnd->Bottom = pWnd->Top + pWnd->nLines - 1;
-        avail += pWnd->nLines;
-        total -= pWnd->nLines;
+        pFrame->Top = avail;
+        pFrame->Bottom = pFrame->Top + pFrame->nLines - 1;
+        avail += pFrame->nLines;
+        total -= pFrame->nLines;
     }
-}    
+}
 
 static void AdjustToFit(int excess)
 {
@@ -73,13 +73,13 @@ static void AdjustToFit(int excess)
     if( pWin->d.fVisible )  active++;
     if( pWin->c.fVisible )  active++;
 
-    newSize = (pOut->height - 5) / (active + 1);
+    newSize = (pOut->sizeY - 5) / (active + 1);
 
     if( pWin->d.fVisible )  pWin->d.nLines = newSize;
     if( pWin->c.fVisible )  pWin->c.nLines = newSize;
 
     pWin->h.nLines = 0;         // This one will be adjusted later
-}    
+}
 
 /******************************************************************************
 *                                                                             *
@@ -97,15 +97,15 @@ static void AdjustToFit(int excess)
 ******************************************************************************/
 int WindowIsSizeValid()
 {
-    int less = pOut->height;
-    
-    if( pWin->r.fVisible )  less -= pWin.r.nLines;
-    if( pWin->d.fVisible )  less -= pWin.d.nLines;
-    if( pWin->c.fVisible )  less -= pWin.c.nLines;
-    if( pWin->h.fVisible )  less -= pWin.h.nLines;
+    int less = pOut->sizeY;
+
+    if( pWin->r.fVisible )  less -= pWin->r.nLines;
+    if( pWin->d.fVisible )  less -= pWin->d.nLines;
+    if( pWin->c.fVisible )  less -= pWin->c.nLines;
+    if( pWin->h.fVisible )  less -= pWin->h.nLines;
 
     return( less );
-}    
+}
 
 /******************************************************************************
 *                                                                             *
@@ -123,18 +123,18 @@ void RecalculateDrawWindows()
     int excess;
 
     avail = 0;
-    total = pOut->height;
+    total = pOut->sizeY;
 
     if( (excess = WindowIsSizeValid()) < 0 )
         AdjustToFit( -excess );
 
-    AdjustTopBottom(pWin->r);
-    AdjustTopBottom(pWin->d);
-    AdjustTopBottom(pWin->c);
+    AdjustTopBottom(&pWin->r);
+    AdjustTopBottom(&pWin->d);
+    AdjustTopBottom(&pWin->c);
 
     // The last one is the history window, and we will let this one slide
     pWin->h.nLines = total - 1;
-    AdjustTopBottom(pWin->h);
+    AdjustTopBottom(&pWin->h);
 
     // Draw the screen
     dputc(DP_CLS);
@@ -143,6 +143,4 @@ void RecalculateDrawWindows()
     if( pWin->d.fVisible )  (pWin->d.draw)();
     if( pWin->c.fVisible )  (pWin->c.draw)();
     (pWin->h.draw)();
-    
-
-}    
+}

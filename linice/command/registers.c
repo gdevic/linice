@@ -29,6 +29,7 @@
 #include "module-header.h"              // Versatile module header file
 
 #include "clib.h"                       // Include C library header file
+#include "ice.h"                        // Include main debugger structures
 
 /******************************************************************************
 *                                                                             *
@@ -46,13 +47,13 @@ typedef struct
 {
     DWORD x;
     DWORD y;
-    
+
 } TRegfield;
 
 static const TRegfield regfield[23] = {
-{4, 0}, {19, 0}, {34, 0}, {49, 0}, {64, 0}, 
+{4, 0}, {19, 0}, {34, 0}, {49, 0}, {64, 0},
 {4, 1}, {19, 1}, {34, 1}, {49, 1},
-{60, 1}, {62, 1}, {64, 1}, {66, 1}, {68, 1}, {70, 1}, {72, 1}, {74, 1}, 
+{60, 1}, {62, 1}, {64, 1}, {66, 1}, {68, 1}, {70, 1}, {72, 1}, {74, 1},
 {3, 2}, {13, 2}, {23, 2}, {33, 2}, {43, 2}, {53, 2} };
 
 
@@ -62,7 +63,6 @@ static const TRegfield regfield[23] = {
 *                                                                             *
 ******************************************************************************/
 
-#if 0
 void RegDraw(void)
 {
     dprinth(0, "EAX=%08X   EBX=%08X   ECX=%08X   EDX=%08X   ESI=%08X\n",
@@ -80,8 +80,6 @@ void RegDraw(void)
             (deb.r->eflags & CF_MASK)? 'C' : 'c' );
 
     dprinth(2, "CS=%04X   DS=%04X   SS=%04X   ES=%04X   FS=%04X   GS=%04X\n",
-            deb.r->pmCS, deb.r->pmDS, deb.r->ss, deb.r->pmES, deb.r->pmFS, deb.r->pmGS );
-}    
+            deb.r->cs, deb.r->ds, deb.r->ss, deb.r->es, deb.r->fs, deb.r->gs );
+}
 
-
-#endif

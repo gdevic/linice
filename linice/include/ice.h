@@ -43,8 +43,8 @@
 *                                                                             *
 ******************************************************************************/
 // Forward declarations, a strange C thing...
-struct TSYMTAB;          
-             
+struct TSYMTAB;
+
 /////////////////////////////////////////////////////////////////
 // THE MAIN DEBUGGER STRUCTURE
 /////////////////////////////////////////////////////////////////
@@ -96,6 +96,15 @@ typedef struct tagTRegs
     DWORD   eflags;
 } TREGS, *PTREGS;
 
+// Generic address descriptor - used to describe any memory access
+
+typedef struct
+{
+    WORD sel;
+    DWORD offset;
+
+} TADDRDESC, *PTADDRDESC;
+
 // Root structure describing the debugee state
 
 typedef struct
@@ -105,6 +114,12 @@ typedef struct
     PTREGS r;                           // pointer to live registers
     TREGS  r_prev;                      // previous registers (for color coding of changes)
     int nInterrupt;                     // Interrupt that occurred
+
+    int DumpSize;                       // Dx dump value size
+    TADDRDESC dataAddr;                 // Data - current display address
+
+    BOOL fCodeOn;                       // Code - is SET CODE ON ?
+    TADDRDESC codeAddr;                 // Code - current display address
 
 } TDEB, *PTDEB;
 
@@ -117,22 +132,22 @@ extern TDEB deb;                        // Global data structure
 typedef struct
 {
     // These are set by the user
-    BOOL fVisible;                      // Whether a window is visible or not
-    DWORD nLines;                       // How many lines a window occupies
+    BOOL fVisible;                      // Whether a frame is visible or not
+    DWORD nLines;                       // How many lines a frame occupies
 
     // The following are calculated on a fly
     DWORD Top;                          // Top coordinate holding the header line
     DWORD Bottom;                       // Bottom coordinate (inclusive)
-    void (*draw)();                     // Function that draws inside window
+    void (*draw)();                     // Function that draws inside frame
 
-} TWND, *PTWND;
+} TFRAME, *PTFRAME;
 
 typedef struct
 {
-    TWND r;                             // Register window
-    TWND d;                             // Data window
-    TWND c;                             // Code window
-    TWND h;                             // Command (history) window
+    TFRAME r;                           // Register window frame
+    TFRAME d;                           // Data window frame
+    TFRAME c;                           // Code window frame
+    TFRAME h;                           // Command (history) window frame
 
 } TWINDOWS, *PTWINDOWS;
 
@@ -154,7 +169,7 @@ typedef struct
     char *sSyntax;                      // Syntax string
     char *sExample;                     // Example string
     DWORD iHelp;                        // Index to description string
-    
+
 } TCommand;
 
 extern TCommand Cmd[];                  // Command structure array
@@ -168,8 +183,8 @@ extern char *sHelp[];                   // Help lines
 typedef struct
 {
     BYTE x, y;                          // Current cursor coordinates
-    BYTE width, height;                 // Current screen width and height
-    BYTE start_x, start_y;              // Display start coordinates
+    BYTE sizeX, sizeY;                  // Current screen width and height
+    BYTE startX, startY;                // Display start coordinates
 
     void (*sprint)(char *c);            // Effective print string function
 
@@ -219,6 +234,12 @@ extern DWORD HistoryGetTop(void);
 extern void HistoryAdd(char *sLine);
 extern void ClearHistory(void);
 
-extern int GetByte(DWORD absOffset);
+extern BYTE ReadCRTC(int index);
+extern void WriteCRTC(int index, int value);
+extern int GetByte(WORD sel, DWORD offset);
+
+extern BOOL AddrIsPresent(PTADDRDESC pAddr);
+extern BYTE AddrGetByte(PTADDRDESC pAddr);
+
 
 #endif //  _ICE_H_
