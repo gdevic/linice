@@ -185,14 +185,14 @@ char *GetSourceLine(WORD *pwLine, PTADDRDESC pAddr)
 
 /******************************************************************************
 *                                                                             *
-*   void CodeDraw(BOOL fForce, DWORD newOffset)                               *
+*   void CodeDraw(BOOL fForce)                                                *
 *                                                                             *
 *******************************************************************************
 *
 *   Prints out a block of code lines.
 *
 ******************************************************************************/
-void CodeDraw(BOOL fForce, DWORD newOffset)
+void CodeDraw(BOOL fForce)
 {
     int maxLines;
     int nLen, nLine=1;
@@ -215,8 +215,7 @@ void CodeDraw(BOOL fForce, DWORD newOffset)
     if( fForce && pWin->c.fVisible==FALSE )
         eMode = 0;                      // Machine disassembly
 
-    deb.codeAddr.offset = newOffset;    // Store the new offset to disassemble
-    Addr = deb.codeAddr;                // Copy the current code address
+    Addr = deb.codeTopAddr;             // Copy the current code address
     maxLines = GetCodeLines();
 
     // Depending on the source mode, we display source file or basically
@@ -224,6 +223,7 @@ void CodeDraw(BOOL fForce, DWORD newOffset)
     if( eMode==1 && deb.pFnScope && deb.pFnLin )
     {
         // SOURCE CODE LINES
+        //================================================================
 
         // Our line count wLine is 0-based, while deb.codeFileTopLine is 1-based
         wLine = deb.codeFileTopLine - 1;
@@ -263,6 +263,7 @@ void CodeDraw(BOOL fForce, DWORD newOffset)
     else
     {
         // MACHINE CODE DISASSEMBLY or MIXED SOURCE LINES AND DISASSEMBLY
+        //================================================================
 
         while( nLine <= maxLines )
         {
@@ -298,6 +299,9 @@ void CodeDraw(BOOL fForce, DWORD newOffset)
             if(dprinth(nLine++, "%c%c%s\r", DP_SETCOLINDEX, col, pLine)==FALSE)
                 break;
 
+            // Keep the running bottom address
+            deb.codeBottomAddr = Addr;
+
             // Advance machine code offset for the next line
             Addr.offset += nLen;
         }
@@ -331,6 +335,38 @@ void CodeDraw(BOOL fForce, DWORD newOffset)
 ******************************************************************************/
 void CodeScroll(int Xdir, int Ydir)
 {
+    TDISASM Dis;                        // Disassembler interface structure
+    BYTE bLen;                          // Temp instruction len
+    int i;                              // Generic counter
+
+    // Subfunction that scrolls a code window one line up:
+    //
+    // Scrolling up is really tricky with the Intel x86 machine code.
+    // We use the assumption that if you disassemble a lot of code, it
+    // eventually 'fixes' itself.
+    void CodeScrollLineUp()
+    {
+#define MAX_UNASM_BACKTRACE     64      // How many bytes we unassemble to find the start
+        BYTE bSizes[MAX_UNASM_BACKTRACE];
+        int i;                          // Generic counter
+
+        Dis.wSel     = deb.codeTopAddr.sel;
+        Dis.dwFlags  = DIS_DATA32 | DIS_ADDRESS32;
+        Dis.dwOffset = deb.codeTopAddr.offset - MAX_UNASM_BACKTRACE;
+
+        i = 0;
+        while( Dis.dwOffset < deb.codeTopAddr.offset )
+        {
+            bSizes[i] = DisassemblerLen(&Dis);
+
+            Dis.dwOffset += bSizes[i];
+
+            i++;
+        }
+
+        deb.codeTopAddr.offset -= bSizes[i-1];
+    }
+
     if( pWin->c.fVisible )
     {
         // If we have source code, scrolling is different than machine code
@@ -387,10 +423,6 @@ void CodeScroll(int Xdir, int Ydir)
                         deb.codeFileTopLine = deb.pSource->nLines - (pWin->c.nLines-1) + 1;
                     break;
             }
-
-            // It really does not matter what offset we send since we are not
-            // disassembling anything in this mode
-            CodeDraw(FALSE, 0);
         }
         else
         {
@@ -402,37 +434,64 @@ void CodeScroll(int Xdir, int Ydir)
                     break;
 
                 case -2:        // One page up
+                    // Scrolling up is really tricky with the Intel x86 machine code.
+                    // We use the assumption that if you disassemble a lot of code, it
+                    // eventually 'fixes' itself.
+
+                    // We step back a number of bytes and store the instruction sizes
+                    for(i=0; i<pWin->c.nLines-1; i++)
+                    {
+                        CodeScrollLineUp();
+                    }
+
                     break;
 
                 case -1:        // One line up
+                    // Scrolling up is really tricky with the Intel x86 machine code.
+                    // We use the assumption that if you disassemble a lot of code, it
+                    // eventually 'fixes' itself.
+
+                    // We step back a number of bytes and store the instruction sizes
+                    CodeScrollLineUp();
+
                     break;
 
                 case 1:         // One line down
+                    // Add the current instruction len to the offset
+
+                    Dis.wSel     = deb.codeTopAddr.sel;
+                    Dis.dwOffset = deb.codeTopAddr.offset;
+                    Dis.dwFlags  = DIS_DATA32 | DIS_ADDRESS32;
+
+                    bLen = DisassemblerLen(&Dis);
+                    deb.codeTopAddr.offset += bLen;
+
                     break;
 
                 case 2:         // One page down
+                    // Roll and get lengths of all instructions in the code window so
+                    // we can continue at the bottom
+
+                    Dis.wSel     = deb.codeTopAddr.sel;
+                    Dis.dwFlags  = DIS_DATA32 | DIS_ADDRESS32;
+                    Dis.dwOffset = deb.codeTopAddr.offset;
+
+                    for(i=0; i<pWin->c.nLines-1; i++)
+                    {
+                        Dis.dwOffset += DisassemblerLen(&Dis);
+                    }
+
+                    deb.codeTopAddr.offset = Dis.dwOffset;
+
                     break;
 
                 case 3:         // End
                     break;
             }
-            if( Ydir==1 )
-            {
-                // Forward is easy since we already saved the address of the next
-                // insteruction to disassemble
-                deb.codeAddr.offset = Addr.offset;
-                CodeDraw(FALSE, deb.codeAddr.offset);
-            }
-            else
-            {
-                // Backward is much trickier.. We need to estimate how many bytes
-                // to backtrack and then attempt until we get the right code alignment...
-
-                // <TODO>
-
-                CodeDraw(FALSE, deb.codeAddr.offset - pWin->c.nLines);
-            }
         }
+
+        // Finally, redraw the code window
+        CodeDraw(FALSE);
     }
 }
 
@@ -454,18 +513,39 @@ BOOL cmdUnasm(char *args, int subClass)
     if( *args!=0 )
     {
         // Argument present: U <address> [L <len>]
-        evalSel = deb.codeAddr.sel;
-        deb.codeAddr.offset = Evaluate(args, &args);
-        deb.codeAddr.sel = evalSel;
+        evalSel = deb.codeTopAddr.sel;
+        deb.codeTopAddr.offset = Evaluate(args, &args);
+        deb.codeTopAddr.sel = evalSel;
     }
     else
     {
         // No arguments - advance current address one screenful
         // We saved the offset at which previous disassembly ended up
-        deb.codeAddr.offset = Addr.offset;
+        deb.codeTopAddr.offset = Addr.offset;
     }
 
-    CodeDraw(TRUE, deb.codeAddr.offset);
+    CodeDraw(TRUE);
+
+    return( TRUE );
+}
+
+
+/******************************************************************************
+*                                                                             *
+*   BOOL cmdDot(char *args, int subClass)                                     *
+*                                                                             *
+*******************************************************************************
+*
+*   Display current instruction. Equal to 'U eip' command.
+*
+******************************************************************************/
+BOOL cmdDot(char *args, int subClass)
+{
+    // Basically reset the code view to what comes by default on break
+
+    SetCurrentSymbolContext();
+
+    CodeDraw(TRUE);
 
     return( TRUE );
 }

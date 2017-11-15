@@ -157,7 +157,7 @@ void RecalculateDrawWindows()
 
         RegDraw(FALSE);
         DataDraw(FALSE, deb.dataAddr.offset);
-        CodeDraw(FALSE, deb.codeAddr.offset);
+        CodeDraw(FALSE);
         HistoryDraw();
         // HistoryDraw leaves the cursor coordinates at the proper Y-coordinate
     }

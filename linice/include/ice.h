@@ -153,7 +153,8 @@ typedef struct
     TADDRDESC dataAddr;                 // Data - current display address
 
     BOOL fCode;                         // Code - is SET CODE ON ?
-    TADDRDESC codeAddr;                 // Address of the top machine code instr. in the code window
+    TADDRDESC codeTopAddr;              // Address of the top machine code instr. in the code window
+    TADDRDESC codeBottomAddr;           // Address of the last line
     TSYMFNSCOPE *pFnScope;              // Pointer to a current function scope descriptor
     TSYMFNLIN *pFnLin;                  // Pointer to a current function line descriptor
     TSYMSOURCE *pSource;                // Current source file in the code window
@@ -309,7 +310,7 @@ extern void dputc(UCHAR c);
 
 extern void RegDraw(BOOL fForce);
 extern void DataDraw(BOOL fForce, DWORD newOffset);
-extern void CodeDraw(BOOL fForce, DWORD newOffset);
+extern void CodeDraw(BOOL fForce);
 extern void HistoryDraw();
 
 extern BOOL CommandExecute( char *pCmd );

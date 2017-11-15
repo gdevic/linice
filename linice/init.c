@@ -144,8 +144,8 @@ int InitPacket(PTINITPACKET pInit)
                 deb.DumpSize = 1;           // Dump bytes
 
                 // Initialize default code pointer
-                deb.codeAddr.sel = __KERNEL_CS;
-                deb.codeAddr.offset = 0;
+                deb.codeTopAddr.sel = __KERNEL_CS;
+                deb.codeTopAddr.offset = 0;
                 deb.fCode = FALSE;
                 deb.eSrc = 1;                       // Default Source ON
 

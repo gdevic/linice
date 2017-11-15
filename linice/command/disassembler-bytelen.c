@@ -143,8 +143,8 @@ static DWORD GetNextDword(void)
 *   Where:
 *       TDisassembler:
 *           wSel is the selector of the address of an instruction
-*           bpTarget is the offset of the address of an instruction
-*           szDisasm is the address of the buffer to print a line, ignored
+*           dwOffset is the offset of the address of an instruction
+*           (szDisasm is the address of the buffer to print a line, ignored)
 *           dwFlags contains the default operand and address bits
 *           bCodes[] is the buffer to store code bytes
 *
@@ -155,6 +155,8 @@ static DWORD GetNextDword(void)
 *                   - DIS_ILLEGALOP set if that was illegal instruction
 *           bCode[0..bInstrLen] contains code bytes
 *       BYTE - instruction length in bytes
+*
+*   pDis->wSel and pDis->dwOffset are preserved.
 *
 ******************************************************************************/
 BYTE DisassemblerLen( PTDISASM pDis )

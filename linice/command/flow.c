@@ -65,9 +65,7 @@
 *                                                                             *
 ******************************************************************************/
 
-extern int IsDebugRegAvail(int which);
-extern int ArmDebugReg(int which, TADDRDESC Addr, BYTE type);
-extern void ArmSingleShotInt3(TADDRDESC Addr);
+extern void SetNonStickyBreakpoint(TADDRDESC Addr);
 
 // From linux/reboot.h
 
@@ -166,16 +164,7 @@ BOOL cmdGo(char *args, int subClass)
         // If we specified break address, set a one-time bp
         if( fBreak )
         {
-            // Try to reserve a debug register for it
-            if( (dr = IsDebugRegAvail(-1)) < 0 )
-            {
-                ArmDebugReg(dr, BpAddr, DR7_EXEC);
-            }
-            else
-            {
-                // We dont have any DR available, use a one-time INT3
-                ArmSingleShotInt3(BpAddr);
-            }
+            SetNonStickyBreakpoint(BpAddr);
         }
     }
 
@@ -221,9 +210,6 @@ BOOL cmdTrace(char *args, int subClass)
         // Single instruction
         deb.TraceCount = 1;
     }
-
-    // Set TRACE flag on the eflags and return to the client
-    deb.r->eflags |= TF_MASK;
 
     // Set the trace state
     deb.fTrace = TRUE;
@@ -299,13 +285,13 @@ BOOL cmdZap(char *args, int subClass)
         AddrSetByte(&Addr, 0x90);
     }
     else
-    if( b0==0x01 )
+    if( b0==0x01 || b0==0x03 )
     {
         if( GetByte(deb.r->cs, deb.r->eip - 2)==0xCD )
         {
             Addr.sel = deb.r->cs;
 
-            // Zap the 2-byte INT1
+            // Zap the 2-byte INT 1 or INT 3
             Addr.offset = deb.r->eip - 1;
             AddrSetByte(&Addr, 0x90);
 
@@ -338,6 +324,7 @@ BOOL cmdI1here(char *args, int subClass)
 
         case 2:         // Off
             deb.fI1Here = FALSE;
+            deb.fI1Kernel = FALSE;
         break;
 
         case 3:         // Display the state of the variable

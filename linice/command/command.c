@@ -108,6 +108,7 @@ extern BOOL cmdPoke    (char *args, int subClass);      // page.c
 extern BOOL cmdPci     (char *args, int subClass);      // pci.c
 extern BOOL cmdDdump   (char *args, int subClass);      // data.c
 extern BOOL cmdUnasm   (char *args, int subClass);      // code.c
+extern BOOL cmdDot     (char *args, int subClass);      // code.c
 extern BOOL cmdOut     (char *args, int subClass);      // ioport.c
 extern BOOL cmdIn      (char *args, int subClass);      // ioport.c
 extern BOOL cmdFill    (char *args, int subClass);      // blockops.c
@@ -117,7 +118,7 @@ extern BOOL cmdMove    (char *args, int subClass);      // blockops.c
 extern BOOL cmdHelp    (char *args, int subClass);      // command.c
 
 TCommand Cmd[] = {
-{    ".",        1, 0, Unsupported,    "Locate current instruction", "ex: .",  0 },
+{    ".",        1, 0, cmdDot,         "Locate current instruction", "ex: .",  0 },
 {    "?",        1, 0, cmdEvaluate,    "? expression", "ex: ? ax << 1",   0 },
 {    "A",        1, 0, Unsupported,    "Assemble [Address]", "ex: A CS:1236",    0 },
 {    "ADDR",     4, 0, Unsupported,    "ADDR [context-handle | task | *]", "ex: ADDR 80FD602C",   0 },

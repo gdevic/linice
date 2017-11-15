@@ -574,6 +574,28 @@ void SetCurrentSymbolContext()
 {
     WORD wLine;
 
+    // Adjust the code window's machine code top address:
+    // We let the cs:eip free flow within the code window that is bound by
+    // codeTopAddr and codeBottomAddr, and adjust the first variable when
+    // the cs:eip is out of bounds
+
+    if( deb.codeBottomAddr.sel==0 )     // Shortcut for non-initialized bounds
+    {
+        // If the bounds had not been initialized, reset the current to the top line
+        deb.codeTopAddr.sel = deb.r->cs;
+        deb.codeTopAddr.offset = deb.r->eip;
+    }
+    else
+    {
+        // Check that the cs:eip is still within the bounds
+        if( !(deb.r->cs==deb.codeTopAddr.sel && deb.r->eip>=deb.codeTopAddr.offset && deb.r->eip<=deb.codeBottomAddr.offset) )
+        {
+            // Again reset the top if the new cs:eip is out of bounds
+            deb.codeTopAddr.sel = deb.r->cs;
+            deb.codeTopAddr.offset = deb.r->eip;
+        }
+    }
+
     // Depending on the current process context, set the appropriate pIce->pSymTabCur
 
 

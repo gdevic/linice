@@ -386,7 +386,7 @@ BOOL cmdReg(char *args, int subClass)
                         *(DWORD *)((DWORD)deb.r + pReg->offset) = (prev_value & ~pReg->max) | value;
 
                         // If we changed eip, we better readjust the code window address
-                        deb.codeAddr.offset = deb.r->eip;
+                        deb.codeTopAddr.offset = deb.r->eip;
 
                         RecalculateDrawWindows();
                     }
