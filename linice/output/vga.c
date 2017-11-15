@@ -59,8 +59,8 @@ TOUT outVga;
 
 #define LINUX_VGA_TEXT  (PAGE_OFFSET + 0xB8000)
 
-#define MAX_SIZEX       80
-#define MAX_SIZEY       60
+#define MAX_VGA_SIZEX       80
+#define MAX_VGA_SIZEY       60
 
 //---------------------------------------------------
 // VGA registers and memory to save
@@ -69,7 +69,7 @@ TOUT outVga;
 typedef struct
 {
     BYTE CRTC[0x19];                    // CRTC Registers
-    WORD textbuf[ MAX_SIZEX * MAX_SIZEY ];
+    WORD textbuf[ MAX_VGA_SIZEX * MAX_VGA_SIZEY ];
 
 } TVgaState;
 
@@ -107,6 +107,7 @@ static TVga vga;
 ******************************************************************************/
 
 void VgaSprint(char *s);
+static void VgaCarret(BOOL fOn);
 static void VgaMouse(int x, int y);
 static BOOL VgaResize(int x, int y);
 
@@ -122,6 +123,7 @@ static BOOL VgaResize(int x, int y);
 void VgaInit(void)
 {
     memset(&vga, 0, sizeof(vga));
+    memset(&outVga, 0, sizeof(outVga));
 
     // Set default parameters
 
@@ -130,14 +132,15 @@ void VgaInit(void)
     outVga.sizeX = 80;
     outVga.sizeY = 25;
     outVga.sprint = VgaSprint;
+    outVga.carret = VgaCarret;
     outVga.mouse = VgaMouse;
     outVga.resize = VgaResize;
 
     vga.scrollTop = 0;
-    vga.scrollBottom = MAX_SIZEY - 1;
+    vga.scrollBottom = MAX_VGA_SIZEY - 1;
     vga.pText = (BYTE *) LINUX_VGA_TEXT;
     vga.col = COL_NORMAL;
-    vga.fEnabled = FALSE;
+    vga.fEnabled = TRUE;
 }
 
 
@@ -178,10 +181,6 @@ static void SaveBackground(void)
     // Store away what was in the text buffer on the screen
 
     memcpy(vgaState.textbuf, vga.pText, sizeof(vgaState.textbuf));
-
-    // Show the cursor with the desired shape
-
-    ShowCursorPos();
 }
 
 
@@ -216,18 +215,19 @@ static void RestoreBackground(void)
 
 /******************************************************************************
 *                                                                             *
-*   static void ShowCursorPos(void)                                           *
+*   static void VgaCarret(BOOL fOn)                                           *
 *                                                                             *
 *******************************************************************************
 *
 *   Shows the cursor at the current position
 *
 ******************************************************************************/
-static void ShowCursorPos(void)
+static void VgaCarret(BOOL fOn)
 {
     WORD wOffset;
 
     // Set the cursor on the VGA screen. Offset it by the display start address.
+    // We ignore on/off message not to interfere with the "natural" blink rate
 
     wOffset = outVga.y * 80 + outVga.x;
     wOffset += (vgaState.CRTC[0x0C] << 8) | vgaState.CRTC[0x0D];
@@ -277,7 +277,29 @@ static void VgaMouse(int x, int y)
 ******************************************************************************/
 static BOOL VgaResize(int x, int y)
 {
-    return( TRUE );
+    // Limit sizes to 80 in width and 25-60 in the number of lines
+    if( x == 80 )
+    {
+        if( y>=25 && y<=MAX_VGA_SIZEY )
+        {
+            // Assign new number of lines and repaint
+            dputc(DP_RESTOREBACKGROUND);
+            outVga.sizeY = y;
+            dputc(DP_SAVEBACKGROUND);
+
+            return( TRUE );
+        }
+        else
+        {
+            dprinth(1, "Lines should be between 25 and %d on a text VGA display!", MAX_VGA_SIZEY);
+        }
+    }
+    else
+    {
+        dprinth(1, "Only WIDTH=80 supported on a text VGA display!");
+    }
+
+    return( FALSE );
 }
 
 
@@ -439,9 +461,6 @@ void VgaSprint(char *s)
                             outVga.x++;
                     break;
             }
-    
-            if( c !=DP_RESTOREBACKGROUND )
-                ShowCursorPos();
         }
         else
         {

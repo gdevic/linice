@@ -36,6 +36,10 @@
 
 #include "module-header.h"              // Versatile module header file
 
+#define __NO_VERSION__
+#include <linux/module.h>               // Include required module include
+#include <linux/sched.h>                // What could we do w/o this one?
+
 #include <asm/uaccess.h>                // User space memory access functions
 //#include <linux/string.h>
 
@@ -50,6 +54,8 @@
 *                                                                             *
 ******************************************************************************/
 
+extern DWORD *pmodule;                  // Head of the module list
+
 /******************************************************************************
 *                                                                             *
 *   Local Defines, Variables and Macros                                       *
@@ -63,7 +69,6 @@
 ******************************************************************************/
 
 extern void *SymTabFindSection(TSYMTAB *pSymTab, BYTE hType);
-extern void RecalculateDrawWindows();
 
 /******************************************************************************
 *                                                                             *
@@ -255,6 +260,99 @@ BOOL cmdFile(char *args, int subClass)
 
 /******************************************************************************
 *                                                                             *
+*   BOOL ModuleBangSymbol2Value(char *pModuleBangSymbol, DWORD *pValue)       *
+*                                                                             *
+*******************************************************************************
+*
+*   Returns value for the symbol specified in module!symbol notation for kernel
+*   symbols and all loaded modules.
+*
+*   Where:
+*       pModuleBangSymbol is the ASCIIZ module!symbol name
+*       pValue is the address where to store value if successful
+*   Returns:
+*       FALSE - symbol name not found
+*       TRUE - *pValue is set with the symbol value
+*
+******************************************************************************/
+BOOL ModuleBangSymbol2Value(char *pModuleBangSymbol, DWORD *pValue)
+{
+    struct module* pMod;                // Pointer to a module list
+    struct module_symbol* pSym;         // Pointer to a module symbol structure
+    char *pSymName;                     // Pointer to a symbol name portion
+    const char *pModName;               // Pointer to a module name
+    int count;                          // Symbol loop counter
+
+    // First verify that the name has the proper format. If the pmodule is NULL,
+    // we skip this function since we can't traverse module list
+
+    pSymName = strchr(pModuleBangSymbol, '!');
+    if( pSymName && pmodule )
+    {
+        pMod = (struct module*) *pmodule;   // Get to the head of the module list
+
+        for(; pMod; pMod = pMod->next )
+        {
+            // Find the specified module name
+
+            // Get the pointer to a module name. We do it using a temp pointer
+            // in order to fake the kernel name from NULL to "kernel"
+            if( *pMod->name )
+                pModName = pMod->name;
+            else
+                pModName = "kernel";
+
+            if( !strnicmp(pModName, pModuleBangSymbol, pSymName-pModuleBangSymbol) )
+            {
+                pSymName++;                 // Increment to point to a symbol, not bang
+    
+                // We found the module that was specified, look for the symbol
+                // Special cases are init_module and cleanup_module
+
+                if( !strcmp(pSymName, "init_module") )
+                {
+                    *pValue = (DWORD) pMod->init;
+
+                    return( TRUE );
+                }
+
+                if( !strcmp(pSymName, "cleanup_module") )
+                {
+                    *pValue = (DWORD) pMod->cleanup;
+
+                    return( TRUE );
+                }
+
+                pSym = pMod->syms;
+
+                for(count=0; count<pMod->nsyms; count++)
+                {
+                    // TODO: Check the validity of these pointers before using them!
+
+                    if( !strcmp(pSym->name, pSymName) )
+                    {
+                        // Found it! Store the symbol value and return true
+
+                        *pValue = pSym->value;
+
+                        return( TRUE );
+                    }
+
+                    pSym++;
+                }
+            }
+        }
+    }
+
+    // We did not find the "!" part, so it is not accepted as a valid specifier
+    // No changes made
+
+    return( FALSE );
+}
+
+
+/******************************************************************************
+*                                                                             *
 *   BOOL SymbolName2Value(TSYMTAB *pSymTab, DWORD *pValue, char *name)        *
 *                                                                             *
 *******************************************************************************
@@ -284,17 +382,20 @@ BOOL SymbolName2Value(TSYMTAB *pSymTab, DWORD *pValue, char *name)
 //    TSYMSTATIC1 *pStatic1;              // Single static item
 
     // Search in this order:
+    //  * Module global symbol in the form "module!symbol"
     //  * Local scope variables
     //  * Current file static variables
     //  * Global variables
     //  * Function names
+    
+
+    // Kernel module exported symbol in the form module!symbol
+    if( ModuleBangSymbol2Value(name, pValue) )
+        return( TRUE );
 
     if( pSymTab )
     {
-
-
-
-        // Global symbols
+        // Global symbols from the given symbol table
 
         pGlobals = (TSYMGLOBAL *) SymTabFindSection(pSymTab, HTYPE_GLOBALS);
         if( pGlobals )
@@ -337,11 +438,67 @@ BOOL SymbolName2Value(TSYMTAB *pSymTab, DWORD *pValue, char *name)
 char *SymAddress2Name(WORD wSel, DWORD dwOffset)
 {
     TSYMHEADER *pHead;                  // Generic section header
+    struct module* pMod;                // Pointer to a module list
+    struct module_symbol* pSym;         // Pointer to a module symbol structure
+    int count;                          // Symbol loop counter
+
+    // Storage for the return string
+    static char sName[MAX_MODULE_NAME+1+MAX_SYMBOL_LEN+1];
 
     // Search the current symbol table first, if loaded
     if( pIce->pSymTabCur )
     {
         ;
+    }
+
+    // Search kernel symbols and symbols exported by each module (ignore NULL)
+    if( wSel==__KERNEL_CS && dwOffset )
+    {
+        pMod = (struct module*) *pmodule;   // Get to the head of the module list
+
+        for(; pMod; pMod = pMod->next )
+        {
+            // Check for the init_module and cleanup_module special cases
+            if( dwOffset==(DWORD)pMod->init )
+            {
+                strcpy(sName, pMod->name);          // Copy the module name
+                strcat(sName, "!init_module");      // Append a bang and init_module name
+
+                return( sName );
+            }
+
+            if( dwOffset==(DWORD)pMod->cleanup )
+            {
+                strcpy(sName, pMod->name);          // Copy the module name
+                strcat(sName, "!cleanup_module");   // Append a bang and cleanup_module name
+
+                return( sName );
+            }
+
+            pSym = pMod->syms;              // Get the number of symbols exported by that module
+
+            for(count=0; count<pMod->nsyms; count++)
+            {
+                // TODO: Check the validity of these pointers before using them!
+
+                if( pSym->value==dwOffset )
+                {
+                    // Found the matching symbol! Form its name and return
+
+                    if( *pMod->name )
+                        strcpy(sName, pMod->name);      // Copy the module name
+                    else
+                        strcpy(sName, "kernel");        // Otherwise it is a kernel symbol
+
+                    strcat(sName, "!");                 // Append a bang
+                    strcat(sName, pSym->name);          // and the symbol name itself
+
+                    return( sName );
+                }
+
+                pSym++;
+            }
+        }
     }
 
     return(NULL);
@@ -654,6 +811,7 @@ char *SymAddress2FunctionName(WORD wSel, DWORD dwOffset)
 {
     TSYMGLOBAL *pGlobals;
     int i;
+    char *pName;
 
     if( pIce->pSymTabCur )
     {
@@ -666,6 +824,10 @@ char *SymAddress2FunctionName(WORD wSel, DWORD dwOffset)
                 return( pIce->pSymTabCur->pPriv->pStrings + pGlobals->global[i].dName );
         }
     }
+
+    pName = SymAddress2Name(wSel, dwOffset);
+    if( pName )
+        return( pName );
 
     return( NULL );
 }
@@ -974,3 +1136,40 @@ void SetSymbolContext(WORD wSel, DWORD dwOffset)
     deb.codeFileTopLine = 0;
     deb.codeFileXoffset = 0;
 }
+
+
+/******************************************************************************
+*                                                                             *
+*   BOOL cmdWhat(char *args, int subClass)                                    *
+*                                                                             *
+*******************************************************************************
+*
+*   For a given address, returns all symbol information it could find
+*
+******************************************************************************/
+BOOL cmdWhat(char *args, int subClass)
+{
+    TADDRDESC Addr;                     // Address given
+    char *pSymName;                     // Symbol that was found
+
+    if( *args!=0 )
+    {
+        // Argument present: assume code selector
+        evalSel = __KERNEL_CS;
+        Addr.offset = Evaluate(args, &args);
+        Addr.sel = evalSel;
+
+        pSymName = SymAddress2Name(Addr.sel, Addr.offset);
+
+        if( pSymName )
+            dprinth(1, "%s", pSymName);
+    }
+    else
+    {
+        // No arguments - Really, nothing can match that
+        dprinth(1, "Nothing.");
+    }
+
+    return( TRUE );
+}
+

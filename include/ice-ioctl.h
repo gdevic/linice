@@ -64,9 +64,29 @@
 // INIT STRUCTURE
 /////////////////////////////////////////////////////////////////
 
+// Define the first init packet that linsym sends initially
+
+typedef struct
+{
+    int nSize;                          // Size of this structure in bytes
+    int fLowercase;                     // Initial value of the lowercase variable
+    int nSymbolSize;                    // Size of the simbol buffer
+    int nDrawSize;                      // Size of the X-display framebuffer
+    int nHistorySize;                   // Size of the history buffer
+    int nMacros;                        // Number of macros
+    int nVars;                          // Number of user variables
+
+    char sInit[MAX_STRING];             // Init string
+    char keyFn [4 * 12][MAX_STRING];    // Key assignment for F, SF, AF and CF keys
+
+} PACKED TINITPACKET, *PTINITPACKET;
+
+// Define X init packet that is sent by the xice helper
+
 typedef struct
 {
     DWORD pFrameBuf;                    // Address of the framebuffer
+    DWORD dwDrawSize;                   // Size of the X-display framebuffer to allocate
     DWORD xres;                         // X resolution in pixels
     DWORD yres;                         // Y resolution in pixels
     DWORD bpp;                          // BYTES per pixel
@@ -83,27 +103,6 @@ typedef struct
 
 } PACKED TXINITPACKET;
 
-typedef struct
-{
-    int nSize;                          // Size of this structure in bytes
-    int fLowercase;                     // Initial value of the lowercase variable
-    int nSymbolSize;                    // Size of the simbol buffer
-    int nDrawSize;                      // Size of the X-display framebuffer
-    int nHistorySize;                   // Size of the history buffer
-    int nMacros;                        // Number of macros
-    int nVars;                          // Number of user variables
-
-    char sInit[MAX_STRING];             // Init string
-    char keyFn [4 * 12][MAX_STRING];    // Key assignment for F, SF, AF and CF keys
-
-//    TXINITPACKET XInit;                 // Optional XInit packet given at start
-
-} PACKED TINITPACKET, *PTINITPACKET;
-
-// This file name is used to share XWindows parameter data between xice in query
-// mode and linice when loading debugger on X
-
-#define XICE_CONFIG_FILE    ".linice_xwin_config"
 
 /////////////////////////////////////////////////////////////////
 // DEVICE IO CONTROL CODES

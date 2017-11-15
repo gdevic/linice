@@ -137,7 +137,7 @@ FALSE
 * 05/18/97   Added bitwise, boolean operators                     Goran Devic *
 * 05/20/97   Literal handling                                     Goran Devic *
 * 09/10/97   Literal function may call evaluator                  Goran Devic *
-* 09/11/00   Modified for LinIce                                  Goran Devic *
+* 09/11/00   Modified for Linice                                  Goran Devic *
 * 10/22/00   Significant mods for linice                          Goran Devic *
 * --------   ---------------------------------------------------  ----------- *
 *******************************************************************************

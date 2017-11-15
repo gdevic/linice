@@ -56,7 +56,7 @@
 *                                                                             *
 ******************************************************************************/
 
-TINITPACKET Init;                       // Init packet
+TINITPACKET Init;                       // Major Init packet
 TXINITPACKET XInit;                     // X-ice init packet
 
 TICE Ice;                               // The main debugger structure
@@ -190,9 +190,6 @@ int init_module(void)
     memset(&Win, 0, sizeof(TWINDOWS));
     pWin = &Win;
 
-//    memset(&Init, 0, sizeof(TINITPACKET));
-//    memset(&XInit, 0, sizeof(TXINITPACKET));
-
     // Register driver
 
     major_device_number = register_chrdev(0, DEVICE_NAME, &ice_fops);
@@ -223,7 +220,7 @@ int init_module(void)
                 // Register /proc/linice virtual file
                 if( InitProcFs()==0 )
                 {
-                    INFO(("LinIce successfully loaded.\n"));
+                    INFO(("Linice successfully loaded.\n"));
 
                     return 0;
                 }
@@ -332,12 +329,13 @@ static DEV_CLOSE_RET DriverClose(struct inode *inode, struct file *file)
 
 static int DriverIOCTL(struct inode *inode, struct file *file, unsigned int ioctl, unsigned long param)
 {
-    int retval = -EINVAL;
+    int retval = -EINVAL;                   // Return error code
 
     INFO(("IceIOCTL %X param %X\n", ioctl, (int)param));
 
     switch(ioctl)
     {
+        //==========================================================================================
         case ICE_IOCTL_INIT:            // Original initialization packet
             INFO(("ICE_IOCTL_INIT\n"));
 
@@ -345,43 +343,25 @@ static int DriverIOCTL(struct inode *inode, struct file *file, unsigned int ioct
             if( copy_from_user(&Init, (void *)param, sizeof(TINITPACKET))==0 )
             {
                 retval = InitPacket(&Init);
-#if 0
-                // If we also supplied a valid XInit packet at the start,
-                // that means XWindows was running at the time of init.
-                if( Init.XInit.pFrameBuf != 0 )
-                {
-                    // Copy structure into the XInit where it belongs
-                    memcpy(&XInit, (void *)&Init.XInit, sizeof(TXINITPACKET));
-
-                    retval = XInitPacket(&XInit);
-
-                    if( retval==0 )
-                    {
-                        // If everything went well, we can probably switch to using DGA
-//                        pOut = &outDga;
-                    }
-                }
-#endif
             }
             else
                 retval = -EFAULT;       // Faulty memory access
         break;
 
+        //==========================================================================================
         case ICE_IOCTL_XDGA:            // Start using X linear framebuffer as the output device
-#if 1
             INFO(("ICE_IOCTL_XDGA\n"));
 
             // Copy the X-init block to the driver
             if( copy_from_user(&XInit, (void *)param, sizeof(TXINITPACKET))==0 )
             {
-                dprinth(1, "ICE_IOCTL_XDGA");
                 retval = XInitPacket(&XInit);
             }
             else
-#endif
                 retval = -EFAULT;       // Faulty memory access
             break;
 
+        //==========================================================================================
         case ICE_IOCTL_EXIT:            // Decrement usage count to 1 so we can unload the module
 
             // Unhook the system call table hooks early here so we dont collide with the
@@ -398,12 +378,14 @@ static int DriverIOCTL(struct inode *inode, struct file *file, unsigned int ioct
 #endif
             break;
 
+        //==========================================================================================
         case ICE_IOCTL_ADD_SYM:         // Add a symbol table
             INFO(("ICE_IOCTL_ADD_SYM\n"));
 
             retval = UserAddSymbolTable((void *)param);
             break;
 
+        //==========================================================================================
         case ICE_IOCTL_REMOVE_SYM:      // Remove a symbol table
             INFO(("ICE_IOCTL_REMOVE_SYM\n"));
 

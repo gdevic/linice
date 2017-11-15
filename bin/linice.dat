@@ -10,7 +10,7 @@ LOWERCASE=ON
 SYM=2048
 HST=4096
 MACROS=32
-DRAWSIZE=4096
+DRAWSIZE=1024
 
 INIT="lines 25; code on; set lowercase on; i3here on; wc 10;wl;"
 

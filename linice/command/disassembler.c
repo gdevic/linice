@@ -29,7 +29,7 @@
 * --------   ---------------------------------------------------  ----------- *
 * 3/17/2000  Original                                             Goran Devic *
 * 4/26/2000  Major rewrite, added coprocessor instructions.       Goran Devic *
-* 5/04/2000  Modified for LinIce                                  Goran Devic *
+* 5/04/2000  Modified for Linice                                  Goran Devic *
 * 1/13/2002  Cleanup from vmsim; setup for better scanner         Goran Devic *
 * --------   ---------------------------------------------------  ----------- *
 *******************************************************************************
@@ -435,16 +435,16 @@ StartInstructionNoMODRM:
                 {
                     dwDword = NEXTDWORD;
                     if( (pName = SymAddress2Name(0, dwDword))==NULL )
-                        nPos += sprintf( pDis->szDisasm+nPos," A [%08X", (unsigned int) dwDword );
+                        nPos += sprintf( pDis->szDisasm+nPos,"[%08X", (unsigned int) dwDword );
                     else
-                        nPos += sprintf( pDis->szDisasm+nPos," A [%s", pName );
+                        nPos += sprintf( pDis->szDisasm+nPos,"[%s", pName );
                 }
                 else
-                    nPos += sprintf( pDis->szDisasm+nPos," B [%s", sGenReg16_32[ 1 ][ bBase ] );
+                    nPos += sprintf( pDis->szDisasm+nPos,"[%s", sGenReg16_32[ 1 ][ bBase ] );
 
                 // Scaled index, no index if bIndex is 4
                 if( bIndex != 4 )
-                    nPos += sprintf( pDis->szDisasm+nPos," C +%s%s", sScale[ bSs ], sGenReg16_32[ 1 ][ bIndex ] );
+                    nPos += sprintf( pDis->szDisasm+nPos,"+%s%s", sScale[ bSs ], sGenReg16_32[ 1 ][ bIndex ] );
                 else
                     if(bSs != 0)
                     nPos += sprintf( pDis->szDisasm+nPos,"<INVALID MODE>" );
@@ -454,15 +454,15 @@ StartInstructionNoMODRM:
                 {
                     bByte = NEXTBYTE;
                     if( (signed char)bByte < 0 )
-                        nPos += sprintf( pDis->szDisasm+nPos," D -%02X", 0-(signed char)bByte );
+                        nPos += sprintf( pDis->szDisasm+nPos,"-%02X", 0-(signed char)bByte );
                     else
-                        nPos += sprintf( pDis->szDisasm+nPos," D +%02X", bByte );
+                        nPos += sprintf( pDis->szDisasm+nPos,"+%02X", bByte );
                 }
 
                 if( bMod == 2 )
                 {
                     dwDword = NEXTDWORD;
-                    nPos += sprintf( pDis->szDisasm+nPos," E +%08X", (unsigned int) dwDword );
+                    nPos += sprintf( pDis->szDisasm+nPos,"+%08X", (unsigned int) dwDword );
                 }
 
                 // Wrap up the instruction
@@ -480,17 +480,17 @@ StartInstructionNoMODRM:
                 {
                     dwDword = NEXTDWORD;
                     if( (pName = SymAddress2Name(0, dwDword))==NULL )
-                        nPos += sprintf( pDis->szDisasm+nPos," F [%08X]", (unsigned int) dwDword );
+                        nPos += sprintf( pDis->szDisasm+nPos,"[%08X]", (unsigned int) dwDword );
                     else
-                        nPos += sprintf( pDis->szDisasm+nPos," F [%s]", pName );
+                        nPos += sprintf( pDis->szDisasm+nPos,"[%s]", pName );
                 }
                 else
                 {
                     wWord = NEXTWORD;
                     if( (pName = SymAddress2Name(0, wWord))==NULL )
-                        nPos += sprintf( pDis->szDisasm+nPos," G [%04X]", wWord );
+                        nPos += sprintf( pDis->szDisasm+nPos,"[%04X]", wWord );
                     else
-                        nPos += sprintf( pDis->szDisasm+nPos," G [%s]", pName );
+                        nPos += sprintf( pDis->szDisasm+nPos,"[%s]", pName );
                 }
 
                 break;
@@ -511,9 +511,9 @@ StartInstructionNoMODRM:
                     pName = SymFnScope2Local( SymAddress2FnScope(GET_ADDRESS_SEL, GET_ADDRESS_OFFSET), dwDword);
 
                 if( pName )
-                    nPos += sprintf( pDis->szDisasm+nPos," @ [%s]", pName );
+                    nPos += sprintf( pDis->szDisasm+nPos,"[%s]", pName );
                 else
-                    nPos += sprintf( pDis->szDisasm+nPos," @ [BP+%X]", dwDword );
+                    nPos += sprintf( pDis->szDisasm+nPos,"[BP+%X]", dwDword );
             }
             else
                 if( (bMod==1 || bMod==2) && DIS_GETADDRSIZE(pDis->bState) && bRm==5 )
@@ -527,25 +527,25 @@ StartInstructionNoMODRM:
                 pName = SymFnScope2Local( SymAddress2FnScope(GET_ADDRESS_SEL, GET_ADDRESS_OFFSET), dwDword);
 
                 if( pName )
-                    nPos += sprintf( pDis->szDisasm+nPos," @ [%s]", pName );
+                    nPos += sprintf( pDis->szDisasm+nPos,"[%s]", pName );
                 else
-                    nPos += sprintf( pDis->szDisasm+nPos," @ [EBP+%X]", dwDword );
+                    nPos += sprintf( pDis->szDisasm+nPos,"[EBP+%X]", dwDword );
             }
             else
             {
                 // <--- This code is default disassembler code:
 
                 // Print the start of the line
-                nPos += sprintf( pDis->szDisasm+nPos," H [%s", sAdr1[DIS_GETADDRSIZE(pDis->bState)][ bRm ] );
+                nPos += sprintf( pDis->szDisasm+nPos,"[%s", sAdr1[DIS_GETADDRSIZE(pDis->bState)][ bRm ] );
 
                 // Offset (8 or 16) or (8 or 32) bit - 16, 32 bits are unsigned
                 if( bMod==1 )
                 {
                     bByte = NEXTBYTE;
                     if( (signed char)bByte < 0 )
-                        nPos += sprintf( pDis->szDisasm+nPos," I -%02X", 0-(signed char)bByte );
+                        nPos += sprintf( pDis->szDisasm+nPos,"-%02X", 0-(signed char)bByte );
                     else
-                        nPos += sprintf( pDis->szDisasm+nPos," I +%02X", bByte );
+                        nPos += sprintf( pDis->szDisasm+nPos,"+%02X", bByte );
                 }
 
                 if( bMod==2 )
@@ -553,12 +553,12 @@ StartInstructionNoMODRM:
                     if( pDis->bState & DIS_ADDRESS32 )
                     {
                         dwDword = NEXTDWORD;
-                        nPos += sprintf( pDis->szDisasm+nPos," J +%08X", (unsigned int) dwDword );
+                        nPos += sprintf( pDis->szDisasm+nPos,"+%08X", (unsigned int) dwDword );
                     }
                     else
                     {
                         wWord = NEXTWORD;
-                        nPos += sprintf( pDis->szDisasm+nPos," J +%04X", wWord );
+                        nPos += sprintf( pDis->szDisasm+nPos,"+%04X", wWord );
                     }
                 }
 
@@ -613,7 +613,7 @@ StartInstructionNoMODRM:
 
         case _Jb :                                         // immediate byte, relative offset
             bByte = NEXTBYTE;
-            nPos += sprintf( pDis->szDisasm+nPos, " K short %08X", (unsigned int)(Addr.offset + (signed char)bByte) );
+            nPos += sprintf( pDis->szDisasm+nPos, "short %08X", (unsigned int)(Addr.offset + (signed char)bByte) );
             break;
 
         case _Jv :                                         // immediate word or dword, relative offset
@@ -621,17 +621,17 @@ StartInstructionNoMODRM:
             {
                 dwDword = NEXTDWORD;
                 if( (pName = SymAddress2FunctionName(0, Addr.offset + (signed long)dwDword))==NULL )
-                    nPos += sprintf( pDis->szDisasm+nPos, " L %08X", (unsigned int)(Addr.offset + (signed long)dwDword) );
+                    nPos += sprintf( pDis->szDisasm+nPos, "%08X", (unsigned int)(Addr.offset + (signed long)dwDword) );
                 else
-                    nPos += sprintf( pDis->szDisasm+nPos, " L %s", pName );
+                    nPos += sprintf( pDis->szDisasm+nPos, "%s", pName );
             }
             else
             {
                 wWord = NEXTWORD;
                 if( (pName = SymAddress2FunctionName(0, (unsigned int)(Addr.offset + (signed short)wWord)))==NULL )
-                    nPos += sprintf( pDis->szDisasm+nPos, " M %08X", (unsigned int)(Addr.offset + (signed short)wWord) );
+                    nPos += sprintf( pDis->szDisasm+nPos, "%08X", (unsigned int)(Addr.offset + (signed short)wWord) );
                 else
-                    nPos += sprintf( pDis->szDisasm+nPos, " M %s", pName );
+                    nPos += sprintf( pDis->szDisasm+nPos, "%s", pName );
             }
             break;
 
@@ -640,41 +640,41 @@ StartInstructionNoMODRM:
             {
                 dwDword = NEXTDWORD;
                 if( (pName = SymAddress2Name(0, dwDword))==NULL )
-                    nPos += sprintf( pDis->szDisasm+nPos," N %s[%08X]", sSegOverride[ bSegOverride ], (unsigned int) dwDword );
+                    nPos += sprintf( pDis->szDisasm+nPos,"%s[%08X]", sSegOverride[ bSegOverride ], (unsigned int) dwDword );
                 else
-                    nPos += sprintf( pDis->szDisasm+nPos," N %s[%s]", sSegOverride[ bSegOverride ], pName );
+                    nPos += sprintf( pDis->szDisasm+nPos,"%s[%s]", sSegOverride[ bSegOverride ], pName );
             }
             else
             {
                 wWord = NEXTWORD;
                 if( (pName = SymAddress2Name(0, wWord))==NULL )
-                    nPos += sprintf( pDis->szDisasm+nPos," N %s[%04X]", sSegOverride[ bSegOverride ], wWord );
+                    nPos += sprintf( pDis->szDisasm+nPos,"%s[%04X]", sSegOverride[ bSegOverride ], wWord );
                 else
-                    nPos += sprintf( pDis->szDisasm+nPos," N %s[%s]", sSegOverride[ bSegOverride ], pName );
+                    nPos += sprintf( pDis->szDisasm+nPos,"%s[%s]", sSegOverride[ bSegOverride ], pName );
             }
             break;
 
         case _Ib :                                         // immediate byte
             bByte = NEXTBYTE;
-            nPos += sprintf( pDis->szDisasm+nPos," O %02X", bByte );
+            nPos += sprintf( pDis->szDisasm+nPos,"%02X", bByte );
             break;
 
         case _Iv :                                         // immediate word or dword
             if( pDis->bState & DIS_DATA32 )
             {
                 dwDword = NEXTDWORD;
-                nPos += sprintf( pDis->szDisasm+nPos, " P %08X", (unsigned int) dwDword );
+                nPos += sprintf( pDis->szDisasm+nPos, "%08X", (unsigned int) dwDword );
             }
             else
             {
                 wWord = NEXTWORD;
-                nPos += sprintf( pDis->szDisasm+nPos, " P %04X", wWord );
+                nPos += sprintf( pDis->szDisasm+nPos, "%04X", wWord );
             }
             break;
 
         case _Iw :                                         // Immediate word
             wWord = NEXTWORD;
-            nPos += sprintf( pDis->szDisasm+nPos, " Q %04X", wWord );
+            nPos += sprintf( pDis->szDisasm+nPos, "%04X", wWord );
             break;
 
         case _Ap :                                         // 32 bit or 48 bit pointer (call far, jump far)
@@ -683,14 +683,14 @@ StartInstructionNoMODRM:
                 dwDword = NEXTDWORD;
                 wWord = NEXTWORD;
                 if( (pName = SymAddress2FunctionName(wWord, dwDword))==NULL )
-                    nPos += sprintf( pDis->szDisasm+nPos, " R %04X:%08X", wWord, (unsigned int) dwDword );
+                    nPos += sprintf( pDis->szDisasm+nPos, "%04X:%08X", wWord, (unsigned int) dwDword );
                 else
-                    nPos += sprintf( pDis->szDisasm+nPos, " R far %s", pName);
+                    nPos += sprintf( pDis->szDisasm+nPos, "far %s", pName);
             }
             else
             {
                 dwDword = NEXTDWORD;
-                nPos += sprintf( pDis->szDisasm+nPos, " R %04X:%04X", (WORD)(dwDword >> 16), (WORD) (dwDword & 0xFFFF) );
+                nPos += sprintf( pDis->szDisasm+nPos, "%04X:%04X", (WORD)(dwDword >> 16), (WORD) (dwDword & 0xFFFF) );
             }
             break;
 

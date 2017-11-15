@@ -30,7 +30,7 @@
 *   DATE     DESCRIPTION OF CHANGES                               AUTHOR      *
 * --------   ---------------------------------------------------  ----------- *
 * 09/04/97   Original                                             Goran Devic *
-* 04/26/00   Modified for LinIce                                  Goran Devic *
+* 04/26/00   Modified for Linice                                  Goran Devic *
 * 09/10/00   Second revision                                      Goran Devic *
 * --------   ---------------------------------------------------  ----------- *
 *******************************************************************************
@@ -82,6 +82,9 @@ extern void InterruptPoll();
 *   If a key is not available and the fBlock argument is True, it polls until
 *   a key becomes available.  Otherwise, it returns code 0.
 *
+*   If the polling is used, this function will manage showing and hiding
+*   of the cursor carret using callback.
+*
 *   Where:
 *       fBlock is a blocking request.  If set to True, the function polls
 *       the input queue until a key is available.
@@ -93,20 +96,49 @@ extern void InterruptPoll();
 ******************************************************************************/
 CHAR GetKey( BOOL fBlock )
 {
+    BOOL fCarret;                       // Cursor carret on/off state
     CHAR c;
 
-    // If the blocking is False, return 0 if a key is not available
+    // There are two distinct ways to handle input depending on polling or not
 
-    if( fBlock==FALSE && head==tail )
-        return( 0 );
-
-    // Poll for the input character
-
-    while( head == tail )
+    if( fBlock )
     {
-        InterruptPoll();
+        // We need to poll for the input character. Turn the cursor (carret) on
+
+        if( pOut && pOut->carret )
+            (pOut->carret)(TRUE);
+
+        pIce->timer[1] = TIMER_CARRET;      // Set the carret blink rate
+        fCarret = TRUE;                     // Cursor is currently on
+
+        while( head == tail )
+        {
+            InterruptPoll();
+
+            // If the blink timer expired, change the state of the carret
+            if( pIce->timer[1]==0 )
+            {
+                pIce->timer[1] = TIMER_CARRET;  // Reset the timer value
+            
+                if( pOut && pOut->carret )
+                    (pOut->carret)(fCarret = !fCarret);
+            }
+        }
+
+        // Turn the cursor (carret) off
+
+        if( pOut && pOut->carret )
+            (pOut->carret)(FALSE);
+    }
+    else
+    {
+        // Polling is not used.. Return if there is no key in the queue
+
+        if( head==tail )
+            return( 0 );
     }
 
+    // Pick up a key from the input queue and return success
     // Get a character from the queue - make it uninterruptible (atomic)
 
     CLI();

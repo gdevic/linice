@@ -41,21 +41,29 @@
 //////////////////////////////////////////////////////////////////////
 // Define character device that the driver assumes in /dev/*
 //
-#define DEVICE_NAME         "ice"       // Define LinIce device name (/dev)
+#define DEVICE_NAME         "ice"       // Define Linice device name (/dev)
 
 //////////////////////////////////////////////////////////////////////
 // Length of the module name string (incl. 0) and internal symbol table name
+//
 #define MAX_MODULE_NAME     32
 
 //////////////////////////////////////////////////////////////////////
 // Length of a symbol name in characters, variable names
+//
 #define MAX_SYMBOL_LEN      64
 
 // Default symbol file signature - hardcoded length in the symbol header struct
+//
 #define SYMSIG              "SYM"
 
-// Define current symbol file version - 1.0
-#define SYMVER              0x0100
+// Define current symbol file version - 0.7
+//
+#define SYMVER              (0 << 8 | 7)
+
+// Define current Linice version - 0.7
+//
+#define LINICEVER           (0 << 8 | 7)
 
 //////////////////////////////////////////////////////////////////////
 // Define the maxlimum length (including terminating zero) of:
@@ -88,31 +96,45 @@
 //////////////////////////////////////////////////////////////////////
 // Define number of bytes per line for data dump command.
 // This is hard-coded at 16 since data edit functions depend on that.
+//
 #define DATA_BYTES          16
 
 //////////////////////////////////////////////////////////////////////
-// Define maximum X and Y size of the output window in all modes
-// and devices
-#define MAX_OUTPUT_SIZEX    160
-#define MAX_OUTPUT_SIZEY    100
+// Define maximum X and Y size of the output window in all modes and devices
+//
+#define MAX_OUTPUT_SIZEX    160             // ie. WIDTH
+#define MAX_OUTPUT_SIZEY    90              // ie. LINES
 
-// TODO These are depriciated and will be removed
-#define MAX_X               160
-#define MAX_Y               90 
+//////////////////////////////////////////////////////////////////////
+// Moving the X-Window Linice frame by this number of pixels
+//
+#define XWIN_MOVE           16
+
+// Define the maximum XWindows backstore buffer allowed (in bytes)
+//
+#define MAX_XWIN_BUFFER     1024 * 1024 * 32
 
 //////////////////////////////////////////////////////////////////////
 // Define if the serial out connection will use polling method or
 // interrupts. As of this writing, interrupts still have some problems
 // (ocasional lost character), so the polling is used.
+//
 #define SERIAL_POLLING      1
 
 //////////////////////////////////////////////////////////////////////
 // Define size of the internal debugger memory heap
+//
 #define MAX_HEAP            4096
 
 //////////////////////////////////////////////////////////////////////
 // Dont change this. It is a hardcoded value of number of symbol types
+//
 #define MAX_SYMRELOC        4           // Hardcoded to 4 for up to 4 sections
+
+//////////////////////////////////////////////////////////////////////
+// Timer value for the cursor carret blink rate in graphics modes (out of 100Hz)
+//
+#define TIMER_CARRET        20
 
 #endif //  _ICE_LIMITS_H_
 

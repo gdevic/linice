@@ -59,8 +59,6 @@
 *                                                                             *
 ******************************************************************************/
 
-extern void RecalculateDrawWindows();
-
 
 BOOL AddrIsPresent(PTADDRDESC pAddr)
 {

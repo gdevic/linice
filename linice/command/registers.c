@@ -165,8 +165,6 @@ static TRegEdit RegEdit[] = {
 *                                                                             *
 ******************************************************************************/
 
-extern void RecalculateDrawWindows();
-
 void RegDraw(BOOL fForce)
 {
     if( pWin->r.fVisible==TRUE )

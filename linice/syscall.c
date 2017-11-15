@@ -105,7 +105,7 @@ asmlinkage int SyscallFork(struct pt_regs regs)
 
     retval = sys_fork(regs);
 
-//    dprinth(1, "SYSCALL: fork(%s) = %d", current->comm, retval);
+    dprinth(1, "SYSCALL: fork(%s) = %d", current->comm, retval);
 
     return( retval );
 }

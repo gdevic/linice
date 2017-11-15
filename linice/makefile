@@ -4,7 +4,8 @@ INC = /lib/modules/$(uname -r)/build/include
 H1  = ../include
 H2  = include
 
-DEF = -D__KERNEL__ -D_LOOSE_KERNEL_NAMES -DMODULE -DLINUX -DDBG
+#DEF = -D__KERNEL__ -D_LOOSE_KERNEL_NAMES -DMODULE -DLINUX -DDBG
+DEF = -D__KERNEL__ -D_LOOSE_KERNEL_NAMES -DMODULE -DLINUX
 
 CC = gcc
 AS = nasm

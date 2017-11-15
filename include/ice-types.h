@@ -29,7 +29,7 @@
 *   DATE     DESCRIPTION OF CHANGES                               AUTHOR      *
 * --------   ---------------------------------------------------  ----------- *
 * 05/28/00   Original                                             Goran Devic *
-* 09/09/00   Modified for LinIce                                  Goran Devic *
+* 09/09/00   Modified for Linice                                  Goran Devic *
 * --------   ---------------------------------------------------  ----------- *
 *******************************************************************************
 *   Important Defines                                                         *

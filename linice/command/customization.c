@@ -105,14 +105,14 @@ extern int SerialInit(int com, int baud);
 extern void SerialPrintStat();
 extern void SetSymbolContext(WORD wSel, DWORD dwOffset);
 
+extern DWORD GetDec(char **psString);
+
 
 /******************************************************************************
 *                                                                             *
 *   Functions                                                                 *
 *                                                                             *
 ******************************************************************************/
-
-extern void RecalculateDrawWindows();
 
 BOOL InitUserVars(int nVars)
 {
@@ -717,7 +717,6 @@ BOOL cmdSet(char *args, int subClass)
 BOOL cmdResize(char *args, int subClass)
 {
     DWORD value;
-    BYTE n1, n2;
     int x, y;
 
     x = pOut->sizeX;
@@ -731,20 +730,18 @@ BOOL cmdResize(char *args, int subClass)
     else
     {
         // Set the new number of lines or width
-        // Get the 2-digit decimal number
-        n1 = *(args); n2 = *(args+1);
-        if( isdigit(n1) && isdigit(n2) )
-        {
-            value = (n1-'0') * 10 + (n2-'0');
+        value = GetDec(&args);
 
+        if( value )
+        {
             if( subClass==0 )
                 x = value;              // Command was WIDTH
             else
                 y = value;              // Command was LINES
 
-            if( y >= 24 && y <= 90 )
+            if( y >= 24 && y <= MAX_OUTPUT_SIZEY )
             {
-                if( x >= 80 && x <=120 )
+                if( x >= 80 && x <= MAX_OUTPUT_SIZEX )
                 {
                     // Check if the parameters are the same as active, so we
                     // dont call function if we don't have to
@@ -752,24 +749,22 @@ BOOL cmdResize(char *args, int subClass)
                     {
                         // Call the resize function of the output device
                         // This function will do all necessary checking depending
-                        // on the device's capability
+                        // on the device's capability.
 
+                        // It is the responsibility of the output device to actually
+                        // set new sizes in its variables after verifying them...
                         if( (pOut->resize)(x, y)==TRUE )
                         {
-                            // Call succeeded - set new size and redraw windows
-
-                            pOut->sizeX = x;
-                            pOut->sizeY = y;
-
+                            // If the resize returned true, repaint windows
                             RecalculateDrawWindows();
                         }
                     }
                 }
                 else
-                    dprinth(1, "Width has to be in the range [80, 120]");
+                    dprinth(1, "Width has to be in the range [80, %d]", MAX_OUTPUT_SIZEX);
             }
             else
-                dprinth(1, "Lines have to be in the range [24, 90]");
+                dprinth(1, "Lines have to be in the range [24, %d]", MAX_OUTPUT_SIZEY);
         }
         else
             deb.error = ERR_SYNTAX;
@@ -962,12 +957,45 @@ Proceed:
 *           0   - VGA
 *           1   - MDA (Monochrome display)
 *           2   - XWIN (DGA X-Window compatible screen)
+*           3   - ALTSCR command - alternate way to switch displays
 *
 ******************************************************************************/
 BOOL cmdDisplay(char *args, int subClass)
 {
+    if( subClass==3 )
+    {
+        // ALTSCR command - translate into one of the basic displays
+        if( !strcmp(args, "vga") ) subClass = 0;        // VGA?
+        else
+        if( !strcmp(args, "mono")) subClass = 1;        // MONO?
+        else
+        if( !strcmp(args, "xwin")) subClass = 2;        // XWIN
+        else
+        if( !strcmp(args, "off") ) subClass = 0;        // OFF? -> VGA
+        else
+        {
+            // No arguments to ALTSCR command - display current display assignment
+
+            if( pOut==&outVga )
+                strcpy(Buf, "VGA");
+            else
+            if( pOut==&outMda )
+                strcpy(Buf, "MONO");
+            else
+            if( pOut==&outDga )
+                strcpy(Buf, "XWIN");
+            else
+                strcpy(Buf, "SERIAL");  // Otherwise it is a serial connection..
+
+            dprinth(1, "Current display is %s", Buf);
+
+            return( TRUE );
+        }
+    }
+
     // Restore user screen from the old display device
     dputc(DP_RESTOREBACKGROUND);
+    dputc(DP_DISABLE_OUTPUT);
 
     switch( subClass )
     {
@@ -981,7 +1009,12 @@ BOOL cmdDisplay(char *args, int subClass)
             break;
 
         case 2:     // DGA-compatible X-Windows display
-            pOut = &outDga;
+            // We can switch to this driver only if xice had passed init packet,
+            // we allocated memory and initialized this subsystem
+            if( pIce->pXDrawBuffer )
+                pOut = &outDga;
+            else
+                dprinth(1, "Error: XWIN not initialized. Please run 'xice' to send parameters..");
             break;
 
         default:

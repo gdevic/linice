@@ -55,7 +55,7 @@
 *                                                                             *
 ******************************************************************************/
 
-BYTE cacheText[MAX_Y][MAX_X];           // Cache output buffer
+BYTE cacheText[MAX_OUTPUT_SIZEY][MAX_OUTPUT_SIZEX];           // Cache output buffer
 
 /******************************************************************************
 *                                                                             *
@@ -72,16 +72,16 @@ BYTE cacheText[MAX_Y][MAX_X];           // Cache output buffer
 void CacheTextScrollUp(DWORD top, DWORD bottom)
 {
     // Scroll up all requested lines
-    memmove(&cacheText[top][0], &cacheText[top+1][0], MAX_X * (bottom-top));
+    memmove(&cacheText[top][0], &cacheText[top+1][0], MAX_OUTPUT_SIZEX * (bottom-top));
 
     // Clear the last line
-    memset(&cacheText[bottom][0], 0, MAX_X);
+    memset(&cacheText[bottom][0], 0, MAX_OUTPUT_SIZEX);
 }
 
 void CacheTextCls()
 {
     // Clear complete cache to spaces
-    memset(cacheText, ' ', MAX_X * MAX_Y);
+    memset(cacheText, ' ', MAX_OUTPUT_SIZEX * MAX_OUTPUT_SIZEY);
 }
 
 /******************************************************************************

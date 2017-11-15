@@ -811,7 +811,7 @@ BOOL ElfToSym(BYTE *pElf, char *pSymName, char *pTableName)
                 write(fs, "", 1);
                 dfs = 1;                // Start with the offset 1 of the strings
 
-                PushString(fd, "Symbol information for LinIce kernel level debugger");
+                PushString(fd, "Symbol information for Linice kernel level debugger");
                 PushString(fd, "Copyright 2000-2001 Goran Devic");
 
                 // The very first thing we need to do is queue these source

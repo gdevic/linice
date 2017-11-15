@@ -61,7 +61,6 @@ static char sCmd[MAX_STRING];
 *                                                                             *
 ******************************************************************************/
 
-extern void RecalculateDrawWindows();
 extern void EdLin( char *sCmdLine );
 extern void GetSysreg( TSysreg * pSys );
 extern void SetSysreg( TSysreg * pSys );
@@ -72,6 +71,7 @@ extern void *DisarmBreakpoints(void);
 extern BOOL EvalBreakpoint(void *pBp);
 extern int  BreakpointCheck(TADDRDESC Addr);
 extern void SetSymbolContext(WORD wSel, DWORD dwOffset);
+extern char *Index2String(DWORD index);
 
 /******************************************************************************
 *                                                                             *

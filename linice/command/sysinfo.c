@@ -220,7 +220,7 @@ BOOL PrintGDT(int nLine, DWORD base, DWORD sel)
     }
 
     return(dprinth(nLine, "%04X  %s  %08X  %08X  %d    %s  %s",
-        sel,
+        (sel & ~7) + pGdt->dpl,
         pType,
         GET_GDT_BASE(pGdt),
         pGdt->granularity?
@@ -399,10 +399,11 @@ BOOL cmdCpu(char *args, int subClass)
 *                                                                             *
 *******************************************************************************
 *
-*   Display kernel loadable modules:
+*   Display list of kernel loadable modules or more information about a single
+*   module.
 *       if no name is given, list all loaded modules
 *       if a partial name is given (module*) display those modules
-*       if a full name is given, display extende info for that module
+*       if a full name is given, display extended info for that module
 *
 ******************************************************************************/
 BOOL cmdModule(char *args, int subClass)
@@ -443,6 +444,8 @@ BOOL cmdModule(char *args, int subClass)
             else
                 pModName = "kernel";
 
+            // This little argument gymnastic lets us separate different ways we
+            // specify module(s) as parameter to this command (all/single/single extra)
             if( nLen != 0 )
             {
                 if( fExact && strcmp(pModName, args)!=0 )
@@ -457,7 +460,7 @@ BOOL cmdModule(char *args, int subClass)
             if( bits[0]==0 )
                 strcat(bits, "UNINIT");
 
-            if(!dprinth(nLine++, "%08X %-16s  %-6d  %-3d  %-3d %08X %08X   %d   %2X  %s",
+            if(!dprinth(nLine++, "%08X %-16s  %-6d  %-4d %-3d %08X %08X   %d   %2X  %s",
                     (DWORD) pMod,
                     pModName,
                     pMod->size,
@@ -560,11 +563,16 @@ struct module *FindModule(const char *name)
 ******************************************************************************/
 BOOL cmdVer(char *args, int subClass)
 {
-    dprinth(1, "Linice (C) 2000-2001 Goran Devic");
+    dprinth(1, "Linice (C) 2000-2002 by Goran Devic.  All Rights Reserved.");
+    dprinth(1, "Version: %d.%d", LINICEVER >> 8, LINICEVER & 0xFF);
+
+    // Display temporary warning
+
+    dprinth(1, "This is early unofficial release!");
 
     if( *args )
     {
-        dprinth(1, "Symbols check: %d", CheckSymtab(pIce->pSymTabCur));
+        dprinth(1, "Symbol check: %d", CheckSymtab(pIce->pSymTabCur));
     }
 
     return(TRUE);
@@ -583,8 +591,6 @@ BOOL cmdVer(char *args, int subClass)
 ******************************************************************************/
 BOOL cmdProc(char *args, int subClass)
 {
-#if 0
-
     int nLine = 1;
     int pid;
     struct task_struct *pTask;
@@ -612,8 +618,8 @@ BOOL cmdProc(char *args, int subClass)
             {
                 /* Re-load page tables */
                 {
-                    unsigned long new_cr3 = pTask->tss.cr3;
-                    asm volatile("movl %0,%%cr3": :"r" (new_cr3));
+//                    unsigned long new_cr3 = pTask->tss.cr3;
+//                    asm volatile("movl %0,%%cr3": :"r" (new_cr3));
                 }
             }
         }
@@ -636,14 +642,14 @@ BOOL cmdProc(char *args, int subClass)
             if( !dprinth(nLine++, "%c%c%4d  %04X %08X  %s %4d %4d %s",
                 DP_SETCOLINDEX, pTask==current? COL_BOLD : COL_NORMAL,
                 pTask->pid,
-                pTask->tss.tr,
+                /*pTask->tss.tr*/ 0,
                 (DWORD)pTask, 
                 pTask->state==TASK_RUNNING?         "RUNNING ":
                 pTask->state==TASK_INTERRUPTIBLE?   "SLEEPING":
                 pTask->state==TASK_UNINTERRUPTIBLE? "UNINTR  ":
                 pTask->state==TASK_ZOMBIE?          "ZOMBIE  ":
                 pTask->state==TASK_STOPPED?         "STOPPED ":
-                pTask->state==TASK_SWAPPING?        "SWAPPING":
+/*              pTask->state==TASK_SWAPPING?        "SWAPPING":*/
                                                     "<?>     ",
                 pTask->uid,
                 pTask->gid,
@@ -652,7 +658,7 @@ BOOL cmdProc(char *args, int subClass)
                 break;
         }
     }
-#endif
+
     return(TRUE);
 }
 
@@ -669,12 +675,15 @@ BOOL cmdProc(char *args, int subClass)
 ******************************************************************************/
 BOOL cmdTss(char *args, int subClass)
 {
-#if 0
-
     int nLine = 1;
     int tr;
     TGDT_Gate *pGdt;
+    TSS_Struct *pTss;
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,4,0)
+#else
     struct thread_struct *tss;
+#endif
 
     if( *args )
     {
@@ -684,8 +693,13 @@ BOOL cmdTss(char *args, int subClass)
     }
     else
     {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,4,0)
+        // Select CPU #0 TSS
+        tr = 0xA0;
+#else
         // TSS that is current should be the same as the one in current->tss
         tr = current->tss.tr;
+#endif
     }
 
     pGdt = (TGDT_Gate *) (deb.gdt.base + (tr & ~7));
@@ -693,7 +707,7 @@ BOOL cmdTss(char *args, int subClass)
     if( pGdt->type==DESC_TYPE_TSS16B || pGdt->type==DESC_TYPE_TSS16A ||
         pGdt->type==DESC_TYPE_TSS32B || pGdt->type==DESC_TYPE_TSS32A )
     {
-        tss = (struct thread_struct *) GET_GDT_BASE(pGdt);
+        pTss = (TSS_Struct *) GET_GDT_BASE(pGdt);
 
         dprinth(nLine++, "TR=%04X   BASE=%08X  LIMIT=%X",
                 tr,
@@ -701,53 +715,47 @@ BOOL cmdTss(char *args, int subClass)
                 GET_GDT_LIMIT(pGdt));
 
         dprinth(nLine++, "LDT=%04X  GS=%04X  FS=%04X  DS=%04X  SS=%04X  CS=%04X  ES=%04X",
-                tss->ldt,
-                tss->gs,
-                tss->fs,
-                tss->ds,
-                tss->ss,
-                tss->cs,
-                tss->es);
+                pTss->ldt,
+                pTss->gs,
+                pTss->fs,
+                pTss->ds,
+                pTss->ss,
+                pTss->cs,
+                pTss->es);
 
-        dprinth(nLine++, "CR3=%08X", current->tss.cr3);
+        dprinth(nLine++, "CR3=%08X", pTss->cr3);
 
         dprinth(nLine++, "EAX=%08X  EBX=%08X  ECX=%08X  EDX=%08X  EIP=%08X",
-                tss->eax,
-                tss->ebx,
-                tss->ecx,
-                tss->edx,
-                tss->eip);
+                pTss->eax,
+                pTss->ebx,
+                pTss->ecx,
+                pTss->edx,
+                pTss->eip);
 
         dprinth(nLine++, "ESI=%08X  EDI=%08X  EBP=%08X  ESP=%08X  EFL=%08X",
-                tss->esi,
-                tss->edi,
-                tss->ebp,
-                tss->esp,
-                tss->eflags);
+                pTss->esi,
+                pTss->edi,
+                pTss->ebp,
+                pTss->esp,
+                pTss->eflags);
 
         dprinth(nLine++, "SS0=%04X:%08X  SS1=%04X:%08X  SS2=%04X:%08X",
-                tss->ss0,
-                tss->esp0,
-                tss->ss1,
-                tss->esp1,
-                tss->ss2,
-                tss->esp2);
+                pTss->ss0,
+                pTss->esp0,
+                pTss->ss1,
+                pTss->esp1,
+                pTss->ss2,
+                pTss->esp2);
 
         dprinth(nLine++, "I/O Map Base=%04X  I/O Map Size=%X",
-                (int)&tss->io_bitmap[0] - (int)tss,
+                (int)&pTss->ioperm - (int)pTss,
                 IO_BITMAP_SIZE);
-
-        dprinth(nLine++, "CR2=%08X  trap_no=%08X  error_code=%X",
-                tss->cr2,
-                tss->trap_no,
-                tss->error_code);
     }
     else
     {
         dprinth(nLine++, "Invalid TSS descriptor %04X", tr);
     }
 
-#endif
     return( TRUE );
 }
 

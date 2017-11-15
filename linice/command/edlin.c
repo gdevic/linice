@@ -45,7 +45,7 @@
 *   DATE     DESCRIPTION OF CHANGES                               AUTHOR      *
 * --------   ---------------------------------------------------  ----------- *
 * 8/28/97    Original                                             Goran Devic *
-* 05/17/00   Modified for LinIce                                  Goran Devic *
+* 05/17/00   Modified for Linice                                  Goran Devic *
 * 09/10/00   Second revision                                      Goran Devic *
 * --------   ---------------------------------------------------  ----------- *
 *******************************************************************************
@@ -119,6 +119,7 @@ static DWORD hView;                     // Handle to a history view
 *                                                                             *
 ******************************************************************************/
 
+extern void XWinControl(CHAR Key);
 extern void CodeScroll(int Xdir, int Ydir);
 extern char *MacroExpand(char *pCmd);
 
@@ -444,6 +445,24 @@ void EdLin( char *sCmdLine )
 
             switch( Key )
             {
+                //========================= X - WINDOW =========================
+
+                case CHAR_CTRL + CHAR_ALT + HOME:
+                case CHAR_CTRL + CHAR_ALT + 'c':
+                case CHAR_CTRL + CHAR_ALT + 'C':
+                case CHAR_CTRL + CHAR_ALT + LEFT:
+                case CHAR_CTRL + CHAR_ALT + RIGHT:
+                case CHAR_CTRL + CHAR_ALT + UP:
+                case CHAR_CTRL + CHAR_ALT + DOWN:
+
+                    // Ctrl+Alt+Home repositions the X-Window window to the top-left corner
+                    // Ctrl+Alt+'C' centers the window on the X screen
+                    // Ctrl+Alt+<arrow keys> move window around
+
+                    XWinControl(Key);
+
+                    break;
+
                 //======================== CODE WINDOW =========================
 
                 case CHAR_CTRL + HOME:

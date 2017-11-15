@@ -32,7 +32,7 @@
 *   DATE     DESCRIPTION OF CHANGES                               AUTHOR      *
 * --------   ---------------------------------------------------  ----------- *
 * 4/28/2000  Original                                             Goran Devic *
-* 5/04/2000  Modified for LinIce                                  Goran Devic *
+* 5/04/2000  Modified for Linice                                  Goran Devic *
 * 1/13/2002  Cleanup from vmsim; setup for better scanner         Goran Devic *
 * --------   ---------------------------------------------------  ----------- *
 *******************************************************************************

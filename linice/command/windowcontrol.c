@@ -59,8 +59,6 @@
 *                                                                             *
 ******************************************************************************/
 
-extern void RecalculateDrawWindows();
-
 /******************************************************************************
 *                                                                             *
 *   Functions                                                                 *
@@ -241,6 +239,9 @@ BOOL cmdCls(char *args, int subClass)
 *
 *   Restores client window, waits for a keypress and then pops up debugger back
 *
+*   The keypress wait that is used is not polling since we dont want to display
+*   cursor carret on the screen.
+*
 ******************************************************************************/
 BOOL cmdRs(char *args, int subClass)
 {
@@ -248,7 +249,7 @@ BOOL cmdRs(char *args, int subClass)
     dputc(DP_RESTOREBACKGROUND);
 
     // Wait for a keypress
-    GetKey( TRUE );
+    while( GetKey( FALSE )==0 );
 
     // Back to debugger
     dputc(DP_SAVEBACKGROUND);

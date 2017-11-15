@@ -33,7 +33,7 @@
 * --------   ---------------------------------------------------  ----------- *
 * 3/17/2000  Original                                             Goran Devic *
 * 4/26/2000  Major rewrite, added coprocessor instructions.       Goran Devic *
-* 5/04/2000  Modified for LinIce                                  Goran Devic *
+* 5/04/2000  Modified for Linice                                  Goran Devic *
 * 1/13/2002  Cleanup from vmsim; setup for better scanner         Goran Devic *
 * --------   ---------------------------------------------------  ----------- *
 *******************************************************************************

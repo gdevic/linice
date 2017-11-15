@@ -66,9 +66,6 @@ TOUT outMda;
 
 #define LINUX_MDA_TEXT  (PAGE_OFFSET + 0xB0000)
 
-#define MAX_SIZEX       80
-#define MAX_SIZEY       25              // 25 or 43 !!!
-
 //---------------------------------------------------
 // MDA registers content for text mode 80x25
 //---------------------------------------------------
@@ -152,7 +149,7 @@ typedef struct
 
 static TMda mda = { 25, };              // 25 lines by default
 
-extern BYTE cacheText[MAX_Y][MAX_X];
+extern BYTE cacheText[MAX_OUTPUT_SIZEY][MAX_OUTPUT_SIZEX];
 
 /******************************************************************************
 *                                                                             *
@@ -166,9 +163,11 @@ extern void CacheTextCls();
 static void MdaSprint(char *s);
 static void MdaMouse(int x, int y);
 static BOOL MdaResize(int x, int y);
+static void MdaCarret(BOOL fOn);
 
 static void HercSprint(char *s);
 static void HercMouse(int x, int y);
+static void HercCarret(BOOL fOn);
 
 /******************************************************************************
 *                                                                             *
@@ -185,6 +184,8 @@ static void HercMouse(int x, int y);
 static void InitMdaHercVideoMode(int lines)
 {
     int index;
+
+    memset(&outMda, 0, sizeof(outMda));
 
     outMda.x = 0;
     outMda.y = 0;
@@ -205,6 +206,7 @@ static void InitMdaHercVideoMode(int lines)
     {
         // Set 43-line pointers
         outMda.sprint = HercSprint;
+        outMda.carret = HercCarret;
         outMda.mouse = HercMouse;
 
         // Disable video signal
@@ -240,6 +242,7 @@ static void InitMdaHercVideoMode(int lines)
     {
         // Set 25-line pointers
         outMda.sprint = MdaSprint;
+        outMda.carret = MdaCarret;
         outMda.mouse = MdaMouse;
 
         // Disable video signal
@@ -315,7 +318,7 @@ static BOOL MdaResize(int x, int y)
             dprinth(1, "Only 25 and 43 lines supported on MDA display");
     }
     else
-        dprinth(1, "Only WIDTH=80 supported");
+        dprinth(1, "Only WIDTH=80 supported on MDA display");
 
     return( FALSE );
 }
@@ -323,48 +326,19 @@ static BOOL MdaResize(int x, int y)
 
 /******************************************************************************
 *                                                                             *
-*   static void SaveBackground(void)                                          *
-*                                                                             *
-*******************************************************************************
-*
-*   Saves the MDA text screen background and prepares driver for displaying
-*
-******************************************************************************/
-static void SaveBackground(void)
-{
-    // We dont care for the background on MDA/Hercules card
-}
-
-
-/******************************************************************************
-*                                                                             *
-*   static void RestoreBackground(void)                                       *
-*                                                                             *
-*******************************************************************************
-*
-*   Restores MDA text screen
-*
-******************************************************************************/
-static void RestoreBackground(void)
-{
-    // We dont care for the background on MDA/Hercules card
-}
-
-
-/******************************************************************************
-*                                                                             *
-*   static void MdaShowCursorPos(void)                                        *
+*   static void MdaCarret(BOOL fOn)                                           *
 *                                                                             *
 *******************************************************************************
 *
 *   Shows the cursor at the current position
 *
 ******************************************************************************/
-static void MdaShowCursorPos(void)
+static void MdaCarret(BOOL fOn)
 {
     WORD wOffset;
 
     // Set the cursor on the MDA screen
+    // We ignore on/off message not to interfere with the "natural" blink rate
 
     wOffset = outMda.y * 80 + outMda.x;
 
@@ -430,14 +404,14 @@ static void MdaScrollUp()
 
 /******************************************************************************
 *                                                                             *
-*   MdaSprint(char *s)                                                        *
+*   static void MdaSprint(char *s)                                            *
 *                                                                             *
 *******************************************************************************
 *
 *   String output to a 25-line MDA text buffer.
 *
 ******************************************************************************/
-void MdaSprint(char *s)
+static void MdaSprint(char *s)
 {
     BYTE c;
     DWORD dwTabs;
@@ -452,12 +426,14 @@ void MdaSprint(char *s)
         else
         switch( c )
         {
-            case DP_SAVEBACKGROUND:
-                    SaveBackground();
+            case DP_ENABLE_OUTPUT:
+            case DP_DISABLE_OUTPUT:
+                    // Enable and disable output are ignored on mda device
                 break;
 
+            case DP_SAVEBACKGROUND:
             case DP_RESTOREBACKGROUND:
-                    RestoreBackground();
+                    // Save and restore background are ignored on mda device
                 break;
 
             case DP_CLS:
@@ -554,22 +530,23 @@ void MdaSprint(char *s)
                         outMda.x++;
                 break;
         }
-
-        MdaShowCursorPos();
     }
 }
 
 
 /******************************************************************************
 *                                                                             *
-*   static void HercPrintCharacter(DWORD x, DWORD y, BYTE c)                  *
+*   static void HercPrintCharacter(DWORD x, DWORD y, BYTE c, int col)         *
 *                                                                             *
 *******************************************************************************
 *
 *   Prints a single character onto the Hercules graphics display buffer
 *
+*   Where:
+*       col is the color index to be used, or special -1 for carret invert
+*
 ******************************************************************************/
-static void HercPrintCharacter(DWORD x, DWORD y, BYTE c)
+static void HercPrintCharacter(DWORD x, DWORD y, BYTE c, int col)
 {
     BYTE *dest, *src;
     BYTE *pStart;
@@ -578,8 +555,16 @@ static void HercPrintCharacter(DWORD x, DWORD y, BYTE c)
     src = (BYTE *) &font8x8[c];
     pStart = dest;
 
-    switch( mda.col )
+    switch( col )
     {
+        case -1:    // Carret invert code, last 2 lines
+            src += 6;
+            dest = pStart + 90 + 2 * 0x2000;
+            *dest = (*src++) ^ 0xFF; dest+=0x2000;
+            *dest = (*src++) ^ 0xFF;
+
+            break;
+
         case COL_BOLD:
             *dest = *src | (*src >> 1); src++; dest+=0x2000;
             *dest = *src | (*src >> 1); src++; dest+=0x2000;
@@ -630,6 +615,25 @@ static void HercPrintCharacter(DWORD x, DWORD y, BYTE c)
 
 /******************************************************************************
 *                                                                             *
+*   static void HercCarret(BOOL fOn)                                          *
+*                                                                             *
+*******************************************************************************
+*
+*   Draws a cursor carret.
+*
+******************************************************************************/
+static void HercCarret(BOOL fOn)
+{
+    // Depending on the off/on message, we redraw cached ASCII code or inverse of it
+    // Depending on the insert/overtype more, invert whole character or use a special col code (-1)
+    if( fOn )
+        HercPrintCharacter(outMda.x, outMda.y, cacheText[outMda.y][outMda.x], deb.fOvertype ? COL_REVERSE : -1);
+    else
+        HercPrintCharacter(outMda.x, outMda.y, cacheText[outMda.y][outMda.x], mda.col);
+}
+
+/******************************************************************************
+*                                                                             *
 *   static void HercScrollUp()                                                *
 *                                                                             *
 *******************************************************************************
@@ -642,12 +646,12 @@ static void HercPrintCharacter(DWORD x, DWORD y, BYTE c)
 static void HercScrollUp()
 {
     int x, y;
-    static BYTE cacheTextPreScroll[MAX_Y][MAX_X];
+    static BYTE cacheTextPreScroll[MAX_OUTPUT_SIZEY][MAX_OUTPUT_SIZEX];
 
     // Copy cacheText state before scroll
     memmove(&cacheTextPreScroll[mda.scrollTop][0], 
             &cacheText[mda.scrollTop][0], 
-            MAX_X * (mda.scrollBottom-mda.scrollTop+1));
+            MAX_OUTPUT_SIZEX * (mda.scrollBottom-mda.scrollTop+1));
 
     // We use cacheText buffer that we scroll first, and then read the
     // content to print it, since reading from the graphics buffer in order
@@ -662,24 +666,10 @@ static void HercScrollUp()
             {
                 // Print out only those positions that changed after the scroll
                 if( cacheText[y][x] != cacheTextPreScroll[y][x] )
-                    HercPrintCharacter(x, y, cacheText[y][x]);
+                    HercPrintCharacter(x, y, cacheText[y][x], mda.col);
             }
         }
     }
-}
-
-
-/******************************************************************************
-*                                                                             *
-*   static void HercShowCursorPos(void)                                       *
-*                                                                             *
-*******************************************************************************
-*
-*   Shows the cursor at the current position
-*
-******************************************************************************/
-static void HercShowCursorPos(void)
-{
 }
 
 
@@ -699,14 +689,14 @@ static void HercMouse(int x, int y)
 
 /******************************************************************************
 *                                                                             *
-*   HercSprint(char *s)                                                       *
+*   static void HercSprint(char *s)                                           *
 *                                                                             *
 *******************************************************************************
 *
 *   String output to a Hercules graphics screen buffer.
 *
 ******************************************************************************/
-void HercSprint(char *s)
+static void HercSprint(char *s)
 {
     BYTE c;
     DWORD dwTabs;
@@ -722,20 +712,22 @@ void HercSprint(char *s)
         else
         switch( c )
         {
-            case DP_SAVEBACKGROUND:
-                    SaveBackground();
+            case DP_ENABLE_OUTPUT:
+            case DP_DISABLE_OUTPUT:
+                    // Enable and disable output are ignored on mda device
                 break;
 
+            case DP_SAVEBACKGROUND:
             case DP_RESTOREBACKGROUND:
-                    RestoreBackground();
+                    // Save and restore background are ignored on mda device
                 break;
 
             case DP_CLS:
                     // Clear the cache text
                     CacheTextCls();
 
-                    // Clear the screen and reset the cursor coordinates
-                    memset_w(mda.pText, 0, 32 * 1024);
+                    // Clear the screen and reset the cursor coordinates (in dwords)
+                    memset_d(mda.pText, 0, 32 * 1024 / 4);
 
                     outMda.x = 0;
                     outMda.y = 0;
@@ -811,7 +803,7 @@ void HercSprint(char *s)
 
             default:
                     // All printable characters
-                    HercPrintCharacter(outMda.x, outMda.y, c);
+                    HercPrintCharacter(outMda.x, outMda.y, c, mda.col);
 
                     // Store it in the cache
                     cacheText[outMda.y][outMda.x] = c;
@@ -821,8 +813,6 @@ void HercSprint(char *s)
                         outMda.x++;
                 break;
         }
-
-        HercShowCursorPos();
     }
 }
 

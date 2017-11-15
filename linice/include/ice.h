@@ -63,7 +63,7 @@ typedef struct
     DWORD nSymbolBufferSize;            // Symbol buffer size
     DWORD nSymbolBufferAvail;           // Symbol buffer size available
     DWORD nXDrawSize;                   // DrawSize parameter
-    BYTE *pXDrawBuffer;                 // Draw buffer pointer
+    BYTE *pXDrawBuffer;                 // Backstore buffer pointer, if XInitPacket accepted
     BYTE *pXFrameBuffer;                // Mapped X frame buffer
     TSYMTAB *pSymTab;                   // Linked list of symbol tables
     TSYMTAB *pSymTabCur;                // Pointer to the current symbol table
@@ -98,6 +98,8 @@ typedef struct
     int nIntsIce[0x40];                 // While debugger run
 
     // Timers - decremented by the timer interrupt down to zero
+    //  0 - serial polling
+    //  1 - cursor carret blink
     DWORD timer[2];
 
 } TICE, *PTICE;
@@ -180,6 +182,8 @@ typedef struct
     BOOL fPause;                        // Pause after a screenful of scrolling info
     DWORD dwTabs;                       // Tabs value for source display
     BYTE fOvertype;                     // Cursor shape is overtype? (or insert)
+    DWORD FrameX;                       // X-Window frame origin X coordinate
+    DWORD FrameY;                       // X-Window frame origin X coordinate
 
     BOOL fTrace;                        // Trace command in progress
     BOOL fDelayedTrace;                 // Delayed trace request
@@ -273,6 +277,7 @@ typedef struct
 
     void (*sprint)(char *c);            // Effective print string function
     void (*mouse)(int, int);            // Function that displays mouse cursor
+    void (*carret)(BOOL fOn);           // Cursor (carret) callback
     BOOL (*resize)(int, int);           // Resize window command
 
 } TOUT, *PTOUT;
@@ -326,6 +331,7 @@ extern void RegDraw(BOOL fForce);
 extern void LocalsDraw(BOOL fForce);
 extern void DataDraw(BOOL fForce, DWORD newOffset);
 extern void CodeDraw(BOOL fForce);
+extern void RecalculateDrawWindows();
 
 extern BOOL CommandExecute( char *pCmd );
 

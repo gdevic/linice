@@ -77,7 +77,7 @@ extern void HookSyscall(void);
 extern BOOL InitUserVars(int num);
 extern BOOL InitMacros(int num);
 extern void InitEdit();
-extern void RecalculateDrawWindows(void);
+extern BOOL cmdVer(char *args, int subClass);
 
 extern BYTE *ice_malloc(DWORD size);
 extern void ice_free_heap(BYTE *pHeap);
@@ -125,6 +125,10 @@ int InitPacket(PTINITPACKET pInit)
 
                 VgaInit();
                 pOut = &outVga;
+
+                // Save user screen from the VGA display device
+                dputc(DP_ENABLE_OUTPUT);
+                dputc(DP_SAVEBACKGROUND);
 
                 // Set default values for initial windows:
                 // Visible: registers, data and code windows and, of course, history
@@ -232,7 +236,10 @@ int InitPacket(PTINITPACKET pInit)
                         
                                         INFO(("INIT: ""%s""\n", pInit->sInit));
 
-                                        dprinth(1, "LinIce (C) 2000-2001 by Goran Devic.  All Rights Reserved.");
+                                        // Display version information
+
+                                        cmdVer("", 0);
+
                                         dprinth(1, "");
                                         dprinth(1, "LINICE: Init: %s", pInit->sInit);
                         

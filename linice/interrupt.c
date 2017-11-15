@@ -328,7 +328,7 @@ DWORD InterruptHandler( DWORD nInt, PTREGS pRegs )
     if(pIce->fRunningIce == TRUE)
     {
         //---------------------------------------------
-        //  Exception occurred during the LinIce run
+        //  Exception occurred during the Linice run
         //---------------------------------------------
         pIce->nIntsIce[nInt & 0x3F]++;
 
@@ -338,8 +338,8 @@ DWORD InterruptHandler( DWORD nInt, PTREGS pRegs )
         {
             case 0x20:      // Timer
                 // Put all required timers here
-                if( pIce->timer[0] )   pIce->timer[0]--;
-                if( pIce->timer[1] )   pIce->timer[1]--;
+                if( pIce->timer[0] )   pIce->timer[0]--;        // Serial polling
+                if( pIce->timer[1] )   pIce->timer[1]--;        // Cursor carret blink
                 break;
 
             case 0x21:      // Keyboard interrupt
