@@ -52,14 +52,14 @@
 *                                                                             *
 ******************************************************************************/
 
+static char *pSrcEipLine = NULL;        // Cache pointer to source line for repeated src step and trace
+
 /******************************************************************************
 *                                                                             *
 *   External Functions                                                        *
 *                                                                             *
 ******************************************************************************/
 
-extern DWORD SymFnLinAddress2NextAddress(TSYMFNLIN *pFnLin, DWORD dwAddress);
-extern void SetSymbolContext(WORD wSel, DWORD dwOffset);
 extern void SetNonStickyBreakpoint(TADDRDESC Addr);
 
 // From linux/reboot.h
@@ -195,6 +195,37 @@ BOOL cmdGo(char *args, int subClass)
 
 /******************************************************************************
 *                                                                             *
+*   BOOL RepeatTrace(void)                                                    *
+*                                                                             *
+*******************************************************************************
+*
+*   Check if we need to continue execution or break on a source trace command.
+*
+*   Returns:
+*       TRUE - Do repeat trace command
+*       FALSE - Break into the debugger
+*
+******************************************************************************/
+BOOL RepeatTrace(void)
+{
+    // If the new context is in the same function line as the cached originator,
+    // continue running, otherwise break.
+    // Also break if we left the legal context (pFnLin is NULL in that case)
+    if( deb.pFnLin && deb.pSrcEipLine==pSrcEipLine )
+    {
+        deb.fTrace = TRUE;              // Do another trace step
+
+        return( TRUE );                 // Continue looping
+    }
+
+    pSrcEipLine = NULL;                 // Reset the cached variable
+
+    return( FALSE );                    // Exit breaking into the debugger
+}
+
+
+/******************************************************************************
+*                                                                             *
 *   BOOL cmdTrace(char *args, int subClass)                                   *
 *                                                                             *
 *******************************************************************************
@@ -210,10 +241,7 @@ BOOL cmdGo(char *args, int subClass)
 ******************************************************************************/
 BOOL cmdTrace(char *args, int subClass)
 {
-    TDISASM Dis;                        // Disassembler interface structure
-    TADDRDESC BpAddr;                   // Address of a non-sticky breakpoint
     DWORD count;                        // Temporary count store
-    DWORD dwNextLine;                   // Address of the next line's code
     DWORD dwAddress;                    // Current scanning address
 
     if( *args != 0 )
@@ -249,11 +277,8 @@ BOOL cmdTrace(char *args, int subClass)
         // Another optional parameter is the number of instructions to single step
         if( *args )
         {
-            if( Expression(&count, args, &args) && !*args )
+            if( Expression(&count, args, &args) && !*args && count )
             {
-                if( count==0 )
-                    count = 1;
-
                 deb.TraceCount = count;
             }
             else
@@ -276,80 +301,15 @@ BOOL cmdTrace(char *args, int subClass)
     {
         // SOURCE CODE ACTIVE
 
-        // Get the machine code address of the next line in the source code
-        dwNextLine = SymFnLinAddress2NextAddress(deb.pFnLin, deb.r->eip);
-
-        // Scan the block between current address/line and the next line
-        // and stop if we hit a jump, ret or call
-        for(dwAddress=deb.r->eip; dwAddress<dwNextLine; dwAddress += Dis.bInstrLen)
-        {
-            Dis.bState   = DIS_DATA32 | DIS_ADDRESS32;
-            Dis.wSel     = deb.r->cs;
-            Dis.dwOffset = dwAddress;
-            DisassemblerLen(&Dis);
-    
-            Dis.bFlags &= SCAN_MASK;            // Mask the scan bits
-
-            if( Dis.bFlags==SCAN_JUMP && Dis.dwTargetAddress )
-            {
-                // Jumps that are always taken are followed
-
-                BpAddr.sel    = deb.r->cs;
-                BpAddr.offset = Dis.dwTargetAddress;
-                SetNonStickyBreakpoint(BpAddr);
-
-                return( FALSE );
-            }
-            else
-            if( Dis.bFlags==SCAN_RET || Dis.bFlags==SCAN_COND_JUMP )
-            {
-                // Returns and conditional jumps are delayed traced
-
-                // Set a delayed Trace
-                deb.fDelayedTrace = TRUE;
-                break;
-            }
-            else
-            if( Dis.bFlags==SCAN_CALL )
-            {
-                // If the instruction is a CALL to subroutine, we will follow only if we
-                // have a symbol for that function in our symbol table (not exports!).
-                // That will avoid tracing into common globals such is 'printk'
-
-                if( SymAddress2FunctionName(deb.r->cs, Dis.dwTargetAddress) != NULL )
-                {
-                    // We have our function defined at that address, so place a bp there
-                    BpAddr.sel    = deb.r->cs;
-                    BpAddr.offset = Dis.dwTargetAddress;
-                    SetNonStickyBreakpoint(BpAddr);
-
-                    return( FALSE );
-                }
-            }
-        }
-
-        // If the address is the current cs:eip, we execute a single step, otherwise
-        // set a non-sticky breakpoint at this address
-        if( deb.r->eip==dwAddress )
-        {
-            deb.fTrace = TRUE;
-        }
-        else
-        {
-            BpAddr.sel    = deb.r->cs;
-            BpAddr.offset = dwAddress;
-            SetNonStickyBreakpoint(BpAddr);
-        }
-    }
-    else
-    {
-        // MACHINE CODE OR MIXED - Use CPU Trace Flag
-
-        deb.fTrace = TRUE;
+        pSrcEipLine = deb.pSrcEipLine;  // Set the pointer cache of the current source line
+        deb.fSrcTrace = TRUE;           // We are doing source trace
     }
 
-    // Exit into debugee...
-    return( FALSE );
+    // Common case - Use CPU Trace Flag
+
+    deb.fTrace = TRUE;
+
+    return( FALSE );                    // Exit into debugee...
 }
 
 /******************************************************************************
@@ -365,14 +325,14 @@ BOOL cmdTrace(char *args, int subClass)
 *       TRUE - skip debugger block and continue tracing
 *       FALSE - break into debugger, no multi-tracing, or it is counted to 0
 *
+*
+*
 ******************************************************************************/
 BOOL MultiTrace(void)
 {
-    if( deb.TraceCount )
-        deb.TraceCount--;               // Decrement the trace count
-
-    // If the counter is not 0 (or yet 0), we will most likely loop
-    if( deb.TraceCount )
+    // Assume deb.TraceCount > 0
+    // If the counter is not yet 0 (or yet 0), we will most likely loop
+    if( --deb.TraceCount )
     {
         // Trace again without stopping, but first we need to check if the user has pressed
         // ESC key to stop tracing
@@ -386,7 +346,7 @@ BOOL MultiTrace(void)
         else
         {
             // Call regular Trace command to correctly set up trace parameters...
-            
+
             cmdTrace("", NULL);
 
             return( TRUE );             // Do not break, but execute trace command
@@ -396,6 +356,96 @@ BOOL MultiTrace(void)
     return( FALSE );                    // No need to trace more, reached the final count
 }
 
+
+/******************************************************************************
+*                                                                             *
+*   BOOL void ArmStep()                                                       *
+*                                                                             *
+*******************************************************************************
+*
+*   Arms the step command. This is not as trivial as CPU trace command, since
+*   we need to disassemble the current command in order to find out if it is
+*   a call or interrupt, which are not traced, but a non-sticky breakpoint is
+*   placed immediately after it.
+*
+*   Return:
+*       TRUE - We armed a step command
+*       FALSE - We did not arm the step command because we hit return in the "P RET" mode
+*
+******************************************************************************/
+static BOOL ArmStep()
+{
+    TDISASM Dis;                        // Disassembler interface structure
+    TADDRDESC BpAddr;                   // Breakpoint address descriptor
+
+    // Get the size in bytes of the current instruction and its flags
+    Dis.bState   = DIS_DATA32 | DIS_ADDRESS32;
+    Dis.wSel     = deb.r->cs;
+    Dis.dwOffset = deb.r->eip;
+    DisassemblerLen(&Dis);
+
+    Dis.bFlags &= SCAN_MASK;            // Mask the scan bits
+
+    // If we are in the "P RET" mode ("step until return"), and the current
+    // instruction _is_ a return, clear that mode and quit stepping
+
+    if( deb.fStepRet && Dis.bFlags==SCAN_RET )
+    {
+        deb.fStepRet = FALSE;           // Dont loop any more
+
+        return( FALSE );                // Signal that we did not arm it
+    }
+
+    if( Dis.bFlags==SCAN_CALL || Dis.bFlags==SCAN_INT )
+    {
+        // Call and INT instructions we skip
+
+        // Set a non-sticky breakpoint at the next instruction
+        BpAddr.sel    = deb.r->cs;
+        BpAddr.offset = deb.r->eip + Dis.bInstrLen;
+        SetNonStickyBreakpoint(BpAddr);
+
+        deb.fTrace = FALSE;             // This time we are not using CPU trace facility
+    }
+    else
+    {
+        // All other instructions we single step
+
+        deb.fTrace = TRUE;              // Use CPU Trace Flag
+    }
+
+    return( TRUE );                     // Signal that we armed the step
+}
+
+
+/******************************************************************************
+*                                                                             *
+*   BOOL RepeatStep(void)                                                     *
+*                                                                             *
+*******************************************************************************
+*
+*   Check if we need to continue execution or break on a source step command.
+*
+*   Returns:
+*       TRUE - Do repeat step command
+*       FALSE - Break into the debugger
+*
+******************************************************************************/
+BOOL RepeatStep(void)
+{
+    // If the new context is in the same function line as the cached originator,
+    // continue running, otherwise break.
+    // Also break if we left the legal context (pFnLin is NULL in that case)
+    if( deb.pFnLin && deb.pSrcEipLine==pSrcEipLine )
+    {
+        // Continue looping unless we hit a return while in the "P RET" mode
+        return( ArmStep() );
+    }
+
+    pSrcEipLine = NULL;                 // Reset the cached variable
+
+    return( FALSE );                    // Exit breaking into the debugger
+}
 
 /******************************************************************************
 *                                                                             *
@@ -414,11 +464,6 @@ BOOL MultiTrace(void)
 ******************************************************************************/
 BOOL cmdStep(char *args, int subClass)
 {
-    TDISASM Dis;                        // Disassembler interface structure
-    TADDRDESC BpAddr;                   // Breakpoint address descriptor
-    DWORD dwNextLine;                   // Address of the next line's code
-    DWORD dwAddress;                    // Current scanning address
-
     if( *args != 0 )
     {
         // Argument must be 'RET' - step until the ret instruction
@@ -433,94 +478,25 @@ BOOL cmdStep(char *args, int subClass)
         }
     }
 
-    deb.fStep = TRUE;
-
     // First, set the current symbol content to make sure our cs:eip is at the
     // right place, since we may have it set differenly
     SetSymbolContext(deb.r->cs, deb.r->eip);
 
     if( (deb.eSrc==SRC_ON) && deb.pFnScope && deb.pFnLin )
     {
-        // SOURCE CODE ACTIVE
+        // SOURCE CODE ACTIVE - initiate repeated step cycles
 
-        // Get the machine code address of the next line in the source code
-        dwNextLine = SymFnLinAddress2NextAddress(deb.pFnLin, deb.r->eip);
-
-        // Scan the block between current address/line and the next line
-        // and stop if we hit a jump or ret
-        for(dwAddress=deb.r->eip; dwAddress<dwNextLine; dwAddress += Dis.bInstrLen)
-        {
-            Dis.bState   = DIS_DATA32 | DIS_ADDRESS32;
-            Dis.wSel     = deb.r->cs;
-            Dis.dwOffset = dwAddress;
-            DisassemblerLen(&Dis);
-    
-            Dis.bFlags &= SCAN_MASK;    // Mask the scan bits
-
-            // If we are in the "P RET" instruction, find if we need to terminate cycling
-            if( deb.fStepRet && Dis.bFlags==SCAN_RET )
-            {
-                deb.fStepRet = FALSE;           // Dont loop any more
-            }
-    
-            if( Dis.bFlags==SCAN_RET || Dis.bFlags==SCAN_JUMP || Dis.bFlags==SCAN_COND_JUMP )
-            {
-                // Set a delayed Trace
-                deb.fDelayedTrace = TRUE;
-                break;
-            }
-        }
-
-        // If the address is the current cs:eip, we execute a single step, otherwise
-        // set a non-sticky breakpoint at this address
-        if( deb.r->eip==dwAddress )
-        {
-            deb.fTrace = TRUE;          // Use CPU Trace Flag
-        }
-        else
-        {
-            BpAddr.sel    = deb.r->cs;
-            BpAddr.offset = dwAddress;
-            SetNonStickyBreakpoint(BpAddr);
-        }
-    }
-    else
-    {
-        // MACHINE CODE OR MIXED - Use CPU Trace Flag or skip calls and ints
-
-        // Get the size in bytes of the current instruction and its flags
-        Dis.bState   = DIS_DATA32 | DIS_ADDRESS32;
-        Dis.wSel     = deb.r->cs;
-        Dis.dwOffset = deb.r->eip;
-        DisassemblerLen(&Dis);
-
-        Dis.bFlags &= SCAN_MASK;            // Mask the scan bits
-
-        // If we are in the "P RET" instruction, find if we need to terminate cycling
-        if( deb.fStepRet && Dis.bFlags==SCAN_RET )
-        {
-            deb.fStepRet = FALSE;           // Dont loop any more
-        }
-
-        if( Dis.bFlags==SCAN_CALL || Dis.bFlags==SCAN_INT )
-        {
-            // Call and INT instructions we skip
-
-            // Set a non-sticky breakpoint at the next instruction
-            BpAddr.sel    = deb.r->cs;
-            BpAddr.offset = deb.r->eip + Dis.bInstrLen;
-            SetNonStickyBreakpoint(BpAddr);
-        }
-        else
-        {
-            // All other instructions we single step
-
-            deb.fTrace = TRUE;          // Use CPU Trace Flag
-        }
+        pSrcEipLine = deb.pSrcEipLine;  // Set the pointer cache of the current source line
+        deb.fSrcStep = TRUE;            // We are doing source step
     }
 
-    // Exit into debugee...
-    return( FALSE );
+    // Common case - Use CPU Trace Flag or skip calls and ints
+
+    // Arm the step command by either using a CPU trace flag for single step or
+    // non-sticky breakpoint in order to skip over a call or interrupt
+    ArmStep();
+
+    return( FALSE );                    // Exit into debugee...
 }
 
 

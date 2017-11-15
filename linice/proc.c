@@ -34,9 +34,11 @@
 *   Include Files                                                             *
 ******************************************************************************/
 
+#include "module-header.h"              // Include types commonly defined for a module
+
 #include "clib.h"                       // Include C library header file
-#include "ice.h"                        // Include main debugger structures
 #include "iceface.h"                    // Include iceface module stub protos
+#include "ice.h"                        // Include main debugger structures
 
 #include "debug.h"                      // Include our dprintk()
 
@@ -53,7 +55,7 @@
 ******************************************************************************/
 
 static int ProcRead(char *buf, char **start, off_t offset, int len, int *unused, int *data);
-static int ProcWrite(struct file *file, char *buf, unsigned long count, void *data);
+static int ProcWrite(void *file, char *buf, unsigned long count, void *data);
 
 /******************************************************************************
 *                                                                             *
@@ -127,7 +129,7 @@ static int ProcRead(char *buf, char **start, off_t offset, int len, int *unused,
 *       We eat all writes for now.
 *
 ******************************************************************************/
-static int ProcWrite(struct file *file, char *buf, unsigned long count, void *data)
+static int ProcWrite(void *file, char *buf, unsigned long count, void *data)
 {
     // Return the count of data.
     return( count );

@@ -34,12 +34,10 @@
 *   Include Files                                                             *
 ******************************************************************************/
 
-#include <asm/unistd.h>                 // Include system call numbers
-#define __NO_VERSION__
-#include <linux/module.h>               // Include required module include
-                                        // so we are able to browse module list
+#include "module-header.h"              // Include types commonly defined for a module
 
 #include "clib.h"                       // Include C library header file
+#include "iceface.h"                    // Include iceface module stub protos
 #include "ice.h"                        // Include main debugger structures
 #include "debug.h"                      // Include our dprintk()
 
@@ -55,7 +53,7 @@ extern void SetSysreg( TSysreg * pSys );
 extern int ArmDebugReg(int nDr, TADDRDESC Addr);
 extern TSYMTAB *SymTabFind(char *name);
 extern void SymTabRelocate(TSYMTAB *pSymTab, int pReloc[], int factor);
-extern struct module *FindModule(const char *name);
+extern BOOL FindModule(const char *name, TMODULE *pMod);
 
 /******************************************************************************
 *                                                                             *
@@ -63,7 +61,7 @@ extern struct module *FindModule(const char *name);
 *                                                                             *
 ******************************************************************************/
 
-extern unsigned long sys_call_table[];
+extern unsigned long *sys_table;
 
 /******************************************************************************
 *                                                                             *
@@ -77,7 +75,7 @@ static PFNEXIT sys_exit = NULL;
 typedef asmlinkage int (*PFNFORK)(struct pt_regs regs);
 static PFNFORK sys_fork = NULL;
 
-typedef asmlinkage int (*PFNINITMODULE)(const char *name, struct module *image);
+typedef asmlinkage int (*PFNINITMODULE)(const char *name, void *image);
 static PFNINITMODULE sys_init_module = NULL;
 
 typedef asmlinkage int (*PFNDELETEMODULE)(const char *name);
@@ -92,7 +90,7 @@ static PFNDELETEMODULE sys_delete_module = NULL;
 
 asmlinkage int SyscallExit(int status)
 {
-    dprinth(1, "SYSCALL: %s: exit(%d)", current->comm, status);
+    dprinth(1, "SYSCALL: %s: exit(%d)", ice_get_current_comm(), status);
 
     return( sys_exit(status) );
 }
@@ -104,13 +102,13 @@ asmlinkage int SyscallFork(struct pt_regs regs)
 
     retval = sys_fork(regs);
 
-    dprinth(1, "SYSCALL: fork(%s) = %d", current->comm, retval);
+    dprinth(1, "SYSCALL: fork(%s) = %d", ice_get_current_comm(), retval);
 
     return( retval );
 }
 
 
-asmlinkage int SyscallInitModule(const char *name, struct module *image)
+asmlinkage int SyscallInitModule(const char *name, void *image)
 {
     TSYMTAB *pSymTab;
     int retval;
@@ -119,14 +117,13 @@ asmlinkage int SyscallInitModule(const char *name, struct module *image)
     DWORD dwInitFunctionSymbol;
     DWORD dwDataReloc, dwSampleOffset;
     TSYMRELOC  *pReloc;                 // Symbol table relocation header
-    struct module *pMod;                // *this* module kernel descriptor
+    TMODULE Mod;                        // Module information structure
 
     dprinth(1, "SYSCALL: init_module(`%s', %08X)", name, image);
 
     // Find a kernel module descriptor that has been created after a previous system call
     // create_module. That should be found - else this call will fail anyways...
-    pMod = FindModule(name);
-    if( pMod )
+    if( FindModule(name, &Mod) )
     {
         // Try to find if we have a symbol table loaded for this module, so we can relocate it
         // Find the symbol table with the name of this module
@@ -143,8 +140,8 @@ asmlinkage int SyscallInitModule(const char *name, struct module *image)
                 // --- relocating code section ---
 
                 // Get the real kernel address of the init_module function after relocation
-                pInitFunctionOffset = (BYTE *) image->init;
-    
+                pInitFunctionOffset = (BYTE *) ice_get_module_init(image);
+
                 // Store private reloc adjustment values
                 pSymTab->pPriv->reloc[0] = (int)(pInitFunctionOffset - dwInitFunctionSymbol);
 
@@ -167,14 +164,14 @@ asmlinkage int SyscallInitModule(const char *name, struct module *image)
 
                         if( pReloc->list[i].refFixup )
                         {
-                            dwSampleOffset = ((DWORD)image->init + pReloc->list[i].refFixup) - (DWORD)pMod;
+                            dwSampleOffset = ((DWORD) ice_get_module_init(image) + pReloc->list[i].refFixup) - (DWORD) Mod.pmodule;
 
                             dwDataReloc = *(DWORD *) ((DWORD)image + dwSampleOffset);
 
                             // image is in the user address space since we still did not call sys_init_module to
-                            // copy it over to the kernel address space. 
-                    
-                            // TODO: Do we need to be more careful about all these accessing of user space? 
+                            // copy it over to the kernel address space.
+
+                            // TODO: Do we need to be more careful about all these accessing of user space?
                             // Remember - we do not have debugger PF/GPF hooked at this point ?!?!?
 
                             pSymTab->pPriv->reloc[i] = dwDataReloc - pReloc->list[i].refOffset;
@@ -188,7 +185,7 @@ asmlinkage int SyscallInitModule(const char *name, struct module *image)
 
                     dprinth(1, "SYSCALL: Symbol table missing HTYPE_RELOC");
                 }
-        
+
                 // Relocate symbol table by the required offset
                 SymTabRelocate(pSymTab, pSymTab->pPriv->reloc, 1);
 
@@ -200,19 +197,19 @@ asmlinkage int SyscallInitModule(const char *name, struct module *image)
 
                 // For now, set a breakpoint on an init_module function that gets called when
                 // we execute this system call.
-        
+
                 // Read in all the system state registers so we can modify DR3 and write back
                 GetSysreg(&deb.sysReg);
-        
+
                 // We set and arm DR3 register and then write back to the CPU all system registers
-                Addr.sel    = __KERNEL_CS;
-                Addr.offset = (DWORD) image->init;
-        
+                Addr.sel    = GetKernelCS();
+                Addr.offset = (DWORD) ice_get_module_init(image);
+
                 ArmDebugReg(3, Addr);
-        
+
                 // Write back all system registers including DR3/DR7 in order to break in
                 SetSysreg(&deb.sysReg);
-        
+
                 //===================================================================
             }
         }
@@ -305,19 +302,19 @@ asmlinkage int SyscallDeleteModule(const char *name)
 ******************************************************************************/
 void HookSyscall(void)
 {
-    INFO(("HookSyscall() at %08X\n", (DWORD)sys_call_table));
+    INFO(("HookSyscall() at %08X\n", (DWORD)sys_table[0]));
 
-    sys_exit = (PFNEXIT) sys_call_table[__NR_exit];
-    sys_call_table[__NR_exit] = (unsigned long) SyscallExit;
+    sys_exit = (PFNEXIT) sys_table[__NR_exit];
+    sys_table[__NR_exit] = (unsigned long) SyscallExit;
 
-    sys_fork = (PFNFORK) sys_call_table[__NR_fork];
-    sys_call_table[__NR_fork] = (unsigned long) SyscallFork;
+    sys_fork = (PFNFORK) sys_table[__NR_fork];
+    sys_table[__NR_fork] = (unsigned long) SyscallFork;
 
-    sys_init_module = (PFNINITMODULE) sys_call_table[__NR_init_module];
-    sys_call_table[__NR_init_module] = (unsigned long) SyscallInitModule;
+    sys_init_module = (PFNINITMODULE) sys_table[__NR_init_module];
+    sys_table[__NR_init_module] = (unsigned long) SyscallInitModule;
 
-    sys_delete_module = (PFNDELETEMODULE) sys_call_table[__NR_delete_module];
-    sys_call_table[__NR_delete_module] = (unsigned long) SyscallDeleteModule;
+    sys_delete_module = (PFNDELETEMODULE) sys_table[__NR_delete_module];
+    sys_table[__NR_delete_module] = (unsigned long) SyscallDeleteModule;
 }
 
 /******************************************************************************
@@ -334,16 +331,16 @@ void UnHookSyscall(void)
     INFO(("UnHookSyscall()\n"));
 
     if( sys_exit )
-        sys_call_table[__NR_exit] = (unsigned long) sys_exit;
+        sys_table[__NR_exit] = (unsigned long) sys_exit;
 
     if( sys_fork )
-        sys_call_table[__NR_fork] = (unsigned long) sys_fork;
+        sys_table[__NR_fork] = (unsigned long) sys_fork;
 
     if( sys_init_module )
-        sys_call_table[__NR_init_module] = (unsigned long) sys_init_module;
+        sys_table[__NR_init_module] = (unsigned long) sys_init_module;
 
     if( sys_delete_module )
-        sys_call_table[__NR_delete_module] = (unsigned long) sys_delete_module;
+        sys_table[__NR_delete_module] = (unsigned long) sys_delete_module;
 
     sys_exit = NULL;
     sys_fork = NULL;

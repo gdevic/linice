@@ -53,7 +53,7 @@
 
 #else // WIN32
 
-#define _POSIX_SOURCE
+//#define _POSIX_SOURCE
 
 
 /* A pointer to a position in a file.  */
@@ -66,7 +66,7 @@
 /* typedef off_t    file_ptr; */
 //typedef long int file_ptr;
 
-#define _SYS_TYPES_H
+//#define _SYS_TYPES_H
 
 #include <assert.h>
 #define ASSERT assert
@@ -96,15 +96,3 @@
 #include "ice-symbols.h"                // Include symbol file structures
 #include "stabs.h"                      // Include STABS defines and structures
 
-// Define internal descriptor for a global symbol
-typedef struct
-{
-    DWORD dwAddress;                    // Start address of a symbol
-    DWORD dwEndAddress;                 // End address of a symbol
-    WORD wAttribute;                    // Attributes of a symbol
-    char SectionName[16];               // Section name string
-    char Name[MAX_SYMBOL_LEN];          // Symbol canonical name
-} TGLOBAL;
-
-extern TGLOBAL *pGlobals;               // Array of global symbols
-extern int nGlobals;                    // Number of global symbols

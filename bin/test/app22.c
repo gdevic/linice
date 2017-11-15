@@ -4,12 +4,18 @@ extern int global;
 static int fnStatic2(int arg);
 int fnGlobal2(int arg);
 
+typedef signed long SWORD;
+
+SWORD global_sword;
+
+static SWORD static_variable_app22;
 
 static int fnStatic2(int arg)
 {
     printf("Static function 2: %d\n", arg);
     global++;
     fnGlobal(global);
+    static_variable_app22 = 0;
     return( 0 );
 }
 

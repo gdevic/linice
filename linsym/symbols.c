@@ -44,13 +44,19 @@
 #ifndef WIN32
 #include <sys/ioctl.h>                  // Include ioctl header file
 #include <unistd.h>                     // Include standard UNIX header file
+#define O_BINARY    0
 #else // WIN32
 #include <io.h>
+#ifdef SIM
+#define printf printk
+#endif // SIM
 #endif // WIN32
 
 
 #include "ice-symbols.h"                // Include symbol file defines
 #include "ice-ioctl.h"                  // Include io control codes
+
+#include "loader.h"                     // Include global protos
 
 #define stricmp     strcasecmp          // Weird gnu c call..
 
@@ -92,7 +98,7 @@ void OptAddSymbolTable(char *sName)
     if( status==0 )
     {
         // Open the symbol table file
-        fd = open(sName, O_RDONLY);
+        fd = open(sName, O_RDONLY | O_BINARY);
         if( fd>0 )
         {
             // Get the total length of the file, allocate memory and load it in
@@ -116,27 +122,29 @@ void OptAddSymbolTable(char *sName)
                             status = ioctl(hIce, ICE_IOCTL_ADD_SYM, pBuf);
                             close(hIce);
 
-                            printf("AddSymbolTable: IOCTL=%d\n", status);
+                            VERBOSE2 printf("AddSymbolTable: IOCTL=%d\n", status);
+
+                            printf("Symbol table '%s' added.\n", sName);
                         }
                         else
-                            printf("Error opening debugger device!\n");
+                            fprintf(stderr, "Error opening /dev/%s device!\n", DEVICE_NAME);
                     }
                     else
-                        printf("%s is an invalid Linice symbol file!\n", sName);
+                        fprintf(stderr, "%s is an invalid Linice symbol file!\n", sName);
                 }
                 else
-                    printf("Error reading symbol table %s\n", sName);
+                    fprintf(stderr, "Error reading symbol table %s\n", sName);
 
                 free(pBuf);
             }
             else
-                printf("Error allocating memory\n");
+                fprintf(stderr, "Error allocating memory\n");
         }
         else
-            printf("Unable to open symbol file %s\n", sName);
+            fprintf(stderr, "Unable to open symbol file %s\n", sName);
     }
     else
-        printf("Unable to access symbol file %s\n", sName);
+        fprintf(stderr, "Unable to access symbol file %s\n", sName);
 }
 
 /******************************************************************************
@@ -164,9 +172,11 @@ void OptRemoveSymbolTable(char *sTableName)
         status = ioctl(hIce, ICE_IOCTL_REMOVE_SYM, sTableName);
         close(hIce);
 
-        printf("RemoveSymbolTable [%s]: IOCTL=%d\n", sTableName, status);
+        VERBOSE2 printf("RemoveSymbolTable [%s]: IOCTL=%d\n", sTableName, status);
+
+        printf("Symbol table '%s' removed.\n", sTableName);
     }
     else
-        printf("Error opening debugger device!\n");
+        fprintf(stderr, "Error opening /dev/%s device!\n", DEVICE_NAME);
 }
 

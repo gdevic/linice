@@ -35,6 +35,8 @@
 *   Include Files                                                             *
 ******************************************************************************/
 
+#include "module-header.h"              // Include types commonly defined for a module
+
 #include "clib.h"                       // Include C library header file
 #include "iceface.h"                    // Include iceface module stub protos
 #include "ice.h"                        // Include main debugger structures
@@ -65,7 +67,8 @@ TOUT outVga;
 
 typedef struct
 {
-    BYTE CRTC[0x19];                    // CRTC Registers
+    BYTE CRTC[0x19];                    // CRTC Registers (3D4/3D5)
+    BYTE SR[5];                         // Sequencer Registers (3C4/3C5)
     WORD textbuf[ MAX_VGA_SIZEX * MAX_VGA_SIZEY ];
 
 } TVgaState;
@@ -171,6 +174,13 @@ static void SaveBackground(void)
 
     WriteCRTC(0x18, 0xFF);
 
+    // Save SR3 (Character map select) since we need to program both maps to the same value
+    // 2.4.18 on Toshiba is using 2 different maps
+    vgaState.SR[3] = ReadSR(3);
+    // Bits are allocated this weird way:  - - A2 B2 A1 A0 B1 B0
+    // We dont complicate for now and just write 0 selecting both sets 0
+    WriteSR(3, 0 );
+
     // TODO: We will reuse the text buffer at the current address
 
     vga.pText = (BYTE *) LINUX_VGA_TEXT + ((vgaState.CRTC[0x0C] << 8) + vgaState.CRTC[0x0D]) * 2;
@@ -203,6 +213,10 @@ static void RestoreBackground(void)
             WriteCRTC(index, vgaState.CRTC[index]);
         }
     }
+
+    // Save SR3 (Character map select) since we need to program both maps to the same value
+    // 2.4.18 on Toshiba is using 2 different maps
+    WriteSR(3, vgaState.SR[3]);
 
     // Restore the frame buffer content that was there before we stepped in
 
@@ -454,7 +468,7 @@ void VgaSprint(char *s)
                 case DP_ESCAPE:
                         // Escape character prints the next code as raw ascii
                         c = *s++;
-                        
+
                         // This case continues into the default...!
 
                 default:

@@ -111,7 +111,6 @@ static char Buf[MAX_STRING];            // Temp line buffer to send line to edit
 extern void MdaInit();
 extern int SerialInit(int com, int baud);
 extern void SerialPrintStat();
-extern void SetSymbolContext(WORD wSel, DWORD dwOffset);
 
 extern DWORD GetDec(char **psString);
 
@@ -710,7 +709,7 @@ BOOL cmdSet(char *args, int subClass)
                                 *pVar->pVal = TRUE;
                                 RecalculateDrawWindows();
                             break;
-            
+
                             case 2:         // Off
                                 *pVar->pVal = FALSE;
                                 RecalculateDrawWindows();
@@ -762,7 +761,7 @@ BOOL cmdSet(char *args, int subClass)
             else
             {
                 // If there were no arguments, display that variable value
-                
+
                 DisplayVariable(pVar, &nLine);
             }
         }
@@ -1088,7 +1087,7 @@ BOOL cmdDisplay(char *args, int subClass)
                 dprinth(1, "Error: XWIN not initialized. Please run 'xice' to send parameters..");
             break;
 
-        default:
+        default:;
     }
 
     // Save user screen from the new display device

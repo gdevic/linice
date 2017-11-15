@@ -36,7 +36,13 @@
 
 #include "Common.h"                     // Include platform specific set
 
+#include "loader.h"                     // Include global protos
+
 extern int dfs;
+
+extern BOOL GlobalsName2Address(DWORD *p, char *pName);
+extern char *GlobalsSection2Address(DWORD *p, WORD wAttribute, char *pSectionName);
+
 
 /******************************************************************************
 *                                                                             *
@@ -55,6 +61,10 @@ extern int dfs;
 *       fs - strings file (to write to)
 *       pBuf - buffer containing the ELF file
 *
+*   Returns:
+*       TRUE - Relocation data parsed and stored
+*       FALSE - Critical error
+*
 ******************************************************************************/
 BOOL ParseReloc(int fd, int fs, BYTE *pBuf)
 {
@@ -70,12 +80,15 @@ BOOL ParseReloc(int fd, int fs, BYTE *pBuf)
     Elf32_Rel *pRel;                    // Pointer to a relocation entry
     char *pStr;                         // Pointer to a stab string
     int i, nItems;
-    int nGlobalIndex;
+    DWORD dwAddress;                    // Temp address value
     BOOL f1, f2, f3;                    // Sections
+    int nGlobalIndex;                   // Index variable
+    char *pName;                        // Symbol name
 
-    printf("=============================================================================\n");
-    printf("||         PARSE RELOCATION INFORMATION                                    ||\n");
-    printf("=============================================================================\n");
+    VERBOSE2 printf("=============================================================================\n");
+    VERBOSE2 printf("||         PARSE RELOCATION INFORMATION                                    ||\n");
+    VERBOSE2 printf("=============================================================================\n");
+    VERBOSE1 printf("Parsing relocation information.\n");
 
     pElfHeader = (Elf32_Ehdr *) pBuf;
 
@@ -87,8 +100,8 @@ BOOL ParseReloc(int fd, int fs, BYTE *pBuf)
     // Only relocatable files such is object files are parsed in this section
     if( pElfHeader->e_type!=ET_REL )
     {
-        printf("Not a relocatable file. Section skipped.\n");
-        return( FALSE );
+        VERBOSE1 printf("Not a relocatable file. Section skipped.\n");
+        return( TRUE );
     }
 
     for( i=1; i<pElfHeader->e_shnum; i++ )
@@ -106,7 +119,7 @@ BOOL ParseReloc(int fd, int fs, BYTE *pBuf)
 
     // This might not be the best way to go, but it works:
     //
-    //  Code relocation is easy: 
+    //  Code relocation is easy:
     //
     //  We get the address of the module `init_module` function from the kernel module descriptor
     //  and the relocation amount is that address minus the relative offset of that function as
@@ -121,7 +134,7 @@ BOOL ParseReloc(int fd, int fs, BYTE *pBuf)
     //  global variable that we store in the symbol table relocation record.
     //
     //  We look for the data relocation section within the ELF file and then for each symbol
-    //  there we loop over the global symbols that we have. We stop as soon as we find a global 
+    //  there we loop over the global symbols that we have. We stop as soon as we find a global
     //  variable that matches the reloc item.
     //  We need to do that in order to find (1) the offset in the text section where the debugger
     //  will pick up the already relocated variable address (Reloc.refOffset), and (2) the true offset
@@ -138,33 +151,27 @@ BOOL ParseReloc(int fd, int fs, BYTE *pBuf)
         memset(&Reloc, 0, sizeof(Reloc));
 
         // Search for the global function symbol
-        for(nGlobalIndex=0; nGlobalIndex<nGlobals; nGlobalIndex++)
+        if( GlobalsName2Address(&dwAddress, "init_module") )
         {
-            if( !strcmp(pGlobals[nGlobalIndex].Name, "init_module") )
-            {
-                Reloc.list[0].refOffset = pGlobals[nGlobalIndex].dwAddress;
-                Reloc.list[0].refFixup  = pGlobals[nGlobalIndex].dwAddress;     // Entry 0 both contain the same value!
+            Reloc.list[0].refOffset = dwAddress;
+            Reloc.list[0].refFixup  = dwAddress;        // Both entries 0 contain the same value!
 
-                printf("Global 'init_module':\n");
-                printf(" Reference offset %08X\n", Reloc.list[0].refOffset);
+            VERBOSE2 printf("Global 'init_module':\n");
+            VERBOSE2 printf(" Reference offset %08X\n", Reloc.list[0].refOffset);
+            VERBOSE2 printf(" Reference fixup  %08X\n", Reloc.list[0].refFixup);
 
-                break;
-            }
-        }
 
-        if( nGlobalIndex<nGlobals )
-        {
             pRel = (Elf32_Rel *) ((char*)pElfHeader + SecRel->sh_offset);
 
             // We did not process these yet
             f1 = f2 = f3 = TRUE;
-        
+
             // Calculate the number of entries in this section
             if( SecRel->sh_entsize && SecRel->sh_size )
             {
                 nItems = SecRel->sh_size / SecRel->sh_entsize;
 
-                // Loop over relocation entries
+                // Loop over all relocation entries until we find all helpful references
 
                 while( nItems-- )
                 {
@@ -181,25 +188,26 @@ BOOL ParseReloc(int fd, int fs, BYTE *pBuf)
                         // 1) Program data segment:             0x11  ".data"    (global variables)
                         // 2) Program data 2 segment:           0x01  ".data"    (static variables)
                         // 3) Program data 3 segment:           0x11  "COMMON"   (uninitialized globals)
-            
-                        if( f1 && pGlobals[nGlobalIndex].wAttribute==0x11 && !strcmp(pGlobals[nGlobalIndex].SectionName, ".data") )
-                        {
-                            printf("Global .data symbol:\n");
-                            printf(" Using relocation data record at .text=%08X, fixup=%08X, symbol=%s\n", pRel->r_offset, pGlobals[nGlobalIndex].dwAddress, pGlobals[nGlobalIndex].Name);
 
-                            Reloc.list[1].refOffset = pGlobals[nGlobalIndex].dwAddress;
+
+                        if( f1 && (pName=GlobalsSection2Address(&dwAddress, 0x11, ".data"))!=NULL )
+                        {
+                            VERBOSE2 printf("Global .data symbol:\n");
+                            VERBOSE2 printf(" Using relocation data record at .text=%08X, fixup=%08X, symbol=%s\n", pRel->r_offset, dwAddress, pName);
+
+                            Reloc.list[1].refOffset = dwAddress;
                             Reloc.list[1].refFixup  = pRel->r_offset - Reloc.list[0].refOffset;
 
                             f1 = FALSE;
                         }
 
 #if 0  // These were to hold static symbols (locals to a source file), but it does not work this way
-                        if( f2 && pGlobals[nGlobalIndex].wAttribute==0x01 && !strcmp(pGlobals[nGlobalIndex].SectionName, ".data") )
+                        if( f2 && (pName=GlobalsSection2Address(&dwAddress, 0x01, ".data"))!=NULL )
                         {
-                            printf("Static variables .data symbol:\n");
-                            printf(" Using relocation data record at .text=%08X, fixup=%08X, symbol=%s\n", pRel->r_offset, pGlobals[nGlobalIndex].dwAddress, pGlobals[nGlobalIndex].Name);
+                            VERBOSE2 printf("Static variables .data symbol:\n");
+                            VERBOSE2 printf(" Using relocation data record at .text=%08X, fixup=%08X, symbol=%s\n", pRel->r_offset, dwAddress, pName);
 
-                            Reloc.list[2].refOffset = pGlobals[nGlobalIndex].dwAddress;
+                            Reloc.list[2].refOffset = dwAddress;
                             Reloc.list[2].refFixup  = pRel->r_offset - Reloc.list[0].refOffset;
 
                             f2 = FALSE;
@@ -207,12 +215,12 @@ BOOL ParseReloc(int fd, int fs, BYTE *pBuf)
 #endif
 f2 = FALSE;
 
-                        if( f3 && pGlobals[nGlobalIndex].wAttribute==0x11 && !strcmp(pGlobals[nGlobalIndex].SectionName, "COMMON") )
+                        if( f3 && (pName=GlobalsSection2Address(&dwAddress, 0x11, "COMMON"))!=NULL )
                         {
-                            printf("Uninitialized global COMMON symbol:\n");
-                            printf(" Using relocation data record at .text=%08X, fixup=%08X, symbol=%s\n", pRel->r_offset, pGlobals[nGlobalIndex].dwAddress, pGlobals[nGlobalIndex].Name);
+                            VERBOSE2 printf("Uninitialized global COMMON symbol:\n");
+                            VERBOSE2 printf(" Using relocation data record at .text=%08X, fixup=%08X, symbol=%s\n", pRel->r_offset, dwAddress, pName);
 
-                            Reloc.list[3].refOffset = pGlobals[nGlobalIndex].dwAddress;
+                            Reloc.list[3].refOffset = dwAddress;
                             Reloc.list[3].refFixup  = pRel->r_offset - Reloc.list[0].refOffset;
 
                             f3 = FALSE;
@@ -226,22 +234,22 @@ f2 = FALSE;
                 }
 
                 // Write out relocation record
-    
-                Reloc.hType  = HTYPE_RELOC;
-                Reloc.dwSize = sizeof(TSYMRELOC);
+
+                Reloc.h.hType  = HTYPE_RELOC;
+                Reloc.h.dwSize = sizeof(TSYMRELOC);
 
                 // Fixed at 4 records for now
                 Reloc.nReloc = MAX_SYMRELOC;
 
-                write(fd, &Reloc, Reloc.dwSize);
+                write(fd, &Reloc, Reloc.h.dwSize);
             }
+            return( TRUE );
         }
         else
-            printf("Error locating expected global function `init_module'\n");
+            fprintf(stderr, "Error locating expected global function `init_module'\n");
     }
     else
-        printf("Failed to get the relocation record!\n");
+        fprintf(stderr, "Failed to get the relocation record!\n");
 
-    return( TRUE );
+    return( FALSE );
 }
-

@@ -64,6 +64,7 @@
             element = QFirst( &q )     (traverse the doubly linked list)
             element = QLast( &q )
             element = QNext( &q )
+            element = QPeekNext ( &q )
             element = QPrev( &q )
             element = QCurrent( &q )
 
@@ -84,6 +85,10 @@
             element = QDequeue( &q )
             fEmpty  = QIsEmpty( &q )
             element = QCurrent( &q )   (peek at the next one to dequeue)
+
+    Random Access List Operations
+    ---------------------------------------
+            element = QSetCurrent( &q, element )
 
 -.
 *******************************************************************************
@@ -778,6 +783,48 @@ void * QCurrent( TQueue * q )
 
 /******************************************************************************
 *                                                                             *
+*   void * QSetCurrent( TQueue * q, void * p )                                *
+*                                                                             *
+*******************************************************************************
+*
+*   Sets the current node value.
+*
+*   Where:
+*       q - Queue descriptor
+*       p - element/pointer to an element
+*
+*   Returns:
+*       p parameter if successful
+*       NULL if the record is not part of this queue
+*
+******************************************************************************/
+void * QSetCurrent( TQueue * q, void * ptr )
+{
+    TNode * pTop = q->pHead;
+
+    // Since the input parameter points to the note element, and internally
+    // we point to the allocation record, we need to search over the linked
+    // list for the given element and set its private allocation node.
+
+    while( pTop )
+    {
+        if( pTop->p == ptr )
+        {
+            q->pCur = pTop;
+
+            return( ptr );
+        }
+
+        pTop = pTop->pNext;
+    }
+
+    return( NULL );
+}
+
+
+
+/******************************************************************************
+*                                                                             *
 *   int QIsEmpty( TQueue * q )                                                *
 *                                                                             *
 *******************************************************************************
@@ -828,6 +875,35 @@ void * QNext( TQueue * q )
     q->pCur = q->pCur->pNext;
 
     return( q->pCur->p );
+}
+
+
+
+/******************************************************************************
+*                                                                             *
+*   void * QPeekNext( TQueue * q )                                            *
+*                                                                             *
+*******************************************************************************
+*
+*   Returns the next element in the linked list without resetting the current.
+*
+*   Where:
+*       q - Queue descriptor
+*
+*   Returns:
+*       Data value associated with the next element
+#       NULL if there are no more list elements or list was empty
+*
+******************************************************************************/
+void * QPeekNext( TQueue * q )
+{
+    if( q->pCur == NULL )
+        return( NULL );
+
+    if( q->pCur->pNext == NULL )
+        return( NULL );
+
+    return( q->pCur->pNext->p );
 }
 
 

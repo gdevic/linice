@@ -35,6 +35,8 @@
 *   Include Files                                                             *
 ******************************************************************************/
 
+#include "module-header.h"              // Include types commonly defined for a module
+
 #include "clib.h"                       // Include C library header file
 #include "ice-ioctl.h"                  // Include our own IOCTL numbers
 #include "iceface.h"                    // Include iceface module stub protos
@@ -219,9 +221,9 @@ int XInitPacket(TXINITPACKET *pXInit)
         {
             memset(&dga, 0, sizeof(dga));
             memset(&outDga, 0, sizeof(outDga));
-        
+
             // Set default parameters
-        
+
             outDga.x = 0;
             outDga.y = 0;
             outDga.sizeX = 80;                  // This is the initial X size of the dga display
@@ -230,13 +232,13 @@ int XInitPacket(TXINITPACKET *pXInit)
             outDga.carret = DgaCarret;
             outDga.mouse = DgaMouse;
             outDga.resize = DgaResize;
-        
+
             dga.scrollTop = 0;
             dga.scrollBottom = outDga.sizeY - 1;
             dga.col = COL_NORMAL;
             dga.pFont = &Font[deb.nFont];
             dga.fEnabled = FALSE;
-        
+
             dga.stride = pXInit->stride;
             dga.xres   = pXInit->xres;
             dga.yres   = pXInit->yres;
@@ -247,7 +249,7 @@ int XInitPacket(TXINITPACKET *pXInit)
 
             // Calculate frame offset based on the existing origin variables
             dga.dwFrameOffset = deb.FrameY * dga.stride + deb.FrameX * dga.bpp;
-        
+
             // We need to calculate colors for the given pixel mode
             for(i=0; i<16; i++ )
             {
@@ -260,7 +262,7 @@ int XInitPacket(TXINITPACKET *pXInit)
                     ((vga_back[i][1] >> pXInit->greenColAdj) << pXInit->greenShift) |
                     ((vga_back[i][2] >> pXInit->blueColAdj) << pXInit->blueShift);
             }
-        
+
             // Depending on the pixel depth, select the raw utility functions
             switch( dga.bpp * 8 )
             {
@@ -272,7 +274,7 @@ int XInitPacket(TXINITPACKET *pXInit)
                             dga.Cls       = DgaCls16;
                     break;
             }
-        
+
             // Print stats
 
             dprinth(1, "XWIN: User virtual address = %08X", pXInit->pFrameBuf);
@@ -293,7 +295,7 @@ int XInitPacket(TXINITPACKET *pXInit)
             // We could not map the frame buffer.. Clean up and switch back to vga driver
 
             pOut = &outVga;
-    
+
             dprinth(1, "XWIN: Unable to map frame buffer (size=%d)!", dwMappingSize);
 
             ice_free_heap(pIce->pXDrawBuffer);
@@ -491,7 +493,7 @@ static void DgaCls16()
         // Set memory - word sizes
         // We are adding for borders
         memset_w(address, pixelBack, (pOut->sizeX+2) * 8);
-        address += dga.stride;
+        address = (void *)((DWORD) address + dga.stride);
     }
 }
 
@@ -518,7 +520,7 @@ static void DgaCls32()
         // Set memory - double word sizes
         // We are adding for borders
         memset_d(address, pixelBack, (pOut->sizeX+2) * 8);
-        address += dga.stride;
+        address = (void *)((DWORD) address + dga.stride);
     }
 }
 
@@ -632,7 +634,7 @@ static BOOL DgaResize(int x, int y, int nFont)
 
     if( dwSize > pIce->nXDrawSize )
     {
-        // New window size needs more buffer. Print out the required size 
+        // New window size needs more buffer. Print out the required size
         // and scale down to use what we currently have allocated.
 
         dprinth(1, "That size would need %d of backing store buffer out of %d allocated.", dwSize, pIce->nXDrawSize);
@@ -727,8 +729,8 @@ static void ScrollUp()
     static BYTE cacheTextPreScroll[MAX_OUTPUT_SIZEY][MAX_OUTPUT_SIZEX];
 
     // Copy cacheText state before scroll
-    memmove(&cacheTextPreScroll[dga.scrollTop][0], 
-            &cacheText[dga.scrollTop][0], 
+    memmove(&cacheTextPreScroll[dga.scrollTop][0],
+            &cacheText[dga.scrollTop][0],
             MAX_OUTPUT_SIZEX * (dga.scrollBottom-dga.scrollTop+1));
 
     // We use cacheText buffer that we scroll first, and then read the
@@ -898,7 +900,7 @@ static void DgaSprint(char *s)
                 case DP_ESCAPE:
                         // Escape character prints the next code as raw ascii
                         c = *s++;
-                        
+
                         // This case continues into the default...!
 
                 default:
@@ -958,7 +960,7 @@ void XWinControl(CHAR Key)
                 deb.FrameX = dga.xres/2 - ((outDga.sizeX+2) * dga.bpp)/2;
                 deb.FrameY = dga.yres/2 - ((outDga.sizeY+2) * dga.pFont->ysize)/2;
                 break;
-                
+
             case CHAR_CTRL + CHAR_ALT + LEFT:
                 // Move window to the left or align it with the left edge
                 if( deb.FrameX > XWIN_MOVE )
@@ -966,13 +968,13 @@ void XWinControl(CHAR Key)
                 else
                     deb.FrameX = 0;
                 break;
-                
+
             case CHAR_CTRL + CHAR_ALT + RIGHT:
                 // Move window to the right or align it with the right edge
                 // Take into account window borders. Final check is done below..
                 deb.FrameX += XWIN_MOVE;
                 break;
-                
+
             case CHAR_CTRL + CHAR_ALT + UP:
                 // Move window up or align it with the top line
                 if( deb.FrameY > XWIN_MOVE )
@@ -980,7 +982,7 @@ void XWinControl(CHAR Key)
                 else
                     deb.FrameY = 0;
                 break;
-                
+
             case CHAR_CTRL + CHAR_ALT + DOWN:
                 // Move window down or align it with the bottom
                 // Take into account window borders. Final check is done below..
@@ -992,7 +994,7 @@ void XWinControl(CHAR Key)
         // over the right or bottom edge, and that could be fatal. Readjust if necessary.
         if( deb.FrameX + (outDga.sizeX+2) * 8 >= dga.xres )
             deb.FrameX = dga.xres - (outDga.sizeX+2) * 8;
-    
+
         if( deb.FrameY + (outDga.sizeY+2) * dga.pFont->ysize >= dga.yres )
             deb.FrameY = dga.yres - (outDga.sizeY+2) * dga.pFont->ysize;
 

@@ -327,10 +327,26 @@ static void EditInPlace(PTRegField pReg, int xDisp)
 }
 
 
+/******************************************************************************
+*                                                                             *
+*   BOOL cmdReg(char *args, int subClass)                                     *
+*                                                                             *
+*******************************************************************************
+*
+*   Register command. If there was no arguments, edit registers in place
+*   (register window will be made visible).
+*   Otherwise, set a register value.
+*
+*   Additional functionality: save and restore a complete register set:
+*   R >                - save CPU registers into a temp buffer
+*   R <                - restore CPU registers from a temp buffer
+*
+******************************************************************************/
 BOOL cmdReg(char *args, int subClass)
 {
     PTRegEdit pReg;
     DWORD value, prev_value;
+    static TREGS tempCpuRegs;           // Temp CPU registers to save/restore
 
     if( *args==0 )
     {
@@ -347,64 +363,82 @@ BOOL cmdReg(char *args, int subClass)
     else
     {
         // Argument is <register>=<value> or <register>
-
-        // Find which register got referenced
-        pReg = &RegEdit[0];
-
-        while( pReg->sRegName != NULL )
+        // or save/restore CPU register set
+        if( *args=='>' )
         {
-            if( strnicmp(pReg->sRegName, args, pReg->nameLen)==0 )
-                break;
-            pReg++;
-        }
-
-        if( pReg->sRegName != NULL )
-        {
-            // Skip over the register name
-            args += pReg->nameLen;
-
-            // If there are no more parameters, go to edit in place mode
-            if( *args==0 )
-            {
-                // r <register>
-                // Position cursor on the selected register and edit register in place
-                EditInPlace(&RegField[pReg->fieldIndex], pReg->delta );
-            }
-            else
-            {
-                // r <register> [=] <value>
-                // Assign register a value ('=' is optional)
-
-                // Skip the blanks and optional '='
-                while( *args==' ' || *args=='=' ) args++;
-
-                // Now we have to have some expression
-                if( *args && Expression(&value, args, &args )==TRUE)
-                {
-                    dprinth(1, "reg: %s = %X", pReg->sRegName, value);
-
-                    // Check that the value is within the range of the selected register
-                    if( value <= pReg->max )
-                    {
-                        prev_value = *(DWORD *)((DWORD)deb.r + pReg->offset);
-                        *(DWORD *)((DWORD)deb.r + pReg->offset) = (prev_value & ~pReg->max) | value;
-
-                        // If we changed eip, we better readjust the code window address
-                        deb.codeTopAddr.offset = deb.r->eip;
-
-                        // TODO: Edit cs:eip should recalc context. do this better...
-                        // If we changed eip, we need to recalculate the whole context
-                        SetSymbolContext(deb.r->cs, deb.r->eip);
-
-                        RecalculateDrawWindows();
-                    }
-                    else
-                        dprinth(1, "Value out of range for selected register");
-                }
-            }
+            // Save CPU registers
+            memcpy(&tempCpuRegs, deb.r, sizeof(TREGS));
+            dprinth(1, "CPU registers saved.");
         }
         else
-            dprinth(1, "Syntax error");
+        if( *args=='<' )
+        {
+            // Restore CPU registers
+            memcpy(deb.r, &tempCpuRegs, sizeof(TREGS));
+            dprinth(1, "CPU registers restored.");
+
+            RecalculateDrawWindows();
+        }
+        else
+        {
+            // Find which register got referenced
+            pReg = &RegEdit[0];
+
+            while( pReg->sRegName != NULL )
+            {
+                if( strnicmp(pReg->sRegName, args, pReg->nameLen)==0 )
+                    break;
+                pReg++;
+            }
+
+            if( pReg->sRegName != NULL )
+            {
+                // Skip over the register name
+                args += pReg->nameLen;
+
+                // If there are no more parameters, go to edit in place mode
+                if( *args==0 )
+                {
+                    // r <register>
+                    // Position cursor on the selected register and edit register in place
+                    EditInPlace(&RegField[pReg->fieldIndex], pReg->delta );
+                }
+                else
+                {
+                    // r <register> [=] <value>
+                    // Assign register a value ('=' is optional)
+
+                    // Skip the blanks and optional '='
+                    while( *args==' ' || *args=='=' ) args++;
+
+                    // Now we have to have some expression
+                    if( *args && Expression(&value, args, &args )==TRUE)
+                    {
+                        dprinth(1, "reg: %s = %X", pReg->sRegName, value);
+
+                        // Check that the value is within the range of the selected register
+                        if( value <= pReg->max )
+                        {
+                            prev_value = *(DWORD *)((DWORD)deb.r + pReg->offset);
+                            *(DWORD *)((DWORD)deb.r + pReg->offset) = (prev_value & ~pReg->max) | value;
+
+                            // If we changed eip, we better readjust the code window address
+                            deb.codeTopAddr.offset = deb.r->eip;
+
+                            // TODO: Edit cs:eip should recalc context. do this better...
+                            // If we changed eip, we need to recalculate the whole context
+                            SetSymbolContext(deb.r->cs, deb.r->eip);
+
+                            RecalculateDrawWindows();
+                        }
+                        else
+                            dprinth(1, "Value out of range for selected register");
+                    }
+                }
+            }
+            else
+                dprinth(1, "Syntax error");
+        }
     }
 
     return( TRUE );

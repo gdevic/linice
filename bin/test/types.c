@@ -4,7 +4,7 @@
 
 */
 
-#define TEST    0
+#define TEST    1
 
 #if TEST
 #define INT(_x) __asm__ __volatile__("int %0" :: "g" (_x))
@@ -35,7 +35,7 @@ typedef struct TagRecord
     char *pName;
     DWORD dwValue;
     enum days day;
-    
+
 } TRecord, *PTRecord;
 
 // Array of structures

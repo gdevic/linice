@@ -50,6 +50,9 @@
 #else // WIN32
 #include <io.h>
 #include <malloc.h>
+#ifdef SIM
+#define printf printk
+#endif // SIM
 #endif // WIN32
 
 #include "ice-ioctl.h"                  // Include shared header file
@@ -69,13 +72,19 @@ extern unsigned int opt;                // Various option flags
 *                                                                             *
 ******************************************************************************/
 
-// These two addresses are read from the kernel symbol table.
-// They are used to set up debugger keyboard hook.
+// We need few addresses that we read from the kernel symbol table, since there
+// are usually no easy ways to get them from the running kernel
+
+// These are used to set up debugger keyboard hook:
 DWORD handle_kbd_event = 0;
 DWORD handle_scancode = 0;
 
-// This symbol address is used to access kernel module list
+// This symbol address is used to access kernel module list:
 DWORD module_list = 0;
+
+// Starting with the 2.4.18 kernel, this symbol is not available for kernel modules:
+DWORD sys_call_table = 0;
+
 
 extern int system2(char *command);
 
@@ -154,15 +163,14 @@ BOOL OpenSystemMap(char *pSystemMap)
     if( pSystemMap && fpSystemMap==NULL )
     {
         // Try to open this file
-        if( opt & OPT_VERBOSE )
-            printf("Trying %s..\n", pSystemMap);
+        VERBOSE1 printf("Trying %s..\n", pSystemMap);
 
         fpSystemMap = fopen(pSystemMap, "r");
 
         if( fpSystemMap )
         {
-            printf("SYSTEM.MAP: %s\n", pSystemMap);
-            
+            VERBOSE1 printf("SYSTEM.MAP: %s\n", pSystemMap);
+
             // We were able to open it - keep fpSystemMap opened
             return( TRUE );
         }
@@ -188,52 +196,52 @@ BOOL OpenSystemMap(char *pSystemMap)
 ******************************************************************************/
 static BOOL GetSymbolExports(void)
 {
-    int items, found = 0;
+    int items;
     DWORD address;
     char code;
     char sSymbol[128];
 
+    handle_kbd_event = handle_scancode = module_list = sys_call_table = 0;
+
     // If the system map file has not been opened, return failure
     if( fpSystemMap )
     {
-        if( opt & OPT_VERBOSE )
-            printf("Reading kernel locations from System.map file:\n");
+        VERBOSE2 printf("Reading kernel locations from System.map file:\n");
 
-        // Look for the addresses of some functions in the system map file
-        while( !feof(fpSystemMap) )
+        // Look for the addresses of some functions in the system map file until
+        // we either reach the end of the System.map file or we have them all read
+
+        while( !feof(fpSystemMap) && (!handle_kbd_event || !handle_scancode || !module_list || !sys_call_table) )
         {
             items = fscanf(fpSystemMap, "%X %c %s\n", &address, &code, sSymbol);
             if( items==3 && strcmp("handle_kbd_event", sSymbol)==0 )
             {
-                if( opt & OPT_VERBOSE )
-                    printf("   handle_kbd_event = %08X\n", address);
+                VERBOSE2 printf("   handle_kbd_event = %08X\n", address);
                 handle_kbd_event = address;
-                if( found++==3 )
-                    break;
             }
             else
             if( items==3 && strcmp("handle_scancode", sSymbol)==0 )
             {
-                if( opt & OPT_VERBOSE )
-                    printf("   handle_scancode = %08X\n", address);
+                VERBOSE2 printf("   handle_scancode = %08X\n", address);
                 handle_scancode = address;
-                if( found++==3 )
-                    break;
             }
             else
             if( items==3 && strcmp("module_list", sSymbol)==0 )
             {
-                if( opt & OPT_VERBOSE )
-                    printf("   module_list = %08X\n", address);
+                VERBOSE2 printf("   module_list = %08X\n", address);
                 module_list = address;
-                if( found++==3 )
-                    break;
+            }
+            else
+            if( items==3 && strcmp("sys_call_table", sSymbol)==0 )
+            {
+                VERBOSE2 printf("   sys_call_table = %08X\n", address);
+                sys_call_table = address;
             }
         }
 
         fclose(fpSystemMap);
         fpSystemMap = NULL;
-                           
+
         return( TRUE );                 // We successfully read symbols
     }
 
@@ -248,9 +256,8 @@ static BOOL GetSymbolExports(void)
 *******************************************************************************
 *
 *   Loads linice.o module.  Feeds it the init file so it can configure itself.
-*   Looks for the System.map file and the keyboard routine "handle_kbd_event"
-*   to send to ice.o as a parameter, so it can hook into the keyboard handler.
-*   Looks for symbol "module_list" as well.
+*   Looks for the System.map file and read all necessary symbols that linice
+*   cannot obtain as a kernel module and needs for proper operation.
 *
 *   Where:
 *       pSystemMap is the default path/name of the System.map file
@@ -408,15 +415,14 @@ BOOL OptInstall(char *pSystemMap)
             sscanf(pStr, "%d", &Init.nVars);
         else
         if(stricmp(sKey, "init")==0)
-             GetString(Init.sInit, pStr); 
+             GetString(Init.sInit, pStr);
         else
         if(stricmp(sKey, "layout"  )==0)
         {
             // If we return TRUE, Init.Layout has been updated
             if( ReadKbdMapping(Init.Layout, pStr)==TRUE )
             {
-                if( opt & OPT_VERBOSE )
-                    printf("Keyboard layout: %s\n", pStr);
+                VERBOSE2 printf("Keyboard layout: %s\n", pStr);
             }
             else
             {
@@ -481,8 +487,7 @@ BOOL OptInstall(char *pSystemMap)
         // Try to open the system map file...
         if(stricmp(sKey, "System.map")==0) OpenSystemMap(pStr); else
         {
-            if( opt & OPT_VERBOSE )
-                printf("Line %d skipped: %s\n", nLine, sLine);
+            VERBOSE2 printf("Line %d skipped: %s\n", nLine, sLine);
         }
     }
 
@@ -520,10 +525,13 @@ BOOL OptInstall(char *pSystemMap)
         //  -x   do not export externs
         //  -f   force load even if kernel version does not match
 
-        sprintf(sLine, "insmod -x -f linice_`uname -r`/linice.o ice_debug_level=1 kbd=%d scan=%d pmodule=%d",
+        sprintf(sLine, "insmod -x -f linice_`uname -r`/linice.o ice_debug_level=1 kbd=%d scan=%d pmodule=%d sys=%d",
             handle_kbd_event,
             handle_scancode,
-            module_list);
+            module_list,
+            sys_call_table);
+
+        VERBOSE2 printf("%s\n", sLine);
 
         status = system2(sLine);
 
@@ -534,10 +542,14 @@ BOOL OptInstall(char *pSystemMap)
             // Send the init packet down to the module
             //====================================================================
             hIce = open("/dev/"DEVICE_NAME, O_RDONLY);
+
             if( hIce>=0 )
             {
                 status = ioctl(hIce, ICE_IOCTL_INIT, &Init);
+
                 close(hIce);
+
+                VERBOSE1 printf("Linice installed.\n");
 
                 // Return success
                 return( TRUE );
@@ -589,37 +601,33 @@ void OptUninstall()
     {
         status = ioctl(hIce, ICE_IOCTL_EXIT, 0);
         close(hIce);
-    }
-    else
-        fprintf(stderr, "Cannot communicate with the Linice module!\n");
 
-    // Unload the linice.o device driver module
-    status = system2("rmmod linice");
+        // Unload the linice.o device driver module
+        status = system2("rmmod linice");
 
-    // rmmod must return 0 when uninstalling a module correctly
-    if( status==0 )
-    {
-        if( opt & OPT_VERBOSE )
-            printf("Linice module removed.\n");
-    }
-    else
-    {
-        // If we cannot unload linice because it crashed, use the
-        // last resort and try to force unload it
-
-        hIce = open("/dev/"DEVICE_NAME, O_RDONLY);
-        if( hIce>=0 )
+        // rmmod must return 0 when uninstalling a module correctly
+        if( status != 0 )
         {
-            if( opt & OPT_VERBOSE )
-                printf("Forcing unload...\n");
+            // If we cannot unload linice because it crashed, use the
+            // last resort and try to force unload it
 
-            status = ioctl(hIce, ICE_IOCTL_EXIT_FORCE, 0);
-            close(hIce);
+            hIce = open("/dev/"DEVICE_NAME, O_RDONLY);
+            if( hIce>=0 )
+            {
+                VERBOSE1 printf("Forcing unload...\n");
 
-            // Theoretically, by now our bad module count is reset back to 0...
+                status = ioctl(hIce, ICE_IOCTL_EXIT_FORCE, 0);
+                close(hIce);
 
-            // Unload the linice.o device driver module
-            status = system2("rmmod linice");
+                // Theoretically, by now our bad module count is reset back to 0...
+
+                // Unload the linice.o device driver module
+                status = system2("rmmod linice");
+            }
         }
+
+        VERBOSE1 printf("Linice uninstalled.\n");
     }
+    else
+        fprintf(stderr, "Cannot communicate with the Linice module! Is Linice installed?\n");
 }

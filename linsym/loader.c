@@ -68,11 +68,14 @@
         linsym --logfile:{file}          -g -> saves linice history into that file
                --logfile:{file},APPEND      ->  optionally appending
 
-        linsym --ver                     -v -> prints debugger version
-
         linsym --help                    -h -> print command line symtax
 
-        linsym --verbose                 -b -> verbose output
+        linsym --verbose                 -v -> verbose output
+
+        Test/Debug:
+        ============
+
+        linsym --capture:{option}        -c -> capture ioctl
 
 *******************************************************************************
 *                                                                             *
@@ -98,6 +101,7 @@
 #include <sys/wait.h>                   // Include waitpid
 #endif // WIN32
 
+#include "ice-version.h"                // Include version file
 #include "ice-ioctl.h"                  // Include shared header file
 #include "loader.h"                     // Include global protos
 
@@ -106,10 +110,6 @@
 *   Global Variables                                                          *
 *                                                                             *
 ******************************************************************************/
-
-int VER_LOADER = (0x00 << 8) + 0x01;    // Major/minor version number
-
-int VER_LOADER_BUILD = 1;
 
 extern char **environ;
 
@@ -125,7 +125,9 @@ char *pArgs = NULL;                     // Default no arguments
 char *pSym = NULL;                      // Default symbol table to load/unload
 char *pLogfile = "linice.log";          // Default logfile name
 char *pSystemMap = NULL;                // User supplied System.map file
+char *pCap = NULL;                      // Capture option string
 unsigned int opt;                       // Various option flags
+int nVerbose;                           // Verbose level
 
 /******************************************************************************
 *                                                                             *
@@ -143,6 +145,7 @@ extern void OptAddSymbolTable(char *sName);
 extern void OptRemoveSymbolTable(char *sName);
 extern void OptTranslate(char *pathOut, char *pathIn, char *pathSources, int nLevel);
 extern void OptLogHistory(void);
+extern void OptCapture(char *pStr);
 
 
 /******************************************************************************
@@ -227,86 +230,68 @@ void OptHelp(int shorth)
 {
     if( shorth )
     {
-        printf("Usage: LINSYM [options] [<module-name>]\n");
-        printf("Use LINSYM --help for extended help\n\n");
+        printf("Usage: LINSYM [options] [<program-name>]\n");
+        printf("Use LINSYM -h or --help for extended help\n\n");
     }
     else
     {
-        printf("\t-i{:System.map} or --install   Installs Linice debugger module\n");
-        printf("\n");
-        printf("\t\tExample: --install\n");
-        printf("\n");
-        printf("\t-x or --uninstall   Uninstalls Linice debugger module\n");
-        printf("\n");
-        printf("\t\tExample: --uninstall\n");
-        printf("\n");
-        printf("\t-t or --translate:  Specify options for symbol translation\n");
-        printf("\t\t[PUBLICS|TYPEINFO|SYMBOLS|SOURCE|*PACKAGE*]\n");
-        printf("\n");
-        printf("\t\tExample: --translate:source Myapp\n");
-        printf("\n");
-        printf("\t-l or --load:  Specify options for loading a module and symbols\n");
-        printf("\t\t[BREAK|NOBREAK]\n");
-        printf("\n");
-        printf("\t\tExample: --load:break module.o\n");
-        printf("\t\tExample: --load:nobreak a.out\n");
-        printf("\n");
-        printf("\t-o or --output:<filename>  Specify alternate filename for translation\n");
-        printf("\n");
-        printf("\t\tExample: --output:MySymbols.sym\n");
-        printf("\n");
-        printf("\t-p or --source:<path>[;<path>] Specify path(s) for source searches\n");
-        printf("\n");
-        printf("\t\tExample: --source:/myproject/source;/myproject/include\n");
-        printf("\n");
-        printf("\t-a or --args:<arg-string>  Specify program argument for loading\n");
-        printf("\n");
-        printf("\t\tExample: --args:\"-ftest.c -x -d\"\n");
-        printf("\n");
-        printf("\t-p or --prompt Prompt for missing source files\n");
-        printf("\n");
-        printf("\t\tExample: --prompt\n");
-        printf("\n");
-        printf("\t-s or --sym:<filename>[;<filename>]  Load symbol file(s)\n");
-        printf("\n");
-        printf("\t\tExample: --sym:MyProg.sym\n");
-        printf("\n");
-        printf("\t-u or --unload:<name>[;<name>]  Unload symbol table(s)\n");
-        printf("\n");
-        printf("\t\tExample: --unload:MyProg\n");
-        printf("\n");
-        printf("\t-g or --logfile[:<filename>]  Save the Linice history buffer\n");
-        printf("\t\t[,APPEND]\n");
-        printf("\n");
-        printf("\t\tExample: --logfile:Mylog.log,append\n");
-        printf("\n");
-        printf("\t-v or --version  Show version information for Linice\n");
-        printf("\n");
-        printf("\t\tExample: --version\n");
-        printf("\n");
-        printf("\t-h or --help  Display this help information\n");
-        printf("\n");
-        printf("\t\tExample: --help\n");
-        printf("\n");
+        printf("  -v:{0-3} or --verbose:{0-3}    Verbose level (0=silent)\n");
+//        printf("\n");
+        printf("       Example: --verbose:3\n");
+//        printf("\n");
+        printf("  -i{:System.map} or --install   Installs Linice debugger module\n");
+//        printf("\n");
+        printf("       Example: --install\n");
+//        printf("\n");
+        printf("  -x or --uninstall              Uninstalls Linice debugger module\n");
+//        printf("\n");
+        printf("       Example: --uninstall\n");
+//        printf("\n");
+        printf("  -t or --translate:             Specify options for symbol translation\n");
+        printf("    [PUBLICS|TYPEINFO|SYMBOLS|SOURCE|*PACKAGE*]\n");
+//        printf("\n");
+        printf("       Example: --translate:source Myapp\n");
+//        printf("\n");
+        printf("  -l or --load:                  Specify options for loading module or symbols\n");
+        printf("    [BREAK|NOBREAK]\n");
+//        printf("\n");
+        printf("       Example: --load:break module.o\n");
+        printf("       Example: --load:nobreak a.out\n");
+//        printf("\n");
+        printf("  -o or --output:<filename>    Specify alternate filename for translation\n");
+//        printf("\n");
+        printf("       Example: --output:MySymbols.sym\n");
+//        printf("\n");
+        printf("  -p or --source:<path>[;<path>]       Specify path(s) for source searches\n");
+//        printf("\n");
+        printf("       Example: --source:/myproject/source;/myproject/include\n");
+//        printf("\n");
+        printf("  -a or --args:<arg-string>            Specify program argument for loading\n");
+//        printf("\n");
+        printf("       Example: --args:\"-ftest.c -x -d\"\n");
+//        printf("\n");
+        printf("  -p or --prompt                       Prompt for missing source files\n");
+//        printf("\n");
+        printf("       Example: --prompt\n");
+//        printf("\n");
+        printf("  -s or --sym:<filename>[;<filename>]  Load symbol file(s)\n");
+//        printf("\n");
+        printf("       Example: --sym:MyProg.sym\n");
+//        printf("\n");
+        printf("  -u or --unload:<name>[;<name>]       Unload symbol table(s)\n");
+//        printf("\n");
+        printf("       Example: --unload:MyProg\n");
+//        printf("\n");
+        printf("  -g or --logfile[:<filename>]         Save the Linice history buffer\n");
+        printf("    [,APPEND]\n");
+//        printf("\n");
+        printf("       Example: --logfile:Mylog.log,append\n");
+//        printf("\n");
     }
 
     exit(0);
 }
 
-/******************************************************************************
-*                                                                             *
-*   void OptVersion()                                                         *
-*                                                                             *
-*******************************************************************************
-*
-*   prints the linice version number
-*
-******************************************************************************/
-void OptVersion()
-{
-    printf("Linsym Translator/Loader Version %d.%02d build %d\n",
-        VER_LOADER >> 8, VER_LOADER & 0xFF, VER_LOADER_BUILD);
-}
 
 /******************************************************************************
 *                                                                             *
@@ -323,11 +308,14 @@ int main(int argn, char *argp[])
     char *ptr;                          // Temporary pointer variable to use
 
     pSource = "./";                     // Default source path is the current directory
-    opt = 0;
+    opt = OPT_VERBOSE;                  // Default option
+    nVerbose = 1;                       // Default verbose level
 
     // Print the basic banner
-    printf("\nLinice Debugger Symbol Translator/Loader version %d.%02d\n", VER_LOADER >> 8, VER_LOADER & 0xFF);
-    printf("(C) Goran Devic, 2000-2001\n\n");
+    printf("\nLinice Debugger ");
+    printf("Symbol Translator/Loader Version %d.%02d\n", LINSYMVER >> 8, LINSYMVER & 0xFF);
+
+    printf("(C) Goran Devic, 2000-2003\n\n");
 
     // If there were no arguments, just print help and exit (help exits)
     if( argn==1 )
@@ -488,16 +476,10 @@ int main(int argn, char *argp[])
                 *ptr = 0;                   // Zero-terminate the log file name
                 ptr++;
             }
-            
+
             // Check if we need to append instead of create/truncate logfile
             if( !strcmpi(ptr, "append") )
                 opt |= OPT_LOGFILE_APPEND;
-        }
-        else
-        if( !strcmpi(argp[i], "--ver") || !strcmpi(argp[i], "-v") )
-        {
-            // --ver  display version
-            opt |= OPT_VER;
         }
         else
         if( !strcmpi(argp[i], "--help") || !strcmpi(argp[i], "-h") )
@@ -506,10 +488,32 @@ int main(int argn, char *argp[])
             opt |= OPT_HELP;
         }
         else
-        if( !strcmpi(argp[i], "--verbose") || !strcmpi(argp[i], "-b") )
+        if( !strnicmp(argp[i], "--verbose", 9) || !strnicmp(argp[i], "-v:", 3) )
         {
-            // --verbose   display more output information
-            opt |= OPT_VERBOSE;
+            ptr = argp[i] + (*(argp[i]+1)=='-'? 9 : 2);
+
+            // --verbose:{0,1,2,3}   display more output information
+            if( *ptr == ':' )
+            {
+                ptr++;
+
+                // 1 is default verbose level, so switch to another
+                switch( *ptr )
+                {
+                    case '0':   opt &= ~OPT_VERBOSE;  break;     // 0 means no output
+                    case '2':   nVerbose = 2;  break;
+                    case '3':   nVerbose = 3;  break;
+                }
+            }
+        }
+        else
+        if( !strnicmp(argp[i], "--capture:", 10) || !strnicmp(argp[i], "-c:", 3) )
+        {
+            ptr = argp[i] + (*(argp[i]+1)=='-'? 10 : 3);
+
+            // --capture:{option}
+            opt |= OPT_CAPTURE;
+            pCap = ptr;
         }
         else
         {
@@ -530,12 +534,9 @@ int main(int argn, char *argp[])
     // Start executing command line options
     //------------------------------------------------------------------------
 
-    if( opt & OPT_VERBOSE )
+    if( opt & OPT_LOGFILE )
     {
-        if( opt & OPT_LOGFILE )
-        {
-            printf("Logfile: %s %s\n", pLogfile, (opt & OPT_LOGFILE_APPEND)? "APPEND":"");
-        }
+        VERBOSE1 printf("Logfile: %s %s\n", pLogfile, (opt & OPT_LOGFILE_APPEND)? "APPEND":"");
     }
 
     // Now we need to do some adjustments:
@@ -558,10 +559,6 @@ int main(int argn, char *argp[])
         if( OptInstall(pSystemMap)==FALSE )
             exit(-1);
     }
-
-    // Print the version
-    if( opt & OPT_VER )
-        OptVersion();
 
     // Translate the symbols
     if( opt & OPT_TRANSLATE )
@@ -608,6 +605,10 @@ int main(int argn, char *argp[])
     // If uninstall debugger is needed, do it last
     if( opt & OPT_UNINSTALL )
         OptUninstall();
+
+    // Test capture option
+    if( opt & OPT_CAPTURE )
+        OptCapture(pCap);
 
     return( 0 );
 }

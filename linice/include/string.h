@@ -50,9 +50,9 @@ typedef unsigned int size_t;
 ******************************************************************************/
 extern void * memchr( const void *s, int c, size_t n);
 extern int    memcmp( const void *s1, const void *s2, size_t n);
-//extern void * memcpy( void *s1, const void *s2, size_t n);      // I think we still picked up these two somewhere in the
+extern void * memcpy( void *s1, const void *s2, size_t n);
 extern void * memmove( void *s1, const void *s2, size_t n);
-//extern void * memset( void *s, int c, size_t n);                // few linux include files that we are getting...
+extern void * memset( void *s, int c, size_t n);
 extern char * strcat( char *s1, const char *s2 );
 extern char * strchr( const char *s, int c );
 extern int    strcmp( const char *s1, const char *s2 );

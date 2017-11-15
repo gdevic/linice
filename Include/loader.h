@@ -36,7 +36,6 @@
 #ifndef _LOADER_H_
 #define _LOADER_H_
 
-#ifndef _CPP
 /******************************************************************************
 *                                                                             *
 *   Global Defines, Variables and Macros                                      *
@@ -49,6 +48,7 @@
 #define TRAN_SOURCE         4
 #define TRAN_PACKAGE        5
 
+
 extern int nTranslate;                  // Default translation is all
 extern char *pTranslate;                // File to translate
 extern char *pOutput;                   // Default output file is "input_file".sym
@@ -57,9 +57,9 @@ extern char *pLoad;                     // Need to specify loading module
 extern char *pArgs;                     // Default no arguments
 extern char *pSym;                      // Default symbol table to load/unload
 extern char *pLogfile;                  // Default logfile name
-unsigned int opt;                       // Various command line options
+extern unsigned int opt;                // Various command line options
+extern int nVerbose;                    // Verbose level
 
-#endif // _CPP
 
 #define OPT_TRANSLATE       0x00000001  // nTranslate -> level of translation
 #define OPT_SOURCE          0x00000002  // pSource -> dirs to search for source
@@ -75,10 +75,14 @@ unsigned int opt;                       // Various command line options
 #define OPT_UNINSTALL       0x00000800  // Uninstall debugger
 #define OPT_LOGFILE         0x00001000  // pLogfile is a logfile to output
 #define OPT_LOGFILE_APPEND  0x00002000  // Append method on logfile
-#define OPT_VER             0x00004000  // Version command
-#define OPT_HELP            0x00008000  // Help command
-#define OPT_VERBOSE         0x00010000  // Option verbose, make output informative
+#define OPT_HELP            0x00004000  // Help command
+#define OPT_VERBOSE         0x00008000  // Option verbose, make output informative
+#define OPT_CAPTURE         0x00010000  // Capture test option
 
+#define VERBOSE0            // 0 simply means no output is desired
+#define VERBOSE1            (opt & OPT_VERBOSE) && (nVerbose>=1) &&
+#define VERBOSE2            (opt & OPT_VERBOSE) && (nVerbose>=2) &&
+#define VERBOSE3            (opt & OPT_VERBOSE) && (nVerbose>=3) &&
 
 #endif //  _LOADER_H_
 

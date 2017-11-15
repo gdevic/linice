@@ -37,11 +37,10 @@
 #ifndef _CLIB_H_
 #define _CLIB_H_
 
-#include <linux/fs.h>                   // Include file operations file
-
 #include "ice-keycode.h"                // Include keyboard codes
 #include "ctype.h"                      // Include character types definition
 #include "string.h"                     // Include standard string declarations
+#include "stdarg.h"                     // Include variable argument macros
 
 #include "ice-types.h"                  // Include exended data types
 
@@ -100,7 +99,15 @@ extern void _kFree( BYTE *pHeap, void *mPtr );
 
 // Use these functions to allocate and free memory from the Ice local heap
 extern char *_kMallocHeap(int size);
-extern char *_kFreeHeap(void *mPtr);
+extern void _kFreeHeap(void *mPtr);
+
+///////////////////////////////////////////////////////////////////////////////
+// From stdlib, defining function in printf.c
+///////////////////////////////////////////////////////////////////////////////
+
+extern int sprintf( char *str, const char *format, ... );
+extern int vsprintf( char *dest, const char *format, va_list arg );
+
 
 #endif //  _CLIB_H_
 

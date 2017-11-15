@@ -41,9 +41,275 @@
 
 extern int dfs;
 
+//****************************************************************************
+//
+// Assumption: There can be at max 65535 source files and each file can have
+//             at most 65535 lines.
+//             Each function can be at most 64K long (line offsets)
+//
+// Assumption: C function tmpfile() will never fail
+//
+//****************************************************************************
+
+static int nSO = 0;                     // Total number of source files
+static int nSources = 0;                // Pruned number of source files
+static char *pSources = NULL;           // Memory buffer to store file names
+
 /******************************************************************************
 *                                                                             *
-*   BOOL ParseSource1(int fd, int fs, char *ptr, WORD file_id)                *
+*   BOOL SetupSourcesArray(FILE *fSources, long maxLen)                       *
+*                                                                             *
+*******************************************************************************
+*
+*   Sets up the array containing the source file names. Prunes duplicates.
+*
+*   Where:
+*       fSources - queue of source file path names to store (have duplicates)
+*       maxLen - total length of the non-pruned strings (the len of the fSources file)
+*
+*   Return:
+*       TRUE - Sources array set up: pSources, nSources
+*       FALSE - Critical error setting up
+*
+******************************************************************************/
+static BOOL SetupSourcesArray(FILE *fSources, long maxLen)
+{
+    char *pSourcesTop;                  // Pointer to the last source stored
+    char *ptr;                          // Pointer to a current source file name
+    char pTmp[FILENAME_MAX];            // Temporary buffer
+
+    // We read all sources that were queued up in the fSources temp file,
+    // and then prune the duplicate files.
+
+    // At this point we assume there is at least one source file
+    ASSERT(maxLen);
+
+    // Allocate memory to keep the file names that we will read from the fSources
+    pSources = pSourcesTop = (char*) malloc(maxLen);
+    if( pSources!=NULL )
+    {
+        // Reposition the queue file to the start
+        fseek(fSources, 0, SEEK_SET);
+
+        VERBOSE1 printf("Unique source files:\n");
+
+        while( !feof(fSources) )
+        {
+            // Read in a single file name
+            fgets(pTmp, FILENAME_MAX, fSources);
+
+            // Get rid of the 0x0A and 0x0D trailing characters
+            if( strchr(pTmp, 0x0A) )
+                *strchr(pTmp, 0x0A) = 0;
+
+            if( strchr(pTmp, 0x0D) )
+                *strchr(pTmp, 0x0D) = 0;
+
+            // Compare it to all the file names already loaded
+            ptr = pSources;
+            while( ptr<pSourcesTop )
+            {
+                if( !strcmp(ptr, pTmp) )
+                    break;
+
+                ptr += strlen(ptr) + 1;
+            }
+
+            if( ptr>=pSourcesTop )
+            {
+                // A new file to put on the list
+                strcpy(pSourcesTop, pTmp);
+                pSourcesTop += strlen(pTmp);
+                *pSourcesTop++ = 0;     // Null-terminate the string
+
+                nSources++;             // Increment the counter
+
+                VERBOSE1 printf("  file_id: %d  %s\n", nSources, pTmp);
+            }
+        }
+
+        return( TRUE );
+    }
+    else
+        fprintf(stderr, "Unable to allocate memory\n");
+
+    return( FALSE );
+}
+
+
+/******************************************************************************
+*                                                                             *
+*   BOOL StoreSourceFiles(BYTE *pBuf)                                         *
+*                                                                             *
+*******************************************************************************
+*
+*   Loads and stores source file names (and paths) for later references.
+*
+*   Where:
+*       pBuf - buffer containing the ELF file
+*
+*   Return:
+*       TRUE - Sources array set up: pSources, nSources
+*       FALSE - Critical error setting up
+*
+******************************************************************************/
+BOOL StoreSourceFiles(BYTE *pBuf)
+{
+    Elf32_Ehdr *pElfHeader;             // ELF header
+
+    Elf32_Shdr *Sec;                    // Section header array
+    Elf32_Shdr *SecName;                // Section header string table
+    Elf32_Shdr *SecCurr;                // Current section
+    Elf32_Shdr *SecStab = NULL;         // Section .STAB
+    Elf32_Shdr *SecStabstr = NULL;      // Section .STABSTR
+    Elf32_Shdr *SecSymtab = NULL;       // Section .SYMTAB
+    Elf32_Shdr *SecStrtab = NULL;       // Section .STRTAB
+
+    StabEntry *pStab;                   // Pointer to a stab entry
+    char *pStr;                         // Pointer to a stab string
+    BOOL fCont;                         // Line continuation?
+    char *pSoDir = NULL;                // Source code directory
+    int i;
+    int nCurrentSection;                // Current string section offset
+    int nSectionSize;                   // Current section string size
+    FILE *fSources;                     // Temp file descriptor for source file names
+
+    VERBOSE2 printf("=============================================================================\n");
+    VERBOSE2 printf("||         PARSE SOURCE REFERENCES                                         ||\n");
+    VERBOSE2 printf("=============================================================================\n");
+
+    ASSERT(sizeof(StabEntry)==12);
+
+    pElfHeader = (Elf32_Ehdr *) pBuf;
+
+    // Ok, we have the complete file inside the buffer...
+    // Find the section header and the string table of section names
+    Sec = (Elf32_Shdr *) &pBuf[pElfHeader->e_shoff];
+    SecName = &Sec[pElfHeader->e_shstrndx];
+
+    for( i=1; i<pElfHeader->e_shnum; i++ )
+    {
+        SecCurr = &Sec[i];
+        pStr = (char *)pBuf + SecName->sh_offset + SecCurr->sh_name;
+
+        if( strcmp(".stab", pStr)==0 )
+            SecStab = SecCurr;
+        else
+        if( strcmp(".stabstr", pStr)==0 )
+            SecStabstr = SecCurr;
+        else
+        if( strcmp(".symtab", pStr)==0 )
+            SecSymtab = SecCurr;
+        else
+        if( strcmp(".strtab", pStr)==0 )
+            SecStrtab = SecCurr;
+    }
+
+    // Create a temp file to store source file names
+    fSources = tmpfile();
+
+
+    //=========================
+    // Parse STABS for source file references
+    //=========================
+    if( SecStab && SecStabstr )
+    {
+        // Parse stab section
+        pStab = (StabEntry *) (pBuf + SecStab->sh_offset);
+        i = SecStab->sh_size / sizeof(StabEntry);
+        nCurrentSection = 0;
+        nSectionSize = 0;
+        fCont=FALSE;
+        while( i-- )
+        {
+            pStr = (char *)pBuf + SecStabstr->sh_offset + pStab->n_strx + nCurrentSection;
+#if 0
+            if(opt & OPT_VERBOSE)
+            {
+                printf("unsigned long n_strx  = %08X\n", pStab->n_strx );
+                printf("unsigned char n_type  = %02X\n", pStab->n_type );
+                printf("unsigned char n_other = %02X\n", pStab->n_other );
+                printf("unsigned short n_desc = %04X\n", pStab->n_desc );
+                printf("unsigned long n_value = %08X\n", pStab->n_value );
+            }
+#endif
+
+            switch( pStab->n_type )
+            {
+                // 0x00 (N_UNDEF) is actually storing the current section string size
+                case N_UNDF:
+                    // We hit another string section, need to advance the string offset of the previous section
+                    nCurrentSection += nSectionSize;
+                    // Save the (new) currect string section size
+                    nSectionSize = pStab->n_value;
+
+                    VERBOSE2 printf("HdrSym size: %lX\n", pStab->n_value);
+                    VERBOSE2 printf("=========================================================\n");
+                break;
+
+                case N_SO:
+                    VERBOSE2 printf("SO  ");
+                    if( *pStr==0 )
+                    {
+                        // Empty name - end of source file
+                        VERBOSE2 printf("End of source. Text section offset: %08lX\n", pStab->n_value);
+                        VERBOSE2 printf("=========================================================\n");
+
+                        nSO++;
+                    }
+                    else
+                    {
+                        if( *(pStr + strlen(pStr) - 1)=='/' )
+                        {
+                            // Directory
+                            VERBOSE2 printf("Source directory: %s\n", pStr);
+
+                            // Store the pointer to a directory so we can use it later for SO and SOL stabs
+                            pSoDir = pStr;
+                        }
+                        else
+                        {
+                            // File
+                            VERBOSE2 printf("Source file: %s\n", pStr );
+
+                            fprintf(fSources, "%s%s\n", pSoDir, pStr);
+                        }
+                    }
+                break;
+
+                case N_SOL:
+                    VERBOSE2 printf("SOL  ");
+                    VERBOSE2 printf("%s\n", pStr);
+
+                    // Change of source - if the first character is not '/', we need to
+                    // prefix the last defined file path to complete the directory
+                    if( *pStr!='/' && *pStr!='\\' )
+                    {
+                        fprintf(fSources, "%s", pSoDir);
+                    }
+                    fprintf(fSources, "%s\n", pStr);
+                break;
+            }
+
+            pStab++;
+        }
+
+        // Set up the sources array
+        if( nSO )
+            return( SetupSourcesArray(fSources, ftell(fSources)) );
+
+        VERBOSE2 printf("No sources to load!\n");
+    }
+    else
+        fprintf(stderr, "No STAB section in the file\n");
+
+    return( FALSE );
+}
+
+
+/******************************************************************************
+*                                                                             *
+*   BOOL WriteSourceFile(int fd, int fs, char *ptr, WORD file_id)             *
 *                                                                             *
 *******************************************************************************
 *
@@ -58,25 +324,30 @@ extern int dfs;
 *
 *   Returns:
 *       TRUE - file is parsed and stored, could also be file is completely skipped
-*       FALSE - Critical memory allocation error, no point to continue with any more files
+*       FALSE - Critical memory allocation error
 *
 ******************************************************************************/
-BOOL ParseSource1(int fd, int fs, char *ptr, WORD file_id)
+static BOOL WriteSourceFile(int fd, int fs, char *ptr, WORD file_id)
 {
     int nLines, i;                      // Running count of number of lines
+    BYTE bSpaces;                       // Number of heading spaces in a line
     TSYMSOURCE *pHeader;                // Source header structure
     DWORD dwSize;                       // Final size of the above structure
     FILE *fp = NULL;                    // Source file descriptor
     char pTmp[FILENAME_MAX];            // Temporary buffer
 	char *pName;						// Temp file name pointer
 
-#define MAX_LINE_LEN    1024            // Max allowable line length in a source code
+    // Max allowable line length in a source code: This does not mean we will store
+    // that complete line - we store only up to MAX_STRING characters of each line!
+#define MAX_LINE_LEN    1024
 
     char sLine[MAX_LINE_LEN];           // Single source line
 
     // Open the source file. If it can't be opened for some reason, display
     // message and input the new file path/name from the console
-    strcpy(pTmp, ptr);
+    strncpy(pTmp, ptr, FILENAME_MAX-1);
+    pTmp[FILENAME_MAX-1] = 0;
+
     while( fp==NULL )
     {
         // Strip trailing 0A, 0D characters
@@ -111,7 +382,6 @@ BOOL ParseSource1(int fd, int fs, char *ptr, WORD file_id)
 
         p = fgets(sLine, MAX_LINE_LEN, fp);
         if(p==NULL) break;
-        printf("%3d: %2d %s", nLines + 1, strlen(sLine), sLine);
         nLines++;
     }
 
@@ -124,8 +394,8 @@ BOOL ParseSource1(int fd, int fs, char *ptr, WORD file_id)
     if( pHeader==NULL )
         return( FALSE );
 
-    pHeader->hType       = HTYPE_SOURCE;
-    pHeader->dwSize      = dwSize;
+    pHeader->h.hType     = HTYPE_SOURCE;
+    pHeader->h.dwSize    = dwSize;
     pHeader->file_id     = file_id;
     pHeader->nLines      = nLines;
     pHeader->dSourcePath = dfs;
@@ -147,23 +417,55 @@ BOOL ParseSource1(int fd, int fs, char *ptr, WORD file_id)
 
     for( i=0; i<nLines; i++ )
     {
+        // Read the whole line - hopefully it will fit into our buffer
+        // TODO: Can we do this differently? So we dont depend on the max source line size?
         fgets(sLine, MAX_LINE_LEN, fp);
 
         // Cut a line into the maximum allowable source line width
         sLine[MAX_STRING-1] = 0;
 
         // Do a small file size optimization: loop from the back to the front
-        // of a line and cut all trailing spaces, 0A and 0D characters (newlines)
-        ptr = sLine + strlen(sLine) - 1;
-        while( ptr>=sLine && (*ptr==' ' || *ptr==0x0A || *ptr==0x0D) )
+        // of a line and cut all trailing spaces, tabs, 0A and 0D characters (newlines)
+        ptr = strchr(sLine, '\0') - 1;
+        while( ptr>=sLine && (*ptr==' ' || *ptr==0x09 || *ptr==0x0A || *ptr==0x0D) )
         {
             *ptr-- = 0;
         }
 
-        // Write a line to the strings file
-        pHeader->dLineArray[i] = dfs;
-        write(fs, sLine, strlen(sLine)+1);
-        dfs += strlen(sLine)+1;
+        // Second optimization: Trim all the spaces from the front of the line, the very
+        // First BYTE in the source line is the number of spaces
+        ptr = sLine;
+        bSpaces = 0;
+        while( *ptr++==' ' )
+        {
+            bSpaces++;
+        }
+
+        ptr--;
+        // ptr now points to the real start of the source line, ignoring heading spaces
+
+        // Another size optimization: If the line is empty then, we dont even store
+        // { bSpaces, '\0' }  but point to the start of the strings area where we
+        // already have { 0, 0 } pseudo-string
+
+        if( strlen(ptr) )
+        {
+            // Size of the line is not zero - store it
+
+            pHeader->dLineArray[i] = dfs;
+            // Write the number of spaces as the first byte of line string
+            write(fs, &bSpaces, 1);
+
+            // Write a line (or whatever is left of it) to the strings file
+            write(fs, ptr, strlen(ptr)+1);
+            dfs += strlen(ptr)+1+1;
+        }
+        else
+        {
+            // Size of the line is zero - point to the start of the strings area
+
+            pHeader->dLineArray[i] = 0;
+        }
     }
 
     // Lastly, write out the header structure to fd
@@ -175,95 +477,6 @@ BOOL ParseSource1(int fd, int fs, char *ptr, WORD file_id)
     fclose(fp);
 
     return( TRUE );
-}
-
-
-int nSources = 0;                       // Counter variables
-char *pSources = NULL;                  // Memory buffer to store file names
-
-/******************************************************************************
-*                                                                             *
-*   BOOL SetupSourcesArray(FILE *fSources)                                    *
-*                                                                             *
-*******************************************************************************
-*
-*   Sets up the array containing the source file names. Prunes duplicates.
-*
-*   Where:
-*       fSources - queue of source file path names to store (have duplicates)
-*
-******************************************************************************/
-BOOL SetupSourcesArray(FILE *fSources)
-{
-    char *pSourcesTop;                  // Pointer to the last source stored
-    char *ptr;                          // Pointer to a current source file name
-    int nLen;                           // File len
-    char pTmp[FILENAME_MAX];            // Temporary buffer
-    struct stat fd_stat;                // file stats
-
-    // We read all sources that were queued up in the fSources temp file,
-    // and then prune the duplicate files.
-
-    // Get the file stats
-    fstat(fileno(fSources), &fd_stat);
-
-    nLen = fd_stat.st_size;
-    if( nLen==0 )
-    {
-        printf("No sources to load!\n");
-        return( TRUE );
-    }
-
-    // Allocate memory to keep the file names that we will read from the fSources
-    pSources = pSourcesTop = (char*) malloc(nLen);
-    if( pSources!=NULL )
-    {
-        // Reposition the queue file to the start
-        fseek(fSources, 0, SEEK_SET);
-
-        printf("Unique sources:\n");
-
-        while( !feof(fSources) )
-        {
-            // Read in a single file name
-            fgets(pTmp, FILENAME_MAX, fSources);
-
-            // Get rid of the 0x0A and 0x0D trailing characters
-            if( strchr(pTmp, 0x0A) )
-                *strchr(pTmp, 0x0A) = 0;
-
-            if( strchr(pTmp, 0x0D) )
-                *strchr(pTmp, 0x0D) = 0;
-
-            // Compare it to all the file names already loaded
-            ptr = pSources;
-            while( ptr<pSourcesTop )
-            {
-                if( !strcmp(ptr, pTmp) )
-                    break;
-
-                ptr += strlen(ptr) + 1;
-            }
-
-            if( ptr>=pSourcesTop )
-            {
-                // A new file to put on the list
-                strcpy(pSourcesTop, pTmp);
-                pSourcesTop += strlen(pTmp);
-                *pSourcesTop++ = 0;     // Null-terminate the string
-
-                nSources++;             // Increment counter
-
-                printf("file_id: %d  %s\n", nSources, pTmp);
-            }
-        }
-
-        return( TRUE );
-    }
-    else
-        printf("Unable to allocate memory\n");
-
-    return( FALSE );
 }
 
 
@@ -279,6 +492,10 @@ BOOL SetupSourcesArray(FILE *fSources)
 *       fd - symbol table file descriptor (to write to)
 *       fs - strings file (to write to)
 *
+*   Returns:
+*       TRUE - Sources written ok
+*       FALSE - Critical error writing sources
+*
 ******************************************************************************/
 BOOL ParseSource(int fd, int fs)
 {
@@ -286,9 +503,9 @@ BOOL ParseSource(int fd, int fs)
     int i;                              // Generic counter
     WORD file_id;                       // File_id counter to assign
 
-    printf("=============================================================================\n");
-    printf("||         PARSE SOURCES                                                   ||\n");
-    printf("=============================================================================\n");
+    VERBOSE2 printf("=============================================================================\n");
+    VERBOSE2 printf("||         PARSE SOURCES                                                   ||\n");
+    VERBOSE2 printf("=============================================================================\n");
 
     file_id = 1;                        // Start with file ID of 1
 
@@ -296,12 +513,14 @@ BOOL ParseSource(int fd, int fs)
     ptr = pSources;
     for( i=0; i<nSources; i++ )
     {
-        ParseSource1(fd, fs, ptr, file_id);
+        if( WriteSourceFile(fd, fs, ptr, file_id)==FALSE)
+            return(FALSE);
+
         file_id++;                      // Increment file number
         ptr += strlen(ptr) + 1;         // And select next file path/name
     }
 
-    return( FALSE );
+    return( TRUE );
 }
 
 
@@ -311,12 +530,16 @@ BOOL ParseSource(int fd, int fs)
 *                                                                             *
 *******************************************************************************
 *
-*   Given the path and file name, search the array of sources and find which
-*   equals.
+*   Given the path and the file name, search the array of all pruned sources and
+*   find the index of the referenced one.
 *
 *   Where:
 *       pSoDir - path to the file
 *       pSo - file name or a full path/name
+*
+*   Returns:
+*       0 - Source is not found
+*       n > 0   - Index of the source file (file_id)
 *
 ******************************************************************************/
 WORD GetFileId(char *pSoDir, char *pSo)
@@ -352,4 +575,3 @@ WORD GetFileId(char *pSoDir, char *pSo)
 
     return( 0 );
 }
-

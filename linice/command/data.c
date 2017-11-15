@@ -68,7 +68,7 @@ typedef struct
 // Descriptions for editing BYTEs (1), WORDs (2) and DWORDs (4)
 static TDataField DataField[] = {
     // 0 - not a valid entry
-    {},
+    { 0, },
     // 1 - 16 BYTE position descriptors
     {
         15,
@@ -86,7 +86,7 @@ static TDataField DataField[] = {
         55, 55+15
     },
     // 3 - not a valid entry
-    {},
+    { 0, },
     // 4 - 4 DWORD position descriptors
     {
         3,
@@ -445,7 +445,7 @@ static void DataEdit()
             // index is also not following.
             // The only relevant variables are xCur and yCur.
             //=================================================================
-    
+
             switch( Key )
             {
                 case ESC:       // ESC and ENTER quit edit
@@ -717,7 +717,7 @@ static void DataEdit()
                     break;
 
                 default:        // All other characters are considered for input
-                    
+
                         if( DataGetSet(DATAGETSET_INSERT, &Addr, xCur-pDataDesc->xStart[index], Key) )
                         {
                             // Character was accepted, print it out
@@ -867,7 +867,7 @@ BOOL cmdEdit(char *args, int subClass)
             RecalculateDrawWindows();
         }
     }
-        
+
 
     if( *args==0 )
     {

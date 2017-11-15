@@ -34,14 +34,15 @@
 *   Include Files                                                             *
 ******************************************************************************/
 
+#include "module-header.h"              // Include types commonly defined for a module
+
 #include "ice-ioctl.h"                  // Include our own IOCTL numbers
-#include "iceface.h"                    // Include iceface module stub protos
 #include "clib.h"                       // Include C library header file
+#include "iceface.h"                    // Include iceface module stub protos
 #include "ice.h"                        // Include main debugger structures
 #include "debug.h"                      // Include our dprintk()
-
-// from errno.h  :p
-#define	EFAULT		14	/* Bad address */
+#include "errno.h"                      // Include kernel error numbers
+#include "ioctl.h"                      // Include IO control macros
 
 /******************************************************************************
 *                                                                             *
@@ -62,12 +63,15 @@ PTWINDOWS pWin;                         // And a pointer to it
 
 PTOUT pOut;                             // Pointer to a current Out class
 
+unsigned long **sys_table;             // alias for sys_call_table
+
 //=============================================================================
 
 extern char *linice;                           // default value
 extern DWORD kbd;                              // default value
 extern DWORD scan;                             // default value
 extern DWORD *pmodule;                         // default value
+extern DWORD sys;                              // default value
 extern DWORD iceface;                          // default value
 extern int ice_debug_level;                    // default value
 
@@ -88,12 +92,11 @@ static int major_device_number;
 extern int InitProcFs();
 extern int CloseProcFs();
 
-extern unsigned long sys_call_table[];
 typedef asmlinkage int (*PFNMKNOD)(const char *filename, int mode, dev_t dev);
 typedef asmlinkage int (*PFNUNLINK)(const char *filename);
 
-static PFNMKNOD sys_mknod;
-static PFNUNLINK sys_unlink;
+static PFNMKNOD sys_mknod = NULL;
+static PFNUNLINK sys_unlink = NULL;
 
 extern int ice_mknod(PFNMKNOD sys_mknod, char *pDevice, int major_device_number);
 extern void ice_rmnod(PFNUNLINK sys_unlink, char *pDevice);
@@ -114,6 +117,12 @@ extern void UnHookSyscall(void);
 extern int HistoryReadReset();
 extern char *HistoryReadNext(void);
 
+extern int Capture(void *);
+
+extern WORD GetKernelDS();
+extern WORD GetKernelCS();
+
+extern WORD sel_ice_ds;                 // Place to self-modify the code with this value
 
 /******************************************************************************
 *                                                                             *
@@ -139,17 +148,35 @@ int IceInitModule(void)
     memset(&Win, 0, sizeof(TWINDOWS));
     pWin = &Win;
 
+    // Since we dont know at the compile time what is the kernel DS and CS will be,
+    // we query it now. We also need to self-modify one place in the interrupt
+    // handler that will load kernel DS
+    sel_ice_ds = GetKernelDS();
+
     // Register driver
 
     major_device_number = ice_register_chrdev(DEVICE_NAME);
 
     if(major_device_number >= 0 )
     {
+        INFO(("Params:\n"));
+        INFO(("  kbd     %08X\n", kbd));
+        INFO(("  scan    %08X\n", scan));
+        INFO(("  pmodule %08X\n", pmodule));
+        INFO(("  sys     %08X\n", sys));
+
+        // Set up our own pointer to sys_call_table
+        // Starting with the kernel version 2.4.20 sys_call_table is not exported any more
+        sys_table = (unsigned long **)sys;
+
         // Create a device node in the /dev directory
         // and also make sure we have the functions in the systable
 
-        sys_mknod = (PFNMKNOD) sys_call_table[ice_get__NR_mknod()];
-        sys_unlink = (PFNUNLINK) sys_call_table[ice_get__NR_unlink()];
+        sys_mknod = (PFNMKNOD) sys_table[ice_get__NR_mknod()];
+        sys_unlink = (PFNUNLINK) sys_table[ice_get__NR_unlink()];
+
+        INFO(("sys_mknod = %08X\n", sys_mknod));
+        INFO(("sys_unlink = %08X\n", sys_unlink));
 
         if(sys_mknod && sys_unlink)
         {
@@ -374,6 +401,13 @@ int DriverIOCTL(void *p1, void *p2, unsigned int ioctl, unsigned long param)
             else
                 retval = -EFAULT;       // Faulty memory access OR end of history stream
 
+            break;
+
+        //==========================================================================================
+        case ICE_IOCTL_CAPTURE:         // Get a capture image
+            INFO(("ICE_IOCTL_CAPTURE\n"));
+
+            retval = Capture((void *)param);
             break;
     }
 

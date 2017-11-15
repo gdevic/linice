@@ -11,9 +11,44 @@ int global;
 
 #define INT(_x) __asm__ __volatile__("int %0" :: "g" (_x))
 
+typedef struct
+{
+    int display;
+    char *name;
+} GC;
+
+typedef GC *PGC;
+
+PGC Displays[2];
+GC Display2[2];
+GC OneDisplay;
+
+typedef struct
+  {
+    unsigned long int __val[10];
+    char x;
+  } __sigset_t;
+
+
+typedef unsigned char U008;
+
+U008 BTFF0[] = { 0x1B, 0x1B, 0x1B, 0x00,
+                 0x12, 0x12, 0x1B, 0x00 };
+U008 BTFF1[] = { 0x9B, 0x9B, 0x80, 0x80,
+                 0x9B, 0x9B, 0x80, 0x80 };
+U008 BTFF2[] = { 0xC0, 0xC0, 0x92, 0xF6,
+                 0xC0, 0xC0, 0x92, 0xF6 };
+
+
+typedef unsigned long DWORD;
+
+DWORD global_dword;
+
 static int fnStatic(int arg);
 int fnGlobal(int arg);
 void fnNested(void);
+
+char ***pppChar = 0;
 
 extern int fnGlobal2(int arg);
 

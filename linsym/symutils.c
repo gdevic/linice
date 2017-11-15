@@ -42,6 +42,7 @@
 #include <malloc.h>
 #include <errno.h>
 #include <stdlib.h>
+#include <time.h>
 
 #ifdef WIN32
 #include <io.h>
@@ -51,7 +52,8 @@
 
 #include "ice-types.h"                  // Include private data types
 #include "ice-symbols.h"                // Include symbol file defines
-//#include "primes.h"                     // Insert table of 1024 prime numbers
+
+#include "loader.h"                     // Include global protos
 
 
 extern BYTE *LoadElf(char *sName);
@@ -107,6 +109,7 @@ void OptTranslate(char *pathOut, char *pathIn, char *pathSources, int nLevel)
     int fd_out, fd_in, status;
     BYTE *pBuf;
     char *pTableName;
+    time_t lapse;
 
     // Find the size of the input file
     status = stat(pathIn, &prop);
@@ -133,6 +136,8 @@ void OptTranslate(char *pathOut, char *pathIn, char *pathSources, int nLevel)
                     fd_in = fileno(fin);
                     if( elf[1]=='E' && elf[2]=='L' && elf[3]=='F' )
                     {
+                        time(&lapse);
+
                         // ELF file
                         pBuf = LoadElf(pathIn);
                         if( pBuf )
@@ -145,35 +150,38 @@ void OptTranslate(char *pathOut, char *pathIn, char *pathSources, int nLevel)
                         // ASCII map symbol file
                         TranslateMapFile(fd_out, fin, pathIn, prop.st_size);
                     }
+
+                    lapse = time(NULL) - lapse;
+                    VERBOSE1 printf("Complete in %ld sec\n", lapse? lapse : 1);
                 }
                 else
-                    printf("Type of input file %s is not supported\n", pathIn);
+                    fprintf(stderr, "Type of input file %s is not supported\n", pathIn);
 
                 fclose(fin);
             }
             else
-                printf("Error opening input file %s\n", pathIn);
+                fprintf(stderr, "Error opening input file %s\n", pathIn);
 
             close(fd_out);
         }
         else
-            printf("Access violation writing symbol file %s\n", pathOut);
+            fprintf(stderr, "Access violation writing symbol file %s\n", pathOut);
     }
     else
     {
         switch(status)
         {
         case EACCES:
-            printf("Error accessing input file %s\n", pathIn);
+            fprintf(stderr, "Error accessing input file %s\n", pathIn);
             break;
         case EBADF:
-            printf("Bad input file %s\n", pathIn);
+            fprintf(stderr, "Bad input file %s\n", pathIn);
             break;
         case ENOENT:
-            printf("Input file %s unreachable\n", pathIn);
+            fprintf(stderr, "Input file %s unreachable\n", pathIn);
             break;
         default:
-            printf("Unable to stat input file %s\n", pathIn);
+            fprintf(stderr, "Unable to stat input file %s\n", pathIn);
         }
     }
 }

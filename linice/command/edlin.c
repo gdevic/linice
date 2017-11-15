@@ -120,6 +120,7 @@ static DWORD hView;                     // Handle to a history view
 ******************************************************************************/
 
 extern void XWinControl(CHAR Key);
+extern void FocusInPlace(TLIST *pList, TFRAME *pFrame, BOOL fCanDel);
 extern void CodeScroll(int Xdir, int Ydir);
 extern char *MacroExpand(char *pCmd);
 
@@ -461,6 +462,29 @@ void EdLin( char *sCmdLine )
                     // Ctrl+Alt+<arrow keys> move window around
 
                     XWinControl(Key);
+
+                    break;
+
+                //======================== WATCH WINDOW ========================
+#ifdef SIM // We cannot handle ALT key
+                case CHAR_CTRL + 'w':
+#else
+                case CHAR_ALT + 'w':
+#endif // SIM
+                    // Temporary switch to manage watch window
+                    // We can delete a watch item
+
+                    FocusInPlace(&deb.Watch, &pWin->w, TRUE);
+
+                    break;
+
+                //======================== LOCALS WINDOW =======================
+
+                case CHAR_ALT + 'l':
+                    // Temporary switch to manage locals window
+                    // We cannot delete a local variable item
+
+                    FocusInPlace(&deb.Local, &pWin->l, FALSE);
 
                     break;
 

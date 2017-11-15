@@ -36,6 +36,8 @@
 
 #include "Common.h"                     // Include platform specific set
 
+#include "loader.h"                     // Include global protos
+
 #include <ctype.h>
 
 extern int dfs;
@@ -45,6 +47,8 @@ extern WORD GetFileId(char *pSoDir, char *pSo);
 #define MAX_TYPEDEF     32768           // Max buffer len for the concat typedef string
 
 static char DefBuf[MAX_TYPEDEF];        // Actual concat typedef string buffer
+static int nTypedefs;                   // Number of typedefs
+
 
 typedef struct
 {
@@ -53,6 +57,13 @@ typedef struct
     DWORD id;                           // Type id number
 
 } TBASICTYPEDEF;
+
+
+// This is a stack of subdefinitions so we can resolve this in the opposite order
+#define MAX_SUBDEF      256             // Maximum number of sub-definitions that we can handle
+static char *Subdef[MAX_SUBDEF];
+static int nSubdef;
+
 
 static TBASICTYPEDEF basic[] = {
     {  4, "int:", 1 },
@@ -78,6 +89,22 @@ static TBASICTYPEDEF basic[] = {
 };
 
 
+/******************************************************************************
+*                                                                             *
+*   DWORD BasicTypedef(char *pDef)                                            *
+*                                                                             *
+*******************************************************************************
+*
+*   Looks if the addressed string contains one of the built-in types.
+*
+*   Where:
+*       pDef is the string to examine
+*
+*   Returns:
+*       0 - Type is not one of the built-in types
+*       nonzero - Basic built-in type ID
+*
+******************************************************************************/
 DWORD BasicTypedef(char *pDef)
 {
     TBASICTYPEDEF *pType;
@@ -94,8 +121,171 @@ DWORD BasicTypedef(char *pDef)
     return( 0 );
 }
 
-char *left(char *pString, int len);
-char *memrchr(char *pMem, int c);
+/******************************************************************************
+*                                                                             *
+*   BOOL ParseDef(int fd, int fs, char *pDefBuf)                              *
+*                                                                             *
+*******************************************************************************
+*
+*   Parses a single line of type definition. It splits the multiple sub-defs
+*   into separate definctions so we can find them faster.
+*
+*   Note: The line will be heavily modified!
+*
+*   Where:
+*       fd - symbol table file descriptor (to write to)
+*       fs - strings file (to write to)
+*       pDefBuf - complete line of a type definition
+*
+*   Returns:
+*       TRUE - Typedefs line parsed and stored
+*       FALSE - Critical error
+*
+******************************************************************************/
+BOOL ParseDef(int fd, int fs, char *pDefBuf)
+{
+    char *pDef;                         // Moving pointer to the definition
+    char *pSub;                         // Pointer to the subdefinition ")="
+    char *pSubend;                      // Pointer to the end of the subdefinition
+    char *pSubnum;                      // Pointer to the subdefinition number "(x,y)="
+    char c;                             // Temporary character
+    TSYMTYPEDEF1 list;                  // Typedef record
+    int nNameLen;                       // Type name length
+
+    nSubdef = 0;                        // Zero subdefinitions so far
+    pDef = pDefBuf;                     // Adjust the pointer that we will move along
+
+    // Scan the typedef definition and stack up the pointers to ")=" substrings
+    while( nSubdef<MAX_SUBDEF && (Subdef[nSubdef] = pDef = strstr(pDef, ")=")) )
+        pDef += 2, nSubdef++;
+
+    // Make sure that we did not overflow our buffer. Chances are slim because we allow
+    // large nesting, but let's still handle it, oh well...
+    if(nSubdef>=MAX_SUBDEF)
+    {
+        fprintf(stderr, "Error: Typedef definition too complex:\n");
+        fprintf(stderr, "%s\n", pDefBuf);
+        return(FALSE);
+    }
+
+    // Pop the subdefinitions from the stack and extract them out of the original string
+    while(nSubdef--)
+    {
+        // Clear the list record just in case
+        memset(&list, 0, sizeof(TSYMTYPEDEF1));
+
+        // Find the start of the subdefinition - its number (x,y)=... by looking for the "("
+        pSubnum = Subdef[nSubdef];
+        while(*pSubnum!='(') pSubnum--;
+
+        // Find the start of the actual subdefinition - we already have it ")="
+        pSub = Subdef[nSubdef] + 2;
+
+        // Find the end of the actual subdefinition: depending on the type of the def,
+        // we may need to parse it
+        pSubend = pSub;
+        switch(*pSub)
+        {
+        case '(':   // This is a simple type number redirection: (x,y)=(i,j)
+        case '*':   // This is a pointer redirection: (x,y)=*(i,j)
+        case 'f':   // Function reference: (x,y)=f(i,j)
+                    // Look for the closing parenthesis
+            pSubend = strchr(pSub,')');
+            break;
+
+        case 'r':   // Self-defined integer value: (x,y)=r(i,j);00000000;0037777777;
+                    // Look for the third semicolon
+            pSubend = strchr(strchr(strchr(pSub,';')+1,';')+1,';');
+            break;
+
+        case 'a':   // Array: (x,y)=ar(i,j);m;n;(k,l)
+                    // Look for the second closing bracket
+            pSubend = strchr(strchr(pSub,')')+1,')');
+            break;
+
+        case 'x':   // Forward defined type: (x,y)=xs_TX:
+                    // Look for the trailing colon
+            pSubend = strchr(pSub,':');
+
+        default:                        // All other types we take completely
+            pSubend = strchr(pSub, '\0') - 1;
+        }
+
+        // Read in the typedef numbers and form the typedef record
+        if( sscanf(pSubnum, "(%hd,%hd)", &list.maj, &list.min) != 2 )
+        {
+            fprintf(stderr, "Error reading typedef!\n");
+            return( FALSE );
+        }
+
+        // If the subdef is the last one (or the very first define), append the typedef name to it
+        // Since we are going reverse order, that last one will be the original definition with the name
+        if( !nSubdef )
+        {
+            // If this is a basic built-in typedef, shortcut it here
+
+            if( (list.dDef = BasicTypedef(pDefBuf)) )
+            {
+                // Basic type definition
+
+                list.dName = 0;
+                write(fd, &list, sizeof(TSYMTYPEDEF1));
+                nTypedefs++;
+
+                VERBOSE2 printf("TYPEDEF(%d,%d) = BASIC %s\n", list.maj, list.min, basic[list.min-1].pStr );
+
+                return( TRUE );         // Return here to avoid writing it over again
+            }
+            else
+            {
+                // It is a complext type or a variable implied type (anonymous)
+                if( *pDefBuf!='(' )
+                {
+                    // Write the type name since this is not anonymous type
+
+                    list.dName = dfs;       // Write the typedef name string
+                    nNameLen = strchr(pDefBuf,':')-pDefBuf;
+                    write(fs, pDefBuf, nNameLen);
+                    write(fs, "", 1);
+
+                    dfs += nNameLen + 1;
+
+                    {   // This is only to assist printing a nice substring
+                        c = *(pDefBuf + nNameLen);
+                        *(pDefBuf + nNameLen) = 0;
+                        VERBOSE2 printf("TYPEDEF(%d,%d) %s = ", list.maj, list.min, pDefBuf );
+                        *(pDefBuf + nNameLen) = c;
+                    }
+                }
+            }
+        }
+
+        pSubend++;
+
+        // Write the definition string
+        list.dDef = dfs;
+        write(fs, pSub, pSubend-pSub);
+        write(fs, "", 1);
+        dfs += pSubend-pSub + 1;
+
+        // Write the typedef record
+        write(fd, &list, sizeof(TSYMTYPEDEF1));
+        nTypedefs++;
+
+        {   // This is only to assist printing a nice substring
+            c = *pSubend;
+            *pSubend = 0;
+            VERBOSE2 printf("TYPEDEF(%d,%d) = %s\n", list.maj, list.min, pSub );
+            *pSubend = c;
+        }
+
+        // Move the rest of the original typedef over the subdefinition
+        memmove(pSub-1, pSubend, strlen(pSubend)+1);
+    }
+
+    return(TRUE);
+}
+
 
 /******************************************************************************
 *                                                                             *
@@ -110,22 +300,19 @@ char *memrchr(char *pMem, int c);
 *       fs - strings file (to write to)
 *       pBuf - buffer containing the ELF file
 *
+*   Returns:
+*       TRUE - Typedefs parsed and stored
+*       FALSE - Critical error
+*
 ******************************************************************************/
 BOOL ParseTypedefs(int fd, int fs, BYTE *pBuf)
 {
     TSYMTYPEDEF Header;                 // Source typedef section header
-    TSYMTYPEDEF1 list;                  // Typedef record
     WORD file_id = 0;                   // Current file ID number
     long fileOffset = 0;                // Temp file offset position
-    int nTypedefs = 0;                  // Number of typedefs
 
     char *pDefBuf = DefBuf;             // Buffer to concatenate long typedef line
     char *pDef = NULL;                  // Pointer to a buffer
-    char *pDefinition;                  // Temp pointer to a typedef definition string
-    char *pSub;                         // Pointer to a substring
-    int nNameLen;                       // Length of the typedef name string
-    int nDefLen;                        // Length of the typedef definition string
-    char cType;                         // Scanned typedef type
     int nCurrentSection;                // Current string section offset
     int nSectionSize;                   // Current section string size
 
@@ -146,9 +333,12 @@ BOOL ParseTypedefs(int fd, int fs, BYTE *pBuf)
     char *pSo = "";                     // Current source file
     int i;
 
-    printf("=============================================================================\n");
-    printf("||         PARSE TYPEDEFS                                                  ||\n");
-    printf("=============================================================================\n");
+    nTypedefs = 0;
+
+    VERBOSE2 printf("=============================================================================\n");
+    VERBOSE2 printf("||         PARSE TYPEDEFS                                                  ||\n");
+    VERBOSE2 printf("=============================================================================\n");
+    VERBOSE1 printf("Parsing type definition.\n");
 
     pElfHeader = (Elf32_Ehdr *) pBuf;
 
@@ -178,7 +368,7 @@ BOOL ParseTypedefs(int fd, int fs, BYTE *pBuf)
     //=========================
     // Parse STABS
     //=========================
-    // We parse STABS exactly as we do in ParseSectionsPass1() function,
+    // We parse STABS exactly as we do a generic ELF section parsing,
     // but here we extract only typedef information
 
     if( SecStab && SecStabstr )
@@ -201,14 +391,36 @@ BOOL ParseTypedefs(int fd, int fs, BYTE *pBuf)
                     // Save the (new) currect string section size
                     nSectionSize = pStab->n_value;
 
-                    printf("HdrSym size: %lX\n", pStab->n_value);
+                    VERBOSE2 printf("HdrSym size: %lX\n", pStab->n_value);
                 break;
+
+                // Function parameter symbols: The parameter symbol can also contains implicit type definition
+                // We consider them the same way as global symbols (which can also contain further typedef)
+                case N_PSYM:
+
+                // Global symbols: Since the global symbols can also contain implicit type definition,
+                // we need to process those as additional separate types. Note that the canonical (simple)
+                // type globals are already stored in the parse global code - here we only need to process
+                // the complex definitions
+                case N_GSYM:
+                    // Find if the global symbol definition is complex, and if not so, break out
+                    if(!strchr(pStr, '='))
+                        break;
+
+                    // Found a complex global definition, move the pointer of the string beyond the symbol
+                    // name so to avoid storing the symbol name as the type name (the definition will be
+                    // stored as an anonymous type
+                    pStr = strchr(pStr, '(');
+
+                    // Note: This code continues into the N_LSYM case...
+                    goto ProcessType;
 
                 // Type definition: this symbol is shared with local symbol, but if the
                 // pStab->n_value == 0, it is a type definition
                 case N_LSYM:
                     if(pStab->n_value==0)
                     {
+ProcessType:
                         // If the definition is split into multiple lines, we will concat them
                         // back together and do the final processing on that complete string
 
@@ -239,259 +451,43 @@ BOOL ParseTypedefs(int fd, int fs, BYTE *pBuf)
 
                             pDef = pDefBuf;
 
-                            // BUG???: I dont know whether this is a bug in a compiler generating typedef stabs,
-                            //      or a feature, but some of typedefs have incorrect format like
-                            //      "persist:,480,32;" without parenthesis...
-                            // Temp fix: Skip over these typedefs (they cause imbalanced scan)
+                            // Call a function that parses the complete definition line
 
-//                            if( strchr(pDef, '(')==NULL )
-//                                break;
-
-                            // Do final processing of the typdef definition:
-                            // If the type defined here is one of the basic types that we know
-                            // how to process, there is no need to store a complete definition
-                            // string - we store the name and the definition enum in the dDef field:
-
-                            // We will somewhat "undo" what gcc did in terms of the type definitions,
-                            // since we dont want to search through all the strings for a (x,y) type,
-                            // we split them into separate lines when multiple types are constructed
-
-                            // Decode typedef record into a binary structure
-                            if(sscanf(strchr(pDef, ':'), ":%c(%hd,%hd)", &cType, &list.maj, &list.min)!=3)
-                            {
-                                printf("Error scanning TYPEDEF ID %s\n", pDef);
-                                return( FALSE );
-                            }
-
-                            // Find the address where the literal typedef name ends
-                            nNameLen = strchr(pDef, ':') - pDef;
-
-                            pDefinition = strchr(pDef, '=') + 1;
-
-                            nDefLen = strlen(pDefinition);
-
-                            list.dName = dfs;
-
-                            // Copy the typedef type (one character) first into the name string
-                            write(fs, &cType, 1);
-                            dfs += 1;
-
-                            // Copy the typedef name into the strings and zero terminate it
-                            write(fs, pDef, nNameLen);
-                            write(fs, "", 1);               // This will append 0
-                            dfs += nNameLen + 1;
-
-                            if( (list.dDef = BasicTypedef(pDef)) == 0 )
-                            {
-                                list.dDef = dfs;
-
-                                // We do canonization in two steps:
-
-                                // Step 1.  Outer nested type definition
-                                //
-                                // Nested definition that we process first are in the form
-                                // <primary>:t(x,y)=(a,b)=...
-                                // where (a,b) should be defined within a separate line
-#if 1
-                                if(*pDefinition=='(')
-                                {
-                                    TSYMTYPEDEF1 list2;         // Typedef record
-
-                                    // Step 1b.  Inner doubly-nested definition
-                                    //
-                                    // A new definition that we extracted may itself be nested
-                                    // If it is so, it is usually only that one extra step deep, so
-                                    // we can process it like this, in-line
-
-                                    if(sscanf(pDefinition, "(%hd,%hd)%c", &list2.maj, &list2.min, &cType)==3 && cType=='=')
-                                    {
-                                        // Create a new definition record containing the outer wrapper (short reference)
-                                        
-                                        // First, complete the original typedef record to point to the next one
-                                        // Copy only the (a,b) part of definition
-                                        nDefLen = strchr(pDefinition, '=') - pDefinition;
-
-                                        write(fs, pDefinition, nDefLen);
-                                        dfs += nDefLen;
-
-                                        write(fs, "", 1);               // This will append 0
-                                        dfs += 1;
-
-                                        write(fd, &list, sizeof(TSYMTYPEDEF1));
-
-                                        nTypedefs++;
-
-                                        // Create a new definition line containing the rest of a def string
-
-                                        list2.dName = list.dName;       // Reuse the same (parent) name
-                                        list = list2;
-                                        
-                                        pDefinition += nDefLen + 1;     // Next definition string
-                                        nDefLen = strlen(pDefinition);
-                                    }
-                                }
-#if 1
-                                // Step 2.   In-string nested type definitions
-                                //
-                                // Parse definition strings and extract all embedded sub-definitions
-                                // into new individual typedefs
-
-                                while((pSub = strchr(pDefinition, '=')) != NULL)
-                                {
-                                    TSYMTYPEDEF1 list3;         // Typedef record
-                                    char *pSubEnd;              // Pointer to the end of a substring
-                                    int nSubLen;                // Subtype string length
-
-                                    TSYMTYPEDEF1 list4;         // Typedef record
-                                    char *pSubSub;              // Pointer to the end of a substring
-                                    int nSubSubLen;             // Subtype string length
-
-                                    // We have internal sub-definitions that we need to extract
-                                    if(sscanf(memrchr(pSub, '('), "(%hd,%hd)=", &list3.maj, &list3.min)==2)
-                                    {
-                                        pSub += 1;
-
-                                        list3.dName = dfs-1;    // Should be 0
-                                        list3.dDef = dfs;
-                                        
-                                        // Find the end of a sub-type by searching for comma or eol (zero)
-                                        pSubEnd = pSub;
-                                        while(*pSubEnd && ((*pSubEnd!=',') || 
-                                            ((*(pSubEnd-1)>='0') && (*(pSubEnd-1)<='9'))) ) pSubEnd++;
-
-                                        // Write out only the new sub-definition
-                                        nSubLen = pSubEnd - pSub;
-
-                                        // New sub-definition may itself be nested (one level)
-
-                                        // This is the way we find out if we have doubly-nested definition
-                                        // We look for a '=' character inside the new substring
-                                        pSubSub = strchr(pSub, '=');
-                                        if(pSubSub && ((pSubSub - pSub) < nSubLen))
-                                        {
-                                            // We need to split our sub-definition into two separate defines
-
-                                            if(sscanf(memrchr(pSubSub, '('), "(%hd,%hd)=", &list4.maj, &list4.min)==2)
-                                            {
-                                                pSubSub += 1;
-
-                                                list4.dName = dfs-1;        // Should be 0
-                                                list4.dDef = dfs;
-
-                                                nSubSubLen = nSubLen - (pSubSub-pSub);
-
-                                                write(fs, pSubSub, nSubSubLen);
-                                                dfs += nSubSubLen;
-
-                                                write(fs, "", 1);       // This will append 0
-                                                dfs += 1;
-
-                                                write(fd, &list4, sizeof(TSYMTYPEDEF1));
-
-                                                nTypedefs++;
-
-                                                printf("sub DEF(%d,%d) = %s\n", list4.maj, list4.min, left(pSubSub, nSubSubLen));
-
-                                                // Prepare parameters to write default sub-definition
-
-                                                nSubLen -= nSubSubLen + 1;
-                                            }
-                                            else
-                                            {
-                                                ; // Unexpected tokens
-                                            }
-                                        }
-
-                                        write(fs, pSub, nSubLen);
-                                        dfs += nSubLen;
-
-                                        write(fs, "", 1);       // This will append 0
-                                        dfs += 1;
-
-                                        write(fd, &list3, sizeof(TSYMTYPEDEF1));
-
-                                        nTypedefs++;
-
-                                        printf("SUB DEF(%d,%d) = %s\n", list3.maj, list3.min, left(pSub, nSubLen));
-
-                                        // Now do the dangerous part - fold pDefinition string over the subdefinition
-                                        // This is going to be an overlapping copy...
-
-                                        // Move over (pSub-1) to start covering '='
-                                        memmove(pSub-1, pSubEnd, strlen(pSubEnd) + 1);
-
-                                        nDefLen -= nSubLen;
-                                    }
-                                    else
-                                    {
-                                        ; // Unexpected tokens
-                                    }
-                                }
-#endif
-#endif
-                                // Copy the typedef definition into the strings
-
-                                list.dDef = dfs;
-
-                                write(fs, pDefinition, nDefLen);
-                                dfs += nDefLen;
-
-                                write(fs, "", 1);               // This will append 0
-                                dfs += 1;
-
-                                write(fd, &list, sizeof(TSYMTYPEDEF1));
-
-                                printf("TYPEDEF(%d,%d) %s = %s\n", list.maj, list.min, left(pDef, nNameLen), pDefinition );
-                            }
-                            else
-                            {
-                                // Write out a simple, basic type
-
-                                write(fd, &list, sizeof(TSYMTYPEDEF1));
-
-                                printf("TYPEDEF(%d,%d) %s = BASIC(%d): %s\n", list.maj, list.min, left(pDef, nNameLen), list.dDef, pDefinition );
-                            }
+                            ParseDef(fd, fs, pDefBuf);
 
                             pDef = NULL;        // Reset the pointer to a typedef string
-
-                            nTypedefs++;
                         }
                     }
                 break;
 
                 // New source file: a typedef record is based on a main source file, so start one
                 case N_SO:
-                    printf("SO  ");
+                    VERBOSE2 printf("SO  ");
                     if( *pStr==0 )
                     {
                         // Empty name - end of source file
-                        printf("End of source. Text section offset: %08lX\n", pStab->n_value);
-                        printf("=========================================================\n");
+                        VERBOSE2 printf("End of source. Text section offset: %08lX\n", pStab->n_value);
+                        VERBOSE2 printf("=========================================================\n");
 
                         // End of source - close the active typedef record structure
 
                         // At this point we know the total size of the header. Fill in the
                         // missing information and rewrite the header
-                        Header.dwSize    = sizeof(TSYMTYPEDEF) + sizeof(TSYMTYPEDEF1) * (nTypedefs-1);
+                        Header.h.dwSize  = sizeof(TSYMTYPEDEF) + sizeof(TSYMTYPEDEF1) * (nTypedefs-1);
                         Header.nTypedefs = nTypedefs;
 
-                        // If we did not find any line numbers, all we do here is
-                        // reposition the file pointer to the start of the header
-                        // and do nothing
+                        // Write the header back up
                         lseek(fd, fileOffset, SEEK_SET);
 
-                        if( nTypedefs > 0 )
-                        {
-                            write(fd, &Header, sizeof(TSYMTYPEDEF)-sizeof(TSYMTYPEDEF1));
-                            lseek(fd, 0, SEEK_END);
-                        }
+                        write(fd, &Header, sizeof(TSYMTYPEDEF)-sizeof(TSYMTYPEDEF1));
+                        lseek(fd, 0, SEEK_END);
                     }
                     else
                     {
                         if( *(pStr + strlen(pStr) - 1)=='/' )
                         {
                             // Directory
-                            printf("Source directory: %s\n", pStr);
+                            VERBOSE2 printf("Source directory: %s\n", pStr);
 
                             // Store the pointer to a directory so we can use it later for
                             // SO and SOL stabs
@@ -500,7 +496,7 @@ BOOL ParseTypedefs(int fd, int fs, BYTE *pBuf)
                         else
                         {
                             // File
-                            printf("Source file: %s\n", pStr );
+                            VERBOSE2 printf("Source file: %s\n", pStr );
 
                             // Store the pointer to a file as a current source file
                             pSo = pStr;
@@ -509,8 +505,8 @@ BOOL ParseTypedefs(int fd, int fs, BYTE *pBuf)
                             file_id = GetFileId(pSoDir, pSo);
 
                             // We got a new main source file... Start filling up the header
-                            Header.hType     = HTYPE_TYPEDEF;
-                            Header.dwSize    = 0;           // To be written later
+                            Header.h.hType   = HTYPE_TYPEDEF;
+                            Header.h.dwSize  = 0;           // To be written later
                             Header.file_id   = file_id;
                             Header.nTypedefs = 0;           // To be written later
 
@@ -530,8 +526,8 @@ BOOL ParseTypedefs(int fd, int fs, BYTE *pBuf)
                 break;
 
                 case N_SOL:
-                    printf("SOL  ");
-                    printf("%s\n", pStr);
+                    VERBOSE2 printf("SOL  ");
+                    VERBOSE2 printf("%s\n", pStr);
 
                     // Change of source - this is either a complete path/name or just
                     // a file name in which case we keep last path
@@ -543,48 +539,12 @@ BOOL ParseTypedefs(int fd, int fs, BYTE *pBuf)
 
             pStab++;
         }
+
+        return( TRUE );
     }
     else
-        printf("No STAB section in the file\n");
+        fprintf(stderr, "No STAB section in the file\n");
 
-    return( TRUE );
-}
-
-
-/******************************************************************************
-*                                                                             *
-*   char *left(char *pString, int len)                                        *
-*                                                                             *
-*******************************************************************************
-*
-*   String helper function: 
-*   Returns 'len' leftmost characters of a given string
-*
-******************************************************************************/
-char *left(char *pString, int len)
-{
-    static char bad_design[MAX_TYPEDEF];
-
-    strncpy(bad_design, pString, len);
-    bad_design[len] = 0;
-
-    return(bad_design);
-}
-
-/******************************************************************************
-*                                                                             *
-*   char *memrchr(char *pMem, int c)                                          *
-*                                                                             *
-*******************************************************************************
-*
-*   String helper function: 
-*   Searches for a character 'c' backwards from the memory pointer 'pMem'
-*
-******************************************************************************/
-char *memrchr(char *pMem, int c)
-{
-    while(*pMem != c) pMem--;
-
-    return(pMem);
+    return( FALSE );
 }
 

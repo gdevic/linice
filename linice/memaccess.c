@@ -71,6 +71,22 @@ BYTE AddrGetByte(PTADDRDESC pAddr)
     return( deb.memaccess & 0xFF );
 }
 
+DWORD AddrGetDword(PTADDRDESC pAddr)
+{
+    DWORD dwValue;
+
+    // Do the access check and leave the result in the deb.memaccess
+    deb.memaccess = GetByte(pAddr->sel, pAddr->offset);
+
+    // Do the actual memory fetch if we could access it
+    if( (deb.memaccess & 0x100)==0 )
+        dwValue = GetDWORD(pAddr->sel, pAddr->offset);
+    else
+        dwValue = 0xFFFFFFFF;
+
+    return( dwValue );
+}
+
 DWORD AddrSetByte(PTADDRDESC pAddr, BYTE value, BOOL fForce)
 {
     TADDRDESC Addr;
@@ -90,7 +106,7 @@ DWORD AddrSetByte(PTADDRDESC pAddr, BYTE value, BOOL fForce)
             // If the source selector was ok, get its base address
             pGdt = (TGDT_Gate *) (deb.gdt.base + pAddr->sel);
 
-            Addr.sel    = __KERNEL_DS;
+            Addr.sel    = GetKernelDS();
             Addr.offset = GET_GDT_BASE(pGdt) + pAddr->offset;
 
             deb.memaccess = SetByte(Addr.sel, Addr.offset, value);
@@ -122,6 +138,8 @@ DWORD fnPtr(DWORD arg)
 
     Addr.sel = evalSel;
     Addr.offset = arg;
+
+    // TODO - rewrite this using getDWORD
 
     value[0] = AddrGetByte(&Addr); Addr.offset++;
     value[1] = AddrGetByte(&Addr); Addr.offset++;
@@ -181,7 +199,7 @@ BOOL VerifyRange(PTADDRDESC pAddr, DWORD dwSize)
             return( FALSE );
 
         Addr.offset += 4096;            // Advance to the next page
-        
+
     } while( --pages );
 
     // Verify the last byte of the region

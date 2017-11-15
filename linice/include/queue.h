@@ -56,6 +56,7 @@
             element = QFirst( &q )     (traverse the doubly linked list)
             element = QLast( &q )
             element = QNext( &q )
+            element = QPeekNext( &q )
             element = QPrev( &q )
             element = QCurrent( &q )
 
@@ -76,6 +77,10 @@
             element = QDequeue( &q )
             fEmpty  = QIsEmpty( &q )
             element = QCurrent( &q )   (peek at the next one to dequeue)
+
+    Random Access List Operations
+    ---------------------------------------
+            element = QSetCurrent( &q, element )
 
 -.
 *******************************************************************************
@@ -147,6 +152,7 @@ extern void * QFirst( TQueue * q );
 extern void * QLast( TQueue * q );
 extern void * QCurrent( TQueue * q );
 extern void * QNext( TQueue * q );
+extern void * QPeekNext( TQueue * q );
 extern void * QPrev( TQueue * q );
 
 extern int    QIsEmpty( TQueue * q );
@@ -159,5 +165,6 @@ extern int    QPriorityEnqueue( char * pHeap, TQueue * q, int fnCmp( void *p1, v
 
 extern int    QSort( char * pHeap, TQueue * q, int fnCmp( void *p1, void *p2));
 
+extern void * QSetCurrent( TQueue * q, void * p );
 
 #endif //  _QUEUE_H_

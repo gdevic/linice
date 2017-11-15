@@ -40,6 +40,8 @@
 *   Include Files                                                             *
 ******************************************************************************/
 
+#include "module-header.h"              // Include types commonly defined for a module
+
 #include "clib.h"                       // Include C library header file
 #include "iceface.h"                    // Include iceface module stub protos
 #include "ice.h"                        // Include main debugger structures
@@ -118,7 +120,7 @@ static BYTE MdaGraph[MAX_MDA_CRTC] =
 
 
 // MDA has the constant "color" scheme, can't be altered by the "color" command:
-static const BYTE MdaColor[6] = 
+static const BYTE MdaColor[6] =
 {
     0,
     0x07,                               // COL_NORMAL     (1)
@@ -520,7 +522,7 @@ static void MdaSprint(char *s)
             case DP_ESCAPE:
                     // Escape character prints the next code as raw ascii
                     c = *s++;
-                    
+
                     // This case continues into the default...!
 
             default:
@@ -573,9 +575,9 @@ static void HercPrintCharacter(DWORD x, DWORD y, BYTE c, int col)
             *dest = *src | (*src >> 1); src++; dest+=0x2000;
             *dest = *src | (*src >> 1); src++; dest+=0x2000;
             *dest = *src | (*src >> 1); src++; dest+=0x2000;
-    
+
             dest = pStart + 90;
-    
+
             *dest = *src | (*src >> 1); src++; dest+=0x2000;
             *dest = *src | (*src >> 1); src++; dest+=0x2000;
             *dest = *src | (*src >> 1); src++; dest+=0x2000;
@@ -588,9 +590,9 @@ static void HercPrintCharacter(DWORD x, DWORD y, BYTE c, int col)
             *dest = (*src++) ^ 0xFF; dest+=0x2000;
             *dest = (*src++) ^ 0xFF; dest+=0x2000;
             *dest = (*src++) ^ 0xFF; dest+=0x2000;
-    
+
             dest = pStart + 90;
-    
+
             *dest = (*src++) ^ 0xFF; dest+=0x2000;
             *dest = (*src++) ^ 0xFF; dest+=0x2000;
             *dest = (*src++) ^ 0xFF; dest+=0x2000;
@@ -603,14 +605,14 @@ static void HercPrintCharacter(DWORD x, DWORD y, BYTE c, int col)
             *dest = *src++; dest+=0x2000;
             *dest = *src++; dest+=0x2000;
             *dest = *src++; dest+=0x2000;
-    
+
             dest = pStart + 90;
-    
+
             *dest = *src++; dest+=0x2000;
             *dest = *src++; dest+=0x2000;
             *dest = *src++; dest+=0x2000;
             *dest = *src++;
-            
+
             break;
     }
 }
@@ -652,8 +654,8 @@ static void HercScrollUp()
     static BYTE cacheTextPreScroll[MAX_OUTPUT_SIZEY][MAX_OUTPUT_SIZEX];
 
     // Copy cacheText state before scroll
-    memmove(&cacheTextPreScroll[mda.scrollTop][0], 
-            &cacheText[mda.scrollTop][0], 
+    memmove(&cacheTextPreScroll[mda.scrollTop][0],
+            &cacheText[mda.scrollTop][0],
             MAX_OUTPUT_SIZEX * (mda.scrollBottom-mda.scrollTop+1));
 
     // We use cacheText buffer that we scroll first, and then read the
@@ -807,7 +809,7 @@ static void HercSprint(char *s)
             case DP_ESCAPE:
                     // Escape character prints the next code as raw ascii
                     c = *s++;
-                    
+
                     // This case continues into the default...!
 
             default:

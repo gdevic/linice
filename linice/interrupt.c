@@ -63,7 +63,7 @@ extern void DebuggerEnterDelayedArm(void);
 
 typedef void (*TDEBUGGER_STATE_FN)(void);
 
-TDEBUGGER_STATE_FN DebuggerEnter[MAX_DEBUGGER_STATE] = 
+TDEBUGGER_STATE_FN DebuggerEnter[MAX_DEBUGGER_STATE] =
 {
     DebuggerEnterBreak,
     DebuggerEnterDelayedTrace,
@@ -141,7 +141,7 @@ static void HookIdt(TIDT_Gate IDT[], int nEntryNumber, int nIntNumber)
 
     pGate->offsetLow  = LOWORD(IntHandlerFunction);
     pGate->offsetHigh = HIWORD(IntHandlerFunction);
-    pGate->selector   = __KERNEL_CS;
+    pGate->selector   = GetKernelCS();
     pGate->type       = INT_TYPE_INT32;
     pGate->dpl        = 3;
     pGate->present    = TRUE;
@@ -247,7 +247,8 @@ void UnHookDebuger(void)
 {
     // Copy back the original Linux IDT
 
-    memcpy((void *)deb.idt.base, LinuxIdt, deb.idt.limit+1);
+    if( deb.idt.base )
+        memcpy((void *)deb.idt.base, LinuxIdt, deb.idt.limit+1);
 }
 
 
@@ -310,59 +311,6 @@ void Panic(void)
 ******************************************************************************/
 DWORD InterruptHandler( DWORD nInt, PTREGS pRegs )
 {
-    //------------------------------------------------------------------------
-    // Continues running within the debugger. Returns when the debugger
-    // issues an execute instruction
-    //
-    void RunDebugger()
-    {
-        // Store the address of the registers into the debugee state structure
-        // and the current interrupt number
-
-        deb.r = pRegs;
-        deb.nInterrupt = nInt;
-
-        // Get the current GDT table
-        GET_GDT(deb.gdt);
-
-        // Restore original Linux IDT table since we may want to examine it
-        // using the debugger
-        UnHookDebuger();
-
-        // Switch to our private IDT that is already hooked
-        SET_IDT(IceIdtDescriptor);
-
-        // Be sure to enable interrupts so we can operate
-        LocalSTI();
-
-        // Now that we have enabled local interrupts, we can send a message to
-        // all other CPUs to interrupt what they've been doing and start spinning
-        // on our `in debugger' semaphore. That we do so they dont execute other
-        // code in the 'background'
-        //
-        smpSpinOtherCpus();
-
-        // Call the debugger entry function of the current state
-        if( pIce->eDebuggerState < MAX_DEBUGGER_STATE )
-            (DebuggerEnter[pIce->eDebuggerState])();
-        else
-            (DebuggerEnter[DEB_STATE_BREAK])();
-
-        // We are ready to continue execution of the system. The controlling CPU
-        // had been armed, but other CPUs also need to have their debug registers
-        // set up
-//        smpSetSysRegs();
-
-        // Disable interrupts so we can mess with IDT
-        LocalCLI();
-
-        // Load debugee IDT
-        SET_IDT(deb.idt);
-
-        // Hook again the debugee IDT
-        HookDebuger();
-    }
-
     //------------------------------------------------------------------------
     DWORD chain;
 //    BYTE savePIC1;
@@ -472,20 +420,72 @@ DWORD InterruptHandler( DWORD nInt, PTREGS pRegs )
         {
             // Store the CPU number that we happen to be using
             deb.cpu = ice_smp_processor_id();
-        
+
             // Limit all IRQ's to the current CPU
             IoApicClamp( deb.cpu );
 
             SpinlockSet(&pIce->fRunningIce);
 
             // Acknowledge the interrupt controller
-            IntAck(nInt);           
+            IntAck(nInt);
 
             // Explicitly enable interrupts on serial ports
 //                    savePIC1 = inp(0x21);
 //                    outp(0x21, savePIC1 & ~((1<<4) | (1<<3)));
 
-            RunDebugger();      // Run the debugger now
+//            RunDebugger();      // Run the debugger now
+            //------------------------------------------------------------------------
+            // Continues running within the debugger. Returns when the debugger
+            // issues an execute instruction
+            //
+            {
+                // Store the address of the registers into the debugee state structure
+                // and the current interrupt number
+
+                deb.r = pRegs;
+                deb.nInterrupt = nInt;
+
+                // Get the current GDT table
+                GET_GDT(deb.gdt);
+
+                // Restore original Linux IDT table since we may want to examine it
+                // using the debugger
+                UnHookDebuger();
+
+                // Switch to our private IDT that is already hooked
+                SET_IDT(IceIdtDescriptor);
+
+                // Be sure to enable interrupts so we can operate
+                LocalSTI();
+
+                // Now that we have enabled local interrupts, we can send a message to
+                // all other CPUs to interrupt what they've been doing and start spinning
+                // on our `in debugger' semaphore. That we do so they dont execute other
+                // code in the 'background'
+                //
+                smpSpinOtherCpus();
+
+                // Call the debugger entry function of the current state
+                if( pIce->eDebuggerState < MAX_DEBUGGER_STATE )
+                    (DebuggerEnter[pIce->eDebuggerState])();
+                else
+                    (DebuggerEnter[DEB_STATE_BREAK])();
+
+                // We are ready to continue execution of the system. The controlling CPU
+                // had been armed, but other CPUs also need to have their debug registers
+                // set up
+        //        smpSetSysRegs();
+
+                // Disable interrupts so we can mess with IDT
+                LocalCLI();
+
+                // Load debugee IDT
+                SET_IDT(deb.idt);
+
+                // Hook again the debugee IDT
+                HookDebuger();
+            }
+
 
             chain = 0;          // Continue into the debugee, do not chain
 

@@ -55,8 +55,8 @@
 
 #define CODE_BYTES         8
 
-static char buf[MAX_STRING];
-static char sCodeLine[MAX_STRING];
+static char buf[MAX_STRING+1];
+static char sCodeLine[MAX_STRING+1];
 
 // We do ourselves a favor and keep the last disassembled address here
 // so on the next call we simply use that one
@@ -68,7 +68,6 @@ static TADDRDESC Addr = { 0, 0 };
 *                                                                             *
 ******************************************************************************/
 
-extern void SetSymbolContext(WORD wSel, DWORD dwOffset);
 extern int BreakpointQuery(TADDRDESC Addr);
 extern int BreakpointQueryFileLine(WORD file_id, WORD line);
 
@@ -291,6 +290,7 @@ void CodeDraw(BOOL fForce)
     char *pLine;                        // Pointer to a source line
     int eMode = deb.eSrc;               // Get the code view mode
     WORD wLine;                         // Line number
+    BYTE bSpaces;                       // Number of heading spaces in a line
 
     if( pWin->c.fVisible==TRUE )
     {
@@ -323,6 +323,17 @@ void CodeDraw(BOOL fForce)
         while( (nLine <= maxLines) && (wLine < deb.pSource->nLines) )
         {
             pLine = GET_STRING( deb.pSource->dLineArray[wLine] );
+
+            bSpaces = *(BYTE *)pLine;
+
+            // Set a number of heading spaces into the final line buffer
+            memset(buf, ' ', bSpaces);
+
+            // Copy the source line into the buffer to be printed out
+            strcpy(buf+bSpaces, pLine+1);
+
+            // Finally, reset the pointer to line into our buffer
+            pLine = buf;
 
             // If the current file in the window is the one containing the current function
             // scope, and the line number is the current EIP line number, invert the line color
@@ -394,10 +405,10 @@ void CodeDraw(BOOL fForce)
                     col = COL_BOLD;
                 else
                     col = COL_NORMAL;
-                
+
                 nLen = GetCodeLine(&Addr, FALSE, fTarget);
             }
-            
+
             pLine = sCodeLine;              // Print the default disassembly
 
             // If the source mode is mixed machine code and disassembly,
@@ -409,9 +420,11 @@ void CodeDraw(BOOL fForce)
                     pLine = sCodeLine;
                 else
                 {
+                    pLine = pLine + 1;      // Actual line starts after the number of spaces, remember?
+
                     // If there is a source line, print it first, and then continue
-                    // with disassembly
-                    dprinth(nLine++,"%c%c%05d:%s\r", DP_SETCOLINDEX, col, wLine, pLine);
+                    // with disassembly. Add few spaces to align the line somewhat nicer.
+                    dprinth(nLine++,"%c%c%05d:       %s\r", DP_SETCOLINDEX, col, wLine, pLine);
 
                     if( nLine <= maxLines )
                         pLine = sCodeLine;
@@ -433,6 +446,45 @@ void CodeDraw(BOOL fForce)
 
     if( pWin->c.fVisible==TRUE )
         dprint("%c", DP_RESTOREXY);
+}
+
+
+/******************************************************************************
+*                                                                             *
+*   void CodeScrollLineUp(TDISASM *pDis)                                      *
+*                                                                             *
+*******************************************************************************
+*
+*   Subfunction that scrolls a code window one line up:
+*
+*   Scrolling up is really tricky with the Intel x86 machine code.
+*   We use the assumption that if you disassemble a lot of code, it
+*   eventually 'fixes' itself.
+*
+*   TODO: We could also look up for a symbol in a symbol table that is close
+*
+******************************************************************************/
+void CodeScrollLineUp(TDISASM *pDis)
+{
+#define MAX_UNASM_BACKTRACE     64      // How many bytes we unassemble to find the start
+    BYTE bSizes[MAX_UNASM_BACKTRACE];
+    int i;                          // Generic counter
+
+    pDis->bState   = DIS_DATA32 | DIS_ADDRESS32;
+    pDis->wSel     = deb.codeTopAddr.sel;
+    pDis->dwOffset = deb.codeTopAddr.offset - MAX_UNASM_BACKTRACE;
+
+    i = 0;
+    while( pDis->dwOffset < deb.codeTopAddr.offset )
+    {
+        bSizes[i] = DisassemblerLen(pDis);
+
+        pDis->dwOffset += bSizes[i];
+
+        i++;
+    }
+
+    deb.codeTopAddr.offset -= bSizes[i-1];
 }
 
 
@@ -462,36 +514,6 @@ void CodeScroll(int Xdir, int Ydir)
     TDISASM Dis;                        // Disassembler interface structure
     BYTE bLen;                          // Temp instruction len
     int i;                              // Generic counter
-
-    // Subfunction that scrolls a code window one line up:
-    //
-    // Scrolling up is really tricky with the Intel x86 machine code.
-    // We use the assumption that if you disassemble a lot of code, it
-    // eventually 'fixes' itself.
-
-    // TODO: We could also look up for a symbol in a symbol table that is close
-    void CodeScrollLineUp()
-    {
-#define MAX_UNASM_BACKTRACE     64      // How many bytes we unassemble to find the start
-        BYTE bSizes[MAX_UNASM_BACKTRACE];
-        int i;                          // Generic counter
-
-        Dis.bState   = DIS_DATA32 | DIS_ADDRESS32;
-        Dis.wSel     = deb.codeTopAddr.sel;
-        Dis.dwOffset = deb.codeTopAddr.offset - MAX_UNASM_BACKTRACE;
-
-        i = 0;
-        while( Dis.dwOffset < deb.codeTopAddr.offset )
-        {
-            bSizes[i] = DisassemblerLen(&Dis);
-
-            Dis.dwOffset += bSizes[i];
-
-            i++;
-        }
-
-        deb.codeTopAddr.offset -= bSizes[i-1];
-    }
 
     if( pWin->c.fVisible )
     {
@@ -567,7 +589,7 @@ void CodeScroll(int Xdir, int Ydir)
                     // We step back a number of bytes and store the instruction sizes
                     for(i=0; i<pWin->c.nLines-1; i++)
                     {
-                        CodeScrollLineUp();
+                        CodeScrollLineUp(&Dis);
                     }
 
                     break;
@@ -578,7 +600,7 @@ void CodeScroll(int Xdir, int Ydir)
                     // eventually 'fixes' itself.
 
                     // We step back a number of bytes and store the instruction sizes
-                    CodeScrollLineUp();
+                    CodeScrollLineUp(&Dis);
 
                     break;
 

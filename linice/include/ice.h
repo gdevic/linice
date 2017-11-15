@@ -40,7 +40,9 @@
 #include "ice-limits.h"                 // Include our limits
 #include "ice-symbols.h"                // Include symbol file defines
 #include "ice-ioctl.h"                  // Include symbol table defines
+#include "memaccess.h"                  // Include memory access header file
 #include "lists.h"                      // Include lists support header file
+#include "eval.h"                       // Include expression evaluator header file
 
 /******************************************************************************
 *                                                                             *
@@ -135,14 +137,6 @@ typedef struct tagTRegs
     DWORD   eflags;
 } TREGS, *PTREGS;
 
-// Generic address descriptor - used to describe any memory access
-
-typedef struct
-{
-    WORD sel;
-    DWORD offset;
-
-} TADDRDESC, *PTADDRDESC;
 
 // Root structure describing the debugee state
 
@@ -176,6 +170,7 @@ typedef struct
     TSYMFNSCOPE *pFnScope;              // Pointer to a current function scope descriptor
     TSYMFNLIN *pFnLin;                  // Pointer to a current function line descriptor
     TSYMSOURCE *pSource;                // Current source file in the code window
+    char *pSrcEipLine;                  // Pointer to the current source line
     WORD codeFileTopLine;               // Line number of the top of code window source file
     WORD codeFileEipLine;               // Line number of the current EIP in the windows source file
     WORD codeFileXoffset;               // X offset of the source code text
@@ -204,8 +199,10 @@ typedef struct
     BOOL fDelayedTrace;                 // Delayed trace request
     DWORD TraceCount;                   // Single trace instr. count to go
 
-    BOOL fStep;                         // Single logical step in progress (command P)
     BOOL fStepRet;                      // Single step until RET instruction (P RET)
+
+    BOOL fSrcStep;                      // Source is on and we issued a step command (P)
+    BOOL fSrcTrace;                     // Source is on and we issued a trace command (T)
 
     BOOL fRedraw;                       // Request to redraw the screen after the current command
     DWORD error;                        // Error code
@@ -371,6 +368,8 @@ extern void ClearHistory(void);
 
 extern BYTE ReadCRTC(int index);
 extern void WriteCRTC(int index, int value);
+extern BYTE ReadSR(int index);
+extern void WriteSR(int index, int value);
 extern BYTE ReadMdaCRTC(int index);
 extern void WriteMdaCRTC(int index, int value);
 extern int GetByte(WORD sel, DWORD offset);
@@ -379,10 +378,13 @@ extern DWORD SetByte(WORD sel, DWORD offset, BYTE value);
 extern void memset_w(void *dest, WORD data, int size);
 extern void memset_d(void *dest, DWORD data, int size);
 extern WORD getTR(void);
+extern WORD GetKernelCS(void);
+extern WORD GetKernelDS(void);
 
 extern DWORD SelLAR(WORD Sel);
 extern BOOL AddrIsPresent(PTADDRDESC pAddr);
 extern BYTE AddrGetByte(PTADDRDESC pAddr);
+extern DWORD AddrGetDword(PTADDRDESC pAddr);
 extern DWORD AddrSetByte(PTADDRDESC pAddr, BYTE value, BOOL fForce);
 extern BOOL VerifyRange(PTADDRDESC pAddr, DWORD dwSize);
 extern BOOL VerifySelector(WORD Sel);
@@ -409,6 +411,8 @@ extern char *SymFnLin2Line(WORD *pLineNumber, TSYMFNLIN *pFnLin, DWORD dwAddress
 extern char *SymFnLin2LineExact(WORD *pLineNumber, TSYMFNLIN *pFnLin, DWORD dwAddress);
 extern TSYMFNSCOPE *SymAddress2FnScope(WORD wSel, DWORD dwOffset);
 extern char *SymFnScope2Local(TSYMFNSCOPE *pFnScope, DWORD ebpOffset);
+
+extern void SetSymbolContext(WORD wSel, DWORD dwOffset);
 
 #endif //  _ICE_H_
 

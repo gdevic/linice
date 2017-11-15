@@ -115,7 +115,7 @@ typedef struct
             Access: 3 (RW), 2 (R), 1 (W)
             Size: 0 (B), 1 (W), 3 (D)
             DrHint register use: 1 (DR0), 2 (DR1), 4 (DR2), 8 (DR3)
-            
+
 */
 
 static TBP bp[MAX_BREAKPOINTS];         // Array of breakpoint structures
@@ -427,6 +427,38 @@ BOOL cmdBpet(char *args, int subClass)
 
 /******************************************************************************
 *                                                                             *
+*   BOOL BPstat(int index, int *pLine)                                        *
+*                                                                             *
+*******************************************************************************
+*
+*   Display statistic of a single (used) breakpoint
+*   Return: FALSE if the printing should stop
+*
+******************************************************************************/
+BOOL BPstat(int index, int *pLine)
+{
+    TBP *p = &bp[index];            // Get the pointer to a current bp
+
+    if(dprinth(*pLine++, "Breakpoint Statistics for #%02X %s", index, (p->Flags & BP_ENABLED)?"" : "(disabled)")==FALSE) return(FALSE);
+    if(dprinth(*pLine++, "   %s", GetBpString(p) )==FALSE) return(FALSE);
+    if(dprinth(*pLine++, "   Cond    %s", p->pIF? p->pIF : "No" )==FALSE) return(FALSE);
+    if(dprinth(*pLine++, "   Action  %s", p->pDO? p->pDO : "No" )==FALSE) return(FALSE);
+    if(dprinth(*pLine++, "Totals")==FALSE) return(FALSE);
+    if(dprinth(*pLine++, "   Hits    %X", p->Hits )==FALSE) return(FALSE);
+    if(dprinth(*pLine++, "   Breaks  %X", p->Breaks )==FALSE) return(FALSE);
+    if(dprinth(*pLine++, "   Popups  %X", p->Popups )==FALSE) return(FALSE);
+    if(dprinth(*pLine++, "   Misses  %X", p->Misses )==FALSE) return(FALSE);
+    if(dprinth(*pLine++, "   Errors  %X", p->Errors )==FALSE) return(FALSE);
+    if(dprinth(*pLine++, "Current")==FALSE) return(FALSE);
+    if(dprinth(*pLine++, "   Hits    %X", p->CurHits )==FALSE) return(FALSE);
+    if(dprinth(*pLine++, "   Misses  %X", p->CurMisses )==FALSE) return(FALSE);
+
+    return(TRUE);
+}
+
+
+/******************************************************************************
+*                                                                             *
 *   BOOL cmdBstat(char *args, int subClass)                                   *
 *                                                                             *
 *******************************************************************************
@@ -439,29 +471,6 @@ BOOL cmdBstat(char *args, int subClass)
     int nLine = 1;                      // Standard line counter
     int index;
 
-    // Display statistic of a single (used) breakpoint
-    // Return: FALSE if the printing should stop
-    BOOL BPstat(int index)
-    {
-        TBP *p = &bp[index];            // Get the pointer to a current bp
-
-        if(dprinth(nLine++, "Breakpoint Statistics for #%02X %s", index, (p->Flags & BP_ENABLED)?"" : "(disabled)")==FALSE) return(FALSE);
-        if(dprinth(nLine++, "   %s", GetBpString(p) )==FALSE) return(FALSE);
-        if(dprinth(nLine++, "   Cond    %s", p->pIF? p->pIF : "No" )==FALSE) return(FALSE);
-        if(dprinth(nLine++, "   Action  %s", p->pDO? p->pDO : "No" )==FALSE) return(FALSE);
-        if(dprinth(nLine++, "Totals")==FALSE) return(FALSE);
-        if(dprinth(nLine++, "   Hits    %X", p->Hits )==FALSE) return(FALSE);
-        if(dprinth(nLine++, "   Breaks  %X", p->Breaks )==FALSE) return(FALSE);
-        if(dprinth(nLine++, "   Popups  %X", p->Popups )==FALSE) return(FALSE);
-        if(dprinth(nLine++, "   Misses  %X", p->Misses )==FALSE) return(FALSE);
-        if(dprinth(nLine++, "   Errors  %X", p->Errors )==FALSE) return(FALSE);
-        if(dprinth(nLine++, "Current")==FALSE) return(FALSE);
-        if(dprinth(nLine++, "   Hits    %X", p->CurHits )==FALSE) return(FALSE);
-        if(dprinth(nLine++, "   Misses  %X", p->CurMisses )==FALSE) return(FALSE);
-
-        return(TRUE);
-    }
-
     if( *args )
     {
         // A specific breakpoint
@@ -470,7 +479,7 @@ BOOL cmdBstat(char *args, int subClass)
             if( index>=0 && index<MAX_BREAKPOINTS && (bp[index].Flags & BP_USED) )
             {
                 // Display individual statistics
-                BPstat(index);
+                BPstat(index, &nLine);
             }
             else
                 dprinth(1, "Invalid breakpoint number %d", index);
@@ -485,7 +494,7 @@ BOOL cmdBstat(char *args, int subClass)
         {
             if( bp[index].Flags & BP_USED )
             {
-                if( BPstat(index)==FALSE )
+                if( BPstat(index, &nLine)==FALSE )
                     break;
             }
         }
@@ -606,7 +615,7 @@ BOOL VerifyBreakpoint(TBP *pBp)
 
             for(index=0; index<MAX_BREAKPOINTS; index++)
             {
-                if( bp[index].Flags & BP_ENABLED && 
+                if( bp[index].Flags & BP_ENABLED &&
                 (bp[index].Type==BP_TYPE_BPMB || bp[index].Type==BP_TYPE_BPMW || bp[index].Type==BP_TYPE_BPMD)
                 && bp[index].address.offset==pBp->address.offset && bp[index].address.sel==pBp->address.sel)
                 {
@@ -664,7 +673,7 @@ BOOL AssignDebugReg(TBP *pBp)
     {
         // Clear the bit of a debug register that is already in use
         if( bp[index].Flags & BP_USED )
-            available &= ~bp[index].DrUse;  
+            available &= ~bp[index].DrUse;
     }
 
     if( available )
@@ -679,7 +688,7 @@ BOOL AssignDebugReg(TBP *pBp)
     {
         return( FALSE );
     }
-    
+
     return( TRUE );
 }
 
@@ -876,7 +885,7 @@ BOOL cmdBpx(char *args, int subClass)
                             SymFnLin2Line(&pBp->line, pFnLin, pBp->address.offset);
                         }
 
-                        // Also, for BPX breakpoints, redraw the screen since we may want to 
+                        // Also, for BPX breakpoints, redraw the screen since we may want to
                         // highlight differently the code pane (source or machine)
 
                         deb.fRedraw = TRUE;
@@ -899,7 +908,7 @@ BOOL cmdBpx(char *args, int subClass)
                 }
 
                 // Else do not define a new breakpoint, but clean up the slot
-bpx_failed:
+bpx_failed:;
             }
             else
                 deb.error = ERR_SYNTAX;     // Syntax error evaluating
@@ -1154,7 +1163,7 @@ void *DisarmBreakpoints(void)
         }
     }
 
-    // If the DR6=0 (no hardware breakpoint hit or a trap fault) and cs:eip-1 was a 
+    // If the DR6=0 (no hardware breakpoint hit or a trap fault) and cs:eip-1 was a
     // breakpoint, decrement eip
     if( (pBp || nsbp.Flags) && (deb.sysReg.dr6 & (DR6_BS_BIT|DR6_BT_BIT|0xF))==0 )
     {
@@ -1292,9 +1301,9 @@ int BreakpointCheck(TADDRDESC Addr)
                     if( bp[index].address.sel==Addr.sel && bp[index].address.offset==Addr.offset )
                     {
                         // Found a matching address!
-        
+
                         bp[index].Hits++;       // Total number of times this was hit
-        
+
                         return(index);
                     }
                     break;

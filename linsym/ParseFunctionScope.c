@@ -36,11 +36,13 @@
 
 #include "Common.h"                     // Include platform specific set
 
+#include "loader.h"                     // Include global protos
+
 
 extern int dfs;
 
 extern WORD GetFileId(char *pSoDir, char *pSo);
-extern DWORD GetGlobalSymbolAddress(char *pName);
+extern BOOL GlobalsName2Address(DWORD *p, char *pName);
 
 /******************************************************************************
 *                                                                             *
@@ -54,6 +56,10 @@ extern DWORD GetGlobalSymbolAddress(char *pName);
 *       fd - symbol table file descriptor (to write to)
 *       fs - strings file (to write to)
 *       pBuf - buffer containing the ELF file
+*
+*   Returns:
+*       TRUE - Function scope parsed and stored
+*       FALSE - Critical error
 *
 ******************************************************************************/
 BOOL ParseFunctionScope(int fd, int fs, BYTE *pBuf)
@@ -85,9 +91,10 @@ BOOL ParseFunctionScope(int fd, int fs, BYTE *pBuf)
     char *pSo = "";                     // Current source file
     int i;
 
-    printf("=============================================================================\n");
-    printf("||         PARSE FUNCTION SCOPE                                            ||\n");
-    printf("=============================================================================\n");
+    VERBOSE2 printf("=============================================================================\n");
+    VERBOSE2 printf("||         PARSE FUNCTION SCOPE                                            ||\n");
+    VERBOSE2 printf("=============================================================================\n");
+    VERBOSE1 printf("Parsing function scope.\n");
 
     pElfHeader = (Elf32_Ehdr *) pBuf;
 
@@ -117,7 +124,7 @@ BOOL ParseFunctionScope(int fd, int fs, BYTE *pBuf)
     //=========================
     // Parse STABS
     //=========================
-    // We parse STABS exactly as we do in ParseSectionsPass1() function,
+    // We parse STABS exactly as we do a generic ELF section parsing,
     // but here we extract only basic function parameters and relevant tokens
 
     if( SecStab && SecStabstr )
@@ -140,20 +147,20 @@ BOOL ParseFunctionScope(int fd, int fs, BYTE *pBuf)
                     // Save the (new) currect string section size
                     nSectionSize = pStab->n_value;
 
-                    printf("HdrSym size: %lX\n", pStab->n_value);
+                    VERBOSE2 printf("HdrSym size: %lX\n", pStab->n_value);
                 break;
 
                 case N_FUN:
-                    printf("FUN---");
+                    VERBOSE2 printf("FUN---");
                     if( *pStr==0 )
                     {
                         // Function end
-                        printf("END--------- +%lX\n\n", pStab->n_value);
+                        VERBOSE2 printf("END--------- +%lX\n\n", pStab->n_value);
 
                         // At this point we know the total size of the header
                         // as well as the function ending address. Fill in the
                         // missing information and rewrite the header
-                        Header.dwSize       = sizeof(TSYMFNSCOPE) + sizeof(TSYMFNSCOPE1) * (nTokens-1);
+                        Header.h.dwSize     = sizeof(TSYMFNSCOPE) + sizeof(TSYMFNSCOPE1) * (nTokens-1);
                         Header.dwEndAddress = Header.dwStartAddress + pStab->n_value - 1;
                         Header.nTokens      = nTokens;
 
@@ -171,8 +178,8 @@ BOOL ParseFunctionScope(int fd, int fs, BYTE *pBuf)
                         // rewind and rewite it with the complete information
                         // This we do so we can simply keep adding file tokens as
                         // TSYMFNSCOPE1 array...
-                        Header.hType          = HTYPE_FUNCTION_SCOPE;
-                        Header.dwSize         = 0;      // To be written later
+                        Header.h.hType  = HTYPE_FUNCTION_SCOPE;
+                        Header.h.dwSize = 0;      // To be written later
 
                         // Copy the function name into the strings
                         Header.dName          = dfs;
@@ -187,11 +194,11 @@ BOOL ParseFunctionScope(int fd, int fs, BYTE *pBuf)
 
                         // If the start address is not defined (0?) and this is an object file
                         // (kernel module), we can search the global symbols for the address
-                        if( Header.dwStartAddress==0 )
-                            Header.dwStartAddress = GetGlobalSymbolAddress(pStr);
+                        if( Header.dwStartAddress==0 && GlobalsName2Address(&Header.dwStartAddress, pStr) )
+                            ;
 
                         // Print function start & name
-                        printf("START-%08X--%s\n", Header.dwStartAddress, pStr);
+                        VERBOSE2 printf("START-%08X--%s\n", Header.dwStartAddress, pStr);
 
                         nTokens = 0;
 
@@ -210,19 +217,19 @@ BOOL ParseFunctionScope(int fd, int fs, BYTE *pBuf)
                 break;
 
                 case N_SO:
-                    printf("SO  ");
+                    VERBOSE2 printf("SO  ");
                     if( *pStr==0 )
                     {
                         // Empty name - end of source file
-                        printf("End of source. Text section offset: %08lX\n", pStab->n_value);
-                        printf("=========================================================\n");
+                        VERBOSE2 printf("End of source. Text section offset: %08lX\n", pStab->n_value);
+                        VERBOSE2 printf("=========================================================\n");
                     }
                     else
                     {
                         if( *(pStr + strlen(pStr) - 1)=='/' )
                         {
                             // Directory
-                            printf("Source directory: %s\n", pStr);
+                            VERBOSE2 printf("Source directory: %s\n", pStr);
 
                             // Store the pointer to a directory so we can use it later for
                             // SO and SOL stabs
@@ -231,7 +238,7 @@ BOOL ParseFunctionScope(int fd, int fs, BYTE *pBuf)
                         else
                         {
                             // File
-                            printf("Source file: %s\n", pStr );
+                            VERBOSE2 printf("Source file: %s\n", pStr );
 
                             // Store the pointer to a file as a current source file
                             pSo = pStr;
@@ -242,8 +249,8 @@ BOOL ParseFunctionScope(int fd, int fs, BYTE *pBuf)
 
                 // Parameter symbol to a function
                 case N_PSYM:
-                    printf("PSYM   ");
-                    printf("line: %d PARAM [EBP+%lX]  %s\n", pStab->n_desc, pStab->n_value, pStr);
+                    VERBOSE2 printf("PSYM   ");
+                    VERBOSE2 printf("line: %d PARAM [EBP+%lX]  %s\n", pStab->n_desc, pStab->n_value, pStr);
 
                     // Write out one token record
                     list.TokType = TOKTYPE_PARAM;
@@ -259,8 +266,8 @@ BOOL ParseFunctionScope(int fd, int fs, BYTE *pBuf)
 
                 // Register variable
                 case N_RSYM:
-                    printf("RSYM  REGISTER VARIABLE ");
-                    printf("%s in %ld\n", pStr, pStab->n_value);
+                    VERBOSE2 printf("RSYM  REGISTER VARIABLE ");
+                    VERBOSE2 printf("%s in %ld\n", pStr, pStab->n_value);
 
                     // Write out one token record
                     list.TokType = TOKTYPE_RSYM;
@@ -280,8 +287,8 @@ BOOL ParseFunctionScope(int fd, int fs, BYTE *pBuf)
                     if( pStab->n_value==0 )
                         break;
 
-                    printf("LSYM   ");
-                    printf("line: %2d LOCAL_VARIABLE [EBP+%02lX] %s\n", pStab->n_desc, pStab->n_value, pStr);
+                    VERBOSE2 printf("LSYM   ");
+                    VERBOSE2 printf("line: %2d LOCAL_VARIABLE [EBP+%02lX] %s\n", pStab->n_desc, pStab->n_value, pStr);
                     // n_value != 0 -> variable address relative to EBP
                     // n_desc = line number where the symbol is declared
 
@@ -303,8 +310,8 @@ BOOL ParseFunctionScope(int fd, int fs, BYTE *pBuf)
                     // TODO: Local scope variables
                     if(fInFunction)
                     {
-                        printf("LCSYM  ");
-                        printf("line: %d BSS %08lX  %s\n", pStab->n_desc, pStab->n_value, pStr);
+                        VERBOSE2 printf("LCSYM  ");
+                        VERBOSE2 printf("line: %d BSS %08lX  %s\n", pStab->n_desc, pStab->n_value, pStr);
 
                         // Write out one token record
                         list.TokType = TOKTYPE_LCSYM;
@@ -321,7 +328,7 @@ BOOL ParseFunctionScope(int fd, int fs, BYTE *pBuf)
 
                 // Left-bracket: open a new scope
                 case N_LBRAC:
-                    printf("LBRAC              +%lX  {  (%d)\n", pStab->n_value, pStab->n_desc);
+                    VERBOSE2 printf("LBRAC              +%lX  {  (%d)\n", pStab->n_value, pStab->n_desc);
 
                     // Write out one token record
                     list.TokType = TOKTYPE_LBRAC;
@@ -335,7 +342,7 @@ BOOL ParseFunctionScope(int fd, int fs, BYTE *pBuf)
 
                 // Right-bracket: close a scope
                 case N_RBRAC:
-                    printf("RBRAC              +%lX  }\n", pStab->n_value);
+                    VERBOSE2 printf("RBRAC              +%lX  }\n", pStab->n_value);
 
                     // Write out one token record
                     list.TokType = TOKTYPE_RBRAC;
@@ -353,10 +360,11 @@ BOOL ParseFunctionScope(int fd, int fs, BYTE *pBuf)
 
             pStab++;
         }
+
+        return( TRUE );
     }
     else
-        printf("No STAB section in the file\n");
+        fprintf(stderr, "No STAB section in the file\n");
 
-    return( 0 );
+    return( FALSE );
 }
-

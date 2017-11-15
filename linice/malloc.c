@@ -40,9 +40,11 @@
 *   Include Files                                                             *
 ******************************************************************************/
 
+#include "module-header.h"              // Include types commonly defined for a module
+
 #include "clib.h"                       // Include C library header file
-#include "ice.h"                        // Include main debugger structures
 #include "iceface.h"                    // Include iceface module stub protos
+#include "ice.h"                        // Include main debugger structures
 
 /******************************************************************************
 *                                                                             *
@@ -120,10 +122,10 @@ char *_kMallocHeap(int size)
 
 /******************************************************************************
 *                                                                             *
-*   char *_kMallocHeap(int size)                                              *
+*   void _kFreeHeap(void *mPtr)                                               *
 *                                                                             *
 ******************************************************************************/
-char *_kFreeHeap(void *mPtr)
+void _kFreeHeap(void *mPtr)
 {
     _kFree(pIce->hHeap, mPtr);
 }

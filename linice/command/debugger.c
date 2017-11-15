@@ -70,10 +70,11 @@ extern void ArmBreakpoints(void);
 extern void *DisarmBreakpoints(void);
 extern BOOL EvalBreakpoint(void *pBp);
 extern int  BreakpointCheck(TADDRDESC Addr);
-extern void SetSymbolContext(WORD wSel, DWORD dwOffset);
 extern char *Index2String(DWORD index);
 extern BOOL cmdStep(char *args, int subClass);
 extern BOOL MultiTrace(void);
+extern BOOL RepeatTrace(void);
+extern BOOL RepeatStep(void);
 
 
 /******************************************************************************
@@ -107,7 +108,7 @@ void DebuggerEnterBreak(void)
 {
     void *pBp = NULL;                   // Pointer to a breakpoint that hit
     BOOL fAcceptNext;                   // Flag to continue looping inside debugger
-    
+
     // Abort possible single step trace state
     deb.r->eflags &= ~TF_MASK;
 
@@ -126,27 +127,38 @@ void DebuggerEnterBreak(void)
             pBp = DisarmBreakpoints();
 
         {
-            // If we are in the "P RET" cycling-trace mode, call the P command handler
-            // to manage the exit from this kind of loop (hitting RET instruction)
-            // This command will normally return FALSE and we will not enter the inner block code
+            // Set the content variables used in debugging with symbols. We need this
+            // context for the next few step and trace tests
+            SetSymbolContext(deb.r->cs, deb.r->eip);
+
+            // If we are in the "P RET" cycling-step mode, call the P command handler
+            // to manage the exit from this kind of loop (hitting RET instruction).
+            // We exit if we actually hit RET command in this mode.
             if( deb.fStepRet && cmdStep("", NULL)==FALSE )
                 goto P_RET_Continuation;
 
+            // If we are in the SRC mode, and doing a step or trace over the source lines,
+            // we may need to repeatedly issue trace to get to the next line or a function
+            if( deb.fSrcTrace && RepeatTrace() )
+                goto P_RET_Continuation;
+
+            if( deb.fSrcStep && RepeatStep() )
+                goto P_RET_Continuation;
+
             // If the multiple-step trace is on, we wanted more than a single instruction,
-            // (because a trace count could be specified) so we will count down a number of
-            // instructions - MultiTrace() will return TRUE if we need to keep looping
-            if( MultiTrace() )
+            // (because a trace count is specified) so we will count down a number of instructions
+            if( deb.TraceCount && MultiTrace() )
                 goto T_count_continuation;
 
+            // ===================================================================================
             {
-                // Reset the trace state and the multi-trace state, just in case
+                // Reset various trace state flags
                 deb.fTrace = FALSE;
                 deb.TraceCount = 0;
+                deb.fSrcStep = FALSE;
+                deb.fSrcTrace = FALSE;
 
                 {
-                    // Set the content variables used in debugging with symbols
-                    SetSymbolContext(deb.r->cs, deb.r->eip);
-
                     // Enable output driver and save background
                     dputc(DP_ENABLE_OUTPUT);
                     dputc(DP_SAVEBACKGROUND);
@@ -256,7 +268,7 @@ void DebuggerEnterDelayedArm(void)
         {
             ArmBreakpoints();
         }
-    
+
         // Restore system registers
         SetSysreg(&deb.sysReg);
     }

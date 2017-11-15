@@ -20,9 +20,10 @@
 
     Module Description:
 
-        This header file deals with differences in kernel versions.
-        All differences should be abstracted here, mostly in the form of
-        preprocessor macros.
+        This header contains small bits and pieces of the constant defines
+        and information pertaining Linux kernel.
+
+        We assume this is not likely to vary between versions or change.
 
 *******************************************************************************
 *                                                                             *
@@ -35,8 +36,8 @@
 *******************************************************************************
 *   Important Defines                                                         *
 ******************************************************************************/
-#ifndef _VERSIONS_H_
-#define _VERSIONS_H_
+#ifndef _MODULE_HEADER_H_
+#define _MODULE_HEADER_H_
 
 /******************************************************************************
 *                                                                             *
@@ -44,92 +45,141 @@
 *                                                                             *
 ******************************************************************************/
 
-#include <linux/autoconf.h>                   // Include our linux configuration
-#include <linux/version.h>                    // Include KERNEL_VERSION macro
-
 //-----------------------------------------------------------------------------
-// We had to have this kernel compiled with loadable modules
-
-#ifndef CONFIG_MODULES
-#error "This kernel is not compiled with CONFIG_MODULES option."
-#endif
-
-//-----------------------------------------------------------------------------
-// In 2.2.3 /usr/include/linux/version.h includes a macro for this,
-//  but 2.0.35 doesn't - so add it here if necessary
-
-#ifndef KERNEL_VERSION
-#define KERNEL_VERSION(a,b,c) ((a)*65536+(b)*256+(c))
-#endif
-
-//-----------------------------------------------------------------------------
-// Define major kernel versions
-
-#ifdef KERNEL_VERSION
-#  if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 4, 0)
-#    define KERNEL_4_0
-#  else
-#    if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 3, 1)
-#      define KERNEL_3_1
-#    else
-#      if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 2, 0)
-#        define KERNEL_2_2_0
-#      else
-#        if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 1, 0)
-#          define KERNEL_2_1_0
-#        else
-#          if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 0, 0)
-#            define KERNEL_2_0_0
-#          else
-#            error Unsupported kernel version!
-#          endif
-#        endif
-#      endif
-#    endif
-#  endif
-#endif
-
+// linkage.h
 //-----------------------------------------------------------------------------
 
-#if defined(CONFIG_MODVERSIONS) && defined(KERNEL_2_1)
-#define MODVERSIONS
-#include <linux/modversions.h>
-#endif
+#ifndef SIM
+#define asmlinkage  __attribute__((regparm(0)))
+#else
+#define asmlinkage
+#endif // SIM
 
-#ifndef __KERNEL__
-#define __KERNEL__
-#endif
+//-----------------------------------------------------------------------------
+// posix-types.h
+//-----------------------------------------------------------------------------
+
+typedef unsigned short  __kernel_dev_t;
+typedef unsigned long   __kernel_ino_t;
+typedef unsigned short  __kernel_mode_t;
+typedef unsigned short  __kernel_nlink_t;
+typedef long            __kernel_off_t;
+typedef int             __kernel_pid_t;
+typedef unsigned short  __kernel_ipc_pid_t;
+typedef unsigned short  __kernel_uid_t;
+typedef unsigned short  __kernel_gid_t;
+typedef unsigned int    __kernel_size_t;
+typedef int             __kernel_ssize_t;
+typedef int             __kernel_ptrdiff_t;
+typedef long            __kernel_time_t;
+typedef long            __kernel_clock_t;
+typedef int             __kernel_daddr_t;
+typedef char *          __kernel_caddr_t;
+typedef unsigned short  __kernel_uid16_t;
+typedef unsigned short  __kernel_gid16_t;
+typedef unsigned int    __kernel_uid32_t;
+typedef unsigned int    __kernel_gid32_t;
+typedef unsigned short  __kernel_old_uid_t;
+typedef unsigned short  __kernel_old_gid_t;
+
+//-----------------------------------------------------------------------------
+// types.h
+//-----------------------------------------------------------------------------
+
+typedef __kernel_dev_t      dev_t;
+typedef __kernel_ino_t      ino_t;
+typedef __kernel_mode_t     mode_t;
+typedef __kernel_nlink_t    nlink_t;
+typedef __kernel_off_t      off_t;
+typedef __kernel_pid_t      pid_t;
+typedef __kernel_daddr_t    daddr_t;
+typedef __kernel_uid32_t    uid_t;
+typedef __kernel_gid32_t    gid_t;
+typedef __kernel_uid16_t    uid16_t;
+typedef __kernel_gid16_t    gid16_t;
+
+//-----------------------------------------------------------------------------
+// ptrace.h
+//-----------------------------------------------------------------------------
+/* this struct defines the way the registers are stored on the
+   stack during a system call. */
+
+struct pt_regs
+{
+    long    ebx;
+    long    ecx;
+    long    edx;
+    long    esi;
+    long    edi;
+    long    ebp;
+    long    eax;
+    int     xds;
+    int     xes;
+    long    orig_eax;
+    long    eip;
+    int     xcs;
+    long    eflags;
+    long    esp;
+    int     xss;
+};
+
+//-----------------------------------------------------------------------------
+// pci.h
+//-----------------------------------------------------------------------------
+
+#define PCI_DEVFN(slot,func)    ((((slot) & 0x1f) << 3) | ((func) & 0x07))
+#define PCI_SLOT(devfn)         (((devfn) >> 3) & 0x1f)
+#define PCI_FUNC(devfn)         ((devfn) & 0x07)
+
+//-----------------------------------------------------------------------------
+// sched.h
+//-----------------------------------------------------------------------------
+
+#define TASK_RUNNING            0
+#define TASK_INTERRUPTIBLE      1
+#define TASK_UNINTERRUPTIBLE    2
+#define TASK_ZOMBIE             4
+#define TASK_STOPPED            8
 
 
 //-----------------------------------------------------------------------------
-// Deal with the different function prototype for different kernel versions
+// module.h
 //-----------------------------------------------------------------------------
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,2,0)
 
-/* This function is called when a process closes the
- * device file. It doesn't have a return value in
- * version 2.0.x because it can't fail (you must ALWAYS
- * be able to close a device). In version 2.2.x it is
- * allowed to fail - but we won't let it.
- */
+/* Bits of module.flags.  */
 
-#define DEV_CLOSE_RET           int
-#define DEV_CLOSE_RET_VAL       (0)
+#define MOD_UNINITIALIZED       0
+#define MOD_RUNNING             1
+#define MOD_DELETED             2
+#define MOD_AUTOCLEAN           4
+#define MOD_VISITED             8
+#define MOD_USED_ONCE           16
+#define MOD_JUST_FREED          32
+#define MOD_INITIALIZING        64
 
-/* flush call is added in the kernel version 2.2.0 */
-
-#define FLUSH_FOPS(function)    function,
-
-
-#else // LINUX_VERSION_CODE >= KERNEL_VERSION(2,2,0)
-
-#define DEV_CLOSE_RET           void
-#define DEV_CLOSE_RET_VAL
-
-#define FLUSH_OPS(function)
-
-#endif // LINUX_VERSION_CODE >= KERNEL_VERSION(2,2,0)
+struct module_symbol
+{
+    unsigned long value;
+    const char *name;
+};
 
 
-#endif //  _VERSIONS_H_
+//-----------------------------------------------------------------------------
+// unistd.h
+//-----------------------------------------------------------------------------
 
+#define __NR_exit               1
+#define __NR_fork               2
+#define __NR_init_module        128
+#define __NR_delete_module      129
+
+
+//-----------------------------------------------------------------------------
+// segment.h
+//-----------------------------------------------------------------------------
+
+#define __USER_CS               0x23
+#define __USER_DS               0x2B
+
+
+#endif //  _MODULE_HEADER_H_

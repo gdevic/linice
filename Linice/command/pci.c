@@ -34,7 +34,7 @@
 *   Include Files                                                             *
 ******************************************************************************/
 
-#include <linux/pci.h>                  // Include PCI bus defines
+#include "module-header.h"              // Include types commonly defined for a module
 
 #include "clib.h"                       // Include C library header file
 #include "iceface.h"                    // Include iceface module stub protos
@@ -160,12 +160,12 @@ static char *GetChipDesc(int vendor, int device)
 *       bytes is the number of bytes to read
 *
 ******************************************************************************/
-static void ReadPCIConfig(struct pci_dev *dev, int start, int bytes)
+static void ReadPCIConfig(void *dev, int start, int bytes)
 {
     bytes /= 4;                         // Make it DWORDS
     while( bytes-- )
     {
-        pci_read_config_dword(dev, start, (unsigned *)&configBuf[start]);
+        ice_pci_read_config_dword(dev, start, (unsigned *)&configBuf[start]);
         start += 4;
     }
 }
@@ -186,7 +186,7 @@ static void ReadPCIConfig(struct pci_dev *dev, int start, int bytes)
 *       FALSE if the printing should be stopped
 *
 ******************************************************************************/
-static BOOL DumpPCI(struct pci_dev *p)
+static BOOL DumpPCI(void *p)
 {
     int address = 0, count = 0, i;
     TPCI pci_store;                     // Place to store PCI information
@@ -303,8 +303,9 @@ static BOOL DumpPCI(struct pci_dev *p)
 ******************************************************************************/
 BOOL cmdPci(char *args, int subClass)
 {
-    struct pci_dev *pci;
+    void *pci;
     DWORD bus, device, function;
+    TPCI pci_store;                     // Place to store PCI information
     nLine = 1;
     opt = 0;
 
@@ -403,8 +404,11 @@ Proceed:
             }
             else
             {
+                // Get the information about that PCI device
+                ice_get_pci_info(&pci_store, pci);
+
                 // If we found a specific bus/device/functon, dump it and exit
-                if( pci->bus->number==bus && PCI_SLOT(pci->devfn)==device && PCI_FUNC(pci->devfn)==function )
+                if( pci_store.bus==bus && PCI_SLOT(pci_store.devfn)==device && PCI_FUNC(pci_store.devfn)==function )
                 {
                     DumpPCI(pci);
                     return(TRUE);

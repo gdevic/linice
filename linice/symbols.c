@@ -34,11 +34,10 @@
 *   Include Files                                                             *
 ******************************************************************************/
 
-#define __NO_VERSION__
-#include <linux/module.h>               // Include required module include
-                                        // so we are able to browse module list
+#include "module-header.h"              // Include types commonly defined for a module
 
 #include "clib.h"                       // Include C library header file
+#include "iceface.h"                    // Include iceface module stub protos
 #include "ice.h"                        // Include main debugger structures
 #include "debug.h"                      // Include our dprintk()
 
@@ -47,8 +46,6 @@
 *   Global Variables                                                          *
 *                                                                             *
 ******************************************************************************/
-
-extern DWORD *pmodule;                  // Head of the module list
 
 /******************************************************************************
 *                                                                             *
@@ -63,7 +60,10 @@ extern DWORD *pmodule;                  // Head of the module list
 ******************************************************************************/
 
 extern void *SymTabFindSection(TSYMTAB *pSymTab, BYTE hType);
+extern BOOL FindModule(const char *name, TMODULE *pMod);
 extern DWORD fnPtr(DWORD arg);
+
+BOOL SymName2LocalSymbol(TSYMBOL *pSymbol, char *pName, int nTokenLen);
 
 /******************************************************************************
 *                                                                             *
@@ -222,81 +222,165 @@ BOOL cmdFile(char *args, int subClass)
 ******************************************************************************/
 BOOL ModuleBangSymbol2Value(char *pModuleBangSymbol, DWORD *pValue)
 {
-    struct module* pMod;                // Pointer to a module list
-    struct module_symbol* pSym;         // Pointer to a module symbol structure
+    const char *pModName;               // Pointer to a module name portion
     char *pSymName;                     // Pointer to a symbol name portion
-    const char *pModName;               // Pointer to a module name
+    struct module_symbol* pSym;         // Pointer to a module symbol structure
+    TMODULE Mod;                        // Current module internal structure
     int count;                          // Symbol loop counter
 
-    // First verify that the name has the proper format. If the pmodule is NULL,
-    // we skip this function since we can't traverse module list
+    // First verify that the name has the proper format
+    // TODO: We have to use @ instead of ! in module!symol specification. Fix expression evaluator!
+    pSymName = strchr(pModuleBangSymbol, '@');
+    if( !pSymName )
+        pSymName = strchr(pModuleBangSymbol, '!');      // FIXME
 
-    pSymName = strchr(pModuleBangSymbol, '!');
-    if( pSymName && pmodule )
+    if( pSymName )
     {
-        pMod = (struct module*) *pmodule;   // Get to the head of the module list
+        // Separate module name from the symbol name. A special name is 'kernel'
+        // that will return a symbol from the Linux kernel. That means we can't
+        // debug a module whose name is "kernel"
+        // TODO: Allow debugging a user module with the name "kernel"
 
-        for(; pMod; pMod = pMod->next )
+        if( !strncmp(pModuleBangSymbol, "kernel!", 7) )
+            pModName = "";
+        else
+            pModName = pModuleBangSymbol;
+
+        // We temporarily modify the name string (we know the delimiter is a character '!')
+        *pSymName = 0;
+
+        // Look for the module with the given name
+        if( FindModule(pModName, &Mod) )
         {
-            // Find the specified module name
+            // Module was found, restore delimiter and increment the symbol name pointer
+            *pSymName++ = '!';
 
-            // Get the pointer to a module name. We do it using a temp pointer
-            // in order to fake the kernel name from NULL to "kernel"
-            if( *pMod->name )
-                pModName = pMod->name;
-            else
-                pModName = "kernel";
-
-            if( !strnicmp(pModName, pModuleBangSymbol, pSymName-pModuleBangSymbol) )
+            // Now we need to search for the symbol within that module
+            // There are two special cases regarding the symbol name:
+            if( !strcmp(pSymName, "init_module") )
             {
-                pSymName++;                 // Increment to point to a symbol, not "!"
-    
-                // We found the module that was specified, look for the symbol
-                // Special cases are init_module and cleanup_module
+                *pValue = (DWORD) Mod.init;
 
-                if( !strcmp(pSymName, "init_module") )
-                {
-                    *pValue = (DWORD) pMod->init;
-
-                    return( TRUE );
-                }
-
-                if( !strcmp(pSymName, "cleanup_module") )
-                {
-                    *pValue = (DWORD) pMod->cleanup;
-
-                    return( TRUE );
-                }
-
-                pSym = pMod->syms;
-
-                for(count=0; count<pMod->nsyms; count++)
-                {
-                    // TODO: Check the validity of these pointers before using them!
-
-                    if( !stricmp(pSym->name, pSymName) )
-                    {
-                        // Found it! Store the symbol value and return true
-
-                        *pValue = pSym->value;
-
-                        return( TRUE );
-                    }
-
-                    pSym++;
-                }
+                return( TRUE );
             }
+
+            if( !strcmp(pSymName, "cleanup_module") )
+            {
+                *pValue = (DWORD) Mod.cleanup;
+
+                return( TRUE );
+            }
+
+            pSym = Mod.syms;
+
+            for(count=0; count<Mod.nsyms; count++)
+            {
+                // TODO: Check the validity of these pointers before using them!
+
+                if( !stricmp(pSym->name, pSymName) )
+                {
+                    // Found it! Store the symbol value and return true
+
+                    *pValue = pSym->value;
+
+                    return( TRUE );
+                }
+
+                pSym++;
+            }
+        }
+        else
+        {
+            // Module was not found, restore the delimiter
+            *pSymName = '!';
         }
     }
 
-    // We did not find the "!" part, so it is not accepted as a valid specifier
+    //    We did not find the "!" part, so it is not accepted as a valid specifier
+    // OR Module with the given name was not found
+    // OR The symbol was not found
+    //
     // No changes made
 
     return( FALSE );
 }
 
 
-BOOL SymName2LocalSymbol(TSYMBOL *pSymbol, char *pName, int nTokenLen);
+/******************************************************************************
+*
+*   BOOL SymbolFindByName(DWORD **pSym, TSYMTYPEDEF1 **ppType1, char *pName, int nNameLen)
+*
+*******************************************************************************
+*
+*   Looks for the symbol within the current context and returns its address
+*   and type descriptor.
+*
+*   Where:
+*       pSym is the returning address of a symbol
+*       ppType1 is the (optional) returning type descriptor
+*       pName is the name of the symbol to look for
+*       nNameLen is thelength of the name string
+*
+*   Returns:
+*       FALSE - symbol name not found
+*       TRUE - pSym contains the address of the symbol
+*              ppType1 contains the type descriptor
+*
+******************************************************************************/
+BOOL SymbolFindByName(DWORD **pSym, TSYMTYPEDEF1 **ppType1, char *pName, int nNameLen)
+{
+    TSYMGLOBAL  *pGlobals;              // Globals section pointer
+    TSYMGLOBAL1 *pGlobal;               // Single global item
+    DWORD count;
+    char *pSymDef;
+
+    // Search in this order:
+    //  * Local scope variables
+    //  * Current file static variables
+    //  * Global variables
+    //  * Function names
+    //  * Module global symbol in the form "module!symbol"
+
+    if( pIce->pSymTabCur )
+    {
+        // Symbol table is loaded and active
+
+        // Search global symbols
+        pGlobals = (TSYMGLOBAL *) SymTabFindSection(pIce->pSymTabCur, HTYPE_GLOBALS);
+        if( pGlobals )
+        {
+            // Search global symbols for a specified symbol name
+
+            pGlobal = &pGlobals->global[0];
+
+            for(count=0; count<pGlobals->nGlobals; count++, pGlobal++ )
+            {
+                if( *(char *)(pIce->pSymTabCur->pPriv->pStrings + pGlobal->dName + nNameLen) == 0 &&
+                   !strnicmp(pIce->pSymTabCur->pPriv->pStrings + pGlobal->dName, pName, nNameLen) )
+                {
+                    // Found a global symbol with this name
+                    *pSym = pGlobal->dwStartAddress;
+                    pSymDef = pIce->pSymTabCur->pPriv->pStrings + pGlobal->dDef;
+
+                    if( *pSymDef=='G' )
+                        pSymDef++;
+
+                    // Find the symbol type descriptor and store it back if requested
+                    if( ppType1 )
+                        *ppType1 = Type2Typedef(pSymDef, strlen(pSymDef));
+
+                    return( TRUE );
+                }
+            }
+        }
+    }
+    else
+    {
+        // There is no active symbol table
+    }
+
+    return( FALSE );
+}
 
 /******************************************************************************
 *                                                                             *
@@ -338,7 +422,7 @@ BOOL SymbolName2Value(TSYMTAB *pSymTab, DWORD *pValue, char *name, int nTokenLen
     //  * Global variables
     //  * Function names
     //  * Module global symbol in the form "module!symbol"
-    
+
     if( pSymTab )
     {
         // Search local symbols inside a current local scope
@@ -371,6 +455,9 @@ BOOL SymbolName2Value(TSYMTAB *pSymTab, DWORD *pValue, char *name, int nTokenLen
     }
 
     // Kernel module exported symbol in the form module!symbol
+
+    // TODO: This is not correct - we need to account for nTokenLen
+    // TODO: This does not store pValue correctly
     if( ModuleBangSymbol2Value(name, pValue) )
     {
         return( TRUE );
@@ -398,8 +485,11 @@ BOOL SymbolName2Value(TSYMTAB *pSymTab, DWORD *pValue, char *name, int nTokenLen
 char *SymAddress2Name(WORD wSel, DWORD dwOffset)
 {
 //  TSYMHEADER *pHead;                  // Generic section header
-    struct module* pMod;                // Pointer to a module list
+//    struct module* pMod;                // Pointer to a module list
+
+    void *pmodule;                      // Kernel pmodule pointer
     struct module_symbol* pSym;         // Pointer to a module symbol structure
+    TMODULE Mod;                        // Current module internal structure
     int count;                          // Symbol loop counter
 
     // Storage for the return string
@@ -412,32 +502,34 @@ char *SymAddress2Name(WORD wSel, DWORD dwOffset)
     }
 
     // Search kernel symbols and symbols exported by each module (ignore NULL)
-    if( wSel==__KERNEL_CS && dwOffset )
+    if( wSel==GetKernelCS() && dwOffset )
     {
-        pMod = (struct module*) *pmodule;   // Get to the head of the module list
+        // Get the pointer to the module structure (internal)
+        pmodule = ice_get_module(NULL, &Mod);
 
-        for(; pMod; pMod = pMod->next )
+        while( pmodule )
         {
             // Check for the init_module and cleanup_module special cases
-            if( dwOffset==(DWORD)pMod->init )
+            if( dwOffset==(DWORD) Mod.init )
             {
                 // Copy the module name and append a bang and init_module name
-                sprintf(sName, "%s!init_module", pMod->name);
+                sprintf(sName, "%s!init_module", Mod.name);
 
                 return( sName );
             }
 
-            if( dwOffset==(DWORD)pMod->cleanup )
+            if( dwOffset==(DWORD) Mod.cleanup )
             {
                 // Copy the module name and append a bang and cleanup_module name
-                sprintf(sName, "%s!cleanup_module", pMod->name);
+                sprintf(sName, "%s!cleanup_module", Mod.name);
 
                 return( sName );
             }
 
-            pSym = pMod->syms;              // Get the number of symbols exported by that module
+            // Get the number of symbols exported by that module
+            pSym = Mod.syms;
 
-            for(count=0; count<pMod->nsyms; count++)
+            for(count=0; count<Mod.nsyms; count++)
             {
                 // TODO: Check the validity of these pointers before using them!
 
@@ -446,13 +538,16 @@ char *SymAddress2Name(WORD wSel, DWORD dwOffset)
                     // Found the matching symbol! Form its name and return. If a
                     // module name is found, print it, otherwise it is a kernel
 
-                    sprintf(sName, "%s!%s", *pMod->name? pMod->name : "kernel", pSym->name);
+                    sprintf(sName, "%s!%s", *Mod.name? Mod.name : "kernel", pSym->name);
 
                     return( sName );
                 }
 
                 pSym++;
             }
+
+            // Get the next module in the linked list
+            pmodule = ice_get_module(pmodule, &Mod);
         }
     }
 
@@ -550,50 +645,6 @@ DWORD SymLinNum2Address(DWORD line)
     }
 
     return( 0 );
-}
-
-
-/******************************************************************************
-*                                                                             *
-*   DWORD SymFnLinAddress2NextAddress(TSYMFNLIN *pFnLin, DWORD dwAddress)     *
-*                                                                             *
-*******************************************************************************
-*
-*   Given a function line descriptor and an address within that function,
-*   return the address of the next line within that function.
-*
-*   Where:
-*       pFnLin is a function line descriptor
-*       dwAddress is the offset part of the address
-*   Returns:
-*       Address of the code from the next line within a function
-*       End of function address if function fails in any ways
-*
-******************************************************************************/
-DWORD SymFnLinAddress2NextAddress(TSYMFNLIN *pFnLin, DWORD dwAddress)
-{
-    int i;
-    WORD wOffset;
-
-    if( pFnLin )
-    {
-        // More checks that the address is right
-        if( dwAddress>=pFnLin->dwStartAddress && dwAddress<=pFnLin->dwEndAddress )
-        {
-            wOffset = (WORD)((dwAddress - pFnLin->dwStartAddress) & 0xFFFF);
-
-            // Traverse the function line array and find the next upper offset
-            for(i=0; i<pFnLin->nLines; i++ )
-            {
-                if( pFnLin->list[i].offset > wOffset )
-                {
-                    return( pFnLin->list[i].offset + pFnLin->dwStartAddress );
-                }
-            }
-        }
-    }
-
-    return( pFnLin->dwEndAddress );
 }
 
 
@@ -953,13 +1004,13 @@ BOOL SymName2LocalSymbol(TSYMBOL *pSymbol, char *pName, int nTokenLen)
 
                             // Compare variable name to what was given as an input parameter
                             pType = strchr(pVar, ':');
-        
+
                             if( pType )
                                 len = MIN(pType-pVar, MAX_SYMBOL_LEN-1);
                             else
                                 // This is just in case that we did not find the type delimiter ':'
                                 len = MIN(strlen(pVar), MAX_SYMBOL_LEN-1);
-        
+
                             if( len==nTokenLen && !strnicmp(pVar, pName, len) )
                             {
                                 // Names match! Return information about the symbol
@@ -1061,7 +1112,7 @@ BOOL SymEvalFnScope1(char *pBuf, TSYMFNSCOPE1 *pLocal)
         }
         else
         {
-            pos += sprintf(pBuf+pos, " %s = %08X", sVar, GetDWORD(Addr.sel, Addr.offset));
+            pos += sprintf(pBuf+pos, " %s = %08X (%s)", sVar, GetDWORD(Addr.sel, Addr.offset), pType);
         }
 
         return( TRUE );
@@ -1094,7 +1145,7 @@ TADDRDESC GetLocalVarAddr(TSYMFNSCOPE1 *pLocal)
 
         case TOKTYPE_RSYM:
             // Variable is stored in a CPU register, we can point to a register file
-            Addr.sel = __KERNEL_DS;     // Register file resides in the Ice' address space
+            Addr.sel = GetKernelDS();     // Register file resides in the Ice' address space
 
             // This is the gcc i386 register allocation
             switch( pLocal->p1 )
@@ -1198,12 +1249,12 @@ void SetSymbolContext(WORD wSel, DWORD dwOffset)
                 // See if we need to adjust the top of window line number - if the
                 // current eip line is not within a window; this line does not have to be exact -
                 // any line that covers a block of code within a function will do
-                SymFnLin2Line(&wLine, deb.pFnLin, dwOffset);
+                deb.pSrcEipLine = SymFnLin2Line(&wLine, deb.pFnLin, dwOffset);
 
                 deb.codeFileEipLine = wLine;    // Store the EIP line number, 1-based
 //dprinth(1, "wLine = %d, deb.codeFileTopLine = %d", wLine, deb.codeFileTopLine);
                 // Adjust so the EIP line is visible
-                if( (wLine < deb.codeFileTopLine) || (deb.codeFileTopLine+pWin->c.nLines-1 < wLine ) || (deb.codeFileTopLine==0) )
+                if( (wLine < deb.codeFileTopLine) || (deb.codeFileTopLine+pWin->c.nLines-2 < wLine ) || (deb.codeFileTopLine==0) )
                 {
                     deb.codeFileTopLine = wLine;
 //dprinth(1, "deb.codeFileTopLine = %d", deb.codeFileTopLine);
@@ -1223,6 +1274,7 @@ void SetSymbolContext(WORD wSel, DWORD dwOffset)
     deb.pFnScope = NULL;
     deb.pFnLin = NULL;
     deb.pSource = NULL;
+    deb.pSrcEipLine = NULL;
     deb.codeFileTopLine = 0;
     deb.codeFileXoffset = 0;
 }
@@ -1245,7 +1297,7 @@ BOOL cmdWhat(char *args, int subClass)
     if( *args!=0 )
     {
         // Argument present: assume code selector
-        evalSel = __KERNEL_CS;
+        evalSel = GetKernelCS();
         Addr.offset = Evaluate(args, &args);
         Addr.sel = evalSel;
 

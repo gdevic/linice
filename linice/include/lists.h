@@ -44,27 +44,43 @@
 *                                                                             *
 ******************************************************************************/
 
-// Define a list item containing information about an atomic item
+// Define a list item containing information about the symbol item in a list
 typedef struct
 {
-    char *pExp;                         // Expression which evaluates into an item
-    char *pType;                        // Expression typedef string
+    char sExp[MAX_STRING+1];            // Symbol name / expression
 
-    BOOL fExpanded;                     // The item is an _expanded_ complex type
-    TQueue SubList;                     // List of elements in a complex type
-    
-} TITEM;
+    TSYMTYPEDEF1 *pType1;               // Pointer to the type descriptor
+    DWORD *pSymbol;                     // Address of the symbol
+
+    BOOL fExpandable;                   // The item can be visually expanded
+    BOOL fExpanded;                     // The item is visually expanded
+    struct TLISTITEM *Parent;           // Expanded, parent item
+
+    //-----------------------------------------------------------------------
+    char *pBaseTypeDef;                 // Parent base type definition ptr
+    TSYMTYPEDEF1 *Array_pTypeChild;     // Array: Type of the child element
+    int Array_Bound;                    // Array: Number of elements
+    int nIArray;                        // Array: Current iterator value
+    char *pIStruct;                     // Structure: Current iterator pointer
+    TADDRDESC IAddr;                    // Both: Address iterator
+
+} TLISTITEM;
 
 // Define a structure TLIST, that holds complete information about a list set,
 // that is, locals, stack or watch window contents
 typedef struct
 {
+    int ID;                             // ID of this list
     TQueue Item;                        // List of items
-    TITEM *pSelected;                   // Currently selected item
-    TITEM *pWinTop;                     // Current windows top item
-    
+    TLISTITEM *pSelected;               // Currently selected item
+    TLISTITEM *pWinTop;                 // Current windows top item
+    DWORD nXOffset;                     // Display is shifted to show right excess
+
 } TLIST;
 
+#define LIST_ID_WATCH       0x00        // Watch list
+#define LIST_ID_LOCALS      0x01        // Locals list
+#define LIST_ID_STACK       0x02        // Stack list
 
 /******************************************************************************
 *                                                                             *

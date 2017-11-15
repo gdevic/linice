@@ -34,9 +34,8 @@
 *   Include Files                                                             *
 ******************************************************************************/
 
-#define __NO_VERSION__
-#include <linux/module.h>               // Include required module include
-#include <linux/sched.h>                // What could we do w/o this one?
+#include "module-header.h"              // Include types commonly defined for a module
+#include "ice-version.h"                // Include version file
 
 #include "clib.h"                       // Include C library header file
 #include "iceface.h"                    // Include iceface module stub protos
@@ -49,8 +48,6 @@
 *   Global Variables                                                          *
 *                                                                             *
 ******************************************************************************/
-
-extern DWORD *pmodule;                  // Head of the module list
 
 /******************************************************************************
 *                                                                             *
@@ -380,7 +377,7 @@ BOOL cmdCpu(char *args, int subClass)
         memcpy(&CPU, deb.r, sizeof(TREGS));
 
         dprinth(1, "CPU registers saved");
-        
+
         return( TRUE );
     }
     else
@@ -443,14 +440,20 @@ BOOL cmdCpu(char *args, int subClass)
 BOOL cmdModule(char *args, int subClass)
 {
     int nLine = 1;                      // Line counter
-    struct module* pMod, *pExact=NULL;  // Pointer to a current module and exact module
     int nLen = 0;                       // Assume every module
     int count;                          // Generic counter
     BOOL fExact = FALSE;                // Assume all modules
     const char *pModName;               // Pointer to a module name
+    void *pmodule, *pExact = NULL;      // Kernel pmodule pointer and exact module
+    struct module_symbol* pSym;         // Module symbols for extra info
 
-    pMod = (struct module*) *pmodule;   // Get to the head of the module list
-    if( pMod==NULL )
+    TMODULE Mod;                        // Current module internal structure
+    TMODULE Exact;                      // Module information that matched user query
+
+    // Get the pointer to the module structure (internal)
+    pmodule = ice_get_module(NULL, &Mod);
+
+    if( pmodule==NULL )
     {
         dprinth(1, "module_list symbol not found.. Module info not available");
     }
@@ -469,12 +472,12 @@ BOOL cmdModule(char *args, int subClass)
         dprinth(nLine++, "%c%cModule   Name              Size   Syms Deps init()   cleanup() Use Flags:",
             DP_SETCOLINDEX, COL_BOLD);
 
-        for(; pMod; pMod = pMod->next )
+        while( pmodule )
         {
             // Get the pointer to a module name. We do it using a temp pointer
             // in order to fake the kernel name from NULL to "kernel"
-            if( *pMod->name )
-                pModName = pMod->name;
+            if( Mod.name && *Mod.name )
+                pModName = Mod.name;
             else
                 pModName = "kernel";
 
@@ -485,49 +488,53 @@ BOOL cmdModule(char *args, int subClass)
                 if( fExact && strcmp(pModName, args)!=0 )
                     continue;
                 if( fExact && strcmp(pModName, args)==0 )
-                    pExact = pMod;
+                {
+                    pExact = pmodule;
+                    memcpy(&Exact, &Mod, sizeof(TMODULE));
+                }
                 if( !fExact && strnicmp(pModName, args, nLen)!=0 )
                     continue;
             }
 
-            MkBits(bits, pMod->flags, bitsModule);
+            MkBits(bits, Mod.flags, bitsModule);
             if( bits[0]==0 )
                 strcat(bits, "UNINIT");
 
             if(!dprinth(nLine++, "%08X %-16s  %-6d  %-4d %-3d %08X %08X   %d   %2X  %s",
-                    (DWORD) pMod,
+                    (DWORD) pmodule,
                     pModName,
-                    pMod->size,
-                    pMod->nsyms,
-                    pMod->ndeps,
-                    (DWORD) pMod->init,
-                    (DWORD) pMod->cleanup,
-                    GET_USE_COUNT(pMod),
-                    pMod->flags,
+                    Mod.size,
+                    Mod.nsyms,
+                    Mod.ndeps,
+                    (DWORD) Mod.init,
+                    (DWORD) Mod.cleanup,
+                    Mod.use_count,
+                    Mod.flags,
                     bits ))
                 break;
+
+            // Get the next module in the linked list
+            pmodule = ice_get_module(pmodule, &Mod);
         }
 
         // For a single module, display additional info
         if( fExact && pExact )
         {
-            struct module_symbol* pSym;         // Module symbols for extra info
-
             // We will display a list of exported symbols for this module
-            pSym = pExact->syms;
+            pSym = Exact.syms;
             if( pSym )
             {
-                count = pExact->nsyms;
+                count = Exact.nsyms;
 
-                if( *pExact->name )
-                    pModName = pExact->name;
+                if( Exact.name )
+                    pModName = Exact.name;
                 else
                     pModName = "kernel";
-    
+
                 // Do some basic sanity check
-                if( pExact->nsyms>0 && pExact->nsyms<2000 )
+                if( Exact.nsyms>0 && Exact.nsyms<2000 )
                 {
-                    for(count=0; count<pExact->nsyms; count++ )
+                    for(count=0; count<Exact.nsyms; count++ )
                     {
                         // TODO: Check the validity of these pointers before using them!
 
@@ -538,7 +545,7 @@ BOOL cmdModule(char *args, int subClass)
                     }
                 }
             }
-    
+
 
             // TODO: What additional info would we like to see???
             ;
@@ -551,7 +558,7 @@ BOOL cmdModule(char *args, int subClass)
 
 /******************************************************************************
 *                                                                             *
-*   struct module *FindModule(const char *name)                               *
+*   BOOL FindModule(const char *name, TMODULE *pMod)                          *
 *                                                                             *
 *******************************************************************************
 *
@@ -559,30 +566,32 @@ BOOL cmdModule(char *args, int subClass)
 *
 *   Where:
 *       name is the module name
+*       pMod is the address of the structure to store module members
+*           Note: This structure will be modified even if a module was not found!!
 *
 *   Returns:
-*       Address of the module descriptor
-*       NULL if the module is not found
+*       TRUE - module with a given name was found
+*              the module members are copied into pMod
+*       FALSE - module with a given name was not found
 *
 ******************************************************************************/
-struct module *FindModule(const char *name)
+BOOL FindModule(const char *name, TMODULE *pMod)
 {
-    struct module* pMod;                // Pointer to a current module
+    void *pmodule;                      // Kernel pmodule pointer
 
-    pMod = (struct module*) *pmodule;   // Get to the head of the module list
+    // Get the pointer to the module structure (internal)
+    pmodule = ice_get_module(NULL, pMod);
 
-    if( pMod )
+    while( pmodule )
     {
-        for(; pMod ; pMod = pMod->next )
-        {
-            if( !strcmp(pMod->name, name) )
-            {
-                return( pMod );
-            }
-        }
+        if( !strcmp(pMod->name, name) )
+            return( TRUE );
+
+        // Get the next module in the linked list
+        pmodule = ice_get_module(pmodule, pMod);
     }
 
-    return( NULL );
+    return( FALSE );
 }
 
 
@@ -603,6 +612,7 @@ BOOL cmdVer(char *args, int subClass)
     if( *args )
     {
         dprinth(1, "Symbol check: %d", CheckSymtab(pIce->pSymTabCur));
+        dprinth(1, "OS Page Offset: %08X", ice_page_offset());
     }
 
     return(TRUE);
@@ -616,48 +626,49 @@ BOOL cmdVer(char *args, int subClass)
 *******************************************************************************
 *
 *   Display process information. If process ID is given, it switches the
-*   current context to that process.
+*   current context to that process (TODO)
 *
 ******************************************************************************/
+
+//----------------------------------------------------------------------------
+// Task structure callback
+//----------------------------------------------------------------------------
+int ice_for_each_task_cb(int *pLine, TTASK *pTask)
+{
+    (*pLine)++;
+
+    if( !dprinth(*pLine, "%c%c%4d  %04X %08X  %s %4d %4d %s",
+        DP_SETCOLINDEX, pTask->ptask==ice_get_current()? COL_BOLD : COL_NORMAL,
+        pTask->pid,
+        /*pTask->tss.tr*/ 0,
+        pTask->ptask,
+        pTask->state==TASK_RUNNING?         "RUNNING ":
+        pTask->state==TASK_INTERRUPTIBLE?   "SLEEPING":
+        pTask->state==TASK_UNINTERRUPTIBLE? "UNINTR  ":
+        pTask->state==TASK_ZOMBIE?          "ZOMBIE  ":
+        pTask->state==TASK_STOPPED?         "STOPPED ":
+/*      pTask->state==TASK_SWAPPING?        "SWAPPING":*/
+                                            "<?>     ",
+        pTask->uid,
+        pTask->gid,
+        pTask->comm
+        ))
+        return( 0 );
+
+    return( 1 );
+}
+
+//----------------------------------------------------------------------------
+// Main cmdProc()
+//----------------------------------------------------------------------------
 BOOL cmdProc(char *args, int subClass)
 {
     int nLine = 1;
-    int pid;
-    struct task_struct *pTask;
+    TTASK Task;
 
     if( *args )
     {
         // Switch to a given process ID (decimal)
-
-        pid = (int) GetDec(&args);
-
-        // Search the process list for the given PID
-        for_each_task(pTask)
-        {
-            if( pTask->pid==pid )
-                break;
-        }
-        
-        if( pTask->pid==pid )
-        {
-            // Switch to that process ID
-
-            // TODO: We can't do this safely this way
-
-//            if( pTask!=current )
-            {
-                /* Re-load page tables */
-                {
-//                    unsigned long new_cr3 = pTask->tss.cr3;
-//                    asm volatile("movl %0,%%cr3": :"r" (new_cr3));
-                }
-            }
-        }
-        else
-        {
-            // Did not find that process ID
-            dprinth(nLine++, "Process ID=%d not found.", pid);
-        }
     }
     else
     {
@@ -667,26 +678,8 @@ BOOL cmdProc(char *args, int subClass)
         dprinth(nLine++, "%c%cPID   TSS  Task      state    uid  gid  name",
             DP_SETCOLINDEX, COL_BOLD);
 
-        for_each_task(pTask)
-        {
-            if( !dprinth(nLine++, "%c%c%4d  %04X %08X  %s %4d %4d %s",
-                DP_SETCOLINDEX, pTask==current? COL_BOLD : COL_NORMAL,
-                pTask->pid,
-                /*pTask->tss.tr*/ 0,
-                (DWORD)pTask, 
-                pTask->state==TASK_RUNNING?         "RUNNING ":
-                pTask->state==TASK_INTERRUPTIBLE?   "SLEEPING":
-                pTask->state==TASK_UNINTERRUPTIBLE? "UNINTR  ":
-                pTask->state==TASK_ZOMBIE?          "ZOMBIE  ":
-                pTask->state==TASK_STOPPED?         "STOPPED ":
-/*              pTask->state==TASK_SWAPPING?        "SWAPPING":*/
-                                                    "<?>     ",
-                pTask->uid,
-                pTask->gid,
-                pTask->comm
-                ))
-                break;
-        }
+        ice_for_each_task(&nLine, &Task, ice_for_each_task_cb);
+
     }
 
     return(TRUE);
@@ -762,10 +755,10 @@ BOOL DumpTSS(TADDRDESC *pAddr, int tr, DWORD limit)
 
         if(dprinth(nLine++, "I/O Map Base=%04X  I/O Map Size=%X",
                 (int)&pTss->ioperm - (int)pTss,
-                IO_BITMAP_SIZE)==FALSE) return( TRUE );
+                ice_get_io_bitmap_size())==FALSE) return( TRUE );
 
         return( TRUE );
-        
+
     }
 
     return( FALSE );
@@ -791,7 +784,7 @@ BOOL cmdTss(char *args, int subClass)
     TGDT_Gate *pGdt;
     TADDRDESC Addr;
 
-    Addr.sel = __KERNEL_DS;             // Only use kernel DS for this command
+    Addr.sel = GetKernelDS();             // Only use kernel DS for this command
 
     if( *args )
     {

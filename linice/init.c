@@ -34,11 +34,15 @@
 *   Include Files                                                             *
 ******************************************************************************/
 
-#include "ice-ioctl.h"                  // Include our own IOCTL numbers
-#include "ice-keycode.h"                // Include keyboard codes
+#include "module-header.h"              // Include types commonly defined for a module
+
 #include "clib.h"                       // Include C library header file
 #include "iceface.h"                    // Include iceface module stub protos
 #include "ice.h"                        // Include main debugger structures
+#include "errno.h"                      // Include kernel error numbers
+
+#include "ice-ioctl.h"                  // Include our own IOCTL numbers
+#include "ice-keycode.h"                // Include keyboard codes
 #include "ibm-pc.h"                     // Include hardware defines
 #include "debug.h"                      // Include our dprintk()
 #include "intel.h"                      // Include processor specific stuff
@@ -148,7 +152,7 @@ int InitPacket(PTINITPACKET pInit)
                 pWin->l.nLines   = 4;
 
                 pWin->w.fVisible = TRUE;
-                pWin->w.nLines   = 4;       // We need to set number of lines even if it is invisible to start
+                pWin->w.nLines   = 4;       // We need to set number of lines even if it is invisible at start
 
 
                 pWin->r.fVisible = TRUE;
@@ -159,18 +163,22 @@ int InitPacket(PTINITPACKET pInit)
                 pWin->c.nLines   = 5;
                 pWin->h.fVisible = TRUE;
 
+                // Initialize lists of items
+                deb.Watch.ID = LIST_ID_WATCH;
+                deb.Local.ID = LIST_ID_LOCALS;
+
                 // Adjust all output driver coordinates - we won't print anything since
                 // we are not yet in the debugger (pIce->fRunningIce is false)
                 RecalculateDrawWindows();
                 pOut->y = pWin->h.Top + 1;          // Force it into the history buffer
 
                 // Initialize default data pointer
-                deb.dataAddr.sel = __KERNEL_DS;
+                deb.dataAddr.sel = GetKernelDS();
                 deb.dataAddr.offset = 0;
                 deb.DumpSize = 1;           // Dump bytes
 
                 // Initialize default code pointer
-                deb.codeTopAddr.sel = __KERNEL_CS;
+                deb.codeTopAddr.sel = GetKernelCS();
                 deb.codeTopAddr.offset = 0;
                 deb.fCode = FALSE;
                 deb.eSrc = SRC_ON;                  // Default Source ON
@@ -241,14 +249,14 @@ int InitPacket(PTINITPACKET pInit)
 
                                         // Hook system call table so we can monitor system calls
                                         HookSyscall();
-                        
+
                                         // Now we can hook our master IDT so all the faults will route to
                                         // debugger.  This effectively makes it active.
 
                                         HookDebuger();
 
                                         // Interpret init command string and execute it
-                        
+
                                         INFO(("INIT: ""%s""\n", pInit->sInit));
 
                                         // Display version information

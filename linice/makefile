@@ -1,18 +1,38 @@
-# INC = /usr/include/linux
-#INC = /usr/src/linux/include/
-INC = /lib/modules/$(uname -r)/build/include
+##############################################################################
+#
+#	Makefile for LINICE kernel module
+#
+#	(c) 2000-2003 Goran Devic
+#	(c) "Linice" by Goran Devic
+#
+##############################################################################
+
+#-----------------------------------------------------------------------------
+# List of include directories
+#-----------------------------------------------------------------------------
+
+INC = include
 H1  = ../include
-H2  = include
+H2  = ../bin
+
+#-----------------------------------------------------------------------------
+# Compiler defines
+#-----------------------------------------------------------------------------
 
 #DEF = -D__KERNEL__ -D_LOOSE_KERNEL_NAMES -DMODULE -DLINUX -DDBG
-DEF = -D__KERNEL__ -D_LOOSE_KERNEL_NAMES -DMODULE -DLINUX
+#DEF = -D__KERNEL__ -D_LOOSE_KERNEL_NAMES -DMODULE -DLINUX
+
+DEF = -DMODULE -DLINUX
+
+#CFLAGS = -gstabs+ -Wall $(DEF) -O -I$(INC) -I$(H1) -I$(H2)
+CFLAGS =         -Wall $(DEF) -O -I$(INC) -I$(H1) -I$(H2)
+
+#-----------------------------------------------------------------------------
+# Compiler and assembler that is used. nasm is a mandatory assembler.
+#-----------------------------------------------------------------------------
 
 CC = gcc
 AS = nasm
-
-CFLAGS = -gstabs+ -Wall $(DEF) -O -I$(INC) -I$(H1) -I$(H2)
-#CFLAGS =         -Wall $(DEF) -O -I$(INC) -I$(H1) -I$(H2)
-
 
 all:	../bin/linice_kernel.o
 
@@ -22,6 +42,7 @@ clean:
 
 ../bin/linice_kernel.o:	\
 			driver.o	\
+			capture.o	\
 			malloc.o	\
 			memaccess.o	\
 			eval.o		\
@@ -33,6 +54,7 @@ clean:
 			symbols.o	\
 			types.o	\
 			string.o 	\
+			printf.o 	\
 			ctype.o		\
 			proc.o		\
 			edlin.o		\
@@ -77,6 +99,9 @@ clean:
 driver.o:	driver.c
 	$(CC) $(CFLAGS) -c driver.c
 
+capture.o:	capture.c
+	$(CC) $(CFLAGS) -c capture.c
+
 malloc.o:	malloc.c
 	$(CC) $(CFLAGS) -c malloc.c
 
@@ -103,6 +128,9 @@ types.o:		types.c
 
 string.o:		string.c
 	$(CC) $(CFLAGS) -c string.c
+
+printf.o:		printf.c
+	$(CC) $(CFLAGS) -c printf.c
 
 ctype.o:		ctype.c
 	$(CC) $(CFLAGS) -c ctype.c
@@ -224,7 +252,7 @@ mda.o:		output/mda.c
 lfb.o:		output/lfb.c
 	$(CC) $(CFLAGS) -c output/lfb.c
 
-vt100o.o:	output/vt100.c
-	$(CC) $(CFLAGS) -c output/vt100.c -o vt100o.o
+vt100o.o:	output/vt100o.c
+	$(CC) $(CFLAGS) -c output/vt100o.c -o vt100o.o
 
 

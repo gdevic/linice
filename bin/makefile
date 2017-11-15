@@ -10,12 +10,14 @@
 TARGET =
 
 # Set the include path of kernel headers that this module will be supporting
-INC = /usr/include
+#INC = /usr/include
+INC = /lib/modules/`uname -r`/build/include
+#INC = ../linux-2.4.18-3/include
 
 # Set the compiler flags - note that you have to specify at least -O when
 # compiling a Linux kernel
-CFLAGS = -gstabs+ -Wall -O
-#CFLAGS = -Wall -O
+#CFLAGS = -gstabs+ -Wall -O
+CFLAGS = -Wall -O
 #CFLAGS = -O
 
 #DEF = $(TARGET) -I$(INC) -D__KERNEL__ -D_LOOSE_KERNEL_NAMES -DMODULE -DLINUX -DDBG
@@ -30,7 +32,7 @@ linice.o:	linice_kernel.o iceface.o
 	@echo Creating linice_`uname -r` and copying kernel-dependent module...
 	@mkdir -p linice_`uname -r`
 	@cp -f linice.o linice_`uname -r`
-	#@rm -f linice.o
+	@rm -f linice.o
 	@echo ------------------------------------------------------------------------------
 	@echo Done.
 

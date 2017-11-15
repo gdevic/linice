@@ -32,6 +32,8 @@ global  IceIntHandlers
 
 global  ReadCRTC
 global  WriteCRTC
+global  ReadSR
+global  WriteSR
 global  ReadMdaCRTC
 global  WriteMdaCRTC
 global  inp
@@ -65,19 +67,16 @@ global  SpinUntilReset
 global  SpinlockSet
 global  SpinlockReset
 
+global  GetKernelDS
+global  GetKernelCS
+global  sel_ice_ds              ; This needs to be initialized at module load time!
+
 
 ;==============================================================================
 ; External definitions that this module uses
 ;==============================================================================
 
 extern  InterruptHandler
-
-;==============================================================================
-; Constants
-;==============================================================================
-
-SEL_ICE_CS      equ     010h
-SEL_ICE_DS      equ     018h
 
 ;==============================================================================
 ; Data
@@ -248,7 +247,15 @@ IntCommon:
         mov     ax, es
         push    eax
 
-        mov     ax, SEL_ICE_DS  ; Load all selectors with kernel data selector
+        ; Since we dont know what is the running kernel data selector at the compile time,
+        ; we leave the space and fill in this word at the module init time.
+        ;
+        ; The next instruction decodes this way:
+        ; 66 B8 xx yy      mov ax, SEL_ICE_DS
+        db      066h, 0B8h
+sel_ice_ds:
+        dw      0               ; Load all selectors with kernel data selector
+
         mov     gs, ax
         mov     fs, ax
         mov     ds, ax
@@ -467,6 +474,54 @@ WriteMdaCRTC:
         mov     ebp, esp
         push    edx
         mov     dx, MDA_INDEX
+        mov     eax, [ebp+8]
+        out     (dx), al
+        inc     dx
+        mov     eax, [ebp+12]
+        out     (dx), al
+        pop     edx
+        pop     ebp
+        ret
+
+;==============================================================================
+;
+;   BYTE ReadSR(BYTE index)
+;
+;   This helper function reads a Sequencer register.
+;
+;   Where:
+;       [ebp + 8]   byte index of a SR register
+;
+;==============================================================================
+ReadSR:
+        push    ebp
+        mov     ebp, esp
+        push    edx
+        mov     dx, 03C4h
+        mov     eax, [ebp+8]
+        out     (dx), al
+        inc     dx
+        in      al, (dx)
+        pop     edx
+        pop     ebp
+        ret
+
+;==============================================================================
+;
+;   void WriteSR(int index, int value)
+;
+;   This helper function writes a sequencer register
+;
+;   Where:
+;       [ebp + 8]   byte index of a SR register
+;       [ebp +12]   new value
+;
+;==============================================================================
+WriteSR:
+        push    ebp
+        mov     ebp, esp
+        push    edx
+        mov     dx, 03C4h
         mov     eax, [ebp+8]
         out     (dx), al
         inc     dx
@@ -962,6 +1017,18 @@ InterruptPoll:
         halt
         ret
 
+;==============================================================================
+;
+;   Kernel code and data information functions
+;
+;==============================================================================
+GetKernelDS:
+        mov     ax, ds
+        ret
+
+GetKernelCS:
+        mov     ax, cs
+        ret
 
 ;==============================================================================
 ;
@@ -1028,4 +1095,3 @@ SpinlockTest:
         pop     ebp
         ret
 
-        

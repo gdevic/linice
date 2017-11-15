@@ -36,10 +36,54 @@
 #ifndef _ICEFACE_H_
 #define _ICEFACE_H_
 
-extern DWORD ice_get_flags();
+/////////////////////////////////////////////////////////////////
+// PRIVATE STRUCTURES
+/////////////////////////////////////////////////////////////////
+
+
+// Private module structure
+typedef struct
+{
+    void *pmodule;
+
+    const char *name;
+    unsigned long flags;
+    unsigned long size;
+    unsigned nsyms;
+    unsigned ndeps;
+    int (*init)(void);
+    void (*cleanup)(void);
+    struct module_symbol *syms;
+    int use_count;
+
+} TMODULE;
+
+extern void *ice_get_module(void *pm, TMODULE *pMod);
+extern void *ice_get_module_init(void *pm);
+
+// Private task structure
+typedef struct
+{
+    void *ptask;
+
+    long    state;
+    pid_t   pid;
+    uid_t   uid;
+    gid_t   gid;
+    char    *comm;
+
+} TTASK;
+
+extern void ice_for_each_task(int *ref, TTASK *pIceTask, int (ice_for_each_task_cb)(int *,TTASK *));
+extern void *ice_get_current(void);
+extern char *ice_get_current_comm();
+
+extern int ice_get_io_bitmap_size(void);
+
+extern unsigned int ice_get_flags();
 extern void  ice_ack_APIC_irq();
-extern DWORD ice_io_apic_read(int n, DWORD reg);
-extern void  ice_io_apic_write(int n, DWORD reg, DWORD val);
+extern unsigned int  ice_io_apic_read(int n, unsigned int  reg);
+extern void  ice_io_apic_write(int n, unsigned int  reg, unsigned int  val);
 extern int   ice_smp_processor_id();
 extern void  ice_smp_call_function(void (*func)(void *), void *info, int retry, int wait);
 
@@ -73,9 +117,11 @@ typedef struct
 } TPCI;
 
 extern void  ice_get_pci_info(TPCI *pci, void *p);
+
 extern void *ice_get_pci(void);
 extern void *ice_get_pci_next(void *p);
 extern int   ice_is_pci(void *p);
+extern int ice_pci_read_config_dword(void *dev, int where, unsigned int *val);
 
 extern void *ice_vmalloc(unsigned int size);
 extern void  ice_vfree(char *p);

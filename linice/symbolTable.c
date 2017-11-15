@@ -34,14 +34,14 @@
 *   Include Files                                                             *
 ******************************************************************************/
 
-#define __NO_VERSION__
-#include <linux/module.h>               // Include required module include
-                                        // so we are able to browse module list
+#include "module-header.h"              // Include types commonly defined for a module
+
+#include "ice-version.h"                // Include version file
 
 #include "clib.h"                       // Include C library header file
 #include "iceface.h"                    // Include iceface module stub protos
 #include "ice.h"                        // Include main debugger structures
-
+#include "errno.h"                      // Include kernel error numbers
 #include "debug.h"                      // Include our dprintk()
 
 /******************************************************************************
@@ -65,7 +65,7 @@
 extern BYTE *ice_malloc(DWORD size);
 extern void ice_free(BYTE *p);
 extern void ice_free_heap(BYTE *pHeap);
-extern struct module *FindModule(const char *name);
+extern BOOL FindModule(const char *name, TMODULE *pMod);
 
 BOOL SymbolTableRemove(char *pTableName, TSYMTAB *pRemove);
 void SymTabRelocate(TSYMTAB *pSymTab, int pReloc[], int factor);
@@ -81,9 +81,6 @@ void SymTabRelocate(TSYMTAB *pSymTab, int pReloc[], int factor);
 *   Returns: Numerical value of erroreous field (look source) or 0 if ok
 *
 ******************************************************************************/
-
-// TODO: Need a smarter way to check the address sanity...
-#define CHKADDR(address) (((DWORD)(address)>0xC0000000)&&((DWORD)(address)<0xD0000000))
 
 int CheckSymtab(TSYMTAB *pSymtab)
 {
@@ -120,7 +117,8 @@ int UserAddSymbolTable(void *pSymUser)
     DWORD dwInitFunctionSymbol;
     DWORD dwDataReloc;
     TSYMRELOC  *pReloc;                 // Symbol table relocation header
-    struct module *image;               // *this* module kernel descriptor
+    TMODULE Mod;                        // Module information structure
+
 
     // Copy the header of the symbol table into the local structur to examine it
     if( ice_copy_from_user(&SymHeader, pSymUser, sizeof(TSYMTAB))==0 )
@@ -176,8 +174,7 @@ int UserAddSymbolTable(void *pSymUser)
                                 // see if that module is already loaded, and if so, relocate its symbols
 
                                 // Try to find if a module with that symbol name has already been loaded
-                                image = FindModule(pSymTab->sTableName);
-                                if( image )
+                                if( FindModule(pSymTab->sTableName, &Mod) )
                                 {
                                     // Module is already loaded - we need to relocate symbol table based on it
 
@@ -187,17 +184,17 @@ int UserAddSymbolTable(void *pSymUser)
                                         dprinth(1, "Relocating symbols for `%s'", pSymTab->sTableName);
 
                                         // Details of relocation scheme are explained in ParseReloc.c file
-                        
+
                                         // --- relocating code section ---
-                        
+
                                         // Get the real kernel address of the init_module function after relocation
-                                        pInitFunctionOffset = (BYTE *) image->init;
-                            
+                                        pInitFunctionOffset = (BYTE *) Mod.init;
+
                                         // Store private reloc adjustment value for code section
                                         pSymTab->pPriv->reloc[0] = (int)(pInitFunctionOffset - dwInitFunctionSymbol);
-                        
+
                                         // --- relocating data section ---
-                        
+
                                         // Find the symbol table relocation block
                                         pReloc = (TSYMRELOC *) SymTabFindSection(pSymTab, HTYPE_RELOC);
                                         if( pReloc )
@@ -211,19 +208,19 @@ int UserAddSymbolTable(void *pSymUser)
                                                 // to our dword sample that we need to take.
                                                 if( pReloc->list[i].refFixup )
                                                 {
-                                                    dwDataReloc = *(DWORD *) ((DWORD)image->init + pReloc->list[i].refFixup);
+                                                    dwDataReloc = *(DWORD *) ((DWORD) Mod.init + pReloc->list[i].refFixup);
                                                     pSymTab->pPriv->reloc[i] = dwDataReloc - pReloc->list[i].refOffset;
                                                 }
-                                            }                        
+                                            }
                                         }
                                         else
                                         {
                                             // There was not a single global variable to use for relocation. Odd, but
                                             // possible... In that case it does not really matter not to relocate data...
-                        
+
                                             dprinth(1, "Symbol table missing HTYPE_RELOC");
                                         }
-                                
+
                                         // Relocate symbol table by the required offset
                                         SymTabRelocate(pSymTab, pSymTab->pPriv->reloc, 1);
                                     }
@@ -301,18 +298,18 @@ int UserAddSymbolTable(void *pSymUser)
 ******************************************************************************/
 int UserRemoveSymbolTable(void *pSymtab)
 {
-    int retval;
+    int retval = 0;                     // Assume no error
     char sName[MAX_MODULE_NAME];
 
     // Copy the symbol table name from the user address space
     if( ice_copy_from_user(sName, pSymtab, MAX_MODULE_NAME)==0 )
     {
+        // Make sure the string name is zero-terminated
         sName[MAX_MODULE_NAME-1] = 0;
 
-        // Search for the symbol table with that specific table name
+        // Search for the symbol table with that specific table name and remove it
         if( SymbolTableRemove(sName, NULL)==FALSE )
             retval = -EINVAL;
-        retval = -4;
     }
     else
     {
@@ -351,7 +348,8 @@ BOOL SymbolTableRemove(char *pTableName, TSYMTAB *pRemove)
     {
         if( pTableName!=NULL )
         {
-            if( !strcmp(pSym->sTableName, pTableName) )
+            // Compare the name of the symbol table to be removed (case insensitive)
+            if( !stricmp(pSym->sTableName, pTableName) )
                 fMatch = TRUE;
         }
         else
@@ -367,6 +365,14 @@ BOOL SymbolTableRemove(char *pTableName, TSYMTAB *pRemove)
                 pIce->pSymTab = (TSYMTAB *) pSym->pPriv->next;     // First in the linked list
             else
                 pPrev->pPriv->next = pSym->pPriv->next;       // Not the first in the linked list
+
+            //------------------------------------------------------------------
+            // Symbol table dependency:
+            // Find all the pointers that were addressing elements within this
+            // table and zero them so they are not dangling
+            //------------------------------------------------------------------
+
+
 
             // Add the memory block to the free pool
             pIce->nSymbolBufferAvail += pSym->dwSize;
@@ -406,7 +412,6 @@ BOOL SymbolTableRemove(char *pTableName, TSYMTAB *pRemove)
 BOOL cmdTable(char *args, int subClass)
 {
     TSYMTAB *pSymTab = pIce->pSymTab;
-//  DWORD offset;
     int nLine = 2;
 
     if( pSymTab==NULL )
@@ -438,7 +443,7 @@ BOOL cmdTable(char *args, int subClass)
                 }
                 else
                 {
-                    // Remove a particular symbol table
+                    // Remove a particular symbol table given by the name
 
                     if( SymbolTableRemove(args, NULL)==FALSE )
                         dprinth(1, "Nonexisting symbol table `%s'", args);
@@ -453,7 +458,7 @@ BOOL cmdTable(char *args, int subClass)
                 while( pSymTab )
                 {
                     // Compare internal table name to our argument string
-                    if( !strcmp(pSymTab->sTableName, args) )
+                    if( !stricmp(pSymTab->sTableName, args) )
                     {
                         pIce->pSymTabCur = pSymTab;
 
@@ -614,7 +619,7 @@ TSYMSOURCE *SymTabFindSource(TSYMTAB *pSymTab, WORD fileID)
 *                                                                             *
 *******************************************************************************
 *
-*   Relocates all address references within a symbol table by a set of 
+*   Relocates all address references within a symbol table by a set of
 *   code/data offsets.
 *
 *   Where:
@@ -705,10 +710,6 @@ void SymTabRelocate(TSYMTAB *pSymTab, int pReloc[], int factor)
                     break;
 
                 case HTYPE_IGNORE:
-                    // This section does not need relocation
-                    break;
-
-                case HTYPE_SYMBOL_HASH:
                     // This section does not need relocation
                     break;
 

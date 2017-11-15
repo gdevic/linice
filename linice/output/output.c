@@ -209,9 +209,7 @@ int dprint( char *format, ... )
 ******************************************************************************/
 BOOL dprinth( int nLineCount, char *format, ... )
 {
-    // TODO: dprinth should have safeguards to avoid buffer overflow
-//  static char printBuf[MAX_STRING+1];
-    static char printBuf[32767];
+    static char printBuf[1024];
 
     CHAR Key;
     char *pBuf = printBuf;

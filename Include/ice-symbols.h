@@ -49,8 +49,11 @@
 // 				        LINICE SYMBOL STRUCTURES
 //============================================================================
 
-// All references are given as relative offsets from the start of the file.
-// These variables have prefix 'd' (for 'distance' or 'delta')
+#ifdef MODULE
+#include "module-symbols.h"
+#else
+typedef struct {int filler;} TSYMPRIV;
+#endif
 
 // Define header types
 #define HTYPE_GLOBALS           0x01    // Global symbols
@@ -61,7 +64,6 @@
 #define HTYPE_TYPEDEF           0x06    // All typedefs bound to one source file
 #define HTYPE_IGNORE            0x07    // This header should be ignored and skipped
 #define HTYPE_RELOC             0x08    // Relocation section
-#define HTYPE_SYMBOL_HASH       0x09    // Hash table with all symbols
 #define HTYPE__END              0x00    // (End of the array of headers)
 
 typedef struct
@@ -71,12 +73,6 @@ typedef struct
     DWORD dwSize;                       // Total size in bytes
 //  ------------- type dependent section -----------
 } PACKED TSYMHEADER;
-
-#ifdef MODULE
-#include "module-symbols.h"
-#else
-typedef struct {int filler;} TSYMPRIV;
-#endif
 
 typedef struct _SYMTAB
 {
@@ -99,18 +95,17 @@ typedef struct _SYMTAB
 typedef struct
 {
     DWORD dName;                        // Offset to the global symbol name string
+    DWORD dDef;                         // Offset to the global symbol definition string
     DWORD dwStartAddress;               // Address where the symbol starts
     DWORD dwEndAddress;                 // Address + size of the symbol
+    WORD  file_id;                      // Source file ID
     BYTE  bFlags;                       // Symbol code / data
 
 } PACKED TSYMGLOBAL1;
 
 typedef struct
 {
-//  ------------- constant section -----------------
-    BYTE hType;                         // Header type (ID)
-    DWORD dwSize;                       // Total size in bytes
-//  ------------- type dependent section -----------
+    TSYMHEADER h;                       // Section header
 
     DWORD nGlobals;                     // Number of global items in the array
     TSYMGLOBAL1 global[1];              // Array of global symbol descriptors
@@ -127,10 +122,7 @@ typedef struct
 
 typedef struct
 {
-//  ------------- constant section -----------------
-    BYTE hType;                         // Header type (ID)
-    DWORD dwSize;                       // Total size in bytes
-//  ------------- type dependent section -----------
+    TSYMHEADER h;                       // Section header
 
     WORD  file_id;                      // This file's unique ID number
     DWORD dSourcePath;                  // Offset to the source code path/name
@@ -155,10 +147,7 @@ typedef struct
 
 typedef struct
 {
-//  ------------- constant section -----------------
-    BYTE hType;                         // Header type (ID)
-    DWORD dwSize;                       // Total size in bytes
-//  ------------- type dependent section -----------
+    TSYMHEADER h;                       // Section header
 
     DWORD dwStartAddress;               // Function start address
     DWORD dwEndAddress;                 // Function end address
@@ -207,10 +196,7 @@ typedef struct
 
 typedef struct
 {
-//  ------------- constant section -----------------
-    BYTE hType;                         // Header type (ID)
-    DWORD dwSize;                       // Total size in bytes
-//  ------------- type dependent section -----------
+    TSYMHEADER h;                       // Section header
 
     DWORD dName;                        // Offset to the function name string
     WORD  file_id;                      // Function refers to this file unique ID number
@@ -236,10 +222,7 @@ typedef struct
 
 typedef struct
 {
-//  ------------- constant section -----------------
-    BYTE hType;                         // Header type (ID)
-    DWORD dwSize;                       // Total size in bytes
-//  ------------- type dependent section -----------
+    TSYMHEADER h;                       // Section header
 
     WORD file_id;                       // Static symbols refer to this file unique ID number
     WORD nStatics;                      // How many static symbols are in the array?
@@ -291,10 +274,7 @@ typedef struct
 
 typedef struct
 {
-//  ------------- constant section -----------------
-    BYTE hType;                         // Header type (ID)
-    DWORD dwSize;                       // Total size in bytes
-//  ------------- type dependent section -----------
+    TSYMHEADER h;                       // Section header
 
     WORD  file_id;                      // Typedefs refers to this file unique ID number
     WORD nTypedefs;                     // How many typedefs are in the array?
@@ -320,42 +300,13 @@ typedef struct
 
 typedef struct
 {
-//  ------------- constant section -----------------
-    BYTE hType;                         // Header type (ID)
-    DWORD dwSize;                       // Total size in bytes
-//  ------------- type dependent section -----------
+    TSYMHEADER h;                       // Section header
 
     WORD nReloc;                        // Number of elements in the relocation list
 
     TSYMRELOC1 list[MAX_SYMRELOC];      // Array of symbol relocation references (fixed)
 
 } PACKED TSYMRELOC;
-
-//----------------------------------------------------------------------------
-// HTYPE_SYMBOL_HASH
-// Collection of all symbols in a hash table for quick access of name->value
-//
-//  TO DO
-
-typedef struct
-{
-    DWORD dName;                        // Offset to the symbol name string
-    DWORD dwAddress;                    // Symbol value (ie start address)
-
-} PACKED TSYMHASH1;
-
-typedef struct
-{
-//  ------------- constant section -----------------
-    BYTE hType;                         // Header type (ID)
-    DWORD dwSize;                       // Total size in bytes
-//  ------------- type dependent section -----------
-
-    WORD nHash;                         // Hash table size in number of entries (prime)
-
-    TSYMHASH1 hash[1];                  // Hash table array
-
-} PACKED TSYMHASH;
 
 #endif //  _ICE_SYMBOLS_H_
 

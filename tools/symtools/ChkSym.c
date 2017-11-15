@@ -1,6 +1,38 @@
-// ChkSym.cpp : Defines the entry point for the console application.
-//
+/******************************************************************************
+*                                                                             *
+*   Module:     ChkSym.cpp                                                    *
+*                                                                             *
+*   Date:       07/22/02                                                      *
+*                                                                             *
+*   Copyright (c) 2001 Goran Devic                                            *
+*                                                                             *
+*   Author:     Goran Devic                                                   *
+*                                                                             *
+*   This source code and produced executable is copyrighted by Goran Devic.   *
+*   This source, portions or complete, and its derivatives can not be given,  *
+*   copied, or distributed by any means without explicit written permission   *
+*   of the copyright owner. All other rights, including intellectual          *
+*   property rights, are implicitly reserved. There is no guarantee of any    *
+*   kind that this software would perform, and nobody is liable for the       *
+*   consequences of running it. Use at your own risk.                         *
+*                                                                             *
+*******************************************************************************
 
+    Module Description:
+
+        This module contains the symbol checker code.
+
+*******************************************************************************
+*                                                                             *
+*   Major changes:                                                            *
+*                                                                             *
+*   DATE     DESCRIPTION OF CHANGES                               AUTHOR      *
+* --------   ---------------------------------------------------  ----------- *
+* 07/22/02   Initial version                                      Goran Devic *
+* --------   ---------------------------------------------------  ----------- *
+*******************************************************************************
+*   Include Files                                                             *
+******************************************************************************/
 #include "stdafx.h"
 
 #ifdef WIN32
@@ -84,6 +116,9 @@ BOOL ChkFunctionScope(TSYMHEADER *pHead, char *pStr)
             case TOKTYPE_LCSYM:     printf("TOKTYPE_LCSYM %s\n", pStr + pFuncScope->list[nTokens].p2);       break;
             case TOKTYPE_LBRAC:     printf("TOKTYPE_LBRAC {\n");       break;
             case TOKTYPE_RBRAC:     printf("TOKTYPE_RBRAC }\n");       break;
+            default:
+                printf("Unknown token type of %X!\n", pFuncScope->list[nTokens].TokType);
+                return(FALSE);
         }
     }
 
@@ -115,11 +150,13 @@ BOOL ChkGlobals(TSYMHEADER *pHead, char *pStr)
 
     for( nGlob=0; nGlob<pGlob->nGlobals; nGlob++)
     {
-        printf("    %3d: %08X %08X F:%02X %s\n", nGlob,
+        printf("    %3d: %08X %08X F:%02X file_id:%d %s = %s\n", nGlob,
             pGlob->global[nGlob].dwStartAddress,
             pGlob->global[nGlob].dwEndAddress,
             pGlob->global[nGlob].bFlags,
-            pStr + pGlob->global[nGlob].dName);
+            pGlob->global[nGlob].file_id,
+            pStr + pGlob->global[nGlob].dName,
+            pGlob->global[nGlob].dDef ? pStr + pGlob->global[nGlob].dDef : "NULL");
     }
 
     return( TRUE );
@@ -130,6 +167,7 @@ BOOL ChkSource(TSYMHEADER *pHead, char *pStr)
 {
     DWORD nLine;
     TSYMSOURCE *pSrc;
+    BYTE bSpaces;
 
     pSrc = (TSYMSOURCE *) pHead;
 
@@ -141,7 +179,15 @@ BOOL ChkSource(TSYMHEADER *pHead, char *pStr)
 
     for( nLine=0; nLine<pSrc->nLines; nLine++ )
     {
-        printf("    %3d: %s\n", nLine + 1, pStr + pSrc->dLineArray[nLine]);
+        printf("    %3d: ", nLine + 1);
+        bSpaces = *(BYTE *)(pStr + pSrc->dLineArray[nLine]);
+        while(bSpaces!=0)
+        {
+            printf(" ");
+            bSpaces--;
+        }
+
+        printf("%s\n", pStr + pSrc->dLineArray[nLine]+1);
     }
 
     return( TRUE );
@@ -231,6 +277,7 @@ BOOL CheckSymStructure(char *pBuf, DWORD nLen)
     TSYMHEADER *pHead;                  // Generic section header
     char *pStr;
     int nSection = 0;
+    BOOL fTest;                         // Return value from the test
 
     // Assign pointers and check the main header
     pSym = (TSYMTAB *) pBuf;
@@ -252,35 +299,35 @@ BOOL CheckSymStructure(char *pBuf, DWORD nLen)
             switch( pHead->hType )
             {
                 case HTYPE_GLOBALS:
-                    ChkGlobals(pHead, pStr);
+                    fTest = ChkGlobals(pHead, pStr);
                     break;
 
                 case HTYPE_SOURCE:
-                    ChkSource(pHead, pStr);
+                    fTest = ChkSource(pHead, pStr);
                     break;
 
                 case HTYPE_FUNCTION_LINES:
-                    ChkFunctionLines(pHead, pStr);
+                    fTest = ChkFunctionLines(pHead, pStr);
                     break;
 
                 case HTYPE_FUNCTION_SCOPE:
-                    ChkFunctionScope(pHead, pStr);
+                    fTest = ChkFunctionScope(pHead, pStr);
                     break;
 
                 case HTYPE_STATIC:
-                    ChkStatic(pHead, pStr);
+                    fTest = ChkStatic(pHead, pStr);
                     break;
 
                 case HTYPE_TYPEDEF:
-                    ChkTypedefs(pHead, pStr);
+                    fTest = ChkTypedefs(pHead, pStr);
                     break;
 
                 case HTYPE_IGNORE:
-                    ChkIgnore(pHead, pStr);
+                    fTest = ChkIgnore(pHead, pStr);
                     break;
 
                 case HTYPE_RELOC:
-                    ChkReloc(pHead, pStr);
+                    fTest = ChkReloc(pHead, pStr);
                     break;
 
                 case HTYPE__END:
@@ -292,6 +339,9 @@ BOOL CheckSymStructure(char *pBuf, DWORD nLen)
                     printf("ERROR: Invalid section header\n");
                     break;
             }
+
+            if(!fTest)
+                return(FALSE);
 
             // Advance to the next header
             nSection++;
@@ -310,16 +360,32 @@ BOOL CheckSymStructure(char *pBuf, DWORD nLen)
 }
 
 
-int main(int argc, char* argv[])
+/******************************************************************************
+*                                                                             *
+*   int ChkSym(char *pName)                                                   *
+*                                                                             *
+*******************************************************************************
+*
+*   Loads symbol map file and checks it for consistency, dumps it.
+*
+*   Where:
+*       pName is the name of the symbol file to check
+*
+*   Return:
+*       TRUE - Symbol file appears correct
+*       FALSE - Symbol file is invalid
+*
+******************************************************************************/
+int ChkSym(char *pName)
 {
     int fd;
     int nLen;
     int status;
     char *pBuf;
 
-    printf("Symbol file to check: %s\n", argv[1]);
+    printf("Symbol file to check: %s\n", pName);
 
-    fd = open(argv[1], O_RDONLY | O_BINARY);
+    fd = open(pName, O_RDONLY | O_BINARY);
     if( fd>0 )
     {
         nLen = filelength(fd);
@@ -332,7 +398,7 @@ int main(int argc, char* argv[])
             status = read(fd, pBuf, nLen);
             if( status==nLen )
             {
-                CheckSymStructure(pBuf, nLen);
+                return( CheckSymStructure(pBuf, nLen) );
             }
             else
                 printf("Error reading %d/%d bytes\n", status, nLen);
@@ -341,7 +407,7 @@ int main(int argc, char* argv[])
             printf("Error allocating memory\n");
     }
     else
-        printf("Error opening symbol file %s\n", argv[1]);
+        printf("Error opening symbol file %s\n", pName);
 
 	return 0;
 }

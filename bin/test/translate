@@ -1,0 +1,11 @@
+#!/bin/bash
+../linsym -t types > types.sym.txt
+../linsym -t hello > hello.sym.txt
+../linsym -t int3 > int3.sym.txt
+../linsym -t app > app.sym.txt
+
+../linsym -t module.o > module.o.sym.txt
+../linsym -t modlp.o > modlp.o.sym.txt
+../linsym -t modscope.o > modscope.o.sym.txt
+
+

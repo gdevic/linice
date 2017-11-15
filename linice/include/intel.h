@@ -37,9 +37,6 @@
 #ifndef _INTEL_H_
 #define _INTEL_H_
 
-#include <asm/io.h>     // Include defines for I/O, memory access
-#include <asm/msr.h>    // Access to machine-specific registers
-
 /******************************************************************************
 *                                                                             *
 *   Global Defines, Variables and Macros                                      *
@@ -63,7 +60,9 @@
 // Define gcc packed structure
 ///////////////////////////////////////////////////////////////////////////////
 
+#ifndef SIM
 #define PACKED __attribute__((packed))
+#endif // SIM
 
 ///////////////////////////////////////////////////////////////////////////////
 // Defines of the Intel processor
@@ -429,6 +428,8 @@ typedef struct
 *                                                                             *
 ******************************************************************************/
 
+#ifndef SIM
+
 #define SET_IDT(_idt)    asm("lidt  %0" : : "m" (_idt))
 #define SET_GDT(_gdt)    asm("lgdt  %0" : : "m" (_gdt))
 #define SET_TR(_tr)      asm("ltr   %0" : : "m" (_tr))
@@ -477,6 +478,17 @@ extern unsigned char inp(unsigned short port);
 #define outw(port,value) __asm__ __volatile__("outw %w0,%w1\n\t":: "a" (value) , "d" (port) );
 #define outd(port,value) __asm__ __volatile__("outl %w0,%w1\n\t":: "a" (value) , "d" (port) );
 
+#else // SIM
+
+extern void outp(int port, int value);
+extern unsigned char inp(unsigned short port);
+
+#define GET_GDT(a) GetGDT(&(a));
+#define GET_IDT(a) GetIDT(&(a));
+extern void GetGDT(TDescriptor *p);
+extern void GetIDT(TDescriptor *p);
+
+#endif // SIM
 
 // Restore packing value
 //#pragma pack( pop, enter_intel )

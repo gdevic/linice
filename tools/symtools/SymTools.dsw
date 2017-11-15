@@ -3,22 +3,14 @@ Microsoft Developer Studio Workspace File, Format Version 6.00
 
 ###############################################################################
 
-Project: "ChkSym"=..\chksym\chksym.dsp - Package Owner=<4>
+Project: "Elf"=.\Translate.dsp - Package Owner=<4>
 
 Package=<5>
 {{{
-}}}
-
-Package=<4>
-{{{
-}}}
-
-###############################################################################
-
-Project: "Elf"=..\elf\elf.dsp - Package Owner=<4>
-
-Package=<5>
-{{{
+    begin source code control
+    Perforce Project
+    ..\elf
+    end source code control
 }}}
 
 Package=<4>

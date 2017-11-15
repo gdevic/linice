@@ -67,4 +67,3 @@ typedef struct
 #define GET_STRING(offset) (pIce->pSymTabCur->pPriv->pStrings + (offset))
 
 #endif //  _MODULE_SYMBOLS_H_
-

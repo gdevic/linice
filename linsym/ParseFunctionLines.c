@@ -36,11 +36,13 @@
 
 #include "Common.h"                     // Include platform specific set
 
+#include "loader.h"                     // Include global protos
+
 
 extern int dfs;
 
 extern WORD GetFileId(char *pSoDir, char *pSo);
-extern DWORD GetGlobalSymbolAddress(char *pName);
+extern BOOL GlobalsName2Address(DWORD *p, char *pName);
 
 /******************************************************************************
 *                                                                             *
@@ -48,12 +50,16 @@ extern DWORD GetGlobalSymbolAddress(char *pName);
 *                                                                             *
 *******************************************************************************
 *
-*   Loads and parses a single source file
+*   Loads and parses function lines tokens.
 *
 *   Where:
 *       fd - symbol table file descriptor (to write to)
 *       fs - strings file (to write to)
 *       pBuf - buffer containing the ELF file
+*
+*   Returns:
+*       TRUE - Function lines parsed and stored
+*       FALSE - Critical error
 *
 ******************************************************************************/
 BOOL ParseFunctionLines(int fd, int fs, BYTE *pBuf)
@@ -83,9 +89,10 @@ BOOL ParseFunctionLines(int fd, int fs, BYTE *pBuf)
     char *pSo = "";                     // Current source file
     int i;
 
-    printf("=============================================================================\n");
-    printf("||         PARSE FUNCTION LINES                                            ||\n");
-    printf("=============================================================================\n");
+    VERBOSE2 printf("=============================================================================\n");
+    VERBOSE2 printf("||         PARSE FUNCTION LINES                                            ||\n");
+    VERBOSE2 printf("=============================================================================\n");
+    VERBOSE1 printf("Parsing function lines.\n");
 
     pElfHeader = (Elf32_Ehdr *) pBuf;
 
@@ -115,7 +122,7 @@ BOOL ParseFunctionLines(int fd, int fs, BYTE *pBuf)
     //=========================
     // Parse STABS
     //=========================
-    // We parse STABS exactly as we do in ParseSectionsPass1() function,
+    // We parse STABS exactly as we do a generic ELF section parsing,
     // but here we extract only basic function parameters and line numbers
 
     if( SecStab && SecStabstr )
@@ -138,33 +145,27 @@ BOOL ParseFunctionLines(int fd, int fs, BYTE *pBuf)
                     // Save the (new) currect string section size
                     nSectionSize = pStab->n_value;
 
-                    printf("HdrSym size: %lX\n", pStab->n_value);
+                    VERBOSE2 printf("HdrSym size: %lX\n", pStab->n_value);
                 break;
 
                 case N_FUN:
-                    printf("FUN---");
+                    VERBOSE2 printf("FUN---");
                     if( *pStr==0 )
                     {
                         // Function end
-                        printf("END--------- +%lX\n\n", pStab->n_value);
+                        VERBOSE2 printf("END--------- +%lX\n\n", pStab->n_value);
 
                         // At this point we know the total size of the header
                         // as well as the function ending address. Fill in the
                         // missing information and rewrite the header
-                        Header.dwSize       = sizeof(TSYMFNLIN) + sizeof(TSYMFNLIN1) * (nLines-1);
+                        Header.h.dwSize     = sizeof(TSYMFNLIN) + sizeof(TSYMFNLIN1) * (nLines-1);
                         Header.dwEndAddress = Header.dwStartAddress + pStab->n_value - 1;
                         Header.nLines       = nLines;
 
-                        // If we did not find any line numbers, all we do here is
-                        // reposition the file pointer to the start of the header
-                        // and do nothing
                         lseek(fd, fileOffset, SEEK_SET);
 
-                        if( nLines > 0 )
-                        {
-                            write(fd, &Header, sizeof(TSYMFNLIN)-sizeof(TSYMFNLIN1));
-                            lseek(fd, 0, SEEK_END);
-                        }
+                        write(fd, &Header, sizeof(TSYMFNLIN)-sizeof(TSYMFNLIN1));
+                        lseek(fd, 0, SEEK_END);
                     }
                     else
                     {
@@ -172,19 +173,19 @@ BOOL ParseFunctionLines(int fd, int fs, BYTE *pBuf)
                         // rewind and rewite it with the complete information
                         // This we do so we can simply keep adding file lines as
                         // TSYMFNLIN1 array...
-                        Header.hType          = HTYPE_FUNCTION_LINES;
-                        Header.dwSize         = 0;      // To be written later
+                        Header.h.hType        = HTYPE_FUNCTION_LINES;
+                        Header.h.dwSize       = 0;      // To be written later
                         Header.dwStartAddress = pStab->n_value;
                         Header.dwEndAddress   = 0;      // To be written later
                         Header.nLines         = 0;      // To be written later
 
                         // If the start address is not defined (0?) and this is an object file
                         // (kernel module), we can search the global symbols for the address
-                        if( Header.dwStartAddress==0 )
-                            Header.dwStartAddress = GetGlobalSymbolAddress(pStr);
+                        if( Header.dwStartAddress==0 && GlobalsName2Address(&Header.dwStartAddress, pStr) )
+                            ;
 
                         // Print function start & name
-                        printf("START-%08X--%s\n", Header.dwStartAddress, pStr);
+                        VERBOSE2 printf("START-%08X--%s\n", Header.dwStartAddress, pStr);
 
                         nLines = 0;
 
@@ -201,7 +202,7 @@ BOOL ParseFunctionLines(int fd, int fs, BYTE *pBuf)
                 break;
 
                 case N_SLINE:
-                    printf("SLINE  line: %2d -> +%lX  file_id: %d\n", pStab->n_desc, pStab->n_value, file_id);
+                    VERBOSE2 printf("SLINE  line: %2d -> +%lX  file_id: %d\n", pStab->n_desc, pStab->n_value, file_id);
 
                     // Write out one line record
                     list.file_id = file_id;
@@ -214,19 +215,19 @@ BOOL ParseFunctionLines(int fd, int fs, BYTE *pBuf)
                 break;
 
                 case N_SO:
-                    printf("SO  ");
+                    VERBOSE2 printf("SO  ");
                     if( *pStr==0 )
                     {
                         // Empty name - end of source file
-                        printf("End of source. Text section offset: %08lX\n", pStab->n_value);
-                        printf("=========================================================\n");
+                        VERBOSE2 printf("End of source. Text section offset: %08lX\n", pStab->n_value);
+                        VERBOSE2 printf("=========================================================\n");
                     }
                     else
                     {
                         if( *(pStr + strlen(pStr) - 1)=='/' )
                         {
                             // Directory
-                            printf("Source directory: %s\n", pStr);
+                            VERBOSE2 printf("Source directory: %s\n", pStr);
 
                             // Store the pointer to a directory so we can use it later for
                             // SO and SOL stabs
@@ -235,7 +236,7 @@ BOOL ParseFunctionLines(int fd, int fs, BYTE *pBuf)
                         else
                         {
                             // File
-                            printf("Source file: %s\n", pStr );
+                            VERBOSE2 printf("Source file: %s\n", pStr );
 
                             // Store the pointer to a file as a current source file
                             pSo = pStr;
@@ -245,8 +246,8 @@ BOOL ParseFunctionLines(int fd, int fs, BYTE *pBuf)
                 break;
 
                 case N_SOL:
-                    printf("SOL  ");
-                    printf("%s\n", pStr);
+                    VERBOSE2 printf("SOL  ");
+                    VERBOSE2 printf("%s\n", pStr);
 
                     // Change of source - this is either a complete path/name or just
                     // a file name in which case we keep last path
@@ -258,10 +259,11 @@ BOOL ParseFunctionLines(int fd, int fs, BYTE *pBuf)
 
             pStab++;
         }
+
+        return( TRUE );
     }
     else
         printf("No STAB section in the file\n");
 
-    return( 0 );
+    return( FALSE );
 }
-

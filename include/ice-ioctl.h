@@ -37,16 +37,23 @@
 #ifndef _ICE_IOCTL_H_
 #define _ICE_IOCTL_H_
 
-#ifndef __KERNEL__
-#ifndef WINDOWS
-#include <sys/ioctl.h>                  // Include io control defines
-#endif // WINDOWS
-#endif // __KERNEL__
-
 #ifdef WINDOWS
+
+#ifdef SIM
+#define open(a,b)    SimOpen(a,b)
+#define ioctl(a,b,c)   SimIoctl(a,b,c)
+extern int SimOpen(char *, int);
+extern int SimIoctl(int, int, void *);
+#define _IOC(dir,type,nr,size) (((nr)<<0)|((type)<<8)|((size)<<16)|((dir)<<30))
+#define _IOC_WRITE	1U
+#define _IOC_READ	2U
+#else // SIM
+
 #define _IOC 0
 #define _IOC_WRITE 0
 #define ioctl(a,b,c)   printf("IOCTL\n");
+#endif
+
 #endif // WINDOWS
 
 #include "ice-types.h"                  // Include exended data types
@@ -139,6 +146,11 @@ typedef struct
 //      Sent by the linsym multiple times to retrieve line by line of the
 //      history buffer. When finished, call returns error instead of 0.
 //
+//  ICE_IOCTL_CAPTURE
+//      Sent by the linsym to get a specific capture image. This is used
+//      for testing on a simulator to get specific module image named
+//      in the buffer, which *must* contain enough space to save it.
+//
 
 #define ICE_IOC_MAGIC       'I'         // Magic IOctl number (8 bits)
 
@@ -150,6 +162,7 @@ typedef struct
 #define ICE_IOCTL_XDGA          _IOC(_IOC_WRITE, ICE_IOC_MAGIC, 0x86, sizeof(TXINITPACKET))
 #define ICE_IOCTL_HISBUF_RESET  _IOC(_IOC_WRITE, ICE_IOC_MAGIC, 0x87, 0)
 #define ICE_IOCTL_HISBUF        _IOC(_IOC_READ,  ICE_IOC_MAGIC, 0x88, MAX_STRING)
+#define ICE_IOCTL_CAPTURE       _IOC(_IOC_WRITE, ICE_IOC_MAGIC, 0x89, MAX_STRING)
 
 
 #endif //  _ICE_IOCTL_H_

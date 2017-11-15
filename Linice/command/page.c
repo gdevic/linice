@@ -34,6 +34,8 @@
 *   Include Files                                                             *
 ******************************************************************************/
 
+#include "module-header.h"              // Include types commonly defined for a module
+
 #include "clib.h"                       // Include C library header file
 #include "iceface.h"                    // Include iceface module stub protos
 #include "intel.h"

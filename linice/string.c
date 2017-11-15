@@ -832,7 +832,6 @@ int strcmpi( const char *s1, const char *s2 )
     }
 }
 
-#if 1
 /******************************************************************************
 *
 *   char * strdup( const char *string )
@@ -862,7 +861,6 @@ char * strdup( const char *string )
 
     return( strcpy(new, string) );
 }
-#endif
 
 /******************************************************************************
 *

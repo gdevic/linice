@@ -36,6 +36,8 @@
 
 #include <fcntl.h>                      // Include file control file
 #include <stdio.h>                      // Include standard io file
+#include <unistd.h>                     // Include standard UNIX header file
+#include <sys/ioctl.h>                  // Include ioctl header file
 
 #include "Common.h"                     // Include platform specific set
 

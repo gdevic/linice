@@ -195,94 +195,6 @@ BOOL cmdSearch(char *args, int subClass)
 
     DWORD value, remains, matching;
 
-    //========================================================================
-    // Do the actual memory search
-    //========================================================================
-    void DoSearch()
-    {
-#if 0
-        {
-            // Test of how did we process those arguments
-            static char str[256];
-            char *p = str;
-            int i;
-
-            p += sprintf(p, "%04X:%08X [%X,%X] ", Addr.sel, Addr.offset, searchLen, index);
-            for(i=0; i<index; i++ )
-            {
-                p += sprintf(p, "%02X ", auxBuf[i]);
-            }
-            dprinth(1, "%s", str);
-        }
-#endif
-        matching = 0;
-
-        while( searchLen )
-        {
-            if( AddrIsPresent(&Addr) )
-            {
-                value = AddrGetByte(&Addr);
-                // If we are doing a case-insensitive search, make ASCII a lowercased
-                // to match what we got in the buffer
-                if( fIgnoreCase )
-                    if( value>='A' && value<='Z' )
-                        value += 'a' - 'A';
-
-                if( value==auxBuf[matching] )
-                    matching++;     // If a value matches, increment matching count
-                else
-                {
-                    if( matching > 0 )
-                    {
-                        // Fixup address and len to go back to the start of the string
-                        // that matched incompletely, so we dont lose any substrings
-                        Addr.offset -= matching;
-                        searchLen += matching;
-                        matching = 0;   // Otherwise, reset it back to zero
-                    }
-                }
-
-                searchLen--;        // Decrement search length
-                Addr.offset++;      // Increment address
-
-                // If we matched complete string, print the address, open the data window
-                // and point the data window to it
-                if( matching==index )
-                {
-                    dprinth(1, "PATTERN FOUND AT %04X:%08X", Addr.sel, Addr.offset - matching);
-
-                    // Open the data window if it is closed
-                    if( pWin->d.fVisible==FALSE )
-                    {
-                        pWin->d.fVisible = TRUE;
-                        RecalculateDrawWindows();
-                    }
-
-                    // Point the data window to the search address
-                    DataDraw(FALSE, Addr.offset - matching);
-
-                    break;
-                }
-
-                // If we pressed ESC, break the search (if it's taking too long)
-                if( GetKey(FALSE)==ESC )
-                    break;
-            }
-            else
-            {
-                // Page is not present.. skip that page if enough length was left
-                remains = 4096 - (Addr.offset & 0xFFF);
-                if( searchLen <= remains )
-                    searchLen = 0;
-                else
-                    searchLen = searchLen - remains;
-
-                Addr.offset += remains;
-            }
-        }
-    }
-
-    //==============================================================================
 
     // Did we ask for a subsequent search?
     if( *args )
@@ -366,7 +278,7 @@ BOOL cmdSearch(char *args, int subClass)
                             auxBuf[value] += 'a' - 'A';
 
                 // Start a new search with the values that we just set up
-                DoSearch();
+                goto DoSearch;
             }
         }
         else
@@ -381,7 +293,72 @@ BOOL cmdSearch(char *args, int subClass)
         if( searchLen )
         {
             // Do the actual search reusing the values from the previous search
-            DoSearch();
+DoSearch:
+            matching = 0;
+
+            while( searchLen )
+            {
+                if( AddrIsPresent(&Addr) )
+                {
+                    value = AddrGetByte(&Addr);
+                    // If we are doing a case-insensitive search, make ASCII a lowercased
+                    // to match what we got in the buffer
+                    if( fIgnoreCase )
+                        if( value>='A' && value<='Z' )
+                            value += 'a' - 'A';
+
+                    if( value==auxBuf[matching] )
+                        matching++;     // If a value matches, increment matching count
+                    else
+                    {
+                        if( matching > 0 )
+                        {
+                            // Fixup address and len to go back to the start of the string
+                            // that matched incompletely, so we dont lose any substrings
+                            Addr.offset -= matching;
+                            searchLen += matching;
+                            matching = 0;   // Otherwise, reset it back to zero
+                        }
+                    }
+
+                    searchLen--;        // Decrement search length
+                    Addr.offset++;      // Increment address
+
+                    // If we matched complete string, print the address, open the data window
+                    // and point the data window to it
+                    if( matching==index )
+                    {
+                        dprinth(1, "PATTERN FOUND AT %04X:%08X", Addr.sel, Addr.offset - matching);
+
+                        // Open the data window if it is closed
+                        if( pWin->d.fVisible==FALSE )
+                        {
+                            pWin->d.fVisible = TRUE;
+                            RecalculateDrawWindows();
+                        }
+
+                        // Point the data window to the search address
+                        DataDraw(FALSE, Addr.offset - matching);
+
+                        break;
+                    }
+
+                    // If we pressed ESC, break the search (if it's taking too long)
+                    if( GetKey(FALSE)==ESC )
+                        break;
+                }
+                else
+                {
+                    // Page is not present.. skip that page if enough length was left
+                    remains = 4096 - (Addr.offset & 0xFFF);
+                    if( searchLen <= remains )
+                        searchLen = 0;
+                    else
+                        searchLen = searchLen - remains;
+
+                    Addr.offset += remains;
+                }
+            }
         }
         else
         {

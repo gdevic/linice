@@ -27,6 +27,7 @@
 #ifdef IO_APIC
 #define CONFIG_X86_IO_APIC
 #define CONFIG_X86_LOCAL_APIC
+//#define CONFIG_X86_GOOD_APIC
 #endif
 
 #ifdef SMP
@@ -34,8 +35,24 @@
 #define __SMP__
 #endif
 
+#if 0
 
-#include <linux/module.h>               // Include Linux module header file
+#define EXPORT_SYMTAB
+#include <linux/config.h>
+#if defined(CONFIG_MODVERSIONS) &&!defined(MODVERSIONS)
+#define MODVERSIONS
+#endif
+#ifdef MODVERSIONS
+#include <linux/modversions.h>
+#endif
+
+#endif
+
+#include <linux/module.h>
+#include <linux/kernel.h>
+
+
+MODULE_LICENSE("GPL");
 
 #include <linux/version.h>
 
@@ -112,15 +129,6 @@
 
 #endif // LINUX_VERSION_CODE >= KERNEL_VERSION(2,2,0)
 
-
-//#ifdef KERNEL_2_1
-//#define EXPORT_SYMTAB
-//#endif
-
-//char kernel_version[] = UTS_RELEASE;
-
-#include <linux/kernel.h>               // Include kernel specific protos
-
 #include <linux/config.h>
 #include <linux/init.h>
 
@@ -154,10 +162,18 @@
 #include <linux/pci.h>                  // Include PCI bus defines
 
 
-#ifdef __SMP__
-#include <linux/smp.h>
-#include <linux/smp_lock.h>
+#ifdef SMP
+#include <asm/smp.h>
+#include <asm/mtrr.h>
+#include <asm/mpspec.h>
+#include <asm/pgalloc.h>
+
+//#include <linux/smp.h>
+//#include <linux/smp_lock.h>
+//#include <asm/io_apic.h>
 #endif
+
+#include "iceface.h"
 
 typedef unsigned int DWORD;
 
@@ -176,6 +192,7 @@ MODULE_DESCRIPTION("Linux kernel debugger");
 //  kbd=<address>                       Address of the handle_kbd_event function
 //  scan=<address>                      Address of the handle_scancode function
 //  mod=<address>                       Address of the module_list variable
+//  sys=<address>                       Address of the sys_call_table symbol
 //  ice_debug_level=[0 - 1]             Set the level for the output messages:
 //                                      0 - Do not display INFO level
 //                                      1 - Display INFO level messages
@@ -192,9 +209,11 @@ DWORD scan = 0;                         // default value
 MODULE_PARM(pmodule, "i");              // mod=<integer>
 DWORD *pmodule = NULL;                  // default value
 
+MODULE_PARM(sys, "i");                  // sys=<integer>
+DWORD sys = 0;                          // default value
+
 MODULE_PARM(ice_debug_level, "i");      // ice_debug_level=<integer>
 int ice_debug_level = 1;                // default value
-
 
 /******************************************************************************
 *                                                                             *
@@ -202,6 +221,7 @@ int ice_debug_level = 1;                // default value
 *                                                                             *
 ******************************************************************************/
 
+//struct mpc_config_ioapic mp_ioapics[MAX_IO_APICS];
 
 /******************************************************************************
 *                                                                             *
@@ -229,6 +249,10 @@ void ice_ack_APIC_irq(void)
 #endif // IO_APIC
 }
 
+int ice_get_io_bitmap_size(void)
+{
+    return( IO_BITMAP_SIZE );
+}
 
 void ice_smp_call_function(void (*func)(void *), void *info, int retry, int wait)
 {
@@ -409,6 +433,7 @@ long ice_copy_from_user(void *p1, void *p2, int len)
     return( copy_from_user(p1, p2, len) );
 }
 
+#if 0
 typedef struct
 {
     unsigned char bus;                  // Bus number
@@ -420,11 +445,15 @@ typedef struct
     unsigned long base_address[6];      // List of base addresses
     unsigned long rom_address;          // ROM address
     char *pDevice;                      // Device name
-    
-} TPCI;
 
-void ice_get_pci_info(TPCI *pci, struct pci_dev *p)
+} TPCI;
+#endif
+
+//void ice_get_pci_info(TPCI *pci, struct pci_dev *p)
+void ice_get_pci_info(TPCI *pci, void *ptr)
 {
+    struct pci_dev *p = ptr;
+
     int i;
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,4,0)
     pci->bus = p->bus->number;
@@ -478,6 +507,12 @@ int ice_is_pci(void *p)
 #endif
 }
 
+int ice_pci_read_config_dword(void *dev, int where, unsigned int *val)
+{
+    return( pci_read_config_dword((struct pci_dev *)dev, where, val) );
+}
+
+
 void *ice_vmalloc(unsigned int size)
 {
     return( vmalloc(size) );
@@ -505,6 +540,73 @@ int init_module(void)
     IceInitModule();
 
     return( 0 );
+}
+
+
+void *ice_get_module(void *pm, TMODULE *pMod)
+{
+    if( pm==NULL )
+        pm = (void *) *pmodule;
+    else
+    {
+        // Get the next module in the list
+        pm = ((struct module *)pm)->next;
+    }
+
+    if( pm )
+    {
+        pMod->pmodule = pm;
+        pMod->name = ((struct module *)pm)->name;
+        pMod->flags = ((struct module *)pm)->flags;
+        pMod->size = ((struct module *)pm)->size;
+        pMod->nsyms = ((struct module *)pm)->nsyms;
+        pMod->syms = ((struct module *)pm)->syms;
+        pMod->init = ((struct module *)pm)->init;
+        pMod->cleanup = ((struct module *)pm)->cleanup;
+        pMod->use_count = GET_USE_COUNT((struct module *)pm);
+    }
+
+    return( pm );
+}
+
+void *ice_get_module_init(void *pm)
+{
+    return( ((struct module *)pm)->init );
+}
+
+
+void ice_for_each_task(int *ref, TTASK *pIceTask, int (ice_for_each_task_cb)(int *,TTASK *))
+{
+    struct task_struct *pTask;
+
+    // for_each_task() was renamed to for_each_process() in 2.5.35
+
+#ifdef for_each_task
+    for_each_task(pTask)
+#else
+    for_each_process(pTask)
+#endif
+    {
+        pIceTask->ptask = (void *)pTask;
+        pIceTask->state = pTask->state;
+        pIceTask->pid   = pTask->pid;
+        pIceTask->uid   = pTask->uid;
+        pIceTask->gid   = pTask->gid;
+        pIceTask->comm  = pTask->comm;
+
+        if( !(*ice_for_each_task_cb)(ref, pIceTask) )
+            return;
+    }
+}
+
+void *ice_get_current(void)
+{
+    return( (void *) current );
+}
+
+char *ice_get_current_comm(void)
+{
+    return( current->comm );
 }
 
 

@@ -57,14 +57,6 @@
 //
 #define SYMSIG              "SYM"
 
-// Define current symbol file version - 0.8
-//
-#define SYMVER              (0 << 8 | 8)
-
-// Define current Linice version - 0.8
-//
-#define LINICEVER           (0 << 8 | 8)
-
 //////////////////////////////////////////////////////////////////////
 // Define the maxlimum length (including terminating zero) of:
 //  * initialization string
@@ -132,7 +124,7 @@
 //////////////////////////////////////////////////////////////////////
 // Define size of the internal debugger memory heap
 //
-#define MAX_HEAP            4096
+#define MAX_HEAP            32768
 
 //////////////////////////////////////////////////////////////////////
 // Dont change this. It is a hardcoded value of number of symbol types
@@ -148,6 +140,11 @@
 // Number of IO APIC interrupt redirection registers that we keep
 //
 #define MAX_IOAPICREG       16
+
+//////////////////////////////////////////////////////////////////////
+// Maximum array size to expand; any more elements will be ignored
+//
+#define MAX_ARRAY_EXPAND    99
 
 #endif //  _ICE_LIMITS_H_
 
