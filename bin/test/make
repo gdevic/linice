@@ -1,0 +1,4 @@
+gcc -gstabs+ -Wall -DDBG hello.c -o hello
+gcc -gstabs+ -Wall -DDBG int3.c  -o int3
+gcc -gstabs+ -Wall -DDBG app12.c app22.c -o app
+

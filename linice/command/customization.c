@@ -943,3 +943,29 @@ BOOL cmdXwin(char *args, int subClass)
 
     return( TRUE );
 }
+
+
+/******************************************************************************
+*                                                                             *
+*   BOOL cmdSrc(char *args, int subClass)                                     *
+*                                                                             *
+*******************************************************************************
+*
+*   Toggles between source code, assembly and mixed
+*
+******************************************************************************/
+BOOL cmdSrc(char *args, int subClass)
+{
+    // Toggle:
+    //  0 = Disassembly
+    //  1 = Source on
+    //  2 = Mixed source and disassembly
+
+    deb.eSrc = (deb.eSrc + 1) % 3;
+
+    // Redraw all windows
+    RecalculateDrawWindows();
+
+    return( TRUE );
+}
+

@@ -60,15 +60,22 @@
 #define HTYPE_STATIC            0x05    // All static symbols bound to one source file
 #define HTYPE_TYPEDEF           0x06    // All typedefs bound to one source file
 #define HTYPE_IGNORE            0x07    // This header should be ignored and skipped
+#define HTYPE_SYMBOL_HASH       0x08    // Hash table with all symbols
 #define HTYPE__END              0x00    // (End of the array of headers)
 
 typedef struct
 {
-//  ------------- mandatory section -------------
+//  ------------- constant section -----------------
     BYTE hType;                         // Header type (ID)
-    DWORD dwSize;                       // How long is it in bytes
-//  ....
+    DWORD dwSize;                       // Total size in bytes
+//  ------------- type dependent section -----------
 } PACKED TSYMHEADER;
+
+#ifdef MODULE
+#include "module-symbols.h"
+#else
+typedef struct {int filler;} TSYMPRIV;
+#endif
 
 typedef struct _SYMTAB
 {
@@ -77,7 +84,9 @@ typedef struct _SYMTAB
     WORD Version;                       // Symbol file version number
     DWORD dwSize;                       // Total file size
     DWORD dStrings;                     // Offset to the strings section
-    struct _SYMTAB *next;               // (used internally)
+
+    TSYMPRIV *pPriv;
+
     TSYMHEADER header[1];               // Array of headers []
     //         ...
 } PACKED TSYMTAB;
@@ -96,10 +105,10 @@ typedef struct
 
 typedef struct
 {
-//  ------------- mandatory section -------------
+//  ------------- constant section -----------------
     BYTE hType;                         // Header type (ID)
-    DWORD dwSize;                       // How long is it in bytes
-//  ------------- specific section  -------------
+    DWORD dwSize;                       // Total size in bytes
+//  ------------- type dependent section -----------
 
     DWORD nGlobals;                     // Number of global items in the array
     TSYMGLOBAL1 global[1];              // Array of global symbol descriptors
@@ -116,12 +125,12 @@ typedef struct
 
 typedef struct
 {
-//  ------------- mandatory section -------------
+//  ------------- constant section -----------------
     BYTE hType;                         // Header type (ID)
-    DWORD dwSize;                       // How long is it in bytes
-//  ------------- specific section  -------------
+    DWORD dwSize;                       // Total size in bytes
+//  ------------- type dependent section -----------
 
-    WORD  file_id;                      // This file unique ID number
+    WORD  file_id;                      // This file's unique ID number
     DWORD dSourcePath;                  // Offset to the source code path/name
     DWORD dSourceName;                  // Offset to the source code name
     DWORD nLines;                       // How many lines this file has
@@ -131,8 +140,7 @@ typedef struct
 
 //----------------------------------------------------------------------------
 // HTYPE_FUNCTION_LINES
-// Defines a function line numbers and offset correlation
-//
+// Defines a function line numbers and offset relation
 
 // Function lines descriptor:
 typedef struct
@@ -145,10 +153,10 @@ typedef struct
 
 typedef struct
 {
-//  ------------- mandatory section -------------
+//  ------------- constant section -----------------
     BYTE hType;                         // Header type (ID)
-    DWORD dwSize;                       // How long is it in bytes
-//  ------------- specific section  -------------
+    DWORD dwSize;                       // Total size in bytes
+//  ------------- type dependent section -----------
 
     DWORD dwStartAddress;               // Function start address
     DWORD dwEndAddress;                 // Function end address
@@ -197,10 +205,10 @@ typedef struct
 
 typedef struct
 {
-//  ------------- mandatory section -------------
+//  ------------- constant section -----------------
     BYTE hType;                         // Header type (ID)
-    DWORD dwSize;                       // How long is it in bytes
-//  ------------- specific section  -------------
+    DWORD dwSize;                       // Total size in bytes
+//  ------------- type dependent section -----------
 
     DWORD dName;                        // Offset to the function name string
     WORD  file_id;                      // Function refers to this file unique ID number
@@ -226,14 +234,15 @@ typedef struct
 
 typedef struct
 {
-//  ------------- mandatory section -------------
+//  ------------- constant section -----------------
     BYTE hType;                         // Header type (ID)
-    DWORD dwSize;                       // How long is it in bytes
-//  ------------- specific section  -------------
+    DWORD dwSize;                       // Total size in bytes
+//  ------------- type dependent section -----------
 
-    DWORD dSource;                      // Offset to the TSYMSOURCE source descriptor
+    WORD file_id;                       // Static symbols refer to this file unique ID number
+    WORD nStatics;                      // How many static symbols are in the array?
 
-    TSYMSTATIC1 def[1];                 // Array of the static symbol descriptors
+    TSYMSTATIC1 list[1];                // Array of static symbol descriptors
     //           ...
 } PACKED TSYMSTATIC;
 
@@ -280,10 +289,10 @@ typedef struct
 
 typedef struct
 {
-//  ------------- mandatory section -------------
+//  ------------- constant section -----------------
     BYTE hType;                         // Header type (ID)
-    DWORD dwSize;                       // How long is it in bytes
-//  ------------- specific section  -------------
+    DWORD dwSize;                       // Total size in bytes
+//  ------------- type dependent section -----------
 
     WORD  file_id;                      // Typedefs refers to this file unique ID number
     WORD nTypedefs;                     // How many typedefs are in the array?
@@ -292,6 +301,31 @@ typedef struct
     //           ...
 } PACKED TSYMTYPEDEF;
 
+//----------------------------------------------------------------------------
+// HTYPE_SYMBOL_HASH
+// Collection of all symbols in a hash table for quick access of name->value
+//
+//  TO DO
+
+typedef struct
+{
+    DWORD dName;                        // Offset to the symbol name string
+    DWORD dwAddress;                    // Symbol value (ie start address)
+
+} PACKED TSYMHASH1;
+
+typedef struct
+{
+//  ------------- constant section -----------------
+    BYTE hType;                         // Header type (ID)
+    DWORD dwSize;                       // Total size in bytes
+//  ------------- type dependent section -----------
+
+    WORD nHash;                         // Hash table size in number of entries (prime)
+
+    TSYMHASH1 hash[1];                  // Hash table array
+
+} PACKED TSYMHASH;
 
 #endif //  _ICE_SYMBOLS_H_
 

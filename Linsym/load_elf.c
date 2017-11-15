@@ -82,6 +82,9 @@ extern BOOL ParseFunctionLines(int fd, int fs, BYTE *pElf);
 extern BOOL ParseFunctionScope(int fd, int fs, BYTE *pBuf);
 extern BOOL ParseTypedefs(int fd, int fs, BYTE *pBuf);
 
+extern BOOL HashSymbolAdd(char *pName, DWORD dwValue);
+extern BOOL WriteHashTable(int fd, FILE *fGlobals, DWORD nGlobals);
+
 
 int ParseSectionsPass1(BYTE *pBuf)
 {
@@ -809,9 +812,10 @@ BOOL ElfToSym(BYTE *pElf, char *pSymName, char *pTableName)
                 ParseFunctionScope(fd, fs, pElf);
 
                 // Type definitions bound to each major source file
-                //
                 ParseTypedefs(fd, fs, pElf);
 
+                // Lastly, store all symbols that should be hashed
+//                WriteHashTable(fd, fGlobals, nGlobals);
 
                 // Add the terminating section HTYPE__END
                 write(fd, &HeaderEnd, sizeof(HeaderEnd));

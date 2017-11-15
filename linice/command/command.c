@@ -68,6 +68,7 @@ extern BOOL cmdColor   (char *args, int subClass);      // customization.c
 extern BOOL cmdSerial  (char *args, int subClass);      // customization.c
 extern BOOL cmdXwin    (char *args, int subClass);      // customization.c
 extern BOOL cmdPause   (char *args, int subClass);      // customization.c
+extern BOOL cmdSrc     (char *args, int subClass);      // customization.c
 extern BOOL cmdBp      (char *args, int subClass);      // breakpoints.c
 extern BOOL cmdBl      (char *args, int subClass);      // breakpoints.c
 extern BOOL cmdBpet    (char *args, int subClass);      // breakpoints.c
@@ -88,8 +89,10 @@ extern BOOL cmdWr      (char *args, int subClass);      // windowcontrol.c
 extern BOOL cmdCls     (char *args, int subClass);      // windowcontrol.c
 extern BOOL cmdRs      (char *args, int subClass);      // windowcontrol.c
 extern BOOL cmdFlash   (char *args, int subClass);      // windowcontrol.c
-extern BOOL cmdTable   (char *args, int subClass);      // symbols.c
+extern BOOL cmdTable   (char *args, int subClass);      // symbolTable.c
 extern BOOL cmdSymbol  (char *args, int subClass);      // symbols.c
+extern BOOL cmdTypes   (char *args, int subClass);      // symbols.c
+extern BOOL cmdFile    (char *args, int subClass);      // symbols.c
 extern BOOL cmdReg     (char *args, int subClass);      // registers.c
 extern BOOL cmdGdt     (char *args, int subClass);      // sysinfo.c
 extern BOOL cmdLdt     (char *args, int subClass);      // sysinfo.c
@@ -164,7 +167,7 @@ TCommand Cmd[] = {
 {    "CSIP",     4, 0, Unsupported,    "CSIP [OFF | [NOT] address address | [NOT] module-name]", "ex: CSIP NOT CS:201000 CS:205fff",  0 },
 {    "F",        1, 0, cmdFill,        "Fill address L length data-string", "ex: F EBX L 50 'ABCD'", 0 },
 {    "FAULTS",   6, 0, Unsupported,    "FAULTS [ON | OFF]", "ex: FAULTS ON",  0 },
-{    "FILE",     4, 0, Unsupported,    "FILE [file-name | *]", "ex: FILE main.c", 0 },
+{    "FILE",     4, 0, cmdFile,        "FILE [file-name | *]", "ex: FILE main.c", 0 },
 {    "FKEY",     4, 0, Unsupported,    "FKEY [function-key string]", "ex: FKEY F1 DD ESP; G @ESP",    0 },
 {    "FLASH",    5, 0, cmdFlash,       "FLASH [ON | OFF]", "ex: FLASH ON",    0 },
 {    "FOBJ",     4, 0, Unsupported,    "FOBJ pfile_object", "ex: FOBJ EAX",   0 },
@@ -218,7 +221,7 @@ TCommand Cmd[] = {
 {    "SERIAL",   6, 0, cmdSerial,      "SERIAL [ON|VT100 [com-port] [baud-rate] | OFF]", "ex: SERIAL ON 2 19200", 0 },
 {    "SET",      3, 0, cmdSet,         "SET [setvariable] [ON | OFF] [value]", "ex: SET FAULTS ON",   0 },
 {    "SHOW",     4, 0, Unsupported,    "SHOW [B | start] [L length]", "ex: SHOW 100", 0 },
-{    "SRC",      3, 0, Unsupported,    "SRC Toggle between source, mixed & code", "ex: SRC",  0 },
+{    "SRC",      3, 0, cmdSrc,         "SRC Toggle between source, mixed & code", "ex: SRC",  0 },
 {    "SS",       2, 0, Unsupported,    "SS [line-number] ['search-string']", "ex: SS 40 'if (i==3)'", 0 },
 {    "STACK",    5, 0, Unsupported,    "STACK [-v | -r][task-name | thread-type | SS:EBP]", "ex: STACK",  0 },
 {    "SYM",      3, 0, cmdSymbol,      "SYM [partial-name* | symbol-name]", "ex: SYM hDC*",   0 },
@@ -228,7 +231,7 @@ TCommand Cmd[] = {
 {    "TABLE",    5, 0, cmdTable,       "TABLE [[R] table-name | AUTOON | AUTOOFF]", "ex: TABLE test", 0 },
 {    "TABS",     4, 0, Unsupported,    "TABS [1 - 8]", "ex: TABS 4",  0 },
 {    "TSS",      3, 0, Unsupported,    "TSS [TSS selector]", "ex: TSS",   0 },
-{    "TYPES",    5, 0, Unsupported,    "TYPES [type-name]", "ex: TYPE DWORD", 0 },
+{    "TYPES",    5, 0, cmdTypes,       "TYPES [type-name]", "ex: TYPE DWORD", 0 },
 {    "U",        1, 0, cmdUnasm,       "Unassemble [address [L length]]", "ex: U EIP-10",  0 },
 {    "VAR",      3, 0, cmdVar,         "VAR [variable-name] | [[*] | [= expression]]", "ex: VAR myvalue = eax+20",   0 },
 {    "VER",      3, 0, cmdVer,         "VER Display LinIce version", "ex: VER",   0 },

@@ -45,7 +45,8 @@ extern int dfs;
 *                                                                             *
 *******************************************************************************
 *
-*   Loads and parses a single source file
+*   Loads and parses a single source file. Each line is limited to MAX_STRING
+*   characters in width.
 *
 *   Where:
 *       fd - symbol table file descriptor (to write to)
@@ -62,9 +63,10 @@ BOOL ParseSource1(int fd, int fs, char *ptr, WORD file_id)
     FILE *fp = NULL;                    // Source file descriptor
     char pTmp[FILENAME_MAX];            // Temporary buffer
     BOOL fRet = FALSE;                  // Assume we failed
+	char *pName;						// Temp file name pointer
 
 #define MAX_LINE_LEN    1024            // Max allowable line in a source code
-#define MAX_LINE        255             // Max line that we will store
+
     char sLine[MAX_LINE_LEN];           // Single source line
 
     // Open the source file. If it can't be opened for some reason, display
@@ -115,8 +117,15 @@ BOOL ParseSource1(int fd, int fs, char *ptr, WORD file_id)
     pHeader->dSourcePath = dfs;
     pHeader->dSourceName = dfs;
 
+	// Find the name proper (without the path)
+	pName = strrchr(pTmp, '/');
+	if(pName==NULL)
+		pName = strrchr(pTmp, '\\');
+	if(pName!=NULL)
+        pHeader->dSourceName += pName - pTmp + 1;
+
     // Write the string - source path and name
-    write(fs, pTmp, strlen(pTmp)+1);
+	write(fs, pTmp, strlen(pTmp)+1);
     dfs += strlen(pTmp)+1;
 
     // Reset the file pointer into our source file
@@ -125,6 +134,9 @@ BOOL ParseSource1(int fd, int fs, char *ptr, WORD file_id)
     for( i=0; i<nLines; i++ )
     {
         fgets(sLine, MAX_LINE_LEN, fp);
+
+        // Cut a line into the maximum allowable source line width
+        sLine[MAX_STRING-1] = 0;
 
         // Do a small file size optimization: loop from the back to the front
         // of a line and cut all trailing spaces, 0A and 0D characters (newlines)

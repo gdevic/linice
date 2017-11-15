@@ -118,7 +118,7 @@ static DWORD hView;                     // Handle to a history view
 *                                                                             *
 ******************************************************************************/
 
-extern void CodeScroll(int direction);
+extern void CodeScroll(int Xdir, int Ydir);
 extern char *MacroExpand(char *pCmd);
 
 /******************************************************************************
@@ -440,19 +440,65 @@ void EdLin( char *sCmdLine )
 
             switch( Key )
             {
-                case CHAR_CTRL + PGUP:
-                    // Ctrl + PgUp scrolls code window backward
+                //======================== CODE WINDOW =========================
 
-                    CodeScroll(-1);
+                case CHAR_CTRL + HOME:
+                    // Ctrl + Home positions at the top of source file
+
+                    CodeScroll(0, -3);
+
+                    break;
+
+                case CHAR_CTRL + END:
+                    // Ctrl + End positions at the end of source file
+
+                    CodeScroll(0, 3);
+
+                    break;
+
+                case CHAR_CTRL + PGUP:
+                    // Ctrl + PgUp page up code window
+
+                    CodeScroll(0, -2);
+
+                    break;
+
+                case CHAR_CTRL + UP:
+                    // Ctrl + Up one line up code window
+
+                    CodeScroll(0, -1);
 
                     break;
 
                 case CHAR_CTRL + PGDN:
-                    // Ctrl + PgDown scrolls code window forward
+                    // Ctrl + PgDown page down code window
 
-                    CodeScroll(1);
+                    CodeScroll(0, 2);
 
                     break;
+
+                case CHAR_CTRL + DOWN:
+                    // Ctrl + Down one line down code window
+
+                    CodeScroll(0, 1);
+
+                    break;
+
+                case CHAR_CTRL + RIGHT:
+                    // Ctrl + Right shifts source to the left
+
+                    CodeScroll(1, 0);
+
+                    break;
+
+                case CHAR_CTRL + LEFT:
+                    // Ctrl + Left shifts source to the right
+
+                    CodeScroll(-1, 0);
+
+                    break;
+
+                //======================== DATA WINDOW =========================
 
                 case CHAR_ALT + PGUP:
                     // Alt + PgUp scrolls data window backward

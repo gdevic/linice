@@ -153,7 +153,14 @@ typedef struct
     TADDRDESC dataAddr;                 // Data - current display address
 
     BOOL fCode;                         // Code - is SET CODE ON ?
-    TADDRDESC codeAddr;                 // Code - current display address
+    TADDRDESC codeAddr;                 // Address of the top machine code instr. in the code window
+    TSYMFNSCOPE *pFnScope;              // Pointer to a current function scope descriptor
+    TSYMFNLIN *pFnLin;                  // Pointer to a current function line descriptor
+    TSYMSOURCE *pSource;                // Current source file in the code window
+    WORD codeFileTopLine;               // Line number of the top of code window source file
+    WORD codeFileEipLine;               // Line number of the current EIP in the windows source file
+    WORD codeFileXoffset;               // X offset of the source code text
+    int eSrc;                           // 0=Source off; 1=Source on; 2=Mixed
 
     BOOL fAltscr;
     BOOL fFaults;
@@ -332,7 +339,17 @@ extern DWORD GetDec(char **psString);
 
 extern int GetOnOff(char *args);
 
+extern char *SymAddress2FunctionName(WORD wSel, DWORD dwOffset);
+extern void *SymTabFindSection(TSYMTAB *pSymTab, BYTE hType);
+extern TSYMSOURCE *SymTabFindSource(TSYMTAB *pSymTab, WORD fileID);
+
 extern BOOL SymbolName2Value(DWORD *pValue, char *name);
+extern char *SymAddress2FunctionName(WORD wSel, DWORD dwOffset);
+extern char *SymAddress2Name(WORD wSel, DWORD dwOffset);
+extern TSYMFNLIN *SymAddress2FnLin(WORD wSel, DWORD dwOffset);
+extern char *SymFnLin2Line(WORD *pLineNumber, TSYMFNLIN *pFnLin, DWORD dwAddress);
+extern TSYMFNSCOPE *SymAddress2FnScope(WORD wSel, DWORD dwOffset);
+extern char *SymFnScope2Local(TSYMFNSCOPE *pFnScope, DWORD ebpOffset);
 
 #endif //  _ICE_H_
 

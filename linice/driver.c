@@ -201,6 +201,8 @@ int init_module(void)
     memset(&Ice, 0, sizeof(TICE));
     pIce = &Ice;
 
+    memset(&deb, 0, sizeof(TDEB));
+
     memset(&Win, 0, sizeof(TWINDOWS));
     pWin = &Win;
 

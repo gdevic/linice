@@ -147,6 +147,7 @@ int InitPacket(PTINITPACKET pInit)
                 deb.codeAddr.sel = __KERNEL_CS;
                 deb.codeAddr.offset = 0;
                 deb.fCode = FALSE;
+                deb.eSrc = 1;                       // Default Source ON
 
                 // Initialize the default break key
                 deb.BreakKey = CHAR_CTRL | 'Q';

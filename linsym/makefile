@@ -21,6 +21,7 @@ clean:
 		ParseGlobal.o	\
 		ParseSource.o	\
 		ParseTypedefs.o	\
+		HashTable.o	\
 		loader.o	\
 		symbols.o   \
         symutils.o
@@ -45,6 +46,9 @@ ParseSource.o:	ParseSource.c
 
 ParseTypedefs.o:	ParseTypedefs.c
 	$(CC) $(CFLAGS) -c ParseTypedefs.c
+
+HashTable.o:		HashTable.c
+	$(CC) $(CFLAGS) -c HashTable.c
 
 loader.o:		loader.c
 	$(CC) $(CFLAGS) -c loader.c

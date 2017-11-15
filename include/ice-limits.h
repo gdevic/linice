@@ -47,6 +47,10 @@
 // Length of the module name string (incl. 0) and internal symbol table name
 #define MAX_MODULE_NAME     32
 
+//////////////////////////////////////////////////////////////////////
+// Length of a symbol name in characters, variable names
+#define MAX_SYMBOL_LEN      64
+
 // Default symbol file signature - hardcoded length in the symbol header struct
 #define SYMSIG              "SYM"
 
@@ -58,6 +62,8 @@
 //  * initialization string
 //  * keyboard function define
 //  * command line buffer
+//  * source line width
+//  * print buffer
 //
 #define MAX_STRING          256
 

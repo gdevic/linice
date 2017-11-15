@@ -23,11 +23,13 @@ clean:
 			memaccess.o	\
 			eval.o		\
 			init.o		\
+			symbolTable.o	\
 			symbols.o	\
 			proc.o		\
 			edlin.o		\
 			debugger.o	\
 			disassembler.o	\
+			disassembler-bytelen.o	\
 			i386.o		\
 			interrupt.o	\
 			command.o	\
@@ -68,6 +70,9 @@ memaccess.o:	memaccess.c
 init.o:		init.c
 	$(CC) $(CFLAGS) -c init.c
 
+symbols.o:		symbolTable.c
+	$(CC) $(CFLAGS) -c symbolTable.c
+
 symbols.o:		symbols.c
 	$(CC) $(CFLAGS) -c symbols.c
 
@@ -88,6 +93,9 @@ debugger.o:	command/debugger.c
 
 disassembler.o:	command/disassembler.c
 	$(CC) $(CFLAGS) -c command/disassembler.c
+
+disassembler-bytelen.o:	command/disassembler-bytelen.c
+	$(CC) $(CFLAGS) -c command/disassembler-bytelen.c
 
 edlin.o:	command/edlin.c
 	$(CC) $(CFLAGS) -c command/edlin.c

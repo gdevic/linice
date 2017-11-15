@@ -36,8 +36,10 @@
 *   Important Defines                                                         *
 ******************************************************************************/
 
+#define PRIMES_MAX          1024
+
 // Table of every 4th prime number
-static unsigned int primes[1024] = {
+static unsigned int primes[PRIMES_MAX] = {
 7     ,19    ,37    ,53    ,71    ,89    ,107   ,131   ,
 151   ,173   ,193   ,223   ,239   ,263   ,281   ,311   ,
 337   ,359   ,383   ,409   ,433   ,457   ,479   ,503   ,

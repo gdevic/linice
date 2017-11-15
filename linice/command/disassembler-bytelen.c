@@ -1,8 +1,8 @@
 /******************************************************************************
 *                                                                             *
-*   Module:     disassembler.c                                                *
+*   Module:     disassembler-bytelen.c                                        *
 *                                                                             *
-*   Date:       03/17/00                                                      *
+*   Date:       06/11/01                                                      *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -17,6 +17,10 @@
 *******************************************************************************
 
     Module Description:
+
+        This module is a stripped-down version of the disassembler with
+        only one function - to provide the length in bytes of the
+        instruction to which it is pointed to.
 
         This module contains the code for the generic Intel disassembler.
         The latest supported uprocessor is Pentium Pro.
@@ -40,7 +44,7 @@
 #include "clib.h"                       // Include C library header file
 #include "ice.h"                        // Include main debugger structures
 
-#include "disassemblerdata.h"           // Include its own data - only once!
+#include "disassemblerdefines.h"        // Include only data declarations
 #include "disassembler.h"               // Include interface header file
 
 /******************************************************************************
@@ -129,27 +133,23 @@ static DWORD GetNextDword(void)
 
 /******************************************************************************
 *                                                                             *
-*   BYTE Disassembler( PTDISASM pDis );                                       *
+*   BYTE DisassemblerLen( PTDISASM pDis );                                    *
 *                                                                             *
 *******************************************************************************
 *
-*   This is a generic Intel line disassembler.
+*   This is a generic Intel line disassembler. This stripped-down version
+*   only returns the size of the opcode that it is pointed to.
 *
 *   Where:
 *       TDisassembler:
-*           wSel is the selector of the address to disassemble
-*           bpTarget is the offset of the address to disassemble
-*           szDisasm is the address of the buffer to print a line
+*           wSel is the selector of the address of an instruction
+*           bpTarget is the offset of the address of an instruction
+*           szDisasm is the address of the buffer to print a line, ignored
 *           dwFlags contains the default operand and address bits
 *           bCodes[] is the buffer to store code bytes
 *
-*   Disassembled instruction is stored as an ASCIIZ string pointed by
-*   szDisasm pointer (from the pDis structure).
-*
 *   Returns:
 *       TDisassembler:
-*           *szDisasm contains the disassembled instruction string
-*           bAsciiLen is set to the length of the printed string
 *           bInstrLen is set to instruction length in bytes
 *           dwFlags - has operand and address size flags adjusted
 *                   - DIS_ILLEGALOP set if that was illegal instruction
@@ -157,7 +157,7 @@ static DWORD GetNextDword(void)
 *       BYTE - instruction length in bytes
 *
 ******************************************************************************/
-BYTE Disassembler( PTDISASM pDis )
+BYTE DisassemblerLen( PTDISASM pDis )
 {
     TOpcodeData *p;                     // Pointer to a current instruction record
     DWORD   arg;                        // Argument counter
@@ -178,8 +178,6 @@ BYTE Disassembler( PTDISASM pDis )
     BYTE    bSs;                        // SS field of the s-i-b byte
     BYTE    bIndex;                     // Index field of the s-i-b byte
     BYTE    bBase;                      // Base field of the s-i-b byte
-
-    char   *pName;                      // Pointer to a generic symbol name
 
     bInstrLen = 0;                      // Reset instruction lenght to zero
     bpCode = pDis->bCodes;              // Set internal pointer to code bytes
@@ -298,7 +296,7 @@ BYTE Disassembler( PTDISASM pDis )
 
 IllegalOpcode:
 
-    nPos += sprintf( pDis->szDisasm+nPos, "invalid");
+//  nPos += sprintf( pDis->szDisasm+nPos, "invalid");
     pDis->dwFlags |= DIS_ILLEGALOP;
 
     goto DisEnd;
@@ -325,18 +323,18 @@ StartInstructionNoMODRM:
 
     // Print the possible repeat prefix followed by the instruction
 
-    if( p->flags & DIS_COPROC )
-        nPos += sprintf( pDis->szDisasm+nPos, "%-6s ", sCoprocNames[ p->name ]);
-    else
-        nPos += sprintf( pDis->szDisasm+nPos, "%s%-6s ",
-            sRep[DIS_GETREPENUM(pDis->dwFlags)],
-            sNames[ p->name + (DIS_GETNAMEFLAG(p->flags) & DIS_GETDATASIZE(pDis->dwFlags)) ] );
+//  if( p->flags & DIS_COPROC )
+//      nPos += sprintf( pDis->szDisasm+nPos, "%-6s ", sCoprocNames[ p->name ]);
+//  else
+//      nPos += sprintf( pDis->szDisasm+nPos, "%s%-6s ",
+//          sRep[DIS_GETREPENUM(pDis->dwFlags)],
+//          sNames[ p->name + (DIS_GETNAMEFLAG(p->flags) & DIS_GETDATASIZE(pDis->dwFlags)) ] );
 
     // Do instruction argument processing, up to 3 times
 
     pArg = &p->dest;
 
-    for( arg=p->args; arg!=0; arg--, pArg++, arg? nPos += sprintf( pDis->szDisasm+nPos,", ") : 0 )
+    for( arg=p->args; arg!=0; arg--, pArg++ /*, arg? nPos += sprintf( pDis->szDisasm+nPos,", ") : 0 */ )
     {
         switch( *pArg )
         {
@@ -374,7 +372,7 @@ StartInstructionNoMODRM:
             if( bMod == 3 )
             {
                 // Registers depending on the w field and data size
-                nPos += sprintf(pDis->szDisasm+nPos, "%s", sRegs1[DIS_GETDATASIZE(pDis->dwFlags)][bW][bRm] );
+//              nPos += sprintf(pDis->szDisasm+nPos, "%s", sRegs1[DIS_GETDATASIZE(pDis->dwFlags)][bW][bRm] );
 
                 break;
             }
@@ -396,14 +394,14 @@ StartInstructionNoMODRM:
 
             _E1:
 
-            if( sPtr )
-                nPos += sprintf( pDis->szDisasm+nPos, "%s", sPtr );
+//          if( sPtr )
+//              nPos += sprintf( pDis->szDisasm+nPos, "%s", sPtr );
 
         case _Ma :                                         // Used by bound instruction, skip the pointer info
 
             // Print the segment if it is overriden
             //
-            nPos += sprintf( pDis->szDisasm+nPos,"%s", sSegOverride[ bSegOverride ] );
+//          nPos += sprintf( pDis->szDisasm+nPos,"%s", sSegOverride[ bSegOverride ] );
 
             //
             // Special case when sib byte is present in 32 address encoding
@@ -423,39 +421,36 @@ StartInstructionNoMODRM:
                 if( (bBase==5) && (bMod==0) )
                 {
                     dwDword = NEXTDWORD;
-                    if( (pName = SymAddress2Name(0, dwDword))==NULL )
-                        nPos += sprintf( pDis->szDisasm+nPos," A [%08X", (unsigned int) dwDword );
-                    else
-                        nPos += sprintf( pDis->szDisasm+nPos," A [%s", pName );
+//                  nPos += sprintf( pDis->szDisasm+nPos," A [%08X", (unsigned int) dwDword );
                 }
-                else
-                    nPos += sprintf( pDis->szDisasm+nPos," B [%s", sGenReg16_32[ 1 ][ bBase ] );
+//              else
+//                  nPos += sprintf( pDis->szDisasm+nPos," B [%s", sGenReg16_32[ 1 ][ bBase ] );
 
                 // Scaled index, no index if bIndex is 4
-                if( bIndex != 4 )
-                    nPos += sprintf( pDis->szDisasm+nPos," C +%s%s", sScale[ bSs ], sGenReg16_32[ 1 ][ bIndex ] );
-                else
-                    if(bSs != 0)
-                    nPos += sprintf( pDis->szDisasm+nPos,"<INVALID MODE>" );
+//              if( bIndex != 4 )
+//                  nPos += sprintf( pDis->szDisasm+nPos," C +%s%s", sScale[ bSs ], sGenReg16_32[ 1 ][ bIndex ] );
+//              else
+//                  if(bSs != 0)
+//                  nPos += sprintf( pDis->szDisasm+nPos,"<INVALID MODE>" );
 
                 // Offset 8 bit or 32 bit
                 if( bMod == 1 )
                 {
                     bByte = NEXTBYTE;
-                    if( (signed char)bByte < 0 )
-                        nPos += sprintf( pDis->szDisasm+nPos," D -%02X", 0-(signed char)bByte );
-                    else
-                        nPos += sprintf( pDis->szDisasm+nPos," D +%02X", bByte );
+//                  if( (signed char)bByte < 0 )
+//                      nPos += sprintf( pDis->szDisasm+nPos," D -%02X", 0-(signed char)bByte );
+//                  else
+//                      nPos += sprintf( pDis->szDisasm+nPos," D +%02X", bByte );
                 }
 
                 if( bMod == 2 )
                 {
                     dwDword = NEXTDWORD;
-                    nPos += sprintf( pDis->szDisasm+nPos," E +%08X", (unsigned int) dwDword );
+//                  nPos += sprintf( pDis->szDisasm+nPos," E +%08X", (unsigned int) dwDword );
                 }
 
                 // Wrap up the instruction
-                nPos += sprintf( pDis->szDisasm+nPos,"]" );
+//              nPos += sprintf( pDis->szDisasm+nPos,"]" );
                 break;
             }
 
@@ -468,159 +463,107 @@ StartInstructionNoMODRM:
                 if( pDis->dwFlags & DIS_ADDRESS32 )
                 {
                     dwDword = NEXTDWORD;
-                    if( (pName = SymAddress2Name(0, dwDword))==NULL )
-                        nPos += sprintf( pDis->szDisasm+nPos," F [%08X]", (unsigned int) dwDword );
-                    else
-                        nPos += sprintf( pDis->szDisasm+nPos," F [%s]", pName );
+//                  nPos += sprintf( pDis->szDisasm+nPos," F [%08X]", (unsigned int) dwDword );
                 }
                 else
                 {
                     wWord = NEXTWORD;
-                    if( (pName = SymAddress2Name(0, wWord))==NULL )
-                        nPos += sprintf( pDis->szDisasm+nPos," G [%04X]", wWord );
-                    else
-                        nPos += sprintf( pDis->szDisasm+nPos," G [%s]", pName );
+//                  nPos += sprintf( pDis->szDisasm+nPos," G [%04X]", wWord );
                 }
 
                 break;
             }
 
-            // At this point we may have instruction referring to the local valiable on the stack: [E]BP +/- value
-            // We know how to decode these few cases of addressing using BP
+            // Print the start of the line
+//          nPos += sprintf( pDis->szDisasm+nPos," H [%s", sAdr1[DIS_GETADDRSIZE(pDis->dwFlags)][ bRm ] );
 
-            // This code is strictly expanded to support symbols --->
-            if( (bMod==1 || bMod==2) && DIS_GETADDRSIZE(pDis->dwFlags)==0 && bRm==6 )
+            // Offset (8 or 16) or (8 or 32) bit - 16, 32 bits are unsigned
+            if( bMod==1 )
             {
-                // 16-bit BP --------
-                if( bMod==1 )
-                    dwDword = (DWORD)(int)(signed char) NEXTBYTE;
-                else
-                    dwDword = (DWORD)(int)(signed short) NEXTWORD;
-
-                    pName = SymFnScope2Local( SymAddress2FnScope(GET_ADDRESS_SEL, GET_ADDRESS_OFFSET), dwDword);
-
-                if( pName )
-                    nPos += sprintf( pDis->szDisasm+nPos," @ [%s]", pName );
-                else
-                    nPos += sprintf( pDis->szDisasm+nPos," @ [BP+%X]", dwDword );
+                bByte = NEXTBYTE;
+//              if( (signed char)bByte < 0 )
+//                  nPos += sprintf( pDis->szDisasm+nPos," I -%02X", 0-(signed char)bByte );
+//              else
+//                  nPos += sprintf( pDis->szDisasm+nPos," I +%02X", bByte );
             }
-            else
-                if( (bMod==1 || bMod==2) && DIS_GETADDRSIZE(pDis->dwFlags) && bRm==5 )
+
+            if( bMod==2 )
             {
-                // 32-bit EBP -------
-                if( bMod==1 )
-                    dwDword = (DWORD)(int)(signed char) NEXTBYTE;
-                else
+                if( pDis->dwFlags & DIS_ADDRESS32 )
+                {
                     dwDword = NEXTDWORD;
-
-                pName = SymFnScope2Local( SymAddress2FnScope(GET_ADDRESS_SEL, GET_ADDRESS_OFFSET), dwDword);
-
-                if( pName )
-                    nPos += sprintf( pDis->szDisasm+nPos," @ [%s]", pName );
+//                  nPos += sprintf( pDis->szDisasm+nPos," J +%08X", (unsigned int) dwDword );
+                }
                 else
-                    nPos += sprintf( pDis->szDisasm+nPos," @ [EBP+%X]", dwDword );
-            }
-            else
-            {
-                // <--- This code is default disassembler code:
-
-                // Print the start of the line
-                nPos += sprintf( pDis->szDisasm+nPos," H [%s", sAdr1[DIS_GETADDRSIZE(pDis->dwFlags)][ bRm ] );
-
-                // Offset (8 or 16) or (8 or 32) bit - 16, 32 bits are unsigned
-                if( bMod==1 )
                 {
-                    bByte = NEXTBYTE;
-                    if( (signed char)bByte < 0 )
-                        nPos += sprintf( pDis->szDisasm+nPos," I -%02X", 0-(signed char)bByte );
-                    else
-                        nPos += sprintf( pDis->szDisasm+nPos," I +%02X", bByte );
+                    wWord = NEXTWORD;
+//                  nPos += sprintf( pDis->szDisasm+nPos," J +%04X", wWord );
                 }
-
-                if( bMod==2 )
-                {
-                    if( pDis->dwFlags & DIS_ADDRESS32 )
-                    {
-                        dwDword = NEXTDWORD;
-                        nPos += sprintf( pDis->szDisasm+nPos," J +%08X", (unsigned int) dwDword );
-                    }
-                    else
-                    {
-                        wWord = NEXTWORD;
-                        nPos += sprintf( pDis->szDisasm+nPos," J +%04X", wWord );
-                    }
-                }
-
-                // Wrap up the instruction
-                nPos += sprintf( pDis->szDisasm+nPos,"]" );
             }
+
+            // Wrap up the instruction
+//          nPos += sprintf( pDis->szDisasm+nPos,"]" );
 
             break;
 
         case _Gb :                                         // general, byte register
-            nPos += sprintf( pDis->szDisasm+nPos, "%s", sRegs1[0][0][ bReg ] );
+//          nPos += sprintf( pDis->szDisasm+nPos, "%s", sRegs1[0][0][ bReg ] );
             break;
 
         case _Gv :                                         // general, (d)word register
-            nPos += sprintf( pDis->szDisasm+nPos, "%s", sGenReg16_32[DIS_GETDATASIZE(pDis->dwFlags)][ bReg ] );
+//          nPos += sprintf( pDis->szDisasm+nPos, "%s", sGenReg16_32[DIS_GETDATASIZE(pDis->dwFlags)][ bReg ] );
             break;
 
         case _Yb :                                         // ES:(E)DI pointer
         case _Yv :
-            nPos += sprintf( pDis->szDisasm+nPos, "%s%s", sSegOverrideDefaultES[ bSegOverride ], sYptr[DIS_GETADDRSIZE(pDis->dwFlags)] );
+//          nPos += sprintf( pDis->szDisasm+nPos, "%s%s", sSegOverrideDefaultES[ bSegOverride ], sYptr[DIS_GETADDRSIZE(pDis->dwFlags)] );
             break;
 
         case _Xb :                                         // DS:(E)SI pointer
         case _Xv :
-            nPos += sprintf( pDis->szDisasm+nPos, "%s%s", sSegOverrideDefaultDS[ bSegOverride ], sXptr[DIS_GETADDRSIZE(pDis->dwFlags)] );
+//          nPos += sprintf( pDis->szDisasm+nPos, "%s%s", sSegOverrideDefaultDS[ bSegOverride ], sXptr[DIS_GETADDRSIZE(pDis->dwFlags)] );
             break;
 
         case _Rd :                                         // general register double word
-            nPos += sprintf( pDis->szDisasm+nPos, "%s", sGenReg16_32[ 1 ][ bRm ] );
+//          nPos += sprintf( pDis->szDisasm+nPos, "%s", sGenReg16_32[ 1 ][ bRm ] );
             break;
 
         case _Rw :                                         // register word
-            nPos += sprintf( pDis->szDisasm+nPos, "%s", sGenReg16_32[ 0 ][ bMod ] );
+//          nPos += sprintf( pDis->szDisasm+nPos, "%s", sGenReg16_32[ 0 ][ bMod ] );
             break;
 
         case _Sw :                                         // segment register
-            nPos += sprintf( pDis->szDisasm+nPos, "%s", sSeg[ bReg ] );
+//          nPos += sprintf( pDis->szDisasm+nPos, "%s", sSeg[ bReg ] );
             break;
 
         case _Cd :                                         // control register
-            nPos += sprintf( pDis->szDisasm+nPos, "%s", sControl[ bReg ] );
+//          nPos += sprintf( pDis->szDisasm+nPos, "%s", sControl[ bReg ] );
             break;
 
         case _Dd :                                         // debug register
-            nPos += sprintf( pDis->szDisasm+nPos, "%s", sDebug[ bReg ] );
+//          nPos += sprintf( pDis->szDisasm+nPos, "%s", sDebug[ bReg ] );
             break;
 
         case _Td :                                         // test register
-            nPos += sprintf( pDis->szDisasm+nPos, "%s", sTest[ bReg ] );
+//          nPos += sprintf( pDis->szDisasm+nPos, "%s", sTest[ bReg ] );
             break;
 
 
         case _Jb :                                         // immediate byte, relative offset
             bByte = NEXTBYTE;
-            nPos += sprintf( pDis->szDisasm+nPos, " K short %08X", (unsigned int)(Addr.offset + (signed char)bByte) );
+//          nPos += sprintf( pDis->szDisasm+nPos, " K short %08X", (unsigned int)(Addr.offset + (signed char)bByte) );
             break;
 
         case _Jv :                                         // immediate word or dword, relative offset
             if( pDis->dwFlags & DIS_DATA32 )
             {
                 dwDword = NEXTDWORD;
-                if( (pName = SymAddress2FunctionName(0, Addr.offset + (signed long)dwDword))==NULL )
-                    nPos += sprintf( pDis->szDisasm+nPos, " L %08X", (unsigned int)(Addr.offset + (signed long)dwDword) );
-                else
-                    nPos += sprintf( pDis->szDisasm+nPos, " L %s", pName );
+//              nPos += sprintf( pDis->szDisasm+nPos, " L %08X", (unsigned int)(Addr.offset + (signed long)dwDword) );
             }
             else
             {
                 wWord = NEXTWORD;
-                if( (pName = SymAddress2FunctionName(0, (unsigned int)(Addr.offset + (signed short)wWord)))==NULL )
-                    nPos += sprintf( pDis->szDisasm+nPos, " M %08X", (unsigned int)(Addr.offset + (signed short)wWord) );
-                else
-                    nPos += sprintf( pDis->szDisasm+nPos, " M %s", pName );
+//              nPos += sprintf( pDis->szDisasm+nPos, " M %08X", (unsigned int)(Addr.offset + (signed short)wWord) );
             }
             break;
 
@@ -628,42 +571,36 @@ StartInstructionNoMODRM:
             if( pDis->dwFlags & DIS_ADDRESS32 )           // depending on the address size
             {
                 dwDword = NEXTDWORD;
-                if( (pName = SymAddress2Name(0, dwDword))==NULL )
-                    nPos += sprintf( pDis->szDisasm+nPos," N %s[%08X]", sSegOverride[ bSegOverride ], (unsigned int) dwDword );
-                else
-                    nPos += sprintf( pDis->szDisasm+nPos," N %s[%s]", sSegOverride[ bSegOverride ], pName );
+//              nPos += sprintf( pDis->szDisasm+nPos," N %s[%08X]", sSegOverride[ bSegOverride ], (unsigned int) dwDword );
             }
             else
             {
                 wWord = NEXTWORD;
-                if( (pName = SymAddress2Name(0, wWord))==NULL )
-                    nPos += sprintf( pDis->szDisasm+nPos," N %s[%04X]", sSegOverride[ bSegOverride ], wWord );
-                else
-                    nPos += sprintf( pDis->szDisasm+nPos," N %s[%s]", sSegOverride[ bSegOverride ], pName );
+//              nPos += sprintf( pDis->szDisasm+nPos," N %s[%04X]", sSegOverride[ bSegOverride ], wWord );
             }
             break;
 
         case _Ib :                                         // immediate byte
             bByte = NEXTBYTE;
-            nPos += sprintf( pDis->szDisasm+nPos," O %02X", bByte );
+//          nPos += sprintf( pDis->szDisasm+nPos," O %02X", bByte );
             break;
 
         case _Iv :                                         // immediate word or dword
             if( pDis->dwFlags & DIS_DATA32 )
             {
                 dwDword = NEXTDWORD;
-                nPos += sprintf( pDis->szDisasm+nPos, " P %08X", (unsigned int) dwDword );
+//              nPos += sprintf( pDis->szDisasm+nPos, " P %08X", (unsigned int) dwDword );
             }
             else
             {
                 wWord = NEXTWORD;
-                nPos += sprintf( pDis->szDisasm+nPos, " P %04X", wWord );
+//              nPos += sprintf( pDis->szDisasm+nPos, " P %04X", wWord );
             }
             break;
 
         case _Iw :                                         // Immediate word
             wWord = NEXTWORD;
-            nPos += sprintf( pDis->szDisasm+nPos, " Q %04X", wWord );
+//          nPos += sprintf( pDis->szDisasm+nPos, " Q %04X", wWord );
             break;
 
         case _Ap :                                         // 32 bit or 48 bit pointer (call far, jump far)
@@ -671,40 +608,37 @@ StartInstructionNoMODRM:
             {
                 dwDword = NEXTDWORD;
                 wWord = NEXTWORD;
-                if( (pName = SymAddress2FunctionName(wWord, dwDword))==NULL )
-                    nPos += sprintf( pDis->szDisasm+nPos, " R %04X:%08X", wWord, (unsigned int) dwDword );
-                else
-                    nPos += sprintf( pDis->szDisasm+nPos, " R far %s", pName);
+//              nPos += sprintf( pDis->szDisasm+nPos, " R %04X:%08X", wWord, (unsigned int) dwDword );
             }
             else
             {
                 dwDword = NEXTDWORD;
-                nPos += sprintf( pDis->szDisasm+nPos, " R %04X:%04X", (WORD)(dwDword >> 16), (WORD) (dwDword & 0xFFFF) );
+//              nPos += sprintf( pDis->szDisasm+nPos, " R %04X:%04X", (WORD)(dwDword >> 16), (WORD) (dwDword & 0xFFFF) );
             }
             break;
 
         case _1 :                                          // numerical 1
-            nPos += sprintf( pDis->szDisasm+nPos,"1" );
+//          nPos += sprintf( pDis->szDisasm+nPos,"1" );
             break;
 
         case _3 :                                          // numerical 3
-            nPos += sprintf( pDis->szDisasm+nPos,"3" );
+//          nPos += sprintf( pDis->szDisasm+nPos,"3" );
             break;
 
         // Hard coded registers
         case _DX: case _AL: case _AH: case _BL: case _BH: case _CL: case _CH:
         case _DL: case _DH: case _CS: case _DS: case _ES: case _SS: case _FS:
         case _GS:
-            nPos += sprintf( pDis->szDisasm+nPos,"%s", sRegs2[ *pArg - _DX ] );
+//          nPos += sprintf( pDis->szDisasm+nPos,"%s", sRegs2[ *pArg - _DX ] );
             break;
 
         case _eAX: case _eBX: case _eCX: case _eDX:
         case _eSP: case _eBP: case _eSI: case _eDI:
-            nPos += sprintf( pDis->szDisasm+nPos, "%s", sGenReg16_32[DIS_GETDATASIZE(pDis->dwFlags)][ *pArg - _eAX ]);
+//          nPos += sprintf( pDis->szDisasm+nPos, "%s", sGenReg16_32[DIS_GETDATASIZE(pDis->dwFlags)][ *pArg - _eAX ]);
             break;
 
         case _ST:                                          // Coprocessor ST
-            nPos += sprintf( pDis->szDisasm+nPos,"%s", sST[9] );
+//          nPos += sprintf( pDis->szDisasm+nPos,"%s", sST[9] );
             break;
 
         case _ST0:                                         // Coprocessor ST(0) - ST(7)
@@ -715,11 +649,11 @@ StartInstructionNoMODRM:
         case _ST5:
         case _ST6:
         case _ST7:
-            nPos += sprintf( pDis->szDisasm+nPos,"%s", sST[ *pArg - _ST0 ] );
+//          nPos += sprintf( pDis->szDisasm+nPos,"%s", sST[ *pArg - _ST0 ] );
             break;
 
         case _AX:                                           // Coprocessor AX
-            nPos += sprintf( pDis->szDisasm+nPos,"%s", sGenReg16_32[0][0] );
+//          nPos += sprintf( pDis->szDisasm+nPos,"%s", sGenReg16_32[0][0] );
             break;
         }
     }

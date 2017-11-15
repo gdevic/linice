@@ -121,7 +121,7 @@ void dputc(UCHAR c)
 ******************************************************************************/
 int PrintLine(char *format,...)
 {
-    char printBuf[256];
+    char printBuf[MAX_STRING+1];
     char *pBuf = printBuf, *p;
     int written;
     va_list arg;
@@ -173,7 +173,7 @@ int PrintLine(char *format,...)
 ******************************************************************************/
 int dprint( char *format, ... )
 {
-    char printBuf[256];
+    char printBuf[MAX_STRING+1];
     char *pBuf = printBuf;
     int written;
     va_list arg;
@@ -212,7 +212,7 @@ int dprint( char *format, ... )
 ******************************************************************************/
 BOOL dprinth( int nLineCount, char *format, ... )
 {
-    char printBuf[256];
+    char printBuf[MAX_STRING+1];
     CHAR Key;
     char *pBuf = printBuf;
     int written;

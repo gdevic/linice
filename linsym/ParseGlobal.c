@@ -59,7 +59,6 @@ BOOL ParseGlobal(int fd, int fs, FILE *fGlobals, int nGlobals)
     int i;                              // Counter
     TSYMGLOBAL *pHeader;                // Globals header
     DWORD dwSize;                       // Final size of the above structure
-#define MAX_SYMBOL_LEN  128
     char sSymbol[MAX_SYMBOL_LEN];       // Buffer to load a symbol name
 
     printf("=============================================================================\n");

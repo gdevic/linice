@@ -1,10 +1,10 @@
 /******************************************************************************
 *                                                                             *
-*   Module:     stabs.h                                                       *
+*   Module:     ice.h                                                         *
 *                                                                             *
-*   Date:       06/10/01                                                      *
+*   Date:       04/27/2000                                                    *
 *                                                                             *
-*   Copyright (c) 2001 Goran Devic                                            *
+*   Copyright (c) 2000 Goran Devic                                            *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -20,21 +20,27 @@
 
     Module Description:
 
-        Define wrappers for ELF stabs.
+        This header file contains global Ice data structures
 
 *******************************************************************************
 *                                                                             *
-*   Major changes:                                                            *
+*   Changes:                                                                  *
 *                                                                             *
 *   DATE     DESCRIPTION OF CHANGES                               AUTHOR      *
-* --------   ---------------------------------------------------  ----------- *
-* 06/10/01   Initial version                                      Goran Devic *
-* --------   ---------------------------------------------------  ----------- *
+* --------   ---------------------------------------------        ----------- *
+* 04/27/00   Original                                             Goran Devic *
+* --------   ---------------------------------------------        ----------- *
 *******************************************************************************
 *   Important Defines                                                         *
 ******************************************************************************/
-#ifndef _STABS_H_
-#define _STABS_H_
+#ifndef _MODULE_SYMBOLS_H_
+#define _MODULE_SYMBOLS_H_
+
+/******************************************************************************
+*                                                                             *
+*   Linux kernel Extern functions                                             *
+*                                                                             *
+******************************************************************************/
 
 /******************************************************************************
 *                                                                             *
@@ -42,32 +48,20 @@
 *                                                                             *
 ******************************************************************************/
 
-// Define so we can generate enums
-#define __define_stab(NAME, CODE, STRING) NAME=CODE,
-
-enum __stab_debug_code
-{
-#include "stab.def"
-LAST_UNUSED_STAB_CODE
-};
-
-#undef __define_stab
-
-//////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////
+// PRIVATE DATA OF A SINGLE SYMBOL TABLE
+/////////////////////////////////////////////////////////////////
+// Define structure that is
 
 typedef struct
 {
-    int code;
-    char *name;
-} TSTABNAME;
+    struct TSYMTAB *next;               // Next symbol structure in a list
 
-// Define so we can generate structures of stab codes
-#define __define_stab(NAME, CODE, STRING)  { CODE, STRING },
+    char *pStrings;                     // Pointer to strings
 
-TSTABNAME StabName[] = {
-#include "stab.def"
-{ 0, NULL }
-};
+} TSYMPRIV;
 
 
-#endif // _STABS_H_
+
+#endif //  _MODULE_SYMBOLS_H_
+

@@ -69,6 +69,7 @@ extern void BreakpointsPlace(void);
 extern void BreakpointsRemove(void);
 extern int  BreakpointCheck(WORD sel, DWORD offset);
 extern BOOL BreakpointCondition(int index);
+extern void SetCurrentSymbolContext(void);
 
 /******************************************************************************
 *                                                                             *
@@ -154,6 +155,8 @@ void DebuggerEnter(void)
 
     // Reset the current breakpoint index to none
     deb.bpIndex = -1;
+
+    SetCurrentSymbolContext();
 
     // If we are back from the trace, we will evaluate that case later..
     // For now, do some things in non-trace case:

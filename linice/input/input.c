@@ -70,6 +70,8 @@ static volatile int head = 0, tail = 0;           // Head and Tail of that queue
 *                                                                             *
 ******************************************************************************/
 
+extern void InterruptPoll();
+
 /******************************************************************************
 *                                                                             *
 *   CHAR GetKey( IN BOOL fBlock )                                             *
@@ -102,7 +104,7 @@ CHAR GetKey( BOOL fBlock )
 
     while( head == tail )
     {
-        ;
+        InterruptPoll();
     }
 
     // Get a character from the queue - make it uninterruptible (atomic)
