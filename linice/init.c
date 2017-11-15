@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       09/09/00                                                      *
 *                                                                             *
-*   Copyright (c) 2000-2004 Goran Devic                                       *
+*   Copyright (c) 2000-2005 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -111,7 +111,8 @@ extern void memFreeHeap(BYTE *hHeap);
 ******************************************************************************/
 int InitPacket(PTINITPACKET pInit)
 {
-    int retval = -EINVAL;
+    int retval = -EINVAL;               // Default return value
+    int n;                              // Generic counter
 
     if( pInit->nSize == sizeof(TINITPACKET) )
     {
@@ -157,6 +158,10 @@ int InitPacket(PTINITPACKET pInit)
                 // Visible: registers, data and code windows and, of course, history
                 // We need to set number of lines even if it is invisible at start
 
+                // Initialize the size of all data window
+                for(n=0; n<MAX_DATA; n++)
+                    pWin->data[n].nLines = 3;
+
                 pWin->r.fVisible = TRUE;    // Registers
                 pWin->r.nLines   = 3;
                 pWin->l.fVisible = FALSE;   // Locals
@@ -165,8 +170,8 @@ int InitPacket(PTINITPACKET pInit)
                 pWin->w.nLines   = 4;
                 pWin->s.fVisible = FALSE;   // Stack
                 pWin->s.nLines   = 4;
-                pWin->d.fVisible = TRUE;    // Data
-                pWin->d.nLines   = 5;
+                pWin->data[deb.nData].fVisible = TRUE;  // Data window [0]
+                pWin->data[deb.nData].nLines   = 5;
                 pWin->c.fVisible = TRUE;    // Code
                 pWin->c.nLines   = 5;
                 pWin->h.fVisible = TRUE;    // History
@@ -182,9 +187,12 @@ int InitPacket(PTINITPACKET pInit)
                 pOut->y = pWin->h.Top + 1;          // Force it into the history buffer
 
                 // Initialize default data pointer
-                deb.dataAddr.sel = GetKernelDS();
-                deb.dataAddr.offset = 0;
-                deb.nDumpSize = 1;                  // Dump bytes
+                for(n=0; n<MAX_DATA; n++)
+                {
+                    deb.dataAddr[n].sel = GetKernelDS();
+                    deb.dataAddr[n].offset = 0;
+                    deb.nDumpSize[n] = 1;           // Dump bytes
+                }
 
                 // Initialize default code pointer
                 deb.codeTopAddr.sel = GetKernelCS();

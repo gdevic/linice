@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       09/05/00                                                      *
 *                                                                             *
-*   Copyright (c) 2000-2004 Goran Devic                                       *
+*   Copyright (c) 2000-2005 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -240,7 +240,7 @@ int main(int argn, char *argp[])
 
     // Print the basic banner
     printf("\nLinice Debugger Symbol Translator/Loader Version %d.%d\n", LINSYMVER >> 8, LINSYMVER & 0xFF);
-    printf("Linice and Linsym (C) 2004 by Goran Devic. All Rights Reserved.\n\n");
+    printf("Linice and Linsym (C) 2005 by Goran Devic. All Rights Reserved.\n\n");
 
     // If there were no arguments, just print help and exit (help exits)
     if( argn==1 )

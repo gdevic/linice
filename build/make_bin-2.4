@@ -3,32 +3,34 @@
     ln -s bin-2.4 ../bin
 
     echo "+-----------------------------------------------------+"
-    echo "|                      LINICE                         |"
+    echo "| Building:  LINICE                                   |"
     echo "+-----------------------------------------------------+"
     cd ../linice
     make clean
     make
 
     echo "+-----------------------------------------------------+"
-    echo "|                      LINSYM                         |"
+    echo "| Building:  LINSYM                                   |"
     echo "+-----------------------------------------------------+"
     cd ../linsym
     make clean
     make
 
     echo "+-----------------------------------------------------+"
-    echo "|                      XICE                           |"
+    echo "| Building:  XICE                                     |"
     echo "+-----------------------------------------------------+"
     cd ../x
     make clean
     make
 
-    echo "+----------------------------------------------------------------------------+"
-    echo "| Symbolic link ../bin is created to lead to ../bin-2.4                      |"
-    echo "|                                                                            |"
-    echo "| From now on, you dont need to run this script to compile. Instead, compile |"
-    echo "| each component by running 'make' in their respective directory.            |"
-    echo "|                                                                            |"
-    echo "| Dont forget to run 'make clean' + 'make' in the /bin directory to create   |"
-    echo "| the final Linice module!                                                   |"
-    echo "+----------------------------------------------------------------------------+"
+    echo "+-----------------------------------------------------+"
+    echo "| Building:  FINAL KERNEL-DEPENDENT LINICE MODULE     |"
+    echo "+-----------------------------------------------------+"
+	cd ../bin
+	make clean
+	make
+
+    echo "+-----------------------------------------------------+"
+    echo "| Compilation of all components is complete. Change   |"
+	echo "| directory to ../bin and run linice.                 |"
+    echo "+-----------------------------------------------------+"

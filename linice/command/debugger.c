@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       04/31/00                                                      *
 *                                                                             *
-*   Copyright (c) 2000-2004 Goran Devic                                       *
+*   Copyright (c) 2000-2005 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -120,11 +120,7 @@ void DebuggerEnterBreak(void)
         deb.bpIndex = -1;                   // Reset the index to signal no breakpoint hit
 
         // Disarm all breakpoints and adjust counters.
-        // We dont need to disarm breakpoints if we are in the CPU trace mode
-
-        if( !deb.fTrace )
-            DisarmBreakpoints();
-
+        DisarmBreakpoints();
         {
             // Set the content variables used in debugging with symbols. We need this
             // context for the next few step and trace tests
@@ -242,10 +238,7 @@ P_RET_Continuation:
 T_count_continuation:
 
         // Arm all breakpoints
-        // We dont arm breakpoints if we are in the CPU trace mode
-
-        if( !deb.fTrace )
-            ArmBreakpoints();
+        ArmBreakpoints();
     }
 
     // If the fTrace signal flag is set, set it in the eflags register. This

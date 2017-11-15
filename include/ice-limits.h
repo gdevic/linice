@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       09/11/00                                                      *
 *                                                                             *
-*   Copyright (c) 2000-2004 Goran Devic                                       *
+*   Copyright (c) 2000-2005 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -71,7 +71,7 @@
 //  * source line width
 //  * print buffer
 //
-#define MAX_STRING          128
+#define MAX_STRING          160
 
 //////////////////////////////////////////////////////////////////////
 // Define number of command lines stored as a history that can be
@@ -166,6 +166,11 @@
 // Maximum number of arguments to the CALL command
 //
 #define MAX_CALL_ARGS       6
+
+//////////////////////////////////////////////////////////////////////
+// Number of data windows
+//
+#define MAX_DATA            4
 
 
 #endif //  _ICE_LIMITS_H_

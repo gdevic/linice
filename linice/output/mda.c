@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       04/22/02                                                      *
 *                                                                             *
-*   Copyright (c) 2002-2004 Goran Devic                                       *
+*   Copyright (c) 2002-2005 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -820,14 +820,16 @@ static void HercSprint(char *s)
 
             default:
                     // All printable characters
-                    HercPrintCharacter(outMda.x, outMda.y, c, mda.col);
-
-                    // Store it in the cache
-                    cacheText[outMda.y][outMda.x] = c;
-
-                    // Advance the print position
                     if( outMda.x < outMda.sizeX )
+                    {
+                        HercPrintCharacter(outMda.x, outMda.y, c, mda.col);
+
+                        // Store it in the cache
+                        cacheText[outMda.y][outMda.x] = c;
+
+                        // Advance the print position
                         outMda.x++;
+                    }
                 break;
         }
     }

@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       02/07/04                                                      *
 *                                                                             *
-*   Copyright (c) 2004 Goran Devic                                            *
+*   Copyright (c) 2004-2005 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -55,7 +55,8 @@
 
 extern BOOL FillStackList(DWORD dwEBP, DWORD dwEIP, BOOL fLocals);
 extern BOOL FillLocalScope(TLIST *List, TSYMFNSCOPE *pFnScope, DWORD dwEIP);
-extern void RecalculateWatch();
+extern void RecalculateWatch(void);
+extern void DataEvaluateDex(void);
 
 
 /******************************************************************************
@@ -530,6 +531,9 @@ void SetSymbolContext(WORD wSel, DWORD dwOffset)
             }
         }
     }
+
+    // Adjust data windows that depend on DEX expressions since they may depend on the context symbols
+    DataEvaluateDex();
 
     // Recalculate watch expressions that depend on context
 

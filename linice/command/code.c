@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       05/16/00                                                      *
 *                                                                             *
-*   Copyright (c) 2000-2004 Goran Devic                                       *
+*   Copyright (c) 2000-2005 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -215,7 +215,7 @@ static BYTE GetCodeLine(PTADDRDESC pAddr, BOOL fDecodeExtra, BOOL fTarget)
             if( fJump==FALSE )
                 sprintf(buf, "\r%c(no jump)", DP_RIGHTALIGN);
             else
-                sprintf(buf, "\r%c(jump %c)", DP_RIGHTALIGN, dis.dwTargetAddress < pAddr->offset? 24 : 25 ); // UP : DOWN
+                sprintf(buf, "\r%c(jump %s)", DP_RIGHTALIGN, dis.dwTargetAddress < pAddr->offset? "back" : "ahead" );
 
             strcat(sCodeLine, buf);
         }
@@ -223,7 +223,7 @@ static BYTE GetCodeLine(PTADDRDESC pAddr, BOOL fDecodeExtra, BOOL fTarget)
         // If the instruction is a simple jump, just print out the direction of jump
         if( (dis.bFlags & SCAN_MASK) == SCAN_JUMP )
         {
-            sprintf(buf, "\r%c(jump %c)", DP_RIGHTALIGN, dis.dwTargetAddress < pAddr->offset? 24 : 25 ); // UP : DOWN
+            sprintf(buf, "\r%c(jump %s)", DP_RIGHTALIGN, dis.dwTargetAddress < pAddr->offset? "back" : "ahead" );
 
             strcat(sCodeLine, buf);
         }
@@ -544,6 +544,20 @@ void CodeScrollLineUp(TDISASM *pDis)
     deb.codeTopAddr.offset -= bSizes[i-1];
 }
 
+/******************************************************************************
+*                                                                             *
+*   DWORD fnCodeAddr(DWORD arg)                                               *
+*                                                                             *
+*******************************************************************************
+*
+*   Expression evaluator helper function to return the address of the first
+*   instruction displayed in the code window.
+*
+******************************************************************************/
+DWORD fnCodeAddr(DWORD arg)
+{
+    return( deb.codeTopAddr.offset );
+}
 
 /******************************************************************************
 *                                                                             *
@@ -772,7 +786,7 @@ BOOL cmdEnterCode(char *args, int subClass)
             {
                 // Make a window visible and redraw whole screen
                 pWin->c.fVisible = TRUE;
-                RecalculateDrawWindows();
+                deb.fRedraw = TRUE;
             }
 
             deb.fCodeEdit = TRUE;

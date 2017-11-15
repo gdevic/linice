@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       05/23/2003                                                    *
 *                                                                             *
-*   Copyright (c) 1996-2004 Goran Devic                                       *
+*   Copyright (c) 2003-2005 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -164,6 +164,11 @@ int SimIoctl(int handle, int code, void *p)
     // Simulate IOCTL call to the device driver
 
     return( DriverIOCTL(NULL, NULL, code, p) );
+}
+
+char *getlogin(void)
+{
+    return("root");
 }
 
 /******************************************************************************

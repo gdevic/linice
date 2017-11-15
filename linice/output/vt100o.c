@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       05/01/00                                                      *
 *                                                                             *
-*   Copyright (c) 2000-2004 Goran Devic                                       *
+*   Copyright (c) 2000-2005 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -56,14 +56,16 @@
 
 TOUT outVT100 = {0};
 
+#define FONT_HLINE      0xCA            // Horizontal line (defined in font.h)
+
 /******************************************************************************
 *                                                                             *
 *   Local Defines, Variables and Macros                                       *
 *                                                                             *
 ******************************************************************************/
 
-#define VT100_MAX_X     80
-#define VT100_MAX_Y     24
+static UINT VT100_INIT_X = 80;          // Initial width
+static UINT VT100_INIT_Y = 24;          // Initial number of lines
 
 typedef struct                          // Define VT100 terminal structure
 {
@@ -142,8 +144,8 @@ int InitVT100(void)
 
     outVT100.x = 0;
     outVT100.y = 0;
-    outVT100.sizeX = VT100_MAX_X;
-    outVT100.sizeY = VT100_MAX_Y;
+    outVT100.sizeX = VT100_INIT_X;
+    outVT100.sizeY = VT100_INIT_Y;
     outVT100.sprint = SerialSprint;
     outVT100.mouse = SerialMouse;
     outVT100.resize = SerialResize;
@@ -166,9 +168,28 @@ int InitVT100(void)
 ******************************************************************************/
 static BOOL SerialResize(int x, int y, int nFont)
 {
-    dprinth(1, "Serial terminal has fixed size.");
+    if( x!=80 && x!=132 )
+    {
+        dprinth(1, "Serial terminal width has to be 80 or 132");
+        return( FALSE );
+    }
 
-    return( FALSE );
+    if( y!=24 && y!=25 && y!=48 && y!=50 )
+    {
+        dprinth(1, "Serial terminal number of lines has to be 24, 25, 48 or 50");
+        return( FALSE );
+    }
+
+    dputc(DP_RESTOREBACKGROUND);
+
+    // Set the new serial terminal size, and store that size as the default for
+    // the next time if we are switching to a terminal from some other device
+    outVT100.sizeX = VT100_INIT_X = x;
+    outVT100.sizeY = VT100_INIT_Y = y;
+
+    dputc(DP_SAVEBACKGROUND);
+
+    return( TRUE );
 }
 
 
@@ -323,7 +344,7 @@ static void SerialSprint(char *s)
 
             default:
                     // All printable characters with few exceptions:
-                    if( c==0xC4 )           // Horizontal line graphics character
+                    if( c==FONT_HLINE )     // Horizontal line graphics character
                         c = '-';
                     if( c>127 || c<32 )     // Non-ANSI characters
                         c = '.';
@@ -339,8 +360,13 @@ static void SerialSprint(char *s)
                         TVT.lastColor = TVT.col;
                     }
 
-                    SerialOut(c);
+                    if( outVT100.x < outVT100.sizeX )
+                    {
+                        SerialOut(c);
 
+                        // Advance the print position
+                        outVT100.x++;
+                    }
                 break;
         }
     }

@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       09/05/00                                                      *
 *                                                                             *
-*   Copyright (c) 2000-2004 Goran Devic                                       *
+*   Copyright (c) 2000-2005 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -197,6 +197,40 @@ BOOL OpenSystemMap(char *pSystemMap)
 
 /******************************************************************************
 *                                                                             *
+*   BOOL IsRootUser(void)                                                     *
+*                                                                             *
+*******************************************************************************
+*
+*   Checks if the current user running this command is a "root" user.
+*   Since this command is only called from the places where we have to be
+*   a root user to continue, we print out an error message if not root.
+*
+*   Returns:
+*       TRUE - the user is root
+*       FALSE - the user is NOT root
+*
+******************************************************************************/
+BOOL IsRootUser(void)
+{
+    // We require for either the login name or the USER environment variable to be 'root'
+
+    VERBOSE1 printf("getlogin()=%s\n", getlogin());
+    VERBOSE1 printf("USER      =%s\n", getenv("USER"));
+
+    if( !strcmp("root", getlogin()) || !strcmp(getenv("USER"), "root") )
+        return( TRUE );
+
+    // Print the error message since we will return FALSE and quit the command
+
+    fprintf(stderr, "You have to be a root user in order to run this command!\n");
+    fprintf(stderr, "(If you did use the 'su' command, try using the 'su -' format instead.)\n");
+
+    return( FALSE );
+}
+
+
+/******************************************************************************
+*                                                                             *
 *   BOOL GetSymbolExports(void)                                               *
 *                                                                             *
 *******************************************************************************
@@ -350,6 +384,9 @@ BOOL OptInstall(char *pSystemMap)
     TINITPACKET Init;
     int nLine, i;
 
+    // Only the root user may install the module
+    if( !IsRootUser() )
+        return( FALSE );
 
     // Initialization: zero out the init packet
     memset(&Init, 0, sizeof(TINITPACKET));
@@ -388,6 +425,8 @@ BOOL OptInstall(char *pSystemMap)
     fp = fopen("linice.dat", "r");
     if( fp==NULL )
     {
+        VERBOSE1 printf("Looking for linice.dat in /etc");
+
         // Look in the /etc directory
         fp = fopen("/etc/linice.dat", "r");
         if( fp==NULL )
@@ -591,6 +630,11 @@ BOOL OptInstall(char *pSystemMap)
     // Scan system map file for some symbols that we need to send to linice
     if( GetSymbolExports() )
     {
+        // In order to do "insmod" with the module name, we need to know where to
+        // find it (user might called linsym from any directory). Environment variable
+        // LINICE should be set to the 'bin' of the linice built module IF the linsym
+        // is not being executed from the default place (bin).
+
         // Load the linice.o device driver module:
         //  -x   do not export externs
         //  -f   force load even if kernel version does not match
@@ -608,7 +652,16 @@ BOOL OptInstall(char *pSystemMap)
 
         VERBOSE2 printf("%s\n", sLine);
 
-        status = system2(sLine);
+        status = system2(sLine);        // Execute the module load...
+
+        // If failed on a first try, change the directory to the environment LINICE and retry
+        if( status && getenv("LINICE") )
+        {
+            VERBOSE2 printf("Using environment variable LINICE = %s\n", getenv("LINICE"));
+            chdir(getenv("LINICE"));    // Change directory to it
+
+            status = system2(sLine);        // Try the module load again...
+        }
 
         // insmod must return 0 to load module correctly
         if( status==0 )
@@ -636,8 +689,21 @@ BOOL OptInstall(char *pSystemMap)
 
             system2("rmmod linice");
         }
+        else
+        {   // We could not load linice module!
+            fprintf(stderr, "Error loading linice module!\n\n");
+        }
+        VERBOSE2 printf("system(insmod()) returns %d\n", status);
 
-        fprintf(stderr, "Error (%d) loading linice module!\n", status);
+        fprintf(stderr, "Possible causes are:\n");
+        fprintf(stderr, "  * /dev/ice exists (delete it)\n");
+        fprintf(stderr, "  * Not calling Linsym from the default Linice directory (its 'bin') -\n");
+        fprintf(stderr, "    Set the environment variable LINICE with the path to that directory:\n");
+        fprintf(stderr, "    Example:  export LINICE=/usr/src/linice/bin\n");
+        fprintf(stderr, "  * Linice did not compile correctly so the module does not exist\n");
+        fprintf(stderr, "  * Your Symbol.map file is not correct (use option -m <map>)\n");
+        fprintf(stderr, "\n");
+
     }
     else
     {
@@ -667,50 +733,54 @@ void OptUninstall()
     int hIce;
     int status;
 
-    // Send the exit ioctl to the driver so it can decrement possibly
-    // multiple usage count to only 1 (useful when loader crashes)
-    hIce = open("/dev/"DEVICE_NAME, O_RDONLY);
-    if( hIce>=0 )
+    // Only the root user may remove the module
+    if( IsRootUser() )
     {
-        // Send the EXIT message to the Linice, so it can release its hooks
-        status = ioctl(hIce, ICE_IOCTL_EXIT, 0);
-        close(hIce);
-
-        // If there are still any extension modules loaded, we cannot unload
-        // since the modules are linked to us and wont let us unload cleanly.
-
-        // Value of 1 for status is the special signal from Linice driver
-        if( status != 1 )
+        // Send the exit ioctl to the driver so it can decrement possibly
+        // multiple usage count to only 1 (useful when loader crashes)
+        hIce = open("/dev/"DEVICE_NAME, O_RDONLY);
+        if( hIce>=0 )
         {
-            // Unload the linice.o device driver module
-            status = system2("rmmod linice");
+            // Send the EXIT message to the Linice, so it can release its hooks
+            status = ioctl(hIce, ICE_IOCTL_EXIT, 0);
+            close(hIce);
 
-            // rmmod must return 0 when uninstalling a module correctly
-            if( status != 0 )
+            // If there are still any extension modules loaded, we cannot unload
+            // since the modules are linked to us and wont let us unload cleanly.
+
+            // Value of 1 for status is the special signal from Linice driver
+            if( status != 1 )
             {
-                // If we cannot unload linice because it crashed, use the
-                // last resort and try to force unload it
+                // Unload the linice.o device driver module
+                status = system2("rmmod linice");
 
-                hIce = open("/dev/"DEVICE_NAME, O_RDONLY);
-                if( hIce>=0 )
+                // rmmod must return 0 when uninstalling a module correctly
+                if( status != 0 )
                 {
-                    VERBOSE1 printf("Forcing unload...\n");
+                    // If we cannot unload linice because it crashed, use the
+                    // last resort and try to force unload it
 
-                    status = ioctl(hIce, ICE_IOCTL_EXIT_FORCE, 0);
-                    close(hIce);
+                    hIce = open("/dev/"DEVICE_NAME, O_RDONLY);
+                    if( hIce>=0 )
+                    {
+                        VERBOSE1 printf("Forcing unload...\n");
 
-                    // Theoretically, by now our bad module count is reset back to 0...
+                        status = ioctl(hIce, ICE_IOCTL_EXIT_FORCE, 0);
+                        close(hIce);
 
-                    // Unload the linice.o device driver module
-                    status = system2("rmmod linice");
+                        // Theoretically, by now our bad module count is reset back to 0...
+
+                        // Unload the linice.o device driver module
+                        status = system2("rmmod linice");
+                    }
                 }
-            }
 
-            printf("Linice uninstalled.\n");
+                printf("Linice uninstalled.\n");
+            }
+            else
+                fprintf(stderr, "One or more Linice extension modules are still loaded. Unload them first!\n");
         }
         else
-            fprintf(stderr, "One or more Linice extension modules are still loaded. Unload them first!\n");
+            fprintf(stderr, "Cannot communicate with the Linice module! Is Linice installed?\n");
     }
-    else
-        fprintf(stderr, "Cannot communicate with the Linice module! Is Linice installed?\n");
 }

@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       12/01/00                                                      *
 *                                                                             *
-*   Copyright (c) 2000-2004 Goran Devic                                       *
+*   Copyright (c) 2000-2005 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -337,14 +337,14 @@ DoSearch:
                         dprinth(1, "PATTERN FOUND AT %04X:%08X", Addr.sel, Addr.offset - matching);
 
                         // Open the data window if it is closed
-                        if( pWin->d.fVisible==FALSE )
+                        if( pWin->data[deb.nData].fVisible==FALSE )
                         {
-                            pWin->d.fVisible = TRUE;
+                            pWin->data[deb.nData].fVisible = TRUE;
                             RecalculateDrawWindows();
                         }
 
                         // Point the data window to the search address
-                        DataDraw(FALSE, Addr.offset - matching);
+                        DataDraw(FALSE, Addr.offset - matching, TRUE);
 
                         break;
                     }

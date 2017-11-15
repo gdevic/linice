@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       09/11/00                                                      *
 *                                                                             *
-*   Copyright (c) 2000-2004 Goran Devic                                       *
+*   Copyright (c) 2000-2005 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -86,7 +86,10 @@ enum
     ERR_BPLINE,
 
     ERR_TOO_COMPLEX,
-    ERR_TOO_BIG,
+    ERR_TOO_BIG_DEC,
+    ERR_TOO_BIG_HEX,
+    ERR_TOO_BIG_BIN,
+    ERR_TOO_BIG_OCT,
     ERR_NOTAPOINTER,
     ERR_ELEMENTNOTFOUND,
     ERR_ADDRESS,
@@ -94,6 +97,9 @@ enum
     ERR_NOTARRAY,
 
     ERR_SELECTOR,
+    ERR_DATAWIN,
+    ERR_NOEA,
+    ERR_INVADDRESS,
 
 };
 

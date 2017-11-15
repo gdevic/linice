@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       10/21/00                                                      *
 *                                                                             *
-*   Copyright (c) 2000-2004 Goran Devic                                       *
+*   Copyright (c) 2000-2005 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -825,7 +825,7 @@ BOOL cmdFile(char *args, int subClass)
                             deb.codeFileTopLine = 1;        // Display at the first source line
                             deb.codeFileXoffset = 0;        // Reset the X offset
 
-                            RecalculateDrawWindows();
+                            deb.fRedraw = TRUE;
 
                             return( TRUE );
                         }
@@ -969,11 +969,11 @@ static char *SymAddress2Function(DWORD dwOffset, UINT *pRange)
 
 /******************************************************************************
 *                                                                             *
-*   char *SymAddress2Global(DWORD dwOffset, UINT *pRange)                     *
+*   char *SymAddress2Static(DWORD dwOffset, UINT *pRange)                     *
 *                                                                             *
 *******************************************************************************
 *
-*   Returns the symbol name associated with a current global function of ANY
+*   Returns the symbol name associated with a current static function of ANY
 *   loaded symbol table.
 *
 *   Where:
@@ -1006,8 +1006,8 @@ static char *SymAddress2Static(DWORD dwOffset, UINT *pRange)
                 // With static symbols, we dont have a range value
                 if( dwOffset == pStatic->list[i].dwAddress )
                 {
-                    if( pRange )        // Only strict match
-                        *pRange = 0;
+                    if( pRange )        // Only strict match because we dont know the size
+                        *pRange = 0;    // of the static object
 
                     return( pStatic->list[i].pName );
                 }
@@ -1021,7 +1021,6 @@ static char *SymAddress2Static(DWORD dwOffset, UINT *pRange)
 
     return( NULL );
 }
-
 
 /******************************************************************************
 *                                                                             *
@@ -1051,8 +1050,10 @@ static char *SymAddress2Kernel(DWORD dwOffset, UINT *pRange)
     UINT minRange = 0;                  // Default minimum range
     char *pMinName = NULL;              // Default minimum name
 
+#define SYM_KERNEL_RANGE        8192    // Will consider symbols within this max. range
+
     if( pRange )
-        minRange = 2048;                // Extend the range if required
+        minRange = SYM_KERNEL_RANGE;    // Extend the range if required
 
     // Get the pointer to the module structure
     pmodule = ice_get_module(NULL, &Mod);
@@ -1099,7 +1100,6 @@ static char *SymAddress2Kernel(DWORD dwOffset, UINT *pRange)
             minRange = dwOffset - (UINT)Mod.cleanup;
             pMinName = "cleanup_module";
         }
-
 
         // If we have found a satisfactory minimal range, return it
         if( pMinName )

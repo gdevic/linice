@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       09/11/00                                                      *
 *                                                                             *
-*   Copyright (c) 1997-2004 Goran Devic                                       *
+*   Copyright (c) 1997-2005 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -130,7 +130,7 @@ void dputc(UCHAR c)
 ******************************************************************************/
 int PrintLine(char *format,...)
 {
-    char printBuf[MAX_STRING+3];
+    char printBuf[MAX_OUTPUT_SIZEX+6];
     char *pBuf;
     int written;
     va_list arg;
@@ -151,11 +151,12 @@ int PrintLine(char *format,...)
     va_end(arg);
 
     // Let the line expand into the whole buffer that we spaced
-    pBuf[4+written] = ' ';
+    pBuf[4+written] = ' ';      // This zaps the trailing '0' written by ivsprintf()
 
-    // Terminate the buffer string
-    pBuf[pOut->sizeX]   = '\n';
-    pBuf[pOut->sizeX+1] = 0;
+    // Terminate the buffer string, add 4 extra chars to accomodate data window
+    // line extra color sequences
+    pBuf[pOut->sizeX + 4]   = '\n';
+    pBuf[pOut->sizeX + 5] = 0;
 
     // Change spaces into a graphics line character
     while( *pBuf )
@@ -269,8 +270,8 @@ BOOL dprinth( int nLineCount, char *format, ... )
             // Move cursor to a new line
             dprint("\n");
 
-            // If ESC was pressed in any case, abort
-            if( Key==ESC )
+            // If ESC or 'q' was pressed in any case, abort
+            if( Key==ESC || Key=='q' || Key=='Q' )
                 return(FALSE);
         }
         else

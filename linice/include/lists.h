@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       02/04/2003                                                    *
 *                                                                             *
-*   Copyright (c) 2003-2004 Goran Devic                                       *
+*   Copyright (c) 2003-2005 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -92,6 +92,13 @@ typedef struct
 #define LIST_ID_STACK       0x02        // Stack list
 #define LIST_ID_EXPRESSION  0x03        // Expression query
 #define LIST_ID_TYPE        0x04        // Typedef query (no evaluation needed)
+
+
+// Define generic purpose previous and next counters
+
+#define PREV(value, max)        (((value)==0)? (max)-1:(value)-1)
+#define NEXT(value, max)        ((value)+1>=max? 0:((value)+1))
+
 
 /******************************************************************************
 *                                                                             *

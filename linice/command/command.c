@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       09/11/00                                                      *
 *                                                                             *
-*   Copyright (c) 2000-2004 Goran Devic                                       *
+*   Copyright (c) 2000-2005 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -93,6 +93,7 @@ extern BOOL cmdHboot        (char *args, int subClass);      // flow.c
 extern BOOL cmdHalt         (char *args, int subClass);      // flow.c
 extern BOOL cmdCall         (char *args, int subClass);      // flow.c
 extern BOOL cmdWd           (char *args, int subClass);      // windowcontrol.c
+extern BOOL cmdData         (char *args, int subClass);      // windowcontrol.c
 extern BOOL cmdWc           (char *args, int subClass);      // windowcontrol.c
 extern BOOL cmdWr           (char *args, int subClass);      // windowcontrol.c
 extern BOOL cmdWs           (char *args, int subClass);      // windowcontrol.c
@@ -125,6 +126,7 @@ extern BOOL cmdPeek         (char *args, int subClass);      // page.c
 extern BOOL cmdPoke         (char *args, int subClass);      // page.c
 extern BOOL cmdPci          (char *args, int subClass);      // pci.c
 extern BOOL cmdDdump        (char *args, int subClass);      // data.c
+extern BOOL cmdDex          (char *args, int subClass);      // data.c
 extern BOOL cmdEdit         (char *args, int subClass);      // data.c
 extern BOOL cmdFormat       (char *args, int subClass);      // data.c
 extern BOOL cmdUnasm        (char *args, int subClass);      // code.c
@@ -180,9 +182,9 @@ TCommand Cmd[] = {
 {    "COLOR",    5, 0, cmdColor,       "COLOR [normal bold reverse help line | - ]", "ex: COLOR 30 3E 1F 1E 34", 0 },
 {    "CPU",      3, 0, cmdCpu,         "CPU [s | r]", "ex: CPU", 0 },
 {    "D",        1, 0, cmdDdump,       "D [address [L length]]", "ex: D B0000",   0 },
-//{  "DATA",     4, 0, Unsupported,    "DATA [window-number(0-3)]", "ex: DATA 2", 0 },
+{    "DATA",     4, 0, cmdData,        "DATA [data-window-number]", "ex: DATA 2", 0 },
 //{  "DEVICE",   6, 0, Unsupported,    "DEVICE [device-name | address]", "ex: DEVICE /dev/hda",   0 },
-//{  "DEX",      3, 0, Unsupported,    "DEX [window-number(0-3)] [expression]", "ex: DEX 2 esp",  0 },
+{    "DEX",      3, 0, cmdDex,         "DEX [[data-window-number] expression]", "ex: DEX 2 esp",  0 },
 {    "DB",       2, 1, cmdDdump,       "DB [address [L length]]", "ex: DB ESI+EBX",   0 },
 {    "DD",       2, 4, cmdDdump,       "DD [address [L length]]", "ex: DD EBX+133",   0 },
 {    "DW",       2, 2, cmdDdump,       "DW [address [L length]]", "ex: DW EDI",   0 },
@@ -198,7 +200,7 @@ TCommand Cmd[] = {
 {    "FKEY",     4, 0, cmdFkey,        "FKEY [function-key string]", "ex: FKEY F1 DD ESP; G @ESP",    0 },
 {    "FLASH",    5, 0, cmdFlash,       "FLASH [ON | OFF]", "ex: FLASH ON",    0 },
 {    "FORMAT",   6, 0, cmdFormat,      "FORMAT Change format of data window", "ex: FORMAT",   0 },
-{    "G",        1, 0, cmdGo,          "G [=address] [address]", "ex: G 231456",  0 },
+{    "G",        1, 0, cmdGo,          "G [=start address] [end address]", "ex: G 231456",  0 },
 {    "GDT",      3, 0, cmdGdt,         "GDT [selector | GDT base-address]", "ex: GDT 28", 0 },
 //{  "GENINT",   6, 0, Unsupported,    "GENINT [NMI | INT1 | INT3 | int-number]", "ex: GENINT 2", 0 },
 {    "H",        1, 0, cmdHelp,        "Help [command]", "ex: H R",  0 },
@@ -327,7 +329,7 @@ char *sHelp[] = {
    "VER    - Linice version",
    "WATCH  - Add watch variable",
    "FORMAT - Change format of data window",
-/* "DATA   - Change data window", */
+   "DATA   - Change data window",
    " DISPLAY SYSTEM INFORMATION",
    "GDT    - Display global descriptor table",
    "LDT    - Display local descriptor table",
@@ -375,7 +377,7 @@ char *sHelp[] = {
    "PAUSE  - Controls display scroll mode",
    "ALTKEY - Set key sequence to invoke window",
    "FKEY   - Display/set function keys",
-/* "DEX    - Display/assign window data expressions", */
+   "DEX    - Display/assign window data expressions",
    "CODE   - Display instruction bytes in code window",
    "COLOR  - Display/set screen colors",
    "TABS   - Set/display tab settings",

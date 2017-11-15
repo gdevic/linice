@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       09/11/00                                                      *
 *                                                                             *
-*   Copyright (c) 1997-2004 Goran Devic                                       *
+*   Copyright (c) 1997-2005 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -81,21 +81,27 @@ static void AdjustTopBottom(PTFRAME pFrame)
 static void AdjustToFit(int excess)
 {
     int newSize;
+    int window;                         // Data window number
     int active = 0;
 
+    // Count how many windows are visible, so we can decide on the size(s)
     if( pWin->r.fVisible )  active++;
     if( pWin->l.fVisible )  active++;
     if( pWin->w.fVisible )  active++;
     if( pWin->s.fVisible )  active++;
-    if( pWin->d.fVisible )  active++;
+    for(window=0; window<MAX_DATA; window++)
+        if( pWin->data[window].fVisible )active++;
     if( pWin->c.fVisible )  active++;
 
     newSize = (pOut->sizeY - 5) / (active + 1);
 
+    // Evenly distribute windows across the sceeen
     if( pWin->l.fVisible )  pWin->l.nLines = newSize;
     if( pWin->w.fVisible )  pWin->w.nLines = newSize;
     if( pWin->s.fVisible )  pWin->s.nLines = newSize;
-    if( pWin->d.fVisible )  pWin->d.nLines = newSize;
+    for(window=0; window<MAX_DATA; window++)
+        if( pWin->data[window].fVisible )
+            pWin->data[window].nLines = newSize;
     if( pWin->c.fVisible )  pWin->c.nLines = newSize;
 
     pWin->h.nLines = 0;         // This one will be adjusted later
@@ -118,6 +124,8 @@ static void AdjustToFit(int excess)
 ******************************************************************************/
 int WindowIsSizeValid()
 {
+    int window;                         // Data window number
+
     // Add 4 lines for help, history (2) and history header line
     int less = pOut->sizeY - 4;
 
@@ -125,7 +133,9 @@ int WindowIsSizeValid()
     if( pWin->l.fVisible )  less -= pWin->l.nLines;
     if( pWin->w.fVisible )  less -= pWin->w.nLines;
     if( pWin->s.fVisible )  less -= pWin->s.nLines;
-    if( pWin->d.fVisible )  less -= pWin->d.nLines;
+    for(window=0; window<MAX_DATA; window++)
+        if( pWin->data[window].fVisible )
+            less -= pWin->data[window].nLines;
     if( pWin->c.fVisible )  less -= pWin->c.nLines;
 
     return( less );
@@ -144,7 +154,9 @@ int WindowIsSizeValid()
 ******************************************************************************/
 void RecalculateDrawWindows()
 {
-    int excess;
+    int excess;                         // Available number of lines
+    int window;                         // Data window number
+    UINT current;                       // Current data window store
 
     avail = pOut->sizeY;
     total = 0;
@@ -156,7 +168,8 @@ void RecalculateDrawWindows()
     AdjustTopBottom(&pWin->l);
     AdjustTopBottom(&pWin->w);
     AdjustTopBottom(&pWin->s);
-    AdjustTopBottom(&pWin->d);
+    for(window=0; window<MAX_DATA; window++)
+        AdjustTopBottom(&pWin->data[window]);
     AdjustTopBottom(&pWin->c);
 
     // The last one is the history window, and we will let it fill in the rest
@@ -179,7 +192,12 @@ void RecalculateDrawWindows()
         LocalsDraw(FALSE);
         WatchDraw(FALSE);
         StackDraw(FALSE);
-        DataDraw(FALSE, deb.dataAddr.offset);
+
+        current = deb.nData;
+        for(deb.nData=0; deb.nData<MAX_DATA; deb.nData++)
+            DataDraw(FALSE, deb.dataAddr[deb.nData].offset, (deb.nData==current));
+        deb.nData = current;
+
         CodeDraw(FALSE);
         HistoryDraw();
 

@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       03/09/02                                                      *
 *                                                                             *
-*   Copyright (c) 2000-2004 Goran Devic                                       *
+*   Copyright (c) 2000-2005 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -95,7 +95,10 @@ static TERROR Errors[] =
     { ERR_BPLINE,          "Selected line contains no effective code"   },
 
     { ERR_TOO_COMPLEX,     "Expression too complex"                     },
-    { ERR_TOO_BIG,         "Number (hex) too large"                     },
+    { ERR_TOO_BIG_DEC,     "Number (dec) too large"                     },
+    { ERR_TOO_BIG_HEX,     "Number (hex) too large"                     },
+    { ERR_TOO_BIG_BIN,     "Number (binary) too large"                  },
+    { ERR_TOO_BIG_OCT,     "Number (octal) too large"                   },
     { ERR_NOTAPOINTER,     "Expression value is not a pointer"          },
     { ERR_ELEMENTNOTFOUND, "Structure/union element not found"          },
     { ERR_ADDRESS,         "Expecting value, not address"               },
@@ -103,10 +106,12 @@ static TERROR Errors[] =
     { ERR_NOTARRAY,        "Subscript of a non array"                   },
 
     { ERR_SELECTOR,        "Invalid selector 0x%04X"                    },
+    { ERR_DATAWIN,         "Invalid data window number"                 },
+    { ERR_NOEA,            "No effective address"                       },
+    { ERR_INVADDRESS,      "Invalid Address"                            },
 
     { 0, NULL }             // Terminating entry has NULL pointer to string
 };
-
 
 
 /******************************************************************************

@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       04/27/2000                                                    *
 *                                                                             *
-*   Copyright (c) 2000-2004 Goran Devic                                       *
+*   Copyright (c) 2000-2005 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -147,8 +147,11 @@ typedef struct
     TLIST Local;                        // Locals window data list
     TLIST Stack;                        // Stack window data list
 
-    UINT nDumpSize;                     // Last Dx dump value size
-    TADDRDESC dataAddr;                 // Data - current display address
+    UINT nData;                         // Current data window (selected active)
+    UINT nDumpSize[MAX_DATA];           // Last Dx dump value size for each data window
+    TADDRDESC dataAddr[MAX_DATA];       // Data window - current display address
+    char Dex[MAX_DATA][MAX_STRING];     // Data window expressions
+    BOOL DexError[MAX_DATA];            // Data expression evaluation resulted in error
 
     UINT errorCode;                     // Error code
     UINT errorParam;                    // Optional parameter to an error message
@@ -228,7 +231,7 @@ typedef struct
     TFRAME l;                           // Locals window frame
     TFRAME s;                           // Stack window frame
     TFRAME w;                           // Watch window frame
-    TFRAME d;                           // Data window frame
+    TFRAME data[MAX_DATA];              // All data window frames
     TFRAME c;                           // Code window frame
     TFRAME h;                           // Command (history) window frame
 
@@ -332,7 +335,7 @@ extern void RegDraw(BOOL fForce);
 extern void LocalsDraw(BOOL fForce);
 extern void WatchDraw(BOOL fForce);
 extern void StackDraw(BOOL fForce);
-extern void DataDraw(BOOL fForce, DWORD newOffset);
+extern void DataDraw(BOOL fForce, DWORD newOffset, BOOL fCurrent);
 extern void CodeDraw(BOOL fForce);
 extern void RecalculateDrawWindows();
 
@@ -381,6 +384,7 @@ extern BOOL GlobalReadBYTE(BYTE *pByte, DWORD dwAddress);
 extern BOOL Expression(DWORD *value, char *sExpr, char **psNext );
 extern WORD evalSel;               // Selector result of the expression (optional)
 extern DWORD GetDec(char **psString);
+extern BOOL GetDecB(UINT *pValue, char **ppString);
 extern BOOL EOL(char **ppArg);
 
 extern int GetOnOff(char *args);

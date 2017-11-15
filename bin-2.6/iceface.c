@@ -4,7 +4,7 @@
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
-*   Copyright © 2004 by Goran Devic.  All rights reserved.                    *
+*   Copyright © 2005 by Goran Devic.  All rights reserved.                    *
 *                                                                             *
 *   This program is free software; you can redistribute it and/or modify      *
 *   it under the terms of the GNU General Public License as published by      *

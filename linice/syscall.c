@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       12/20/01                                                      *
 *                                                                             *
-*   Copyright (c) 2000-2004 Goran Devic                                       *
+*   Copyright (c) 2000-2005 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -55,6 +55,7 @@
 ******************************************************************************/
 
 extern void ArmDebugReg(int nDr, TADDRDESC Addr);
+extern void BreakpointDisableRange(DWORD dwStartAddress, UINT size);
 extern TSYMTAB *SymTabFind(char *name, BYTE SymTableType);
 extern BOOL SymTabSetupRelocOffset(TSYMTAB *pSymTab, DWORD dwInitModule, DWORD dwInitModuleSample);
 extern void SymTabRelocate(TSYMTAB *pSymTab, int factor);
@@ -133,7 +134,7 @@ void SyscallExecveHook(DWORD OrigRet, struct pt_regs regs)
 asmlinkage int SyscallInitModule(const char *name, void *image)
 {
     TSYMTAB *pSymTab;                   // Pointer to internal symbol table
-    int retval;
+    int retval;                         // Function return value variable
     TADDRDESC Addr;                     // Address descriptor
     DWORD dwInitModule, dwSampleBase;   // Relocation helper variables
     TMODULE Mod;                        // Module information structure
@@ -208,7 +209,7 @@ asmlinkage int SyscallInitModule(const char *name, void *image)
             SymTabRelocate(pSymTab, -1);
         }
 
-        dprinth(1, "SYSCALL: init_module failed with error code=%d", retval);
+        dprinth(1, "SYSCALL: init_module failed with error code %d", retval);
     }
 
     return( retval );
@@ -217,7 +218,8 @@ asmlinkage int SyscallInitModule(const char *name, void *image)
 
 asmlinkage int SyscallDeleteModule(const char *name)
 {
-    TSYMTAB *pSymTab;
+    TSYMTAB *pSymTab;                   // Pointer to internal symbol table
+    TMODULE Mod;                        // Module information structure
     int retval = -1;                    // By default assume error
 
     if( deb.fSyscall )
@@ -235,18 +237,17 @@ asmlinkage int SyscallDeleteModule(const char *name)
     }
     else
     {
+        // Find the module descriptor. We are not concerned if this fails since
+        // user probably called to unload a nonexisting module.
+        FindModule(&Mod, (char *) name, strlen(name));
+
         // Call the original delete_module
         retval = sys_delete_module(name);
 
         if( retval==0 )
         {
-            // TODO: If we had any breakpoints placed within this module, we need to disable them
-
-
-
-
-
-
+            // Cleanup module succeeded; delete all breakpoints placed within this module
+            BreakpointDisableRange((DWORD) Mod.pmodule, Mod.size);
 
             // Module has been deleted from the kernel space. We need to find
             // if we had a symbol table mapped to it so we can revert the relocation
@@ -261,7 +262,7 @@ asmlinkage int SyscallDeleteModule(const char *name)
         }
         else
         {
-            dprinth(1, "SYSCALL: delete_module returned nonzero! (%d)", retval);
+            dprinth(1, "SYSCALL: delete_module failed with error code %d", retval);
         }
     }
 

@@ -73,41 +73,141 @@
 
 /******************************************************************************
 *                                                                             *
+*   BOOL cmdData(char *args, int subClass)                                    *
+*                                                                             *
+*******************************************************************************
+*
+*   DATA        - opens next sequential data window, switch to the next data
+*                 window if all are open
+*   DATA [n]    - opens (if it is not open) and switch to that data window
+*
+******************************************************************************/
+BOOL cmdData(char *args, int subClass)
+{
+    UINT window;                        // Optional data window number
+
+    if( *args )
+    {
+        if( GetDecB(&window, &args) && !*args )
+        {
+            if( window < MAX_DATA )
+            {
+                deb.nData = window;
+
+                pWin->data[deb.nData].fVisible = TRUE;
+            }
+            else
+                PostError(ERR_DATAWIN, 0);
+        }
+        else
+            PostError(ERR_SYNTAX, 0);
+    }
+    else
+    {
+        // No arguments - open and switch to the next sequential data window
+
+        if( pWin->data[deb.nData].fVisible==TRUE )
+        {
+            // Open the next one and switch to it
+
+            deb.nData = (deb.nData + 1) % MAX_DATA;
+        }
+
+        pWin->data[deb.nData].fVisible = TRUE;
+    }
+
+    deb.fRedraw = TRUE;
+
+    return( TRUE );
+}
+
+
+/******************************************************************************
+*                                                                             *
 *   BOOL cmdWd(char *args, int subClass)                                      *
 *                                                                             *
 *******************************************************************************
 *
-*   WD          - toggle data window on/off
+*   WD          - toggle current data window on/off
 *   WD [n]      - sets the data window size (and opens it)
+*
+*   WD.#        - toggle the state of the data window number #
+*   WD.# [n]    - sets the data window number # size (and opens it)
 *
 ******************************************************************************/
 BOOL cmdWd(char *args, int subClass)
 {
+    UINT window;                        // Optional data window number
     int value;
+
+    // Get the optional data window number, otherwise use the current window
+    window = deb.nData;
+
+    if( *args && *args=='.' )           // Syntax is WD.#
+    {
+        args++;                         // Advance to the data window number
+        if( GetDecB(&window, &args) )
+        {
+            if( window < MAX_DATA )
+            {
+                deb.nData = window;
+
+                while( *args==' ' ) *args++;    // Skip optional spaces
+            }
+            else
+            {
+                PostError(ERR_DATAWIN, 0);
+                return( TRUE );
+            }
+        }
+        else
+        {
+            PostError(ERR_SYNTAX, 0);
+            return( TRUE );
+        }
+    }
 
     if( *args )
     {
         // Argument is present - get the number of lines and activate window
-        value = GetDec(&args);
-
-        // If the number of lines was 0, close window
-        if( value==0 )
-            pWin->d.fVisible = FALSE;
-        else
+        if( GetDecB(&value, &args) && !*args )
         {
-            pWin->d.fVisible = TRUE;
-            pWin->d.nLines = value + 1;
+            // If the number of lines was 0, close window
+            if( value==0 )
+                pWin->data[deb.nData].fVisible = FALSE;
+            else
+            {
+                pWin->data[deb.nData].fVisible = TRUE;
+                pWin->data[deb.nData].nLines = value + 1;
+            }
         }
+        else
+            PostError(ERR_SYNTAX, 0);
     }
     else
     {
         // No arguments - toggle open/close window
 
-        pWin->d.fVisible = !pWin->d.fVisible;
+        pWin->data[deb.nData].fVisible = !pWin->data[deb.nData].fVisible;
     }
 
-    // Repaint all windows
-    RecalculateDrawWindows();
+    // If the current window was just closed, move the 'current' to the previous one opened
+    if( !pWin->data[deb.nData].fVisible )
+    {
+        for(window=PREV(deb.nData, MAX_DATA); window!=deb.nData; window = PREV(window, MAX_DATA))
+        {
+            if( pWin->data[window].fVisible==TRUE )
+                break;
+        }
+
+        // If we did not find any open window, set up the data window number 0
+        if( window==deb.nData )
+            deb.nData = 0;
+        else
+            deb.nData = window;
+    }
+
+    deb.fRedraw = TRUE;
 
     return( TRUE );
 }
@@ -130,16 +230,19 @@ BOOL cmdWc(char *args, int subClass)
     if( *args )
     {
         // Argument is present - get the number of lines and activate window
-        value = GetDec(&args);
-
-        // If the number of lines was 0, close window
-        if( value==0 )
-            pWin->c.fVisible = FALSE;
-        else
+        if( GetDecB(&value, &args) && !*args )
         {
-            pWin->c.fVisible = TRUE;
-            pWin->c.nLines = value + 1;
+            // If the number of lines was 0, close window
+            if( value==0 )
+                pWin->c.fVisible = FALSE;
+            else
+            {
+                pWin->c.fVisible = TRUE;
+                pWin->c.nLines = value + 1;
+            }
         }
+        else
+            PostError(ERR_SYNTAX, 0);
     }
     else
     {
@@ -163,9 +266,7 @@ BOOL cmdWc(char *args, int subClass)
                 deb.nCodeEditY = pWin->c.nLines-2;
         }
     }
-
-    // Repaint all windows
-    RecalculateDrawWindows();
+    deb.fRedraw = TRUE;
 
     return( TRUE );
 }
@@ -188,16 +289,19 @@ BOOL cmdWl(char *args, int subClass)
     if( *args )
     {
         // Argument is present - get the number of lines and activate window
-        value = GetDec(&args);
-
-        // If the number of lines was 0, close window
-        if( value==0 )
-            pWin->l.fVisible = FALSE;
-        else
+        if( GetDecB(&value, &args) && !*args )
         {
-            pWin->l.fVisible = TRUE;
-            pWin->l.nLines = value + 1;
+            // If the number of lines was 0, close window
+            if( value==0 )
+                pWin->l.fVisible = FALSE;
+            else
+            {
+                pWin->l.fVisible = TRUE;
+                pWin->l.nLines = value + 1;
+            }
         }
+        else
+            PostError(ERR_SYNTAX, 0);
     }
     else
     {
@@ -205,9 +309,7 @@ BOOL cmdWl(char *args, int subClass)
 
         pWin->l.fVisible = !pWin->l.fVisible;
     }
-
-    // Repaint all windows
-    RecalculateDrawWindows();
+    deb.fRedraw = TRUE;
 
     return( TRUE );
 }
@@ -230,16 +332,19 @@ BOOL cmdWs(char *args, int subClass)
     if( *args )
     {
         // Argument is present - get the number of lines and activate window
-        value = GetDec(&args);
-
-        // If the number of lines was 0, close window
-        if( value==0 )
-            pWin->s.fVisible = FALSE;
-        else
+        if( GetDecB(&value, &args) && !*args )
         {
-            pWin->s.fVisible = TRUE;
-            pWin->s.nLines = value + 1;
+            // If the number of lines was 0, close window
+            if( value==0 )
+                pWin->s.fVisible = FALSE;
+            else
+            {
+                pWin->s.fVisible = TRUE;
+                pWin->s.nLines = value + 1;
+            }
         }
+        else
+            PostError(ERR_SYNTAX, 0);
     }
     else
     {
@@ -247,9 +352,7 @@ BOOL cmdWs(char *args, int subClass)
 
         pWin->s.fVisible = !pWin->s.fVisible;
     }
-
-    // Repaint all windows
-    RecalculateDrawWindows();
+    deb.fRedraw = TRUE;
 
     return( TRUE );
 }
@@ -272,16 +375,19 @@ BOOL cmdWw(char *args, int subClass)
     if( *args )
     {
         // Argument is present - get the number of lines and activate window
-        value = GetDec(&args);
-
-        // If the number of lines was 0, close window
-        if( value==0 )
-            pWin->w.fVisible = FALSE;
-        else
+        if( GetDecB(&value, &args) && !*args )
         {
-            pWin->w.fVisible = TRUE;
-            pWin->w.nLines = value + 1;
+            // If the number of lines was 0, close window
+            if( value==0 )
+                pWin->w.fVisible = FALSE;
+            else
+            {
+                pWin->w.fVisible = TRUE;
+                pWin->w.nLines = value + 1;
+            }
         }
+        else
+            PostError(ERR_SYNTAX, 0);
     }
     else
     {
@@ -289,9 +395,7 @@ BOOL cmdWw(char *args, int subClass)
 
         pWin->w.fVisible = !pWin->w.fVisible;
     }
-
-    // Repaint all windows
-    RecalculateDrawWindows();
+    deb.fRedraw = TRUE;
 
     return( TRUE );
 }
@@ -310,8 +414,7 @@ BOOL cmdWr(char *args, int subClass)
 {
     pWin->r.fVisible = !pWin->r.fVisible;
 
-    // Repaint all windows
-    RecalculateDrawWindows();
+    deb.fRedraw = TRUE;
 
     return( TRUE );
 }
@@ -330,8 +433,7 @@ BOOL cmdCls(char *args, int subClass)
 {
     ClearHistory();
 
-    // Repaint all windows
-    RecalculateDrawWindows();
+    deb.fRedraw = TRUE;
 
     return( TRUE );
 }
@@ -360,8 +462,7 @@ BOOL cmdRs(char *args, int subClass)
     // Back to debugger
     dputc(DP_SAVEBACKGROUND);
 
-    // Repaint all windows
-    RecalculateDrawWindows();
+    deb.fRedraw = TRUE;
 
     return( TRUE );
 }

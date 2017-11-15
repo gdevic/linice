@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       10/25/00                                                      *
 *                                                                             *
-*   Copyright (c) 2000-2004 Goran Devic                                       *
+*   Copyright (c) 2000-2005 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -572,7 +572,7 @@ BOOL FindModule(TMODULE *pMod, char *pName, int nNameLen)
 ******************************************************************************/
 BOOL cmdVer(char *args, int subClass)
 {
-    dprinth(1, "Linice (C) 2004 by Goran Devic.  All Rights Reserved.  www.linice.com");
+    dprinth(1, "Linice (C) 2005 by Goran Devic.  All Rights Reserved.  www.linice.com");
     dprinth(1, "Version: %d.%d", LINICEVER >> 8, LINICEVER & 0xFF);
 
 #ifdef DBG

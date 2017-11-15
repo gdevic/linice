@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       9/4/97                                                        *
 *                                                                             *
-*   Copyright (c) 1997-2004 Goran Devic                                       *
+*   Copyright (c) 1997-2005 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *

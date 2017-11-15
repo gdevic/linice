@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       5/15/97                                                       *
 *                                                                             *
-*   Copyright (c) 1997-2004 Goran Devic                                       *
+*   Copyright (c) 1997-2005 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -38,6 +38,8 @@
 
         Numbers may be expressed in:
             hexadecimal, default number with optional prefix '0x'
+            binary, prefix '0b'
+            octal, prefix '0o'
             decimal, prefix '+' or '-'
             prefix '.' (line operator) changes radix to decimal
             character constant: 'a', 'ab', 'abc', 'abcd' note symbol: '
@@ -179,12 +181,18 @@ static DWORD fnByte(DWORD arg);
 static DWORD fnWord(DWORD arg);
 static DWORD fnDword(DWORD arg);
 static DWORD fnHiword(DWORD arg);
+static DWORD fnHibyte(DWORD arg);
+static DWORD fnSword(DWORD arg);
 
 extern DWORD fnBpCount(DWORD arg);
 extern DWORD fnBpMiss(DWORD arg);
 extern DWORD fnBpTotal(DWORD arg);
 extern DWORD fnBpIndex(DWORD arg);
 extern DWORD fnBpLog(DWORD arg);
+extern DWORD fnDataAddr(DWORD arg);
+extern DWORD fnCodeAddr(DWORD arg);
+extern DWORD fnEAddr(DWORD arg);
+extern DWORD fnEValue(DWORD arg);
 
 extern DWORD fnPtr(DWORD arg);
 
@@ -197,33 +205,30 @@ typedef struct
     TFnPtr funct;                       // Function
 } TFunction;
 
-#define MAX_FUNCTION    10              // Ordinal index of the last function in the array
+#define MAX_FUNCTION    16              // Ordinal index of the last function in the array
 
 static TFunction Func[] = {
                                         // Functions with 1 parameter
-{ "byte",   4, 1, fnByte },             // 1
-{ "word",   4, 1, fnWord },             // 2
-{ "dword",  5, 1, fnDword },            // 3
-{ "hiword", 6, 1, fnHiword },           // 4
-{ "ptr",    3, 1, fnPtr },              // 5
+{ "byte",   4, 1, fnByte },
+{ "word",   4, 1, fnWord },
+{ "dword",  5, 1, fnDword },
+{ "hibyte", 6, 1, fnHibyte },
+{ "hiword", 6, 1, fnHiword },
+{ "sword",  5, 1, fnSword },
+{ "ptr",    3, 1, fnPtr },
                                         // Functions with 0 parameters
-{ "bpcount", 7, 0, fnBpCount },         // 6
-{ "bpmiss",  6, 0, fnBpMiss },          // 7
-{ "bptotal", 7, 0, fnBpTotal },         // 8
-{ "bpindex", 7, 0, fnBpIndex },         // 9
-{ "bplog",   5, 0, fnBpLog },           // 10
+{ "bpcount", 7, 0, fnBpCount },
+{ "bpmiss",  6, 0, fnBpMiss },
+{ "bptotal", 7, 0, fnBpTotal },
+{ "bpindex", 7, 0, fnBpIndex },
+{ "bplog",   5, 0, fnBpLog },
+{ "DataAddr",8, 0, fnDataAddr },
+{ "CodeAddr",8, 0, fnCodeAddr },
+{ "EAddr",   5, 0, fnEAddr },
+{ "EValue",  6, 0, fnEValue },
 
 { NULL }
 };
-
-// TODO - add these functions:
-/*
-{ "DataAddr", 8, 0xFFFFFFFF, 0, 0 },
-{ "CodeAddr", 8, 0xFFFFFFFF, 0, 0 },
-{ "EAddr",    5, 0xFFFFFFFF, 0, 0 },
-{ "Evalue",   6, 0xFFFFFFFF, 0, 0 },
-{ "DataAddr", 8, 0xFFFFFFFF, 0, 0 },
-*/
 
 //=============================================================================
 
@@ -365,6 +370,7 @@ extern void TypedefCanonical(TSYMTYPEDEF1 *pType1);
 extern TSYMTYPEDEF1 *Type2Typedef(char *pTypeName, int nLen, WORD file_id);
 extern BOOL GlobalReadDword(DWORD *ppDword, DWORD dwAddress);
 extern UINT GetTypeSize(TSYMTYPEDEF1 *pType1);
+extern BOOL GetUserVar(DWORD *pValue, char *sStart, int nLen);
 extern void ExpandPrintSymbol(TExItem *Item, char *pName);
 extern BOOL FindSymbol(TExItem *item, char *pName, int *pNameLen);
 
@@ -372,6 +378,8 @@ static DWORD fnByte(DWORD arg) { return(arg & 0xFF); }
 static DWORD fnWord(DWORD arg) { return(arg & 0xFFFF);}
 static DWORD fnDword(DWORD arg) { return(arg);}
 static DWORD fnHiword(DWORD arg) { return(arg >> 16);}
+static DWORD fnHibyte(DWORD arg) { return((arg >> 8) & 0xFF);}
+static DWORD fnSword(DWORD arg) { return((arg & 0x80)? 0xFF00 | arg : arg );}
 
 
 /******************************************************************************
@@ -558,7 +566,7 @@ static BOOL CheckHex(char *pToken, int nTokenLen)
 *
 *******************************************************************************
 *
-*   Converts string to a hex number.
+*   Converts a string into a number. Expect a binary number.
 *
 *   Where:
 *       pValue is the address of the variable to receive a number
@@ -585,7 +593,7 @@ static BOOL GetHex(UINT *pValue, char **ppString)
     }
 
     if( count<0 )                       // Set error if the number if too big
-        PostError(ERR_TOO_BIG, 0);
+        PostError(ERR_TOO_BIG_HEX, 0);
 
     if( pChar==*ppString || deb.errorCode ) // Return FALSE if no number was read or error
         return( FALSE );
@@ -595,7 +603,6 @@ static BOOL GetHex(UINT *pValue, char **ppString)
 
     return(TRUE);
 }
-
 
 /******************************************************************************
 *
@@ -625,7 +632,7 @@ BOOL GetDecB(UINT *pValue, char **ppString)
         // Check for overflow (number too big)
         // Max digit is 4294967295
         if( value>429496729 )
-            PostError(ERR_TOO_BIG, 0);
+            PostError(ERR_TOO_BIG_DEC, 0);
 
         value *= 10;
         value += digit - '0';
@@ -663,6 +670,92 @@ DWORD GetDec(char **ppString)
     GetDecB(&value, ppString);
 
     return( value );
+}
+
+/******************************************************************************
+*
+*   BOOL GetOct(UINT *pValue, char **ppString)
+*
+*******************************************************************************
+*
+*   Converts a string into a number. Expect an octal number.
+*
+*   Where:
+*       pValue is the address of the variable to receive a number
+*       ppString is the address of the pointer to string
+*
+*   Returns:
+*       FALSE - we did not read any octal digits
+*       TRUE - hex digit is read into pValue, *ppString is updated
+*
+******************************************************************************/
+static BOOL GetOct(UINT *pValue, char **ppString)
+{
+    char *pChar = *ppString;            // Running pointer to string
+    UINT oct;                           // max number: 37777777777
+    int count = 11;
+    UINT value = 0;
+
+    while( (oct = *pChar) && (oct>='0' && oct<='7') && count-- )
+    {
+        value <<= 3;
+        value += oct - '0';
+        pChar++;
+    }
+
+    if( count<0 )                       // Set error if the number if too big
+        PostError(ERR_TOO_BIG_OCT, 0);
+
+    if( pChar==*ppString || deb.errorCode ) // Return FALSE if no number was read or error
+        return( FALSE );
+
+    *pValue = value;                    // Store the decimal digit final value
+    *ppString = pChar;                  // Store the updated string pointer
+
+    return(TRUE);
+}
+
+/******************************************************************************
+*
+*   BOOL GetBin(UINT *pValue, char **ppString)
+*
+*******************************************************************************
+*
+*   Converts a string into a number. Expect a binary number.
+*
+*   Where:
+*       pValue is the address of the variable to receive a number
+*       ppString is the address of the pointer to string
+*
+*   Returns:
+*       FALSE - we did not read any binary digits
+*       TRUE - hex digit is read into pValue, *ppString is updated
+*
+******************************************************************************/
+static BOOL GetBin(UINT *pValue, char **ppString)
+{
+    char *pChar = *ppString;            // Running pointer to string
+    UINT bit;
+    int count = 32;
+    UINT value = 0;
+
+    while( (bit = *pChar) && (bit=='0' || bit=='1') && count-- )
+    {
+        value <<= 1;
+        value += bit - '0';
+        pChar++;
+    }
+
+    if( count<0 )                       // Set error if the number if too big
+        PostError(ERR_TOO_BIG_BIN, 0);
+
+    if( pChar==*ppString || deb.errorCode ) // Return FALSE if no number was read or error
+        return( FALSE );
+
+    *pValue = value;                    // Store the decimal digit final value
+    *ppString = pChar;                  // Store the updated string pointer
+
+    return(TRUE);
 }
 
 /******************************************************************************
@@ -708,15 +801,15 @@ static TRegister *IsRegister(char *ptr, int nTokenLen)
 }
 
 /******************************************************************************
-*   int EvalGetFunc( char **sExpr, int nTokenLen, int params )                *
+*   int EvalGetFunc( char *pToken, int nTokenLen, int params )                *
 *******************************************************************************
 *
 *   Evaluates a string token into a function name, only for functions that
 *   match the number of parameters, since we process them differently.
 *
 *   Where:
-*       item is the item to fill in with the value token
-*       sExpr is an address of a pointer to a string containing expression
+*       pToken is an address to the function name string
+*       nTokenLen is the length of the function name string
 *       params is the required number of parameters (0 or 1)
 *
 *   Returns:
@@ -724,7 +817,7 @@ static TRegister *IsRegister(char *ptr, int nTokenLen)
 *       0 if no function name match
 *
 ******************************************************************************/
-static int EvalGetFunc( char **sExpr, int nTokenLen, int params )
+static int EvalGetFunc( char *pToken, int nTokenLen, int params )
 {
     int i = 0;                          // Index into function array
 
@@ -732,7 +825,7 @@ static int EvalGetFunc( char **sExpr, int nTokenLen, int params )
     {
         if( Func[i].nArgs==params )
         {
-            if(Func[i].nameLen==nTokenLen && !strnicmp(Func[i].sName, *sExpr, nTokenLen))
+            if(Func[i].nameLen==nTokenLen && !strnicmp(Func[i].sName, pToken, nTokenLen))
                 return(i + 1);          // Return one more than the index
         }
         i++;
@@ -842,17 +935,15 @@ static BOOL NextToken(char **ppNext)
 ******************************************************************************/
 static BOOL GetValue( TExItem *item, char **sExpr, int nTokenLen )
 {
-    static TSYMTYPEDEF1 intdef = { 0, 0, "", "\1"/*TYPE_INT*/, 0 };
     TRegister *pReg;                    // Register structure for CPU register compares
     TADDRDESC Addr;                     // Address structure for breakpoint evaluation
     char *pToken = *sExpr;              // Start of the token pointer
     int n;                              // Temp variable to use locally
 
-    // Zero out the item to avoid stale data
+    // Zero out the item to avoid stale data and set up the default type to integer
     memset(item, 0, sizeof(TExItem));
-
-    // Set up the default type to integer
-    memcpy(&item->Type, &intdef, sizeof(TSYMTYPEDEF1));
+    item->Type.pName = "";
+    item->Type.pDef = "\1";
 
     //----------------------------------------------------------------------------------
     // If we switched to decimal radix, try a decimal number first
@@ -872,6 +963,32 @@ static BOOL GetValue( TExItem *item, char **sExpr, int nTokenLen )
         pToken += 2;                    // Skip the 0x prefix
 
         GetHex(&item->Data, &pToken);   // Ignore exit value - it has to be hex
+
+        item->bType = EXTYPE_LITERAL;   // This was a literal type
+        item->pData = (BYTE *)&item->Data;
+    }
+    else
+    //----------------------------------------------------------------------------------
+    // Check if the first two characters represent a binary number
+    //----------------------------------------------------------------------------------
+    if( *pToken=='0' && tolower(*(pToken+1))=='b' )
+    {
+        pToken += 2;                    // Skip the 0b prefix
+
+        GetBin(&item->Data, &pToken);   // Ignore exit value - it has to be binary
+
+        item->bType = EXTYPE_LITERAL;   // This was a literal type
+        item->pData = (BYTE *)&item->Data;
+    }
+    else
+    //----------------------------------------------------------------------------------
+    // Check if the first two characters represent a octal number
+    //----------------------------------------------------------------------------------
+    if( *pToken=='0' && tolower(*(pToken+1))=='o' )
+    {
+        pToken += 2;                    // Skip the 0o prefix
+
+        GetOct(&item->Data, &pToken);   // Ignore exit value - it has to be octal
 
         item->bType = EXTYPE_LITERAL;   // This was a literal type
         item->pData = (BYTE *)&item->Data;
@@ -909,7 +1026,7 @@ static BOOL GetValue( TExItem *item, char **sExpr, int nTokenLen )
             pToken++;
             GetHex(&item->Data, &pToken);
         }
-        else
+        else                                            // Else it is a decimal number
         {
             GetDecB(&item->Data, &pToken);
         }
@@ -954,7 +1071,7 @@ static BOOL GetValue( TExItem *item, char **sExpr, int nTokenLen )
     //----------------------------------------------------------------------------------
     // The literal value may be a built-in function with 0 parameters
     //----------------------------------------------------------------------------------
-    if( (n = EvalGetFunc(&pToken, nTokenLen, 0)) != 0 )
+    if( (n = EvalGetFunc(pToken, nTokenLen, 0)) != 0 )
     {
         // Functons with 0 parameters are treated differently from functions with 1 parameter
 
@@ -987,6 +1104,18 @@ static BOOL GetValue( TExItem *item, char **sExpr, int nTokenLen )
 
         item->bType = EXTYPE_LITERAL;   // This was a literal type
         item->pData = (BYTE *)&item->Data;
+    }
+    else
+    //----------------------------------------------------------------------------------
+    // Check the user variable
+    //----------------------------------------------------------------------------------
+    if( GetUserVar(&item->Data, pToken, nTokenLen) )
+    {
+        // Found and evaluated a user variable
+        item->bType = EXTYPE_LITERAL;   // This was a literal type
+        item->pData = (BYTE *)&item->Data;
+
+        pToken += nTokenLen;
     }
     else
     {
@@ -1222,7 +1351,8 @@ static void Execute( TStack *Values, int Operation )
         case OP_UNARY_AND:              // &symbol
         case OP_UNARY_PTR:              // *symbol
 
-        case OP_BITWISE_NOT:            // !
+        case OP_NOT:                    // !
+        case OP_BITWISE_NOT:            // ~
         case OP_UNARY_MINUS:            // -(num)
         case OP_UNARY_PLUS:             // +(num)
         case OP_LINE_NUMBER:            // .(num)
@@ -1560,7 +1690,7 @@ BOOL Evaluate(TExItem *pItem, char *pExpr, char **ppNext, BOOL fSymbolsValueOf)
                         else
                         {
                             // If the token was not a type cast, check if it is an internal function with 1 argument
-                            if( (nFunc1 = EvalGetFunc(&pExpr, nTokenLen, 1)) )
+                            if( (nFunc1 = EvalGetFunc(pExpr, nTokenLen, 1)) )
                             {
                                 // The token was a function that takes 1 parameter. Insert the function token,
                                 // then push the index of the function
@@ -1575,11 +1705,14 @@ BOOL Evaluate(TExItem *pItem, char *pExpr, char **ppNext, BOOL fSymbolsValueOf)
                             else
                                 break;
                         }
+
+                        Push(&Values, &Item);
+
+                        continue;
                     }
                 }
 
                 Push(&Values, &Item);
-
 
                 fExpectValue = FALSE;   // Next token has to be an operator
             }
@@ -1693,7 +1826,7 @@ BOOL Evaluate(TExItem *pItem, char *pExpr, char **ppNext, BOOL fSymbolsValueOf)
 ******************************************************************************/
 BOOL Expression(DWORD *pValue, char *pExpr, char **ppNext)
 {
-    TExItem Item;                         // Store the result of the evaluation
+    TExItem Item;                       // Store the result of the evaluation
 
     if( Evaluate(&Item, pExpr, ppNext, FALSE) )
     {
@@ -1703,10 +1836,10 @@ BOOL Expression(DWORD *pValue, char *pExpr, char **ppNext)
         // Address contains the offset in *pData
 
         // Assign the value from the item pointer
-        // TODO: Is this dangerous?
-        *pValue = *(DWORD *)Item.pData;
+        if( GlobalReadDword(pValue, (DWORD)Item.pData) )
+            return( TRUE );
 
-        return( TRUE );
+        // Final pointer error
     }
 
     return( FALSE );
@@ -1725,42 +1858,17 @@ BOOL Expression(DWORD *pValue, char *pExpr, char **ppNext)
 BOOL cmdEvaluate(char *args, int subClass)
 {
     static char buf[MAX_STRING];        // Temp output buffer
-    TExItem Item;                         // Store the result of the evaluation
+    TExItem Item;                       // Store the result of the evaluation
+    char *pEnd;                         // Pointer to the end of expression string
     DWORD Data;                         // Temp data store
     int i;                              // Temp store
 
     if( *args )
     {
-        if( Evaluate(&Item, args, NULL, TRUE) )
+        if( Evaluate(&Item, args, &pEnd, TRUE) && !*pEnd )
         {
             switch( Item.bType )
             {
-                //-----------------------------------------------------------------
-                // Literal contains the value in the *pData
-                // Register contains the register value in the *pData
-                //-----------------------------------------------------------------
-                case EXTYPE_LITERAL:
-                case EXTYPE_REGISTER:
-                {
-                    Data = *(DWORD *)Item.pData; // Get the actual data value
-
-                    i = sprintf(buf, " Hex=%08X  Dec=%010u  ", Data, Data );
-
-                    // Print negative decimal only if it is a negative number
-                    if( (signed)Data<0 )
-                        i += sprintf(buf+i, "(%d)  ", (signed)Data);
-
-                    // Print ASCII representation of that number
-                    i += sprintf(buf+i, "\"%c%c%c%c\"",
-                            ((Data>>24) & 0xFF) >= ' '? ((Data>>24) & 0xFF) : '.',
-                            ((Data>>16) & 0xFF) >= ' '? ((Data>>16) & 0xFF) : '.',
-                            ((Data>> 8) & 0xFF) >= ' '? ((Data>> 8) & 0xFF) : '.',
-                            ((Data>> 0) & 0xFF) >= ' '? ((Data>> 0) & 0xFF) : '.' );
-
-                    dprinth(1, "%s", buf);
-                }
-                break;
-
                 //-----------------------------------------------------------------
                 // Symbol is expanded
                 //-----------------------------------------------------------------
@@ -1783,10 +1891,36 @@ BOOL cmdEvaluate(char *args, int subClass)
                     dprinth(1, "%s", buf);
                 }
                 break;
-            }
 
-            return( TRUE );
+                //-----------------------------------------------------------------
+                // Literal contains the value in the *pData
+                // Register contains the register value in the *pData
+                //-----------------------------------------------------------------
+                // case EXTYPE_LITERAL:
+                // case EXTYPE_REGISTER:
+                default:
+                {
+                    Data = *(DWORD *)Item.pData; // Get the actual data value
+
+                    i = sprintf(buf, " Hex=%08X  Dec=%010u  ", Data, Data );
+
+                    // Print negative decimal only if it is a negative number
+                    if( (signed)Data<0 )
+                        i += sprintf(buf+i, "(%d)  ", (signed)Data);
+
+                    // Print ASCII representation of that number
+                    i += sprintf(buf+i, "\"%c%c%c%c\"",
+                            ((Data>>24) & 0xFF) >= ' '? ((Data>>24) & 0xFF) : '.',
+                            ((Data>>16) & 0xFF) >= ' '? ((Data>>16) & 0xFF) : '.',
+                            ((Data>> 8) & 0xFF) >= ' '? ((Data>> 8) & 0xFF) : '.',
+                            ((Data>> 0) & 0xFF) >= ' '? ((Data>> 0) & 0xFF) : '.' );
+
+                    dprinth(1, "%s", buf);
+                }
+            }
         }
+        else
+            PostError(ERR_SYNTAX, 0);
     }
     else
         PostError(ERR_EXP_WHAT, 0);

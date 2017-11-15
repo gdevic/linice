@@ -2,7 +2,7 @@
 #																			 #
 #	Makefile for LINICE kernel module										 #
 #																			 #
-#	(c) 2000-2004 Goran Devic												 #
+#	(c) 2000-2005 Goran Devic												 #
 #	(c) "Linice" by Goran Devic												 #
 #	(c) "Linsym" by Goran Devic												 #
 #																			 #
@@ -95,6 +95,7 @@ clean:
 			debugger.o		\
 			dis.o			\
 			dis_len.o		\
+			dis_ea.o		\
 			interrupt.o		\
 			apic.o			\
 			command.o		\
@@ -207,6 +208,9 @@ dis.o:	command/disassembler.c
 
 dis_len.o:	command/disassembler-bytelen.c
 	$(CC) $(CFLAGS) -c command/disassembler-bytelen.c -o dis_len.o
+
+dis_ea.o:	command/disassembler-ea.c
+	$(CC) $(CFLAGS) -c command/disassembler-ea.c -o dis_ea.o
 
 edlin.o:	command/edlin.c
 	$(CC) $(CFLAGS) -c command/edlin.c

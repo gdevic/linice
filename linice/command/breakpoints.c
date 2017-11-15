@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       06/26/01                                                      *
 *                                                                             *
-*   Copyright (c) 2001-2004 Goran Devic                                       *
+*   Copyright (c) 2001-2005 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -44,7 +44,7 @@
 #include "module-header.h"              // Versatile module header file
 
 #include "clib.h"                       // Include C library header file
-#include "intel.h"
+#include "intel.h"                      // Include processor specific stuff
 #include "ice.h"                        // Include main debugger structures
 
 /******************************************************************************
@@ -61,10 +61,9 @@ extern char *pCmdEdit;                  // Push edit line string
 *                                                                             *
 ******************************************************************************/
 
-//////////////////////////////////////////////////////////////////////////////
-// Define a structure that holds a breakpoint info
+#define HWBPMASK        0x0F            // Mask of all hardware breakpoints
 
-// Flags: Any bit can be specified independently:
+// Flags: More than one can be specified for a single breakpoint
 
 #define BP_USED         0x01            // Breakpoint is used (not an empty slot)
 #define BP_ENABLED      0x02            // Breakpoint is enabled (active)
@@ -79,6 +78,8 @@ extern char *pCmdEdit;                  // Push edit line string
 #define BP_TYPE_BPMW    0x05            // Breakpoint is BPMW  (subClass 5)
 #define BP_TYPE_BPMD    0x07            // Breakpoint is BPMD  (subClass 7)
 
+// Define a breakpoint entry structure
+
 typedef struct
 {
     BYTE Flags;                         // Breakpoint flags
@@ -91,17 +92,17 @@ typedef struct
     BYTE Size;                          // Size of the memory access (B, W, D)
     BYTE Access;                        // Access type (R/W/RW/X)
     BYTE DrRequest;                     // Debug register that the user explicitly requested (bitmask)
-    BYTE DrUse;                         // Debug register that is actually used (bitmask)
-                                        // Also specifies the use of HW breakpoint as opposed to embedded INT3
+    BYTE DrUse;                         // Debug register that is actually assigned (bitmask)
+                                        // Also specifies the use of HW breakpoint as opposed to an embedded INT3
     TADDRDESC address;                  // Breakpoint address (sel:offset)
     WORD file_id;                       // Source code file_id
     WORD line;                          // Source code line number
     BYTE origValue;                     // Original value that was there before INT3
 
-    // Breakpoint statistics
-    DWORD Hits;                         // Number of times we evaluated a bp
+    DWORD Hits;                         // Number of times we hit a bp
     DWORD Breaks;                       // Number of times a bp has evaluated to TRUE
     DWORD Popups;                       // Number of times it caused Ice to popup
+    DWORD Logged;                       // Number of times a bp has been logged
     DWORD Misses;                       // Number of times a bp has evaluated to FALSE
     DWORD Errors;                       // Number of times evaluation resulted in error
     DWORD CurHits;                      // Number of timer we hit it before it popup (clear after popup)
@@ -113,6 +114,7 @@ typedef struct
     BPX   - address.sel, address.offset contain user specified address to break
             file_id, line, if non-zero, index the source code line of that bpx
             Note: In code edit mode, no arguments is allowed.
+            DrRequest register use: 1 (DR0), 2 (DR1), 4 (DR2), 8 (DR3)
 
     BPIO  - address.offset is the IO port to trap (0x00 - 0xFFFF)
             Access: 3 (RW), 2 (R), 1 (W)
@@ -128,14 +130,14 @@ typedef struct
 static TBP bp[MAX_BREAKPOINTS];         // Array of breakpoint structures
 
 static int hint = -1;                   // No hints to edit breakpoint number
-static int hwbpinuse = 0;               // Number of hw breakpoints in use (0 - 4)
-static BYTE GlRequest = 0;              // Global hw breakpoint request bitmask
+
+static BYTE GlAvail = HWBPMASK;         // Bitmask of the hardware breakpoints available
 
 static char Buf[MAX_STRING];            // Temp line buffer to send line to edit and to use as a code edit mode address line
-static char *pBuf;
 
 static DWORD dr[8];                     // Temp stored verification values
 
+static BOOL fBpLog = FALSE;             // Current expression contained BPLOG
 
 // BPIO types (stored in the Access field)
 static const char *sBpio[] = { "", "R ", "W ", "RW " };
@@ -146,6 +148,9 @@ static const char *sBpm[] = { "B ", "W ", "", "D " };
 // DR register name from a bitfield
 static const char *sDr[] =  { "", "DR0 ", "DR1 ", "", "DR2 ", "", "", "", "DR3 " };
 
+// DR7-Mask to enable a hardware breakpoint indexed by a bitfield
+static const UINT dr7mask[] = { 0, 3, 0xC, 0, 0x30, 0, 0, 0, 0xC0 };
+
 
 /******************************************************************************
 *                                                                             *
@@ -154,19 +159,8 @@ static const char *sDr[] =  { "", "DR0 ", "DR1 ", "", "DR2 ", "", "", "", "DR3 "
 ******************************************************************************/
 
 extern DWORD GetHex(char **psString);
-
-
-DWORD fnBpCount(DWORD arg) { return( deb.bpIndex>=0? bp[deb.bpIndex].CurHits : 0 ); };
-DWORD fnBpMiss(DWORD arg) { return( deb.bpIndex>=0? bp[deb.bpIndex].CurMisses : 0 ); };
-DWORD fnBpTotal(DWORD arg) { return( deb.bpIndex>=0? bp[deb.bpIndex].Hits : 0 ); };
-DWORD fnBpIndex(DWORD arg) { return( deb.bpIndex ); };
-DWORD fnBpLog(DWORD arg)
-{
-    // Log the breakpoint into the history buffer
-    dprinth(1, "BPLOG Not implemented yet");
-    return( TRUE );
-}
-
+extern void CalcMemAccessChecksum();
+extern void SetDebugReg(TSysreg * pSys);
 
 /******************************************************************************
 *                                                                             *
@@ -174,9 +168,17 @@ DWORD fnBpLog(DWORD arg)
 *                                                                             *
 ******************************************************************************/
 
-extern void CalcMemAccessChecksum();
+/******************************************************************************
+*                                                                             *
+*   A set of functions used by the expression evaluator                       *
+*                                                                             *
+******************************************************************************/
 
-int BreakpointQuery(TADDRDESC Addr);
+DWORD fnBpCount(DWORD arg) { return( deb.bpIndex>=0? bp[deb.bpIndex].CurHits : 0 ); };
+DWORD fnBpMiss(DWORD arg)  { return( deb.bpIndex>=0? bp[deb.bpIndex].CurMisses : 0 ); };
+DWORD fnBpTotal(DWORD arg) { return( deb.bpIndex>=0? bp[deb.bpIndex].Hits : 0 ); };
+DWORD fnBpIndex(DWORD arg) { return( deb.bpIndex ); };
+DWORD fnBpLog(DWORD arg)   { return( (fBpLog = TRUE) ); }
 
 /******************************************************************************
 *                                                                             *
@@ -207,6 +209,175 @@ void InitBreakpoints()
 
     // Protection: Calculate the checksum of the memory access functions
     CalcMemAccessChecksum();
+}
+
+/******************************************************************************
+*                                                                             *
+*   int BreakpointQuery(TADDRDESC Addr)                                       *
+*                                                                             *
+*******************************************************************************
+*
+*   Checks if any breakpoint address matches given sel:offset. This is valid
+*   only for BPX breakpoints.
+*
+*   This function is called from the code source listing to signal a breakpoint
+*   within a source code line or address.
+*
+*   Returns:
+*       -1 if no breakpoint addresses match
+*       bp index if match is found
+*
+******************************************************************************/
+int BreakpointQuery(TADDRDESC Addr)
+{
+    int index;
+
+    for(index=0; index<MAX_BREAKPOINTS; index++ )
+    {
+        // Check only enabled breakpoints
+
+        if( bp[index].Flags & BP_ENABLED )
+        {
+            if( bp[index].Type==BP_TYPE_BPX )
+            {
+                if( bp[index].address.sel==Addr.sel && bp[index].address.offset==Addr.offset )
+                {
+                    // Found a matching address!
+                    return(index);
+                }
+            }
+        }
+    }
+
+    return(-1);
+}
+
+/******************************************************************************
+*                                                                             *
+*   BOOL VerifyBreakpoint(TBP *pBp)                                           *
+*                                                                             *
+*******************************************************************************
+*
+*   When we define a new breakpoint, we need to check that it is valid with
+*   regards to other breakpoints already defined.
+*   That is, no duplicate breakpoint and some parameter validity.
+*
+*   Where:
+*       pBp is the breakpoint that is to be checked against the rest
+*           This pointer may address a breakpoint from the array.
+*
+*   Returns:
+*       TRUE - Given breakpoint is ok
+*       FALSE - There was some error with the given breakpoint
+*
+******************************************************************************/
+static BOOL VerifyBreakpoint(TBP *pBp)
+{
+    int index;                                  // Temp breakpoint index
+
+    // With internal breakpoints we dont check for duplicates
+    if( !(pBp->Flags & BP_INTERNAL) )
+    {
+        // With all breakpoints types, we can compare address and selector for the same values
+        // If we found, those are duplicate breakpoints (of the same class)
+
+        for(index=0; index<MAX_BREAKPOINTS; index++)
+        {
+            // Compare only enabled bps - we dont care what the disabled are set to
+            if( bp[index].Type==BP_ENABLED )
+            {
+                if( pBp != &bp[index] )
+                {
+                    // The breakpoint type has to be the same to compare
+                    if( bp[index].Type == pBp->Type )
+                    {
+                        if( bp[index].address.offset==pBp->address.offset && bp[index].address.sel==pBp->address.sel)
+                        {
+                            PostError(ERR_BPDUP, 0);    // Duplicate breakpoint
+
+                            return( FALSE );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Type specific checks --
+
+    switch( pBp->Type )
+    {
+        //====================================================================
+        case BP_TYPE_BPIO:
+            // Port number has to be in the range 0000 - FFFF
+            if( pBp->address.offset > 0xFFFF )
+            {
+                PostError(ERR_BPIO, 0);         // Invalid port number in a breakpoint
+
+                return( FALSE );
+            }
+            break;
+
+        //====================================================================
+        case BP_TYPE_BPMW:
+            // Memory alignment: BPW must be aligned on a word boundary
+            if( (pBp->address.offset & 1)!=0 )
+            {
+                PostError(ERR_BPMWALIGN, 0);    // Data alignment error
+
+                return( FALSE );
+            }
+            break;
+
+        //====================================================================
+        case BP_TYPE_BPMD:
+            // Memory alignment: BPD must be aligned on a dword boundary
+            if( (pBp->address.offset & 3)!=0 )
+            {
+                PostError(ERR_BPMDALIGN, 0);    // Data alignment error
+
+                return( FALSE );
+            }
+            break;
+    }
+
+    // Do this check last since it actually assigns resources !!!
+
+    // Assign the requested debug register
+    if( pBp->DrRequest )
+    {
+        if( !(pBp->DrRequest & GlAvail) )
+        {
+            // Conflict - we cannot use the requested DR register, it's not available
+            PostError(ERR_DRUSED, 0);
+            return( FALSE );
+        }
+
+        // Assign the requested resource
+        pBp->DrUse = pBp->DrRequest;
+        GlAvail &= ~pBp->DrUse;
+    }
+    else
+    if( IsNeedHwBp(pBp->Type) )
+    {
+        if( GlAvail==0 )
+        {
+            PostError(ERR_DRUSEDUP, 0);     // All debug registers used error
+            return( FALSE );
+        }
+        // Assign any available breakpoint
+        if( GlAvail & 1 )   pBp->DrUse = 1;
+        else
+        if( GlAvail & 2 )   pBp->DrUse = 2;
+        else
+        if( GlAvail & 4 )   pBp->DrUse = 4;
+        else
+        if( GlAvail & 8 )   pBp->DrUse = 8;
+
+        GlAvail &= ~pBp->DrUse;
+    }
+
+    return( TRUE );
 }
 
 /******************************************************************************
@@ -285,11 +456,8 @@ BOOL cmdBp(char *args, int subClass)
                             bp[index].Flags &= ~BP_ENABLED;
 
                             // Free the hardware bp resource
-                            if( bp[index].DrRequest )
-                                GlRequest ^= bp[index].DrRequest, hwbpinuse--;
-                            else
-                                if( IsNeedHwBp(bp[index].Type) )
-                                    hwbpinuse--;
+                            bp[index].DrUse = 0;
+                            GlAvail |= bp[index].DrUse;
                         }
 
                         // Now we will do actual clear for those cases
@@ -307,35 +475,10 @@ BOOL cmdBp(char *args, int subClass)
                         // Dont re-enable breakpoints that are already enabled
                         if( !(bp[index].Flags & BP_ENABLED) )
                         {
-                            // Reaquire the hw resource if possible
-                            if( bp[index].DrRequest )
+                            if( VerifyBreakpoint(bp) )
                             {
-                                if( bp[index].DrRequest & GlRequest )
-                                {
-                                    // Conflict - we cannot use the requested DR register
-                                    PostError(ERR_DRUSED, 0);
-                                    break;
-                                }
-
-                                GlRequest |= bp[index].DrRequest;
-                                hwbpinuse++;
+                                bp[index].Flags |= BP_ENABLED;
                             }
-                            else
-                            {
-                                if( IsNeedHwBp(bp[index].Type) )
-                                {
-                                    if( hwbpinuse>4 )
-                                    {
-                                        // Not enough DR registers, so we cannot enable this bp
-                                        PostError(ERR_BP_TOO_MANY, 0);
-                                        break;
-                                    }
-                                    else
-                                        hwbpinuse++;
-                                }
-                            }
-
-                            bp[index].Flags |= BP_ENABLED;
                         }
                     break;
             }
@@ -347,7 +490,6 @@ BOOL cmdBp(char *args, int subClass)
 
     return(TRUE);
 }
-
 
 /******************************************************************************
 *                                                                             *
@@ -361,6 +503,8 @@ BOOL cmdBp(char *args, int subClass)
 ******************************************************************************/
 static char *GetBpFormatStringList(TBP *pBp)
 {
+    char *pBuf;                         // Pointer to the string buffer
+
     // Reset the string buffer pointer
     pBuf = Buf;
 
@@ -417,6 +561,8 @@ static char *GetBpFormatStringList(TBP *pBp)
 ******************************************************************************/
 static char *GetBpFormatStringEdit(TBP *pBp)
 {
+    char *pBuf;                         // Pointer to the string buffer
+
     // Reset the string buffer pointer
     pBuf = Buf;
 
@@ -482,7 +628,7 @@ BOOL cmdBl(char *args, int subClass)
         {
             if( bp[index].Flags & BP_USED )
             {
-                dprinth(nLine++, "%02X f=%d t=%d rq=%X du=%X a=%d s=%d",
+                dprinth(nLine++, "%02X  Flags=%d Type=%d DrRequest=%X DrUse=%X Access=%d Size=%d",
                     index,
                     bp[index].Flags,
                     bp[index].Type,
@@ -492,14 +638,12 @@ BOOL cmdBl(char *args, int subClass)
                     bp[index].Size );
             }
         }
-
-        dprinth(nLine++, "hint=%d inuse=%d GR=%X ind=%d", hint, hwbpinuse, GlRequest, deb.bpIndex);
+        dprinth(nLine++, "hint=%d GlAvail=%X current=%d", hint, GlAvail, deb.bpIndex);
         dprinth(nLine++, "%08X %08X %08X %08X 6=%08X 7=%08X", dr[0], dr[1], dr[2], dr[3], dr[6], dr[7]);
     }
 
     return(TRUE);
 }
-
 
 /******************************************************************************
 *                                                                             *
@@ -533,7 +677,6 @@ BOOL cmdBpet(char *args, int subClass)
                         // breakpoint creating instruction to use that index
                         hint = index;
                     }
-
                     // Prepare the string given the original breakpoint command
                     // This way we can re-evaluate expressions and keep the user syntax
 
@@ -542,20 +685,19 @@ BOOL cmdBpet(char *args, int subClass)
                     return(TRUE);
                 }
             }
-
             // From now on it is an invalid breakpoint
+
             PostError(ERR_BPNUM, 0);
 
             return(TRUE);
         }
     }
-
     // Everything else is a syntax error
+
     PostError(ERR_SYNTAX, 0);
 
     return(TRUE);
 }
-
 
 /******************************************************************************
 *                                                                             *
@@ -582,6 +724,7 @@ BOOL BPstat(int index, int n)
     && dprinth(nLine++, "   Hits    %X", p->Hits )
     && dprinth(nLine++, "   Breaks  %X", p->Breaks )
     && dprinth(nLine++, "   Popups  %X", p->Popups )
+    && dprinth(nLine++, "   Logged  %X", p->Logged )
     && dprinth(nLine++, "   Misses  %X", p->Misses )
     && dprinth(nLine++, "   Errors  %X", p->Errors )
     && dprinth(nLine++, "Current")
@@ -591,7 +734,6 @@ BOOL BPstat(int index, int n)
 
     return(FALSE);
 }
-
 
 /******************************************************************************
 *                                                                             *
@@ -638,123 +780,6 @@ BOOL cmdBstat(char *args, int subClass)
 
     return(TRUE);
 }
-
-/******************************************************************************
-*                                                                             *
-*   BOOL VerifyBreakpoint(TBP *pBp)                                           *
-*                                                                             *
-*******************************************************************************
-*
-*   When we define a new breakpoint, we need to check that it is valid with
-*   regards to other breakpoints already defined.
-*   That is, no duplicate breakpoint and some parameter validity.
-*
-*   Where:
-*       pBp is the breakpoint that is to be checked against the rest
-*           This pointer may address a breakpoint from the array.
-*
-*   Returns:
-*       TRUE - Given breakpoint is ok
-*       FALSE - There was some error with the given breakpoint
-*
-******************************************************************************/
-static BOOL VerifyBreakpoint(TBP *pBp)
-{
-    int index;                                  // Temp breakpoint index
-
-    // With all breakpoints types, we can compare address and selector for the same values
-    // If we found, those are duplicate breakpoints (of the same class)
-
-    // TODO - do we need to compare only to BP_USED bps?
-
-    for(index=0; index<MAX_BREAKPOINTS; index++)
-    {
-        if( pBp != &bp[index] )
-        {
-            // The breakpoint type has to be the same to compare
-            if( bp[index].Type == pBp->Type )
-            {
-                if( bp[index].address.offset==pBp->address.offset && bp[index].address.sel==pBp->address.sel)
-                {
-                    PostError(ERR_BPDUP, 0);    // Duplicate breakpoint
-
-                    return( FALSE );
-                }
-            }
-        }
-    }
-
-    // Type specific checks --
-
-    switch( pBp->Type )
-    {
-        //====================================================================
-        case BP_TYPE_BPIO:
-            // Port number has to be in the range 0000 - FFFF
-            if( pBp->address.offset > 0xFFFF )
-            {
-                PostError(ERR_BPIO, 0);         // Invalid port number in a breakpoint
-
-                return( FALSE );
-            }
-            break;
-
-        //====================================================================
-        case BP_TYPE_BPMW:
-            // Memory alignment: BPW must be aligned on a word boundary
-            if( (pBp->address.offset & 1)!=0 )
-            {
-                PostError(ERR_BPMWALIGN, 0);    // Data alignment error
-
-                return( FALSE );
-            }
-            break;
-
-        //====================================================================
-        case BP_TYPE_BPMD:
-            // Memory alignment: BPD must be aligned on a dword boundary
-            if( (pBp->address.offset & 3)!=0 )
-            {
-                PostError(ERR_BPMDALIGN, 0);    // Data alignment error
-
-                return( FALSE );
-            }
-            break;
-    }
-
-    // Do this check last since it actually assigns resources
-
-    if( pBp->DrRequest )
-    {
-        if( pBp->DrRequest & GlRequest )
-        {
-            // Conflict - we cannot use the requested DR register
-            PostError(ERR_DRUSED, 0);
-            return( FALSE );
-        }
-        else
-        {
-            // Assign the resource
-            GlRequest |= pBp->DrRequest;
-            hwbpinuse++;
-        }
-    }
-    else
-    if( IsNeedHwBp(pBp->Type) )
-    {
-        if( hwbpinuse>4 )
-        {
-            // Not enough DR registers, so we cannot enable this bp
-            PostError(ERR_BP_TOO_MANY, 0);
-            return( FALSE );
-        }
-        else
-            hwbpinuse++;
-    }
-
-    return( TRUE );
-}
-
 
 /******************************************************************************
 *                                                                             *
@@ -913,13 +938,13 @@ BOOL cmdBpx(char *args, int subClass)
                     // User can always assign an optional HW breakpoint register as his choice, DR0..DR3
                     if( !strnicmp(args, "DR", 2) )
                     {
-                        if( *(args+2)=='0' ) pBp->DrRequest = 1 << 0;
+                        if( *(args+2)=='0' ) pBp->DrRequest = 1;
                         else
-                        if( *(args+2)=='1' ) pBp->DrRequest = 1 << 1;
+                        if( *(args+2)=='1' ) pBp->DrRequest = 2;
                         else
-                        if( *(args+2)=='2' ) pBp->DrRequest = 1 << 2;
+                        if( *(args+2)=='2' ) pBp->DrRequest = 4;
                         else
-                        if( *(args+2)=='3' ) pBp->DrRequest = 1 << 3;
+                        if( *(args+2)=='3' ) pBp->DrRequest = 8;
                         else
                         {
                             PostError(ERR_DRINVALID, 0);
@@ -959,7 +984,8 @@ BOOL cmdBpx(char *args, int subClass)
                         if( !strnicmp(args-1, "DO", 2) ) args--;
 
                         // Terminate "IF" expression substring
-                        *(args-1) = 0;
+                        if(*(args-1)==' ')
+                            *(args-1) = 0;
                     }
 
                     //------------------------------------------------------------------
@@ -1008,7 +1034,6 @@ BOOL cmdBpx(char *args, int subClass)
                         return(TRUE);
                     }
                 }
-
                 // Else do not define a new breakpoint, but clean up the slot
 bpx_failed:;
             }
@@ -1076,34 +1101,36 @@ void SetOneTimeBreakpoint(TADDRDESC Addr)
     // Clear the breakpoint entry since we will rebuild it
     memset(pBp, 0, sizeof(TBP));
 
-    pBp->Flags = BP_USED | BP_ENABLED | BP_ONETIME | BP_INTERNAL;
+    pBp->Flags = BP_ONETIME | BP_INTERNAL;
     pBp->Type  = BP_TYPE_BPX;
     pBp->address = Addr;
     // We dont allocate the command buffer for internal breakpoints
+    if( VerifyBreakpoint(pBp)==TRUE )
+    {
+        pBp->Flags |= BP_USED | BP_ENABLED;
+    }
+    else
+        dprinth(1, "Internal error: Unable to set up one-time internal bpx!");
 }
-
 
 /******************************************************************************
 *                                                                             *
-*   BOOL IsBreakpointAtCSIP(void)                                             *
+*   TBP *IsBreakpointAtCSIP(void)                                             *
 *                                                                             *
 *******************************************************************************
 *
 *   This function supports a peculiar case where a breakpoint might be
 *   placed at the address of the current cs:eip and the running it would
-*   break immediately. We check all the BPX-type breakpoints.
-*
-*   TODO - This is really only needed for the INT3 embedded style BPX since the HW breakpoints are supressed by the RF flag.
-*
+*   break immediately. We check only the BPX-type breakpoints.
 *
 *   Returns:
-*       TRUE - a bpx-type breakpoint was found at the cs:eip
-*       FALSE - no bpx-type breakpoints at this address
+*       Address of the brakpoint structure that matches CS:EIP
+*       NULL - CS:EIP is free from breakpoints
 *
 ******************************************************************************/
-BOOL IsBreakpointAtCSIP(void)
+static TBP *IsBreakpointAtCSIP(void)
 {
-    int index;
+    int index;                          // Temp breakpoint index
 
     for(index=0; index<MAX_BREAKPOINTS; index++ )
     {
@@ -1115,17 +1142,14 @@ BOOL IsBreakpointAtCSIP(void)
             {
                 if( bp[index].address.sel==deb.r->cs && bp[index].address.offset==deb.r->eip )
                 {
-                    // Found a matching breakpoint!
-
-                    return( TRUE );
+                    return( &bp[index] );
                 }
             }
         }
     }
 
-    return(FALSE);
+    return(NULL);
 }
-
 
 /******************************************************************************
 *                                                                             *
@@ -1147,9 +1171,9 @@ void ArmBreakpoints(void)
     static const UINT bDr[] = {  0, 0, 1, 0, 2, 0, 0, 0, 3  };
 
     int index;                          // Temp breakpoint index
+    TBP *pBp;                           // Pointer to a breakpoint to use
     BYTE avail;                         // Available hw breakpoints
     UINT dr;                            // Temp debug register
-
 
     // Reset debug registers
     deb.sysReg.dr7 = 3 << 8;            // LE GE set recommended
@@ -1162,8 +1186,8 @@ void ArmBreakpoints(void)
         bp[deb.bpIndex].CurMisses = 0;
     }
 
-    // If the breakpoint would be placed at the current cs:eip..
-    if( IsBreakpointAtCSIP() )
+    // If the breakpoint would be placed at the current cs:eip AND it is an INT3 breakpoint
+    if( (pBp = IsBreakpointAtCSIP()) && !pBp->DrUse )
     {
         // .. enter the delayed arm mode
 
@@ -1174,71 +1198,28 @@ void ArmBreakpoints(void)
     }
     else
     {
-        avail = 0xF;                    // All 4 DR registers are available
-
-        //=================================================================================
-        // Resource allocation
-        //=================================================================================
-
-        // Pass I: Clear all in-use masks since we will start allocation
-        for(index=0; index<MAX_BREAKPOINTS; index++ )
+        // While there are more hardware breakpoints availables, distribute them
+        if( GlAvail )
         {
-            if( (bp[index].Flags & BP_ENABLED) )
+            avail = GlAvail;
+
+            index = 0;
+            while( index<MAX_BREAKPOINTS && avail )
             {
-                bp[index].DrUse = 0;
+                if( (bp[index].Flags & BP_ENABLED) && (bp[index].DrUse==0) )
+                {
+                    if( avail & 1 ) bp[index].DrUse = 1;
+                    else
+                    if( avail & 2 ) bp[index].DrUse = 2;
+                    else
+                    if( avail & 4 ) bp[index].DrUse = 4;
+                    else
+                    if( avail & 8 ) bp[index].DrUse = 8;
+
+                    avail &= ~bp[index].DrUse;
+                }
+                index++;
             }
-        }
-
-
-        // Pass II: Arm all breakpoints that have a hardware resource already assigned
-        for(index=0; index<MAX_BREAKPOINTS; index++ )
-        {
-            if( (bp[index].Flags & BP_ENABLED) && (bp[index].DrRequest) )
-            {
-                bp[index].DrUse = bp[index].DrRequest;
-                avail ^= bp[index].DrUse;
-            }
-        }
-
-        // Pass III: Allocate available to those that need it, if they did not get it yet
-        for(index=0; index<MAX_BREAKPOINTS; index++ )
-        {
-            if( (bp[index].Flags & BP_ENABLED) && IsNeedHwBp(bp[index].Type) && (bp[index].DrUse==0) )
-            {
-                // Assign the first available
-
-                if( avail & 1 ) bp[index].DrUse = 1;
-                else
-                if( avail & 2 ) bp[index].DrUse = 2;
-                else
-                if( avail & 4 ) bp[index].DrUse = 4;
-                else
-                if( avail & 8 ) bp[index].DrUse = 8;
-
-                avail ^= bp[index].DrUse;
-            }
-        }
-
-        // Pass IV: While there is more availables, distribute them out
-        index = 0;
-        while( index<MAX_BREAKPOINTS && avail )
-        {
-            if( (bp[index].Flags & BP_ENABLED) && (bp[index].DrUse==0) )
-            {
-                // Assign the first available
-
-                if( avail & 1 ) bp[index].DrUse = 1;
-                else
-                if( avail & 2 ) bp[index].DrUse = 2;
-                else
-                if( avail & 4 ) bp[index].DrUse = 4;
-                else
-                if( avail & 8 ) bp[index].DrUse = 8;
-
-                avail ^= bp[index].DrUse;
-            }
-
-            index++;
         }
 
         //=================================================================================
@@ -1262,15 +1243,11 @@ void ArmBreakpoints(void)
                             deb.sysReg.dr[ dr ] = bp[index].address.offset;
 
                             // Enable that breakpoint
-                            // We dont need to do anything special for execute since DR7
-                            // fields should be set to 0
-                            //deb.sysReg.dr7 |= 0 << (dr*4 + 16); // Execute Breakpoint
-
-                            deb.sysReg.dr7 |= 3 << (dr*2);  // Global + Local flag
+                            deb.sysReg.dr7 |= dr7mask[1 << dr];  // Global + Local flag
                         }
                         else
                         {
-                            // This BPX breakpoint is using embedded INT3
+                            // This BPX breakpoint is using an embedded INT3
 
                             // Save the original byte and place INT3 opcode
                             bp[index].origValue = AddrGetByte(&bp[index].address);
@@ -1290,7 +1267,7 @@ void ArmBreakpoints(void)
                         // Enable that breakpoint
                         deb.sysReg.dr7 |= 2 << (dr*4 + 16); // IO Breakpoint
 
-                        deb.sysReg.dr7 |= 3 << (dr*2);  // Global + Local flag
+                        deb.sysReg.dr7 |= dr7mask[1 << dr];  // Global + Local flag
 
                         break;
 
@@ -1309,7 +1286,7 @@ void ArmBreakpoints(void)
                         // Set the access size
                         deb.sysReg.dr7 |= bp[index].Size << (dr*4 + 16 + 2);
 
-                        deb.sysReg.dr7 |= 3 << (dr*2);  // Global + Local flag
+                        deb.sysReg.dr7 |= dr7mask[1 << dr];  // Global + Local flag
 
                         break;
                 }
@@ -1341,14 +1318,15 @@ void ArmBreakpoints(void)
 *   If we break due to our breakpoint INT3, decrement eip to position it on the
 *   valid instruction start that has been overwritten with 0xCC.
 *
-*   Debug registers will be cleared.
+*   Debug registers will be cleared since we assume we are entering debugger.
 *
 ******************************************************************************/
 void DisarmBreakpoints(void)
 {
     int index;
+    BOOL fDecrementEIP = FALSE;         // Signal to decrement EIP once
 
-    // Disarm the opposite way to allow possible duplicate breakpoints
+    // Disarm walking the opposite way to allow possible duplicate breakpoints
 
     for(index=MAX_BREAKPOINTS-1; index>=0; index-- )
     {
@@ -1360,7 +1338,7 @@ void DisarmBreakpoints(void)
                     // Execute breakpoint may use INT3 or hardware resource
                     if( bp[index].DrUse )
                     {
-                        if( (deb.sysReg.dr6 & 0xF) & bp[index].DrUse )
+                        if( deb.sysReg.dr6 & bp[index].DrUse )
                         {
                             // If the current cs:eip matches the bpx address, set the index
                             // We do that additional step for the cases where we simply used a HW BP
@@ -1381,28 +1359,25 @@ void DisarmBreakpoints(void)
 
                             // If the current cs:eip-1 matches the bpx address, set the index
                             if( deb.r->cs==bp[index].address.sel && deb.r->eip-1==bp[index].address.offset )
+                            {
                                 if( !(bp[index].Flags & BP_INTERNAL) )  // Dont set index on internal bps!
                                     deb.bpIndex = index;
 
-                            // Since we restored original byte from INT3 opcode, need to rewind the EIP
-                            deb.r->eip -= 1;
+                                // Since we restored original byte from an INT3 opcode, need to rewind the EIP
+                                fDecrementEIP = TRUE;
+                            }
                         }
+                        else
+                            dprinth(1, "%2X at %X", AddrGetByte(&bp[index].address), bp[index].address);
                     }
 
                     // As we loop over all enabled breakpoints, clear all internal ones since every
                     // time we hit a bp, we dont want them active any more. Those are step call-bypass
                     // and G=xxx command.
-                    // If we hit a one-time, internal breakpoint, we will clear it here, so it will be
 
                     if( bp[index].Flags & BP_INTERNAL )
                     {
-                        // Free the hardware bp resource
-
-                        if( bp[index].DrRequest )
-                            GlRequest ^= bp[index].DrRequest, hwbpinuse--;
-                        else
-                            if( IsNeedHwBp(bp[index].Type) )
-                                hwbpinuse--;
+                        GlAvail |= bp[index].DrUse;
 
                         // Clear the breakpoint entry - internal breakpoints dont have the command string
                         memset(&bp[index], 0, sizeof(TBP));
@@ -1417,14 +1392,24 @@ void DisarmBreakpoints(void)
                 case BP_TYPE_BPMW:
                 case BP_TYPE_BPMD:
 
-                    if( (deb.sysReg.dr6 & 0xF) & bp[index].DrUse )
+                    if( deb.sysReg.dr6 & bp[index].DrUse )
                         deb.bpIndex = index;
                     break;
             }
         }
     }
 
-    // For verification purposes, save debug registers away
+    // If we hit one INT3 breakpoint, we need to decrement eip once
+    if( fDecrementEIP )
+        deb.r->eip -= 1;
+
+    // Clear all DrUse bits since we will redistribute them when we arm them
+    for(index=0; index<MAX_BREAKPOINTS; index++ )
+    {
+        bp[index].DrUse = 0;
+    }
+
+    // For internal debug purposes, save debug registers into a temp buffer
     dr[0] = deb.sysReg.dr[0];
     dr[1] = deb.sysReg.dr[1];
     dr[2] = deb.sysReg.dr[2];
@@ -1442,7 +1427,6 @@ void DisarmBreakpoints(void)
     SetSysreg(&deb.sysReg);             // Write out DR7
 }
 
-
 /******************************************************************************
 *                                                                             *
 *   BOOL EvalBreakpoint(void)                                                 *
@@ -1452,7 +1436,8 @@ void DisarmBreakpoints(void)
 *   This function is called before debugger gets control to evaluate a single
 *   breakpoint that hit. All breakpoint counters will be adjusted.
 *
-*   The breakpoint that hit is read from deb.bpIndex variable.
+*   The breakpoint that hit is read from deb.bpIndex variable. Note that the
+*   DisarmBreakpoints() is already called.
 *
 *   Returns:
 *       TRUE - evaluation requires to continue execution
@@ -1465,6 +1450,8 @@ BOOL EvalBreakpoint(void)
     DWORD result;                       // Result of evaluation
     BOOL fPopup;                        // Result of breakpoint DO evaluation
 
+    fBpLog = FALSE;                     // Reset the BPLOG flag to none
+
     // Evaluate only if we hit a breakpoint
     if( deb.bpIndex>=0 )
     {
@@ -1473,14 +1460,10 @@ BOOL EvalBreakpoint(void)
         // If we hit a one-time breakpoint, clear it
         if( p->Flags & BP_ONETIME )
         {
-            dprinth(1, "Breakpoint due to one-time BPX %02X, cleared.", deb.bpIndex);
+            dprinth(1, "Breakpoint due to a one-time BPX %02X, cleared.", deb.bpIndex);
 
-            // Free the hardware bp resource
-            if( p->DrRequest )
-                GlRequest ^= p->DrRequest, hwbpinuse--;
-            else
-                if( IsNeedHwBp(p->Type) )
-                    hwbpinuse--;
+            // Free the breakpoint resources
+            GlAvail |= p->DrUse;
 
             // Free the command line of a breakpoint and IF/DO statements
             freeHeap(deb.hHeap, p->pCmd);
@@ -1503,46 +1486,33 @@ BOOL EvalBreakpoint(void)
                     if( result )
                     {
                         // Result is non-zero, means TRUE.
-                        // If the DO part was given, evaluate it as a command stream
-                        if( p->pDO )
+                        // If we had a BPLOG in the expression, dont pop up
+                        if( fBpLog )
                         {
-                            fPopup = CommandExecute(p->pDO);
-
-                            if( fPopup==FALSE )
-                            {
-                                // Command evaluation required to continue execution
-
-                                p->CurMisses++;
-
-                                return( TRUE );
-                            }
-                        }
-                        else
-                        {
-                            // No DO portion and it evaluated to TRUE, so break and popup
-
-                            p->Popups++;
                             p->Breaks++;
-                        }
-                    }
-                    else
-                    {
-                        // Result is zero, means FALSE, we will continue
-                        p->Misses++;        // Evaluated to FALSE and miss
-                        p->CurMisses++;     // Current misses
+                            p->Logged++;// Increment the logged count
 
-                        return( TRUE );     // Return to debugee
+                            return( TRUE );
+                        }
+                        // If the DO part was given, evaluate it as a command stream
+
+                        goto bp_check_do;
                     }
+                    // Result is zero, means FALSE, we will continue
+
+                    p->Misses++;        // Evaluated to FALSE and miss
+                    p->CurMisses++;     // Current misses
+
+                    return( TRUE );     // Return to debugee
                 }
-                else
-                {
-                    p->Errors++;            // Expression resulted in error in evaluation
-                }
+                // Expression resulted in error in evaluation
+
+                p->Errors++;
             }
             else
             {
-                // The breakpoint does not have IF condition; if it has DO portion, execute it unconditionally
-
+                // The breakpoint does not have IF condition; if it has a DO portion, execute it unconditionally
+bp_check_do:
                 if( p->pDO )
                 {
                     fPopup = CommandExecute(p->pDO);
@@ -1556,62 +1526,66 @@ BOOL EvalBreakpoint(void)
                         return( TRUE );     // Return to debugee
                     }
                 }
-                else
-                {
-                    // No DO portion and it evaluated to TRUE, so break and popup
-
-                    p->Popups++;                    // We will popup now
-                    p->Breaks++;
-                }
             }
         }
+        p->Breaks++;
+        p->Popups++;
     }
 
     return( FALSE );        // Popup in the debugger
 }
 
-
 /******************************************************************************
 *                                                                             *
-*   int BreakpointQuery(TADDRDESC Addr)                                       *
+*   void BreakpointDisableRange(DWORD dwStartAddress, UINT size)              *
 *                                                                             *
 *******************************************************************************
 *
-*   Checks if any breakpoint address matches given sel:offset. This is valid
-*   only for BPX breakpoints.
+*   Called from the module unload to free up (disable) all breakpoints within
+*   a certain address range. Since the module is getting unload, and its memory
+*   freed, it is not necessary to clean the embedded INT3 unless we have used
+*   a hardware breakpoint.
 *
-*   This function is called from the code source listing to signal a breakpoint
-*   within a source code line or address.
+*   This function is not called from the Linice context, but from the syscall
+*   hook!
 *
-*   Returns:
-*       -1 if no breakpoint addresses match
-*       bp index if match is found
+*   Where:
+*       dwStartAddress is the starting kernel address of the range
+*       size is the size of the address range
 *
 ******************************************************************************/
-int BreakpointQuery(TADDRDESC Addr)
+void BreakpointDisableRange(DWORD dwStartAddress, UINT size)
 {
     int index;
 
     for(index=0; index<MAX_BREAKPOINTS; index++ )
     {
-        // Check only enabled breakpoints
+        // Check only enabled breakpoints, BPX and BPM type whose target address is within the given range
 
         if( bp[index].Flags & BP_ENABLED )
         {
-            if( bp[index].Type==BP_TYPE_BPX )
+            if( bp[index].Type==BP_TYPE_BPX
+            ||  bp[index].Type==BP_TYPE_BPMB || bp[index].Type==BP_TYPE_BPMW || bp[index].Type==BP_TYPE_BPMD )
             {
-                if( bp[index].address.sel==Addr.sel && bp[index].address.offset==Addr.offset )
+                if( dwStartAddress<=bp[index].address.offset && bp[index].address.offset<(dwStartAddress+size) )
                 {
-                    // Found a matching address!
-                    return(index);
+                    // Found a matching address! Disable this breakpoint.
+                    bp[index].Flags &= ~BP_ENABLED;
+
+                    if( bp[index].DrUse )
+                    {
+                        // If we have used a hardware breakpoint, disable it
+                        deb.sysReg.dr7 &= ~(dr7mask[bp[index].DrUse]);
+                        SetDebugReg(&deb.sysReg);   // Write them back into the CPU
+
+                        GlAvail |= bp[index].DrUse;
+                        bp[index].DrUse = 0;
+                    }
                 }
             }
         }
     }
-
-    return(-1);
 }
-
 
 /******************************************************************************
 *                                                                             *
@@ -1653,7 +1627,6 @@ BOOL EvalBreakpointAddress(TADDRDESC *pAddr, int index)
     return(FALSE);
 }
 
-
 /******************************************************************************
 *                                                                             *
 *   void ArmDebugReg(int nDr, TADDRDESC Addr)                                 *
@@ -1685,6 +1658,5 @@ void ArmDebugReg(int nDr, TADDRDESC Addr)
     deb.sysReg.dr7 &= ~(3 << ((nDr*4)+16));
 
     // Set global and local flag to actually enable a breakpoint
-    deb.sysReg.dr7 |= 3 << (nDr*2);
+    deb.sysReg.dr7 |= dr7mask[1 << nDr];
 }
-

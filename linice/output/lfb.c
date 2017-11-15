@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       05/18/01                                                      *
 *                                                                             *
-*   Copyright (c) 2000-2004 Goran Devic                                       *
+*   Copyright (c) 2000-2005 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -908,14 +908,16 @@ static void DgaSprint(char *s)
 
                 default:
                         // Output a character on the screen
-                        DgaPrintCharacter(outDga.x+1, outDga.y+1, c, dga.col);
-
-                        // Store it in the cache
-                        cacheText[outDga.y][outDga.x] = c;
-
-                        // Advance the print position
                         if( outDga.x < outDga.sizeX )
+                        {
+                            DgaPrintCharacter(outDga.x+1, outDga.y+1, c, dga.col);
+
+                            // Store it in the cache
+                            cacheText[outDga.y][outDga.x] = c;
+
+                            // Advance the print position
                             outDga.x++;
+                        }
                     break;
             }
         }

@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       09/10/00                                                      *
 *                                                                             *
-*   Copyright (c) 1997-2004 Goran Devic                                       *
+*   Copyright (c) 1997-2005 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -600,32 +600,32 @@ void EdLin( char *sCmdLine )
                 case CHAR_ALT + PGUP:
                     // Alt + PgUp scrolls data window backward
 
-                    newOffset = deb.dataAddr.offset - DATA_BYTES * (pWin->d.nLines - 1);
-                    DataDraw(FALSE, newOffset);
+                    newOffset = deb.dataAddr[deb.nData].offset - DATA_BYTES * (pWin->data[deb.nData].nLines - 1);
+                    DataDraw(FALSE, newOffset, TRUE);
 
                     break;
 
                 case CHAR_ALT + PGDN:
                     // Alt + PgDown scrolls data window forward
 
-                    newOffset = deb.dataAddr.offset + DATA_BYTES * (pWin->d.nLines - 1);
-                    DataDraw(FALSE, newOffset);
+                    newOffset = deb.dataAddr[deb.nData].offset + DATA_BYTES * (pWin->data[deb.nData].nLines - 1);
+                    DataDraw(FALSE, newOffset, TRUE);
 
                     break;
 
                 case CHAR_ALT + UP:
                     // Alt + CursorUp scrolls data window one line back
 
-                    newOffset = deb.dataAddr.offset - DATA_BYTES;
-                    DataDraw(FALSE, newOffset);
+                    newOffset = deb.dataAddr[deb.nData].offset - DATA_BYTES;
+                    DataDraw(FALSE, newOffset, TRUE);
 
                     break;
 
                 case CHAR_ALT + DOWN:
                     // Alt + CursorDown scrolls data window one line forward
 
-                    newOffset = deb.dataAddr.offset + DATA_BYTES;
-                    DataDraw(FALSE, newOffset);
+                    newOffset = deb.dataAddr[deb.nData].offset + DATA_BYTES;
+                    DataDraw(FALSE, newOffset, TRUE);
 
                     break;
 

@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       05/01/00                                                      *
 *                                                                             *
-*   Copyright (c) 2000-2004 Goran Devic                                       *
+*   Copyright (c) 2000-2005 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -479,12 +479,14 @@ void VgaSprint(char *s)
 
                 default:
                         // All printable characters
-                        *(WORD *)(vga.pText + (outVga.x +  outVga.y * outVga.sizeX) * 2)
-                            = (WORD) c + deb.col[vga.col] * 256;
-
-                        // Advance the print position
                         if( outVga.x < outVga.sizeX )
+                        {
+                            *(WORD *)(vga.pText + (outVga.x +  outVga.y * outVga.sizeX) * 2)
+                                = (WORD) c + deb.col[vga.col] * 256;
+
+                            // Advance the print position
                             outVga.x++;
+                        }
                     break;
             }
         }

@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       10/15/00                                                      *
 *                                                                             *
-*   Copyright (c) 2000-2004 Goran Devic                                       *
+*   Copyright (c) 2000-2005 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -118,11 +118,9 @@ static char Buf[MAX_STRING];            // Temp line buffer to send line to edit
 ******************************************************************************/
 
 extern void MdaInit();
-extern int SerialInit(int com, int baud);
+extern BOOL SerialInit(int com, int baud);
+extern int InitVT100(void);
 extern void SerialPrintStat();
-
-extern DWORD GetDec(char **psString);
-
 
 /******************************************************************************
 *                                                                             *
@@ -619,12 +617,12 @@ BOOL cmdCode(char *args, int subClass)
     {
         case 1:         // On
             deb.fCode = TRUE;
-            RecalculateDrawWindows();
+            deb.fRedraw = TRUE;
         break;
 
         case 2:         // Off
             deb.fCode = FALSE;
-            RecalculateDrawWindows();
+            deb.fRedraw = TRUE;
         break;
 
         case 3:         // Display the state of the CODE view
@@ -716,12 +714,12 @@ BOOL cmdSet(char *args, int subClass)
                         {
                             case 1:         // On
                                 *pVar->pVal = TRUE;
-                                RecalculateDrawWindows();
+                                deb.fRedraw = TRUE;
                             break;
 
                             case 2:         // Off
                                 *pVar->pVal = FALSE;
-                                RecalculateDrawWindows();
+                                deb.fRedraw = TRUE;
                             break;
                         }
                     break;
@@ -742,7 +740,7 @@ BOOL cmdSet(char *args, int subClass)
                                         if( (pOut->resize)(pOut->sizeX, pOut->sizeY, value)==TRUE )
                                         {
                                             // New font value was accepted in the resize(), just repaint windows
-                                            RecalculateDrawWindows();
+                                            deb.fRedraw = TRUE;
                                         }
                                     }
                                     else
@@ -809,9 +807,7 @@ BOOL cmdResize(char *args, int subClass)
     else
     {
         // Set the new number of lines or width
-        value = GetDec(&args);
-
-        if( value )
+        if( GetDecB(&value, &args) && !*args )
         {
             if( subClass==0 )
                 x = value;              // Command was WIDTH
@@ -835,7 +831,7 @@ BOOL cmdResize(char *args, int subClass)
                         if( (pOut->resize)(x, y, deb.nFont)==TRUE )
                         {
                             // If the resize returned true, repaint windows
-                            RecalculateDrawWindows();
+                            deb.fRedraw = TRUE;
                         }
                     }
                 }
@@ -903,7 +899,7 @@ BOOL cmdColor(char *args, int subClass)
             deb.col[COL_HELP]    = 0x30;
             deb.col[COL_LINE]    = 0x02;
 
-            RecalculateDrawWindows();
+            deb.fRedraw = TRUE;
         }
         else
         {
@@ -930,7 +926,7 @@ BOOL cmdColor(char *args, int subClass)
                 for( i=COL_NORMAL; i<=COL_LINE; i++)
                     deb.col[i] = mycol[i];
 
-                RecalculateDrawWindows();
+                deb.fRedraw = TRUE;
             }
             else
                 PostError(ERR_SYNTAX, 0);
@@ -958,7 +954,8 @@ BOOL cmdColor(char *args, int subClass)
 ******************************************************************************/
 BOOL cmdSerial(char *args, int subClass)
 {
-    DWORD com = 0, baud;
+    static UINT com = 0;                // Use whatever default is in the serial module
+    static UINT baud = 0x9600;          // If we dont specify it, the default rate is 9600 baud
 
     if( *args )
     {
@@ -968,8 +965,12 @@ BOOL cmdSerial(char *args, int subClass)
             // Link the VGA back to be the default output device
             pOut = &outVga;
 
+            // Back to debugger, save the background
+            dputc(DP_ENABLE_OUTPUT);
+            dputc(DP_SAVEBACKGROUND);
+
             // Redraw all windows
-            RecalculateDrawWindows();
+            deb.fRedraw = TRUE;
         }
         else
         {
@@ -985,36 +986,49 @@ BOOL cmdSerial(char *args, int subClass)
                 args += 2;
             }
 
-            // Read the optional com port and baud rate
-            if( Expression(&com, args, &args) )
+            while( *args==' ' ) args++;      // Skip spaces before checking for the next parameter
+
+            if( *args )
             {
-                if( Expression(&baud, args, &args) )
+                // Read the optional com port and baud rate
+                if( Expression(&com, args, &args) )
                 {
                     if( com>=1 && com<=MAX_SERIAL )
                     {
-                        if( baud==0x2400 || baud==0x9600 || baud==0x19200 || baud==0x38400 || baud==0x57600 || baud==0x115200 )
+                        if( Expression(&baud, args, &args) )
                         {
-                            goto Proceed;       // All right!
+                            if( baud==0x2400 || baud==0x9600 || baud==0x19200 || baud==0x38400 || baud==0x57600 || baud==0x115200 )
+                            {
+                                goto Proceed;       // All right!
+                            }
                         }
-                        else
-                            dprinth(1, "Invalid baud rate (2400, 9600, 19200, 38400, 57600, 115200)");
-                    }
-                    else
-                        dprinth(1, "Serial port must be 1, 2, 3 or 4 (or 5 for a special 1E0)");
-                }
+                        // Could not evaluate expression into a baud rate, or the rate was illegal
 
-                PostError(ERR_SYNTAX, 0);
-                return(TRUE);
+                        dprinth(1, "Invalid baud rate (2400, 9600, 19200, 38400, 57600, 115200)");
+                        return(TRUE);
+                    }
+                }
+                // Either we could not evaluate the serial port number or the port number was illegal
+                dprinth(1, "Invalid com port (valid ports are: 1, 2, 3, 4, 5)");
+                return( TRUE );
             }
+            // No more arguments - use the defaults or the last selection
 Proceed:
+            // Restore client window since we are switching from the VGA out
+            dputc(DP_RESTOREBACKGROUND);
+            dputc(DP_DISABLE_OUTPUT);
+
             // Link the serial VT100 to be the default output device
             pOut = &outVT100;
 
-            // Turn the serial interface ON
+            // Reset the serial interface
             SerialInit(com, baud);
 
+            // Now we can initialize and start using a VT100 terminal
+            InitVT100();
+
             // Redraw all windows
-            RecalculateDrawWindows();
+            deb.fRedraw = TRUE;
         }
     }
     else
@@ -1107,7 +1121,7 @@ BOOL cmdDisplay(char *args, int subClass)
     dputc(DP_SAVEBACKGROUND);
 
     // Redraw all windows
-    RecalculateDrawWindows();
+    deb.fRedraw = TRUE;
 
     return( TRUE );
 }
@@ -1133,12 +1147,12 @@ BOOL cmdSrc(char *args, int subClass)
         case SRC_MIXED  : deb.eSrc = SRC_OFF;   break;
     }
 
-    // Reset the symbol context
+    // TODO: Reset the symbol context
 //    SetSymbolContext(deb.codeTopAddr.sel, deb.codeTopAddr.offset);
 //    SetSymbolContext(deb.r->cs, deb.r->eip);
 
     // Redraw all windows
-    RecalculateDrawWindows();
+    deb.fRedraw = TRUE;
 
     return( TRUE );
 }
@@ -1166,8 +1180,7 @@ BOOL cmdTabs(char *args, int subClass)
             {
                 deb.nTabs = nTabs;
 
-                // Redraw all windows
-                RecalculateDrawWindows();
+                deb.fRedraw = TRUE;
             }
             else
                 dprinth(1, "Tabs value should be 1 - 8");

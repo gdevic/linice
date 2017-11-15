@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       04/28/00                                                      *
 *                                                                             *
-*   Copyright (c) 2000-2004 Goran Devic                                       *
+*   Copyright (c) 2000-2005 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -88,6 +88,7 @@ TDescriptor IceIdtDescriptor = {0};
 extern void LoadIDT(PTDescriptor pIdt);
 extern void KeyboardHandler(void);
 extern void SerialHandler(int port);
+extern BOOL SerialInit(int com, int baud);
 extern void MouseHandler(void);
 
 extern DWORD SpinlockTest(DWORD *pSpinlock);
@@ -314,7 +315,7 @@ DWORD InterruptHandler( DWORD nInt, PTREGS pRegs )
 {
     //------------------------------------------------------------------------
     DWORD chain;
-//    BYTE savePIC1;
+    BYTE savePIC1 = 0;
 
     // If it is an embedded INT3 (0xCC) at the address of the hooked task switcher,
     // Simply call our function followed by the return to our buffer where we kept
@@ -454,11 +455,6 @@ DWORD InterruptHandler( DWORD nInt, PTREGS pRegs )
             // Acknowledge the interrupt controller
             IntAck(nInt);
 
-            // Explicitly enable interrupts on serial ports
-//                    savePIC1 = inp(0x21);
-//                    outp(0x21, savePIC1 & ~((1<<4) | (1<<3)));
-
-//            RunDebugger();      // Run the debugger now
             //------------------------------------------------------------------------
             // Continues running within the debugger. Returns when the debugger
             // issues an execute instruction
@@ -491,6 +487,15 @@ DWORD InterruptHandler( DWORD nInt, PTREGS pRegs )
                     // Be sure to enable interrupts so we can operate
                     LocalSTI();
 
+                    // TODO: The following direct handling of PIC1 probably breaks APIC !!!
+
+                    // Explicitly enable interrupts on serial ports if we use the serial connection
+                    // Note that this call may re-enable interrupts when messing with PIC
+                    if( !deb.fIoApic ) {                // TODO: Fix this with APIC
+                    savePIC1 = inp(0x21);               // Save old state of the interrupts enable
+                    SerialInit(0, 0);                   // Re-initialize PIC and UART _iff_ using serial
+                    }
+
                     // Now that we have enabled local interrupts, we can send a message to
                     // all other CPUs to interrupt what they've been doing and start spinning
                     // on our `in debugger' semaphore. That we do so they dont execute other
@@ -513,12 +518,16 @@ DWORD InterruptHandler( DWORD nInt, PTREGS pRegs )
                     // Disable interrupts so we can mess with IDT
                     LocalCLI();
 
+                    // Restore the state of the PIC1 so we dont interfere with the kernel
+                    if( !deb.fIoApic ) {                // TODO: Fix this with APIC
+                    outp(0x21, savePIC1);
+                    }
+
                     // Load debugee IDT
                     SET_IDT(deb.idt);
 
                     // Hook again the debugee IDT
                     HookDebuger();
-
                 }
 
                 // Restore system registers
@@ -526,9 +535,6 @@ DWORD InterruptHandler( DWORD nInt, PTREGS pRegs )
             }
 
             chain = 0;          // Continue into the debugee, do not chain
-
-            // Restore the state of the PIC1
-//                    outp(0x21, savePIC1);
 
             SpinlockReset(&deb.fRunningIce);
 

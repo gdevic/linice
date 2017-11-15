@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       12/25/01 Chrismas                                             *
 *                                                                             *
-*   Copyright (c) 2001-2004 Goran Devic                                       *
+*   Copyright (c) 2001-2005 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *

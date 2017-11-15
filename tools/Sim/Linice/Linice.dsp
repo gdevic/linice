@@ -234,6 +234,10 @@ SOURCE="$(LINICE_ROOT)\linice\command\disassembler-bytelen.c"
 # End Source File
 # Begin Source File
 
+SOURCE="$(LINICE_ROOT)\linice\command\disassembler-ea.c"
+# End Source File
+# Begin Source File
+
 SOURCE="$(LINICE_ROOT)\linice\command\disassembler.c"
 # End Source File
 # Begin Source File

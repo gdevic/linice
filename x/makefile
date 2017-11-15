@@ -2,7 +2,7 @@
 #																			 #
 #	Makefile for XICE - X-Window Linice Loader								 #
 #																			 #
-#	(c) 2000-2004 Goran Devic												 #
+#	(c) 2000-2005 Goran Devic												 #
 #	(c) "Linice" by Goran Devic												 #
 #	(c) "Linsym" by Goran Devic												 #
 #																			 #

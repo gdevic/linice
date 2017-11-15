@@ -12,9 +12,9 @@ Compile all components, depending on the kernel version:
 
 This command will also create a correct sym link named 'bin'
 
-Compile kernel specific code:
+Compile the kernel specific code:
 # cd ../bin
-# make
+# make clean ; make
 
 Install Linice:
 # ./linsym -i

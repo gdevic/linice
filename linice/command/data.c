@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       05/15/00                                                      *
 *                                                                             *
-*   Copyright (c) 2000-2004 Goran Devic                                       *
+*   Copyright (c) 2000-2005 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -116,12 +116,29 @@ static char buf[MAX_STRING];
 
 static char *sSize[4] = { "byte", "word", "", "dword" };
 
+// These defines select a method of access to a field string provided by the
+// DataGetSet function on access to data element:
+
+#define DATAGETSET_READ     1
+#define DATAGETSET_WRITE    2
+#define DATAGETSET_INSERT   3
+
+
 /******************************************************************************
 *                                                                             *
 *   Functions                                                                 *
 *                                                                             *
 ******************************************************************************/
 
+/******************************************************************************
+*                                                                             *
+*   int PrintAscii(int pos)                                                   *
+*                                                                             *
+*******************************************************************************
+*
+*   Prints the ASCII field in the buffer for a single data line.
+*
+******************************************************************************/
 static int PrintAscii(int pos)
 {
     int i;
@@ -139,7 +156,15 @@ static int PrintAscii(int pos)
     return( i + 1 );
 }
 
-
+/******************************************************************************
+*                                                                             *
+*   void GetDataLine(PTADDRDESC pAddr)                                        *
+*                                                                             *
+*******************************************************************************
+*
+*   Formats the buffer with a single data line.
+*
+******************************************************************************/
 void GetDataLine(PTADDRDESC pAddr)
 {
     int i, pos;
@@ -155,7 +180,7 @@ void GetDataLine(PTADDRDESC pAddr)
 
     pos = sprintf(buf, "%04X:%08X ", pAddr->sel, pAddr->offset - DATA_BYTES);
 
-    switch( deb.nDumpSize )
+    switch( deb.nDumpSize[deb.nData] )
     {
     //=========================================================
         case 1:             // BYTE
@@ -212,12 +237,20 @@ void GetDataLine(PTADDRDESC pAddr)
     buf[pos] = 0;
 }
 
-
+/******************************************************************************
+*                                                                             *
+*   DWORD GetDataLines()                                                      *
+*                                                                             *
+*******************************************************************************
+*
+*   Returns the number of data lines on the screen.
+*
+******************************************************************************/
 static DWORD GetDataLines()
 {
     // If data frame is visible, we will advance so many lines of data
-    if( pWin->d.fVisible )
-        return( pWin->d.nLines - 1 );
+    if( pWin->data[deb.nData].fVisible )
+        return( pWin->data[deb.nData].nLines - 1 );
 
     // Data window is not visible, so advance 8 or (history height-1) data lines
     if( pWin->h.nLines > 8 )
@@ -226,24 +259,62 @@ static DWORD GetDataLines()
     return( pWin->h.nLines - 1 );
 }
 
-
-void DataDraw(BOOL fForce, DWORD newOffset)
+/******************************************************************************
+*                                                                             *
+*   void DataDraw(BOOL fForce, DWORD newOffset, BOOL fCurrent)                *
+*                                                                             *
+*******************************************************************************
+*
+*   Draws the current data window.
+*
+******************************************************************************/
+void DataDraw(BOOL fForce, DWORD newOffset, BOOL fCurrent)
 {
     TADDRDESC Addr;
     int maxLines;
     int nLine = 1;
+    char *pSymName;                     // Symbol that was found
+    UINT range;                         // Range variable
+    char *pBuf = buf;                   // Pointer to the output buffer
 
-    if( pWin->d.fVisible==TRUE )
+
+    if( pWin->data[deb.nData].fVisible==TRUE )
     {
-        dprint("%c%c%c%c", DP_SAVEXY, DP_SETCURSORXY, 0+1, pWin->d.Top+1);
-        PrintLine("Data                                             %s", sSize[deb.nDumpSize-1]);
+        dprint("%c%c%c%c", DP_SAVEXY, DP_SETCURSORXY, 0+1, pWin->data[deb.nData].Top+1);
+
+        // If the expression had been set for this data window, print it;
+        // otherwise, try to find the closest symbol
+        if( deb.Dex[deb.nData][0] )
+        {
+            // We have an expression set via the DEX command (special format for expression error)
+            if( deb.DexError[deb.nData] )
+                pBuf += sprintf(pBuf, "?%-39s", deb.Dex[deb.nData]);
+            else
+                pBuf += sprintf(pBuf, "%-40s", deb.Dex[deb.nData]);
+        }
+        else
+        {
+            // If there is a symbol that we can use, print it out,
+            // unless it is within first 4K - there are no symbols at those addresses in Linux
+            pSymName = SymAddress2Name(newOffset, &range);
+
+            pBuf += sprintf(pBuf, "%-40s", pSymName && (newOffset>=4096)? pSymName : "Data");
+        }
+
+        pBuf += sprintf(pBuf, "   %5s                   %c%c(%d)%c%c",
+            sSize[deb.nDumpSize[deb.nData]-1],
+            DP_SETCOLINDEX, fCurrent? COL_BOLD:COL_LINE,
+            deb.nData,
+            DP_SETCOLINDEX, COL_LINE);
+
+        PrintLine(buf);
     }
     else
         if( fForce==FALSE )
             return;
 
-    deb.dataAddr.offset = newOffset;    // Store the new offset to dump
-    Addr = deb.dataAddr;                // Copy the current data address
+    deb.dataAddr[deb.nData].offset = newOffset;    // Store the new offset to dump
+    Addr = deb.dataAddr[deb.nData];                // Copy the current data address
     maxLines = GetDataLines();
 
     while( nLine <= maxLines )
@@ -253,11 +324,19 @@ void DataDraw(BOOL fForce, DWORD newOffset)
             break;
     }
 
-    if( pWin->d.fVisible==TRUE )
+    if( pWin->data[deb.nData].fVisible==TRUE )
         dprint("%c", DP_RESTOREXY);
 }
 
-
+/******************************************************************************
+*                                                                             *
+*   static BYTE ReadByte(char *pStr)                                          *
+*                                                                             *
+*******************************************************************************
+*
+*   Evaluates two ASCII codes into a BYTE value.
+*
+******************************************************************************/
 static BYTE ReadByte(char *pStr)
 {
     BYTE value, nibble;
@@ -271,17 +350,9 @@ static BYTE ReadByte(char *pStr)
     return( value );
 }
 
-
-// These defines select a method of access to a field string provided by the
-// DataGetSet function on access to data element:
-
-#define DATAGETSET_READ     1
-#define DATAGETSET_WRITE    2
-#define DATAGETSET_INSERT   3
-
 /******************************************************************************
 *                                                                             *
-*   static BOOL DataGetSet(int cmd, TADDRDESC *pAddr, int pos, char key)      *
+*   BOOL DataGetSet(int cmd, TADDRDESC *pAddr, int pos, char key)             *
 *                                                                             *
 *******************************************************************************
 *
@@ -311,7 +382,7 @@ static BOOL DataGetSet(int cmd, TADDRDESC *pAddr, int pos, char key)
             // Read bytes first
             temp = pAddr->offset;
 
-            for(i=0; i<DataField[deb.nDumpSize].FWidth; i++ )
+            for(i=0; i<DataField[deb.nDumpSize[deb.nData]].FWidth; i++ )
             {
                 MyData.byte[i] = AddrGetByte(pAddr);
                 pAddr->offset++;
@@ -320,7 +391,7 @@ static BOOL DataGetSet(int cmd, TADDRDESC *pAddr, int pos, char key)
             pAddr->offset = temp;
 
             // Translate into ASCII representation
-            switch( deb.nDumpSize )
+            switch( deb.nDumpSize[deb.nData] )
             {
                 case 1:     // BYTE
                     sprintf(sField, "%02X", MyData.byte[0]);
@@ -337,7 +408,7 @@ static BOOL DataGetSet(int cmd, TADDRDESC *pAddr, int pos, char key)
             break;
 
         case DATAGETSET_WRITE: // Write out a field from the internal ASCII buffer
-            switch( deb.nDumpSize )
+            switch( deb.nDumpSize[deb.nData] )
             {
                 case 1:     // BYTE
                 case 2:     // WORD
@@ -345,7 +416,7 @@ static BOOL DataGetSet(int cmd, TADDRDESC *pAddr, int pos, char key)
 
                     temp = pAddr->offset;
 
-                    for(i=deb.nDumpSize-1; i>=0; i--)
+                    for(i=deb.nDumpSize[deb.nData]-1; i>=0; i--)
                     {
                         bValue = ReadByte(&sField[i*2]);
                         AddrSetByte(pAddr, bValue, TRUE);
@@ -373,6 +444,50 @@ static BOOL DataGetSet(int cmd, TADDRDESC *pAddr, int pos, char key)
 
 /******************************************************************************
 *                                                                             *
+*   void DataEvaluateDex(void)                                                *
+*                                                                             *
+*******************************************************************************
+*
+*   This function is called from the context set to recalculate data window
+*   expressions for those windows that have it.
+*
+******************************************************************************/
+void DataEvaluateDex(void)
+{
+    UINT window;                        // Data window counter
+    DWORD offset;                       // Offset part of the new address
+    char *pExp;                         // Pointer to the expression
+
+    for(window=0; window<MAX_DATA; window++)
+    {
+        pExp = &deb.Dex[window][0];
+        if( *pExp )
+        {
+            // Run the evaluator to see if we can arrive to a new address value
+
+            evalSel = deb.dataAddr[window].sel;
+            if( Expression(&offset, pExp, &pExp) )
+            {
+                // Verify the selector value
+                if( VerifySelector(evalSel) )
+                {
+                    deb.DexError[window] = FALSE;
+                    deb.dataAddr[window].offset = offset;
+                    deb.dataAddr[window].sel = evalSel;
+
+                    continue;           // Do next data expression
+                }
+            }
+
+            // Expression is not valid, clear the evaluation error
+            deb.DexError[window] = TRUE;
+            deb.errorCode = NOERROR;
+        }
+    }
+}
+
+/******************************************************************************
+*                                                                             *
 *   static void DataEdit()                                                    *
 *                                                                             *
 *******************************************************************************
@@ -396,9 +511,9 @@ static void DataEdit()
     // specified in the deb.data address structure, so we can edit there
 
     // Make data window visible and redraw if necessary
-    if( pWin->d.fVisible==FALSE )
+    if( pWin->data[deb.nData].fVisible==FALSE )
     {
-        pWin->d.fVisible = TRUE;
+        pWin->data[deb.nData].fVisible = TRUE;
         RecalculateDrawWindows();
     }
 
@@ -409,17 +524,17 @@ static void DataEdit()
     DP_SETCURSORXY, 1+0, 1+pOut->sizeY-1,
     DP_SETCOLINDEX, COL_HELP,
     "Left", "Right", "Up", "Dn",
-    deb.nDumpSize > 4? "":"Tab: Toggle ASCII",
+    deb.nDumpSize[deb.nData] > 4? "":"Tab: Toggle ASCII",
     DP_RESTOREXY);
 
     // Set up initial parameters to edit in DATA mode the first field
-    pDataDesc = &DataField[deb.nDumpSize];
+    pDataDesc = &DataField[deb.nDumpSize[deb.nData]];
     index = 0;
 
     xCur = pDataDesc->xStart[index];
-    yCur = pWin->d.Top + 1;
+    yCur = pWin->data[deb.nData].Top + 1;
 
-    Addr = deb.dataAddr;
+    Addr = deb.dataAddr[deb.nData];
     DataGetSet(DATAGETSET_READ, &Addr, 0, 0);
 
     // Save cursor coordinates manually since we can't have more than one
@@ -464,7 +579,7 @@ static void DataEdit()
                     offs = xCur - pDataDesc->xAsciiStart;
                     index = offs / pDataDesc->FWidth;
                     xCur = pDataDesc->xStart[index];
-                    Addr.offset = deb.dataAddr.offset + DATA_BYTES * (yCur - pWin->d.Top - 1) + index * pDataDesc->FWidth;
+                    Addr.offset = deb.dataAddr[deb.nData].offset + DATA_BYTES * (yCur - pWin->data[deb.nData].Top - 1) + index * pDataDesc->FWidth;
                     DataGetSet(DATAGETSET_READ, &Addr, 0, 0);
                     break;
 
@@ -474,11 +589,11 @@ static void DataEdit()
                     if( xCur <= pDataDesc->xAsciiStart )
                     {
                         // Was that the first line in the data window?
-                        if( yCur==pWin->d.Top+1 )
+                        if( yCur==pWin->data[deb.nData].Top+1 )
                         {
                             // Scroll whole window one byte to the left (decrement address)
-                            deb.dataAddr.offset--;
-                            DataDraw(TRUE, deb.dataAddr.offset);
+                            deb.dataAddr[deb.nData].offset--;
+                            DataDraw(TRUE, deb.dataAddr[deb.nData].offset, TRUE);
                         }
                         else
                         {
@@ -496,11 +611,11 @@ static void DataEdit()
 
                 case UP:        // Up key accepts and cycles one line up
                     // Was that the first line in the data window?
-                    if( yCur==pWin->d.Top+1 )
+                    if( yCur==pWin->data[deb.nData].Top+1 )
                     {
                         // Scroll whole window one line up
-                        deb.dataAddr.offset -= DATA_BYTES;
-                        DataDraw(TRUE, deb.dataAddr.offset);
+                        deb.dataAddr[deb.nData].offset -= DATA_BYTES;
+                        DataDraw(TRUE, deb.dataAddr[deb.nData].offset, TRUE);
                     }
                     else
                     {
@@ -511,11 +626,11 @@ static void DataEdit()
 
                 case DOWN:      // Down key accepts and cycles one line down
                     // Was that the last line in the data window?
-                    if( yCur==pWin->d.Bottom )
+                    if( yCur==pWin->data[deb.nData].Bottom )
                     {
                         // Scroll whole window one line down
-                        deb.dataAddr.offset += DATA_BYTES;
-                        DataDraw(TRUE, deb.dataAddr.offset);
+                        deb.dataAddr[deb.nData].offset += DATA_BYTES;
+                        DataDraw(TRUE, deb.dataAddr[deb.nData].offset, TRUE);
                     }
                     else
                     {
@@ -525,24 +640,24 @@ static void DataEdit()
                     break;
 
                 case PGUP:      // Page down in the data window
-                        deb.dataAddr.offset -= DATA_BYTES * (pWin->d.nLines - 1);
-                        DataDraw(TRUE, deb.dataAddr.offset);
+                        deb.dataAddr[deb.nData].offset -= DATA_BYTES * (pWin->data[deb.nData].nLines - 1);
+                        DataDraw(TRUE, deb.dataAddr[deb.nData].offset, TRUE);
                     break;
 
                 case PGDN:      // Page up in the data window
-                        deb.dataAddr.offset += DATA_BYTES * (pWin->d.nLines - 1);
-                        DataDraw(TRUE, deb.dataAddr.offset);
+                        deb.dataAddr[deb.nData].offset += DATA_BYTES * (pWin->data[deb.nData].nLines - 1);
+                        DataDraw(TRUE, deb.dataAddr[deb.nData].offset, TRUE);
                     break;
 
                 default:        // Anything else is accepted
                         dprint("%c", Key);
 
                         // Store the ASCII character
-                        Addr.offset = deb.dataAddr.offset + DATA_BYTES * (yCur - pWin->d.Top - 1) + (xCur - pDataDesc->xAsciiStart);
+                        Addr.offset = deb.dataAddr[deb.nData].offset + DATA_BYTES * (yCur - pWin->data[deb.nData].Top - 1) + (xCur - pDataDesc->xAsciiStart);
                         AddrSetByte(&Addr, Key, TRUE);
 
                         // Redraw the window to display data in both panes
-                        DataDraw(TRUE, deb.dataAddr.offset);
+                        DataDraw(TRUE, deb.dataAddr[deb.nData].offset, TRUE);
 
                         // No break.. Continue similar to the RIGHT key:
 
@@ -550,11 +665,11 @@ static void DataEdit()
                     if( xCur >= pDataDesc->xAsciiEnd )
                     {
                         // Was that the last line in the data window?
-                        if( yCur==pWin->d.Bottom )
+                        if( yCur==pWin->data[deb.nData].Bottom )
                         {
                             // Scroll whole window one BYTE to the right (increment address)
-                            deb.dataAddr.offset++;
-                            DataDraw(TRUE, deb.dataAddr.offset);
+                            deb.dataAddr[deb.nData].offset++;
+                            DataDraw(TRUE, deb.dataAddr[deb.nData].offset, TRUE);
                         }
                         else
                         {
@@ -595,7 +710,7 @@ static void DataEdit()
 
                 case TAB:       // Tab key accepts change and toggles ASCII, if allowed
                     DataGetSet(DATAGETSET_WRITE, &Addr, 0, 0);
-                    DataDraw(TRUE, deb.dataAddr.offset);
+                    DataDraw(TRUE, deb.dataAddr[deb.nData].offset, TRUE);
                     if( pDataDesc->xAsciiStart )
                     {
                         fAscii = TRUE;
@@ -622,10 +737,10 @@ static void DataEdit()
                         if( index==0 )
                         {
                             // Was that the first line in the data window?
-                            if( yCur==pWin->d.Top+1 )
+                            if( yCur==pWin->data[deb.nData].Top+1 )
                             {
                                 // Scroll whole window one field to the left (decrement address)
-                                deb.dataAddr.offset -= deb.nDumpSize;
+                                deb.dataAddr[deb.nData].offset -= deb.nDumpSize[deb.nData];
                             }
                             else
                             {
@@ -642,11 +757,11 @@ static void DataEdit()
                         xCur = pDataDesc->xStart[index];
 
                         // Reload new field
-                        Addr.offset = deb.dataAddr.offset + DATA_BYTES * (yCur - pWin->d.Top - 1) + index * pDataDesc->FWidth;
+                        Addr.offset = deb.dataAddr[deb.nData].offset + DATA_BYTES * (yCur - pWin->data[deb.nData].Top - 1) + index * pDataDesc->FWidth;
                         DataGetSet(DATAGETSET_READ, &Addr, 0, 0);
 
                         // Redisplay data
-                        DataDraw(TRUE, deb.dataAddr.offset);
+                        DataDraw(TRUE, deb.dataAddr[deb.nData].offset, TRUE);
                     }
                     break;
 
@@ -654,10 +769,10 @@ static void DataEdit()
                     DataGetSet(DATAGETSET_WRITE, &Addr, 0, 0);
 
                     // Was that the first line in the data window?
-                    if( yCur==pWin->d.Top+1 )
+                    if( yCur==pWin->data[deb.nData].Top+1 )
                     {
                         // Scroll whole window one line up
-                        deb.dataAddr.offset -= DATA_BYTES;
+                        deb.dataAddr[deb.nData].offset -= DATA_BYTES;
                     }
                     else
                     {
@@ -665,21 +780,21 @@ static void DataEdit()
                         yCur--;
                     }
                     // Reload new field
-                    Addr.offset = deb.dataAddr.offset + DATA_BYTES * (yCur - pWin->d.Top - 1) + index * pDataDesc->FWidth;
+                    Addr.offset = deb.dataAddr[deb.nData].offset + DATA_BYTES * (yCur - pWin->data[deb.nData].Top - 1) + index * pDataDesc->FWidth;
                     DataGetSet(DATAGETSET_READ, &Addr, 0, 0);
 
                     // Redisplay data
-                    DataDraw(TRUE, deb.dataAddr.offset);
+                    DataDraw(TRUE, deb.dataAddr[deb.nData].offset, TRUE);
                     break;
 
                 case DOWN:      // Down key accepts and cycles one line down
                     DataGetSet(DATAGETSET_WRITE, &Addr, 0, 0);
 
                     // Was that the last line in the data window?
-                    if( yCur==pWin->d.Bottom )
+                    if( yCur==pWin->data[deb.nData].Bottom )
                     {
                         // Scroll whole window one line down
-                        deb.dataAddr.offset += DATA_BYTES;
+                        deb.dataAddr[deb.nData].offset += DATA_BYTES;
                     }
                     else
                     {
@@ -687,37 +802,37 @@ static void DataEdit()
                         yCur++;
                     }
                     // Reload new field
-                    Addr.offset = deb.dataAddr.offset + DATA_BYTES * (yCur - pWin->d.Top - 1) + index * pDataDesc->FWidth;
+                    Addr.offset = deb.dataAddr[deb.nData].offset + DATA_BYTES * (yCur - pWin->data[deb.nData].Top - 1) + index * pDataDesc->FWidth;
                     DataGetSet(DATAGETSET_READ, &Addr, 0, 0);
 
                     // Redisplay data
-                    DataDraw(TRUE, deb.dataAddr.offset);
+                    DataDraw(TRUE, deb.dataAddr[deb.nData].offset, TRUE);
                     break;
 
                 case PGUP:      // Page down in the data window
                         DataGetSet(DATAGETSET_WRITE, &Addr, 0, 0);
 
-                        deb.dataAddr.offset -= DATA_BYTES * (pWin->d.nLines - 1);
+                        deb.dataAddr[deb.nData].offset -= DATA_BYTES * (pWin->data[deb.nData].nLines - 1);
 
                         // Reload new field
-                        Addr.offset = deb.dataAddr.offset + DATA_BYTES * (yCur - pWin->d.Top - 1) + index * pDataDesc->FWidth;
+                        Addr.offset = deb.dataAddr[deb.nData].offset + DATA_BYTES * (yCur - pWin->data[deb.nData].Top - 1) + index * pDataDesc->FWidth;
                         DataGetSet(DATAGETSET_READ, &Addr, 0, 0);
 
                         // Redisplay data
-                        DataDraw(TRUE, deb.dataAddr.offset);
+                        DataDraw(TRUE, deb.dataAddr[deb.nData].offset, TRUE);
                     break;
 
                 case PGDN:      // Page up in the data window
                         DataGetSet(DATAGETSET_WRITE, &Addr, 0, 0);
 
-                        deb.dataAddr.offset += DATA_BYTES * (pWin->d.nLines - 1);
+                        deb.dataAddr[deb.nData].offset += DATA_BYTES * (pWin->data[deb.nData].nLines - 1);
 
                         // Reload new field
-                        Addr.offset = deb.dataAddr.offset + DATA_BYTES * (yCur - pWin->d.Top - 1) + index * pDataDesc->FWidth;
+                        Addr.offset = deb.dataAddr[deb.nData].offset + DATA_BYTES * (yCur - pWin->data[deb.nData].Top - 1) + index * pDataDesc->FWidth;
                         DataGetSet(DATAGETSET_READ, &Addr, 0, 0);
 
                         // Redisplay data
-                        DataDraw(TRUE, deb.dataAddr.offset);
+                        DataDraw(TRUE, deb.dataAddr[deb.nData].offset, TRUE);
                     break;
 
                 default:        // All other characters are considered for input
@@ -742,10 +857,10 @@ static void DataEdit()
                         if( index >= pDataDesc->nF )
                         {
                             // Was that the last line in the data window?
-                            if( yCur==pWin->d.Bottom )
+                            if( yCur==pWin->data[deb.nData].Bottom )
                             {
                                 // Scroll whole window one field to the right (increment address)
-                                deb.dataAddr.offset += deb.nDumpSize;
+                                deb.dataAddr[deb.nData].offset += deb.nDumpSize[deb.nData];
                             }
                             else
                             {
@@ -762,11 +877,11 @@ static void DataEdit()
                         xCur = pDataDesc->xStart[index];
 
                         // Reload new field
-                        Addr.offset = deb.dataAddr.offset + DATA_BYTES * (yCur - pWin->d.Top - 1) + index * pDataDesc->FWidth;
+                        Addr.offset = deb.dataAddr[deb.nData].offset + DATA_BYTES * (yCur - pWin->data[deb.nData].Top - 1) + index * pDataDesc->FWidth;
                         DataGetSet(DATAGETSET_READ, &Addr, 0, 0);
 
                         // Redisplay data
-                        DataDraw(TRUE, deb.dataAddr.offset);
+                        DataDraw(TRUE, deb.dataAddr[deb.nData].offset, TRUE);
                     }
                     break;
             }
@@ -782,7 +897,7 @@ static void DataEdit()
     }
 
     // Redisplay data
-    DataDraw(TRUE, deb.dataAddr.offset);
+    DataDraw(TRUE, deb.dataAddr[deb.nData].offset, TRUE);
 
     // Restore cursor coordinates
     pOut->x = xOrig;
@@ -810,19 +925,19 @@ BOOL cmdDdump(char *args, int subClass)
 
     // If data size was explicitly specified, set it as default
     if( subClass )
-        deb.nDumpSize = subClass;
+        deb.nDumpSize[deb.nData] = subClass;
 
     if( *args!=0 )
     {
         // Argument present: D <address> [L <len>]
-        evalSel = deb.dataAddr.sel;
+        evalSel = deb.dataAddr[deb.nData].sel;
         if( Expression(&offset, args, &args) )
         {
             // Verify the selector value
             if( VerifySelector(evalSel) )
             {
-                deb.dataAddr.offset = offset;
-                deb.dataAddr.sel = evalSel;
+                deb.dataAddr[deb.nData].offset = offset;
+                deb.dataAddr[deb.nData].sel = evalSel;
             }
             else
                 return( TRUE );
@@ -831,14 +946,13 @@ BOOL cmdDdump(char *args, int subClass)
     else
     {
         // No arguments - advance current address
-        deb.dataAddr.offset += DATA_BYTES * GetDataLines();
+        deb.dataAddr[deb.nData].offset += DATA_BYTES * GetDataLines();
     }
 
-    DataDraw(TRUE, deb.dataAddr.offset);
+    DataDraw(TRUE, deb.dataAddr[deb.nData].offset, TRUE);
 
     return( TRUE );
 }
-
 
 /******************************************************************************
 *                                                                             *
@@ -865,9 +979,9 @@ BOOL cmdEdit(char *args, int subClass)
     // different from the default, then set it to be the current format
     if( subClass )
     {
-        if( deb.nDumpSize != subClass )
+        if( deb.nDumpSize[deb.nData] != subClass )
         {
-            deb.nDumpSize = subClass;
+            deb.nDumpSize[deb.nData] = subClass;
 
             RecalculateDrawWindows();
         }
@@ -887,7 +1001,7 @@ BOOL cmdEdit(char *args, int subClass)
         // E [address] [data-list]      - store data without opening data window
 
         // Set the default selector to current data window
-        evalSel = deb.dataAddr.sel;
+        evalSel = deb.dataAddr[deb.nData].sel;
 
         if( Expression(&EditAddr.offset, args, &args) )
         {
@@ -911,7 +1025,7 @@ BOOL cmdEdit(char *args, int subClass)
             else
             {
                 // No data was following the address, open the data window for in place edit
-                deb.dataAddr = EditAddr;
+                deb.dataAddr[deb.nData] = EditAddr;
 
                 DataEdit();
             }
@@ -927,7 +1041,6 @@ BOOL cmdEdit(char *args, int subClass)
     return( TRUE );
 }
 
-
 /******************************************************************************
 *                                                                             *
 *   BOOL cmdFormat(char *args, int subClass)                                  *
@@ -939,15 +1052,97 @@ BOOL cmdEdit(char *args, int subClass)
 ******************************************************************************/
 BOOL cmdFormat(char *args, int subClass)
 {
-    switch( deb.nDumpSize )
+    switch( deb.nDumpSize[deb.nData] )
     {
-        case 1:     deb.nDumpSize = 2;   break;
-        case 2:     deb.nDumpSize = 4;   break;
-        case 4:     deb.nDumpSize = 1;   break;
+        case 1:     deb.nDumpSize[deb.nData] = 2;   break;
+        case 2:     deb.nDumpSize[deb.nData] = 4;   break;
+        case 4:     deb.nDumpSize[deb.nData] = 1;   break;
     }
 
-    DataDraw(TRUE, deb.dataAddr.offset);
+    DataDraw(TRUE, deb.dataAddr[deb.nData].offset, TRUE);
 
     return( TRUE );
 }
 
+/******************************************************************************
+*                                                                             *
+*   BOOL cmdDex(char *args, int subClass)                                     *
+*                                                                             *
+*******************************************************************************
+*
+*   Displays or assigns an expression to the data window
+*
+*   DEX         - lists expressions assigned to every data window
+*   DEX # <exp> - assigns an expression to a data window
+*   DEX #       - removes the expression for that data window
+*
+******************************************************************************/
+BOOL cmdDex(char *args, int subClass)
+{
+    int nLine = 1;                      // Print line counter
+    UINT window;                        // Data window counter
+
+    if( *args )
+    {
+        // Get the window number and copy the expression string
+
+        if( GetDecB(&window, &args) )
+        {
+            if( window < MAX_DATA )
+            {
+                while( *args==' ' ) *args++;    // Skip optional spaces
+
+                if( *args )
+                {
+                    // Make sure the selected data window is visible (but dont switch to it!)
+                    pWin->data[window].fVisible = TRUE;
+
+                    // Copy the expression string
+                    strcpy(&deb.Dex[window][0], args);
+                }
+                else
+                {   // If there are no more parameters, remove the expression
+
+                    deb.Dex[window][0] = 0;
+                }
+
+                // Run the initial evaluation and redraw windows on a way back
+                DataEvaluateDex();
+
+                deb.fRedraw = TRUE;
+            }
+            else
+                PostError(ERR_DATAWIN, 0);
+        }
+        else
+            PostError(ERR_SYNTAX, 0);
+    }
+    else
+    {
+        // List expressions assigned to every data window
+
+        for(window=0; window<MAX_DATA; window++)
+        {
+            if( deb.Dex[window][0] )
+                if( dprinth(nLine++, " %d  %s %s", window, deb.Dex[window], deb.DexError[window]?"(error evaluating)":"")==FALSE )
+                    break;
+        }
+    }
+
+    return( TRUE );
+}
+
+/******************************************************************************
+*                                                                             *
+*   DWORD fnDataAddr(DWORD arg)                                               *
+*                                                                             *
+*******************************************************************************
+*
+*   Expression evaluator helper function to return the address of the first
+*   data item displayed in the data window.
+*
+******************************************************************************/
+DWORD fnDataAddr(DWORD arg)
+{
+    return( deb.dataAddr[deb.nData].offset );
+}

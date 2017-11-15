@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       05/01/00                                                      *
 *                                                                             *
-*   Copyright (c) 2000-2004 Goran Devic                                       *
+*   Copyright (c) 2000-2005 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -72,9 +72,9 @@ static int irq[MAX_SERIAL]  = { 4, 3, 4, 3, 4 };
 
 typedef struct                          // Define serial connection structure
 {
-    int com;                            // COM port number
-    int port;                           // Serial port #
-    int irq;                            // IRQ: 2 or 3
+    int com;                            // COM port number (1,2,3...)
+    int port;                           // Serial port base IO address
+    int irq;                            // IRQ: 3 or 4
     int baud;                           // Baud rate number
     int rate;                           // Baud rate translated
     DWORD sent;                         // Number of bytes sent over the port
@@ -85,7 +85,7 @@ typedef struct                          // Define serial connection structure
 } TSerial;
 
 // Define serial port default setting: COM1, 9600 baud
-static TSerial Serial = { 1, 0x3F8, 3, 0x9600, 0x0C, };
+static TSerial Serial = { 1, 0x3F8, 4, 0x9600, 0x0C, };
 
 #if SERIAL_POLLING
 static char *smode="Polling";
@@ -99,16 +99,17 @@ static char *smode="Ints";
 *                                                                             *
 ******************************************************************************/
 
-extern int InitVT100(void);
 extern void VT100Input(BYTE data);
 
 /******************************************************************************
 *                                                                             *
-*   int SerialInit(int com, int baud)                                         *
+*   BOOL SerialInit(int com, int baud)                                        *
 *                                                                             *
 *******************************************************************************
 *
-*   Initializes serial interface.
+*   Initializes serial interface and enables interrupts on it. This function
+*   is called from the SERIAL command, and also every time debugger pops up,
+*   and a serial connector is active.
 *
 *   Where:
 *       com is the com port to use: [1..MAX_SERIAL]
@@ -116,90 +117,104 @@ extern void VT100Input(BYTE data);
 *
 *   If com==0, default (or previously set) port and rate will be used.
 *
+*   Returns:
+*       TRUE - serial interface has been reset + PIC enable interrupts
+*       FALSE - serial is not the default output device
+*
 ******************************************************************************/
-int SerialInit(int com, int baud)
+BOOL SerialInit(int com, int baud)
 {
-    // If we supplied the new port and baud numbers, set them up
-    if( com != 0 )
+    BYTE PIC;                           // Current value of the PIC1 register
+
+    // Do the reset only if the current output device is a serial terminal
+    if( pOut == &outVT100 )
     {
-        Serial.com = com;
-        com = com - 1;
-
-        Serial.port = port[com];
-        Serial.irq  = irq[com];
-        Serial.baud = baud;
-
-        switch( baud )
+        // If we supplied the new port and baud numbers, set them up
+        if( com != 0 )
         {
-            case 0x2400:    Serial.rate = 0x30; break;
-            case 0x9600:    Serial.rate = 0x0C; break;
-            case 0x19200:   Serial.rate = 0x06; break;
-            case 0x38400:   Serial.rate = 0x03; break;
-            case 0x57600:   Serial.rate = 0x02; break;
-            case 0x115200:  Serial.rate = 0x01; break;
+            Serial.com = com;
+            com = com - 1;
+
+            Serial.port = port[com];
+            Serial.irq  = irq[com];
+            Serial.baud = baud;
+
+            switch( baud )
+            {
+                case 0x2400:    Serial.rate = 0x30; break;
+                case 0x9600:    Serial.rate = 0x0C; break;
+                case 0x19200:   Serial.rate = 0x06; break;
+                case 0x38400:   Serial.rate = 0x03; break;
+                case 0x57600:   Serial.rate = 0x02; break;
+                case 0x115200:  Serial.rate = 0x01; break;
+            }
         }
-    }
-    // Initialize serial port - we'd rather not have interrupts at this time
-    LocalCLI();
+        // Initialize serial port - we'd rather not have interrupts at this time
+        LocalCLI();
 
-    // + 3 Data format register:
-    // [7]   Access to divisor latch
-    // [6]   BRK off
-    // [5:3] parity - 000 none
-    // [2]   stop 0 - 1 bit
-    // [1:0] 11 - 8 data bits
-    outp(Serial.port + 3, 0x83);
+        // + 3 Data format register:
+        // [7]   Access to divisor latch
+        // [6]   BRK off
+        // [5:3] parity - 000 none
+        // [2]   stop 0 - 1 bit
+        // [1:0] 11 - 8 data bits
+        outp(Serial.port + 3, 0x83);
 
-    // Output baud rate parameter
-    outp(Serial.port + 0, Serial.rate);
-    outp(Serial.port + 1, 0);
+        // Output baud rate parameter
+        outp(Serial.port + 0, Serial.rate);
+        outp(Serial.port + 1, 0);
 
-    // Revert the DLATCH to 0
-    outp(Serial.port + 3, 3);
+        // Revert the DLATCH to 0
+        outp(Serial.port + 3, 3);
 
 #if SERIAL_POLLING
-    // We still expect interrupt on receiver data in
-    outp(Serial.port + 1, 0x01);
+        // We still expect interrupt on receiver data in
+        outp(Serial.port + 1, 0x01);
 
-    // DTR + RTS set
-    outp(Serial.port + 4, 0x08 | 0x03);
+        // DTR + RTS set
+        outp(Serial.port + 4, 0x08 | 0x03);
 #else
-    // + 1 Interrupt enable register:
-    // [3] Issue interrupt on state-change of a RS-232 input line
-    // [2] Issue interrupt on parity, overrun, framing error or break
-    // [1] Issue interrupt when out buffer is empty (ready to send)
-    // [0] Issue interrupt when byte arrives (incomming)
-    outp(Serial.port + 1, 0x06);
+        // + 1 Interrupt enable register:
+        // [3] Issue interrupt on state-change of a RS-232 input line
+        // [2] Issue interrupt on parity, overrun, framing error or break
+        // [1] Issue interrupt when out buffer is empty (ready to send)
+        // [0] Issue interrupt when byte arrives (incomming)
+        outp(Serial.port + 1, 0x06);
 
-    // + 2 Interrupt identification line:
-    // [2] \   00 - change of RS232 line     01 - output buffer empty
-    // [1]  \  10 - data received            11 - error or break
-    // [0] 1 - no pending int.  0 - interrupt pending
+        // + 2 Interrupt identification line:
+        // [2] \   00 - change of RS232 line     01 - output buffer empty
+        // [1]  \  10 - data received            11 - error or break
+        // [0] 1 - no pending int.  0 - interrupt pending
 
-    // + 4 Modem control register:
-    // [3] Must be set to allow interrupts
-    // [1] RTS
-    // [0] DTR
-    outp(Serial.port + 4, 0x08 | 0x02 | 0x01);
+        // + 4 Modem control register:
+        // [3] Must be set to allow interrupts
+        // [1] RTS
+        // [0] DTR
+        outp(Serial.port + 4, 0x08 | 0x02 | 0x01);
 
 #endif // SERIAL_POLLING
 
-    Serial.sent = 0;
-    Serial.parity = Serial.overrun = Serial.framing = Serial.brk = 0;
-    Serial.head = 0;
-    Serial.tail = 0;
+        Serial.sent = 0;
+        Serial.parity = Serial.overrun = Serial.framing = Serial.brk = 0;
+        Serial.head = 0;
+        Serial.tail = 0;
 
-    // Empty the input queue
-    while( inp(Serial.port + 5) & 1 )
-        inp(Serial.port + 0);
+        // Empty the input queue
+        while( inp(Serial.port + 5) & 1 )
+            inp(Serial.port + 0);
 
-    // Done with initialization of the serial port
-    LocalSTI();
+        // Done with initialization of the serial port
+        LocalSTI();
 
-    // Now we can initialize and start using a VT100 terminal
-    InitVT100();
+        // Enable the correct interrupt for the serial communication
+        PIC = inp(0x21);
+        PIC = PIC & ~(1 << Serial.irq);
+        outp(0x21, PIC);
 
-    return(0);
+        return( TRUE );
+    }
+
+    return(FALSE);
 }
 
 
@@ -252,7 +267,6 @@ void SerialHandler(int IRQ)
     //  X    0    X5   X4   X3   X2   X1   X0
     //  X    0    Y5   Y4   Y3   Y2   Y1   Y0
     //
-
 
     // Otherwise, it is a remote terminal
     // See if our serial port initiated this interrupt

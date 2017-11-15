@@ -140,6 +140,8 @@ extern BYTE Disassembler( PTDISASM pDis );
 extern BYTE DisassemblerLen( PTDISASM pDis );
 extern DWORD GetDisFlags(void);
 extern int GetInstructionLen(WORD cs, DWORD eip);
+extern BOOL IsEffectiveAddress(void);
+extern DWORD fnEAddr(DWORD arg);
 
 
 #endif //  _DISASM_INT_H_

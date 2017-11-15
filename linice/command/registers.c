@@ -44,6 +44,7 @@
 
 #include "clib.h"                       // Include C library header file
 #include "ice.h"                        // Include main debugger structures
+#include "disassembler.h"               // Include disassembler for ea
 
 /******************************************************************************
 *                                                                             *
@@ -171,8 +172,22 @@ static TRegEdit RegEdit[] = {
 *                                                                             *
 ******************************************************************************/
 
+extern BOOL GlobalReadDword(DWORD *ppDword, DWORD dwAddress);
+
+/******************************************************************************
+*                                                                             *
+*   void RegDraw(BOOL fForce)                                                 *
+*                                                                             *
+*******************************************************************************
+*
+*   Function that actually prints the register information.
+*
+******************************************************************************/
 void RegDraw(BOOL fForce)
 {
+    static char bufEA[16];              // Buffer to print effective address substring
+    DWORD EA, PtrEA;                    // Effective address variable and the value
+
     if( pWin->r.fVisible==TRUE )
         dprint("%c%c%c%c", DP_SAVEXY, DP_SETCURSORXY, 0+1, 0+1);
     else
@@ -193,14 +208,36 @@ void RegDraw(BOOL fForce)
             ATTRFL(PF_MASK, 'P','p'),
             ATTRFL(CF_MASK, 'C','c') );
 
-    dprinth(3, "CS=%c%c%04X%c%c   DS=%c%c%04X%c%c   SS=%c%c%04X%c%c   ES=%c%c%04X%c%c   FS=%c%c%04X%c%c   GS=%c%c%04X%c%c",
-            ATTR(cs), ATTR(ds), ATTR(ss), ATTR(es), ATTR(fs), ATTR(gs) );
+    // Print the optional current instruction's effective address
+    if( IsEffectiveAddress() )
+    {
+        EA = fnEAddr(0);
+
+        // Get the DWORD value from the effective address
+        if( GlobalReadDword(&PtrEA, EA) )
+            sprintf(bufEA, "%08X=%08X", EA, PtrEA);
+        else
+            sprintf(bufEA, "%08X=????????", EA);
+    }
+    else
+        bufEA[0] = 0;
+
+    dprinth(3, "CS=%c%c%04X%c%c   DS=%c%c%04X%c%c   SS=%c%c%04X%c%c   ES=%c%c%04X%c%c   FS=%c%c%04X%c%c   GS=%c%c%04X%c%c   %s",
+        ATTR(cs), ATTR(ds), ATTR(ss), ATTR(es), ATTR(fs), ATTR(gs), bufEA);
 
     if( pWin->r.fVisible==TRUE )
         dprint("%c", DP_RESTOREXY);
 }
 
-
+/******************************************************************************
+*                                                                             *
+*   void EditInPlace(PTRegField pReg, int xDisp)                              *
+*                                                                             *
+*******************************************************************************
+*
+*   Edits register values.s
+*
+******************************************************************************/
 static void EditInPlace(PTRegField pReg, int xDisp)
 {
     BOOL fContinue = TRUE;              // Continuation flag
@@ -333,7 +370,6 @@ static void EditInPlace(PTRegField pReg, int xDisp)
     pOut->y = yOrig;
 }
 
-
 /******************************************************************************
 *                                                                             *
 *   BOOL cmdReg(char *args, int subClass)                                     *
@@ -361,7 +397,7 @@ BOOL cmdReg(char *args, int subClass)
         // If we changed cs:eip, we need to recalculate the whole context
         SetSymbolContext(deb.r->cs, deb.r->eip);
 
-        RecalculateDrawWindows();
+        deb.fRedraw = TRUE;
     }
     else
     {
@@ -425,7 +461,7 @@ BOOL cmdReg(char *args, int subClass)
                             // If we changed cs:eip, we need to recalculate the whole context
                             SetSymbolContext(deb.r->cs, deb.r->eip);
 
-                            RecalculateDrawWindows();
+                            deb.fRedraw = TRUE;
                         }
                         else
                             dprinth(1, "Value out of range for selected register");

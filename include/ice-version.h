@@ -4,7 +4,7 @@
 *                                                                             *
 *   Date:       10/28/03                                                      *
 *                                                                             *
-*   Copyright (c) 2003-2004 Goran Devic                                       *
+*   Copyright (c) 2003-2005 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -48,7 +48,7 @@
 // using the same root defines.
 
 #define MAJOR_VERSION       2   // (Keep this comment for the Perl script)
-#define MINOR_VERSION       2   // (Keep this comment for the Perl script)
+#define MINOR_VERSION       5   // (Keep this comment for the Perl script)
 
 // Define current Linice version
 //

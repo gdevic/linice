@@ -7,6 +7,6 @@ Port to kernels 2.6:
  * Peter K.
  * Carlos Manuel Duclos Vergara
 
-Rewrote ASM files from NASM syntax to GCC syntax (not used yet):
+Rewrote ASM files from NASM syntax to GCC syntax:
 
  * Oleg Khudyakov
