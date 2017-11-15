@@ -147,6 +147,8 @@ int InitPacket(PTINITPACKET pInit)
                 pWin->l.fVisible = TRUE;
                 pWin->l.nLines   = 4;
 
+                pWin->w.fVisible = TRUE;
+                pWin->w.nLines   = 4;       // We need to set number of lines even if it is invisible to start
 
 
                 pWin->r.fVisible = TRUE;

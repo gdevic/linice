@@ -337,6 +337,12 @@ BOOL cmdReg(char *args, int subClass)
         // No arguments - if the register window is not visible, make it visible
         // then edit in place
         EditInPlace(&RegField[0], 0);
+
+        // TODO: Edit cs:eip should recalc context. do this better...
+        // If we changed eip, we need to recalculate the whole context
+        SetSymbolContext(deb.r->cs, deb.r->eip);
+
+        RecalculateDrawWindows();
     }
     else
     {
@@ -385,6 +391,10 @@ BOOL cmdReg(char *args, int subClass)
 
                         // If we changed eip, we better readjust the code window address
                         deb.codeTopAddr.offset = deb.r->eip;
+
+                        // TODO: Edit cs:eip should recalc context. do this better...
+                        // If we changed eip, we need to recalculate the whole context
+                        SetSymbolContext(deb.r->cs, deb.r->eip);
 
                         RecalculateDrawWindows();
                     }

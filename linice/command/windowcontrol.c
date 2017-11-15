@@ -193,6 +193,48 @@ BOOL cmdWl(char *args, int subClass)
 
 /******************************************************************************
 *                                                                             *
+*   BOOL cmdWw(char *args, int subClass)                                      *
+*                                                                             *
+*******************************************************************************
+*
+*   WW          - toggle watch window on/off
+*   WW [n]      - sets the watch window size (and opens it)
+*
+******************************************************************************/
+BOOL cmdWw(char *args, int subClass)
+{
+    int value;
+
+    if( *args )
+    {
+        // Argument is present - get the number of lines and activate window
+        value = GetDec(&args);
+
+        // If the number of lines was 0, close window
+        if( value==0 )
+            pWin->w.fVisible = FALSE;
+        else
+        {
+            pWin->w.fVisible = TRUE;
+            pWin->w.nLines = value + 1;
+        }
+    }
+    else
+    {
+        // No arguments - toggle open/close window
+
+        pWin->w.fVisible = !pWin->w.fVisible;
+    }
+
+    // Repaint all windows
+    RecalculateDrawWindows();
+
+    return( TRUE );
+}
+
+
+/******************************************************************************
+*                                                                             *
 *   BOOL cmdWr(char *args, int subClass)                                      *
 *                                                                             *
 *******************************************************************************

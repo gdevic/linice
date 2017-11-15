@@ -65,6 +65,8 @@ BOOL ParseFunctionScope(int fd, int fs, BYTE *pBuf)
     long fileOffset = 0;                // Temp file offset position
     WORD nTokens = 0;                   // Number of tokens in a function
     BOOL fInFunction = FALSE;           // Are we inside a function scope?
+    int nCurrentSection;                // Current string section offset
+    int nSectionSize;                   // Current section string size
 
     Elf32_Ehdr *pElfHeader;             // ELF header
 
@@ -123,12 +125,24 @@ BOOL ParseFunctionScope(int fd, int fs, BYTE *pBuf)
         // Parse stab section
         pStab = (StabEntry *) ((char*)pElfHeader + SecStab->sh_offset);
         i = SecStab->sh_size / sizeof(StabEntry);
+        nCurrentSection = 0;
+        nSectionSize = 0;
         while( i-- )
         {
-            pStr = (char *)pElfHeader + SecStabstr->sh_offset + pStab->n_strx;
+            pStr = (char *)pElfHeader + SecStabstr->sh_offset + pStab->n_strx + nCurrentSection;
 
             switch( pStab->n_type )
             {
+                // 0x00 (N_UNDEF) is actually storing the current section string size
+                case N_UNDF:
+                    // We hit another string section, need to advance the string offset of the previous section
+                    nCurrentSection += nSectionSize;
+                    // Save the (new) currect string section size
+                    nSectionSize = pStab->n_value;
+
+                    printf("HdrSym size: %lX\n", pStab->n_value);
+                break;
+
                 case N_FUN:
                     printf("FUN---");
                     if( *pStr==0 )

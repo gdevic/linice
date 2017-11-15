@@ -1066,3 +1066,37 @@ char * strupr( char *s )
 }
 
 
+/******************************************************************************
+* EXOTIC FUNCTIONS TAKEN FROM OTHER LANGUAGES
+******************************************************************************/
+
+/******************************************************************************
+*
+*   char *substr(char *s, int i, int j)
+*
+*      Returns a substring from index i to index j (inclusive)
+*
+*   Where:
+*       s - source string
+*       i - index of the first character
+*       j - index of the last character
+*
+*   Returns:
+*       The address of the static buffer
+*       NULL if i>j or the substring is larger than MAX_STRING
+*
+******************************************************************************/
+#define MAX_STRING      256
+char *substr(char *s, int i, int j)
+{
+    static char buf[MAX_STRING];        // Resulting buffer
+
+    if( i>j || j-i>MAX_STRING-1 )
+        return( NULL );
+
+    strncpy(buf, &s[i], j-i);
+    buf[j-i] = 0;                       // Null-terminate string
+
+    return( buf );
+}
+

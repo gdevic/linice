@@ -182,7 +182,7 @@ int UserAddSymbolTable(void *pSymUser)
                                     // Module is already loaded - we need to relocate symbol table based on it
 
                                     // Get the offset of the init_module global symbol from this symbol table
-                                    if( SymbolName2Value(pSymTab, &dwInitFunctionSymbol, "init_module") )
+                                    if( SymbolName2Value(pSymTab, &dwInitFunctionSymbol, "init_module", 11) )
                                     {
                                         dprinth(1, "Relocating symbols for `%s'", pSymTab->sTableName);
 
@@ -653,9 +653,19 @@ void SymTabRelocate(TSYMTAB *pSymTab, int pReloc[], int factor)
                     {
                         // pGlobal->bFlags contains the symbol segment that is index
                         // into the relocation array for that segment type
+                        if( pGlobal->bFlags==0x00 )
+                        {
+                            // [0] is .text
+                            pGlobal->dwStartAddress += pReloc[0] * factor;
+                            pGlobal->dwEndAddress   += pReloc[0] * factor;
+                        }
+                        else
+                        {
+                            // [1] is .data
+                            pGlobal->dwStartAddress += pReloc[1] * factor;
+                            pGlobal->dwEndAddress   += pReloc[1] * factor;
+                        }
 
-                        pGlobal->dwStartAddress += pReloc[pGlobal->bFlags] * factor;
-                        pGlobal->dwEndAddress   += pReloc[pGlobal->bFlags] * factor;
                     }
                     break;
 

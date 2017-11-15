@@ -103,6 +103,36 @@ DWORD AddrSetByte(PTADDRDESC pAddr, BYTE value, BOOL fForce)
 
 /******************************************************************************
 *                                                                             *
+*   DWORD fnPtr(DWORD arg)                                                    *
+*                                                                             *
+*******************************************************************************
+*
+*   Expression evaluator helper function to return a DWORD from a memory
+*   location given a pointer.
+*
+******************************************************************************/
+DWORD fnPtr(DWORD arg)
+{
+    BYTE value[4];                      // Temporary DWORD store
+    TADDRDESC Addr;                     // Address to look up
+
+    // If the selector is not quite right, set it up
+    if( SelLAR(evalSel)==0 )
+        evalSel = deb.r->ds;
+
+    Addr.sel = evalSel;
+    Addr.offset = arg;
+
+    value[0] = AddrGetByte(&Addr); Addr.offset++;
+    value[1] = AddrGetByte(&Addr); Addr.offset++;
+    value[2] = AddrGetByte(&Addr); Addr.offset++;
+    value[3] = AddrGetByte(&Addr);
+
+    return( *(DWORD *)value );
+}
+
+/******************************************************************************
+*                                                                             *
 *   BOOL VerifySelector(WORD Sel)                                             *
 *                                                                             *
 *******************************************************************************

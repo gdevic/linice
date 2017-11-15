@@ -59,7 +59,7 @@
 *                                                                             *
 ******************************************************************************/
 
-char *GetTypeString(TSYMTYPEDEF1 *pType1)
+char *GetTypeString(TSYMTYPEDEF1 *pType1, BOOL fTypedef)
 {
     static char buf[MAX_STRING+1];      // Static buffer to return the string info
     char *pName;                        // Pointer to name string
@@ -83,9 +83,12 @@ char *GetTypeString(TSYMTYPEDEF1 *pType1)
         {
             memset(buf, 0, sizeof(buf));
 
-            // If the name type was 'T', prepend "typedef"
-            if( *pName=='T' )
+            // If the name type was 'T', prepend "typedef", if we asked for it..
+            if( *pName=='T' && fTypedef )
                 strcpy(buf, "typedef ");
+
+            // If it is a forward-defined type, it has form of xs, xu, xe
+
 
             switch( *pDef )
             {
@@ -118,6 +121,79 @@ char *GetTypeString(TSYMTYPEDEF1 *pType1)
     return( buf );
 }
 
+char *GetTypeStringItem(TSYMTYPEDEF1 *pType1, char *pTypeName)
+{
+    static char buf[MAX_STRING+1];      // Static buffer to return the string info
+    char *pName;                        // Pointer to name string
+    char *pDef;                         // Pointer to definition string
+    BOOL fForward = FALSE;              // Forward declaration type?
+
+    if( pType1 )
+    {
+        // Parse type definition string to return the proper type description
+
+        pName = pIce->pSymTabCur->pPriv->pStrings + pType1->dName;
+        pDef = pIce->pSymTabCur->pPriv->pStrings + pType1->dDef;
+
+        // If it is a basic type, use the type name as a definition instead and we are done
+        if( pType1->dDef <= TYPEDEF__LAST )
+        {
+            // Type is one of the basic types
+
+            strcpy(buf, pName+1);
+        }
+        else
+        {
+            buf[0] = 0;             // Zero-out the buffer
+
+            // If it is a forward-defined type, it has form of xs, xu, xe
+            if( *pDef=='x' )
+            {
+                pDef++;             // Advance to the type character
+
+                switch( *pDef )
+                {
+                    case 's':       // Type is a structure
+                        strcpy(buf, "struct ");
+                        strcat(buf, pDef+1);
+                        break;
+                }
+            }
+            else
+            {
+                switch( *pDef )
+                {
+                    case 's':   // Type is a structure
+                        strncat(buf, pName+1, MAX_SYMBOL_LEN);
+                        break;
+
+                    case 'e':   // Type is an enum
+                        strncat(buf, pName+1, MAX_SYMBOL_LEN);
+                        break;
+
+                    case 'u':   // Type is an union
+                        strncat(buf, pName+1, MAX_SYMBOL_LEN);
+                        break;
+
+                    case 'a':   // Type is an array
+                        sprintf(buf, ">>%s<<%s>>", pName, pDef);
+                        break;
+
+                    default:    // Whatever appears here, we ought to support!
+                        strncpy(buf, pDef, MAX_SYMBOL_LEN);
+                        break;
+                }
+            }
+        }
+    }
+    else
+    {
+        strcpy(buf, "unknown");
+    }
+
+    return( buf );
+}
+
 
 TSYMTYPEDEF1 *Type2Typedef(char *pTypeName);
 TSYMTYPEDEF1 *Typedef2TypedefLeaf(int *pPtrLevel, TSYMTYPEDEF1 *pType1);
@@ -128,16 +204,22 @@ void PrettyPrintType(TSYMTYPEDEF1 *pType1)
     static char buf[MAX_STRING+1];      // Static buffer to print one line
     TSYMTYPEDEF1 *pSubType1;
     char *pDef;                         // Pointer to definition string
-    char *pName, *pNameEnd;             // Pointer to type name
+    char *pName;                        // Pointer to type name
     DWORD size;                         // Item size
+    int nLine = 1;
     int nTokenLen;                      // Token length
     int nPtrLevel = 0;
 
+    pName = pIce->pSymTabCur->pPriv->pStrings + pType1->dName;
     pDef = pIce->pSymTabCur->pPriv->pStrings + pType1->dDef;
     
     switch( *pDef )
     {
+        //--------------------------------------------------------------------
         case 's':       // Structure
+        //--------------------------------------------------------------------
+
+            if( dprinth(nLine++, "%s {", GetTypeString(pType1, TRUE) )==FALSE) break;
 
             pDef++;                 // Advance past 's'
             size = GetDec(&pDef);   // Get the structure size in bytes
@@ -158,7 +240,7 @@ void PrettyPrintType(TSYMTYPEDEF1 *pType1)
                 if( pSubType1 )
                 {
                     // Print the subtype string
-                    strcpy(buf, GetTypeString(pSubType1));
+                    strcpy(buf, GetTypeStringItem(pSubType1), NULL);
                     strcat(buf, " ");
 
                     // Print a number of levels of pointer indirection
@@ -168,7 +250,7 @@ void PrettyPrintType(TSYMTYPEDEF1 *pType1)
                     }
                 }
 
-                dprinth(1, "    %s%s;", buf, substr(pName, 0, nTokenLen-1));
+                if( dprinth(nLine++, "    %s%s;", buf, substr(pName, 0, nTokenLen-1))==FALSE ) return;
 
                 // Look for the next subitem entry, separated by ';'
                 pDef = strchr(pDef, ';');
@@ -177,9 +259,51 @@ void PrettyPrintType(TSYMTYPEDEF1 *pType1)
                 // We are at the end of the definition string when hitting ';;'
             } while( *pDef != ';' );
 
-            dprinth(1, "};");
+            if( dprinth(nLine++, "};")==FALSE ) break;
 
             break;
+
+        //--------------------------------------------------------------------
+        case 'a':       // Array
+//        194  TYPEDEF(53, 3)  = ar(22,4);0;5;(0,3)
+            
+            {
+                int low, high;         // Lower and upper bounds of the array
+
+                pDef = strchr(pDef, ';');
+                pDef++;
+
+                low = GetDec(&pDef);
+                pDef++;
+                high = GetDec(&pDef);
+                pDef++;
+
+                // Get the leaf type of that particular field
+                pSubType1 = Type2Typedef(pDef);
+                pSubType1 = Typedef2TypedefLeaf(&nPtrLevel, pSubType1);
+                if( pSubType1 )
+                {
+                    // Print the subtype string
+                    strcpy(buf, GetTypeStringItem(pSubType1), NULL);
+                    strcat(buf, " ");
+
+                    // Print a number of levels of pointer indirection
+                    while( nPtrLevel-- )
+                    {
+                        strcat(buf, "*");
+                    }
+                }
+
+                dprinth(nLine++, "%s [%d];", pName, high-low+1);
+            }
+
+            break;
+        //--------------------------------------------------------------------
+
+        //--------------------------------------------------------------------
+        case 'e':       // Enum
+            break;
+        //--------------------------------------------------------------------
     }
 }
 
@@ -220,12 +344,15 @@ BOOL cmdTypes(char *args, int subClass)
             pType1 = Typedef2TypedefLeaf(&nPtrLevel, pType1);
             if( pType1 )
             {
-                dprinth(nLine++, "(%d,%d) %s *%d", pType1->maj, pType1->min, GetTypeString(pType1), nPtrLevel);
 
                 // If the type is a complex type (structure etc.), print the complete typedef
                 if( pType1->dDef > TYPEDEF__LAST )
                 {
                     PrettyPrintType(pType1);
+                }
+                else
+                {
+                    dprinth(1, "%s *%d", GetTypeString(pType1, TRUE), nPtrLevel);
                 }
             }
 #endif
@@ -265,7 +392,7 @@ BOOL cmdTypes(char *args, int subClass)
 #endif
                             }
         
-                            if( dprinth(nLine++, "(%d,%d) %-30s%s", pType1->maj, pType1->min, pStr+1, GetTypeString(pType1) )==FALSE)
+                            if( dprinth(nLine++, "(%d,%d) %-30s%s", pType1->maj, pType1->min, pStr+1, GetTypeString(pType1, TRUE) )==FALSE)
                                 return( TRUE );
                         }
 
@@ -300,7 +427,7 @@ BOOL cmdTypes(char *args, int subClass)
                     {
                         pStr = pIce->pSymTabCur->pPriv->pStrings + pType1->dName;
 
-                        if( dprinth(nLine++, "(%d,%d) %-30s%s", pType1->maj, pType1->min, pStr+1, GetTypeString(pType1) )==FALSE)
+                        if( dprinth(nLine++, "(%d,%d) %-30s%s", pType1->maj, pType1->min, pStr+1, GetTypeString(pType1, TRUE) )==FALSE)
                             return( TRUE );
 
                         pType1++;

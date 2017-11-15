@@ -10,8 +10,8 @@ DEF = -D__KERNEL__ -D_LOOSE_KERNEL_NAMES -DMODULE -DLINUX
 CC = gcc
 AS = nasm
 
-#CFLAGS = -gstabs+ -Wall $(DEF) -O -I$(INC) -I$(H1) -I$(H2)
-CFLAGS =         -Wall $(DEF) -O -I$(INC) -I$(H1) -I$(H2)
+CFLAGS = -gstabs+ -Wall $(DEF) -O -I$(INC) -I$(H1) -I$(H2)
+#CFLAGS =         -Wall $(DEF) -O -I$(INC) -I$(H1) -I$(H2)
 
 
 all:	../bin/linice_kernel.o
@@ -25,6 +25,7 @@ clean:
 			malloc.o	\
 			memaccess.o	\
 			eval.o		\
+			evalex.o	\
 			init.o		\
 			errors.o		\
 			syscall.o		\
@@ -44,6 +45,7 @@ clean:
 			command.o	\
 			registers.o	\
 			locals.o	\
+			watch.o		\
 			data.o		\
 			code.o		\
 			customization.o	\
@@ -136,11 +138,17 @@ command.o:	command/command.c
 eval.o:		command/eval.c
 	$(CC) $(CFLAGS) -c command/eval.c
 
+evalex.o:	command/evalex.c
+	$(CC) $(CFLAGS) -c command/evalex.c
+
 registers.o:		command/registers.c
 	$(CC) $(CFLAGS) -c command/registers.c
 
 locals.o:	command/locals.c
 	$(CC) $(CFLAGS) -c command/locals.c
+
+watch.o:	command/watch.c
+	$(CC) $(CFLAGS) -c command/watch.c
 
 data.o:		command/data.c
 	$(CC) $(CFLAGS) -c command/data.c

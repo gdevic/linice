@@ -14,8 +14,8 @@ INC = /usr/include
 
 # Set the compiler flags - note that you have to specify at least -O when
 # compiling a Linux kernel
-#CFLAGS = -gstabs+ -Wall -O
-CFLAGS = -Wall -O
+CFLAGS = -gstabs+ -Wall -O
+#CFLAGS = -Wall -O
 #CFLAGS = -O
 
 #DEF = $(TARGET) -I$(INC) -D__KERNEL__ -D_LOOSE_KERNEL_NAMES -DMODULE -DLINUX -DDBG
@@ -30,7 +30,7 @@ linice.o:	linice_kernel.o iceface.o
 	@echo Creating linice_`uname -r` and copying kernel-dependent module...
 	@mkdir -p linice_`uname -r`
 	@cp -f linice.o linice_`uname -r`
-	@rm -f linice.o
+	#@rm -f linice.o
 	@echo ------------------------------------------------------------------------------
 	@echo Done.
 

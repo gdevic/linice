@@ -88,4 +88,8 @@ extern char * strupr( char *s );
 
 //#endif // _POSIX_SOURCE
 
+// Some more exotic functions borrowed from other languages
+extern char *substr(char *s, int i, int j);
+
+
 #endif // _STRING_H_

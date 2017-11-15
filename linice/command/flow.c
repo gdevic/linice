@@ -199,11 +199,11 @@ BOOL cmdGo(char *args, int subClass)
 *                                                                             *
 *******************************************************************************
 *
-*   Trace one instruction. Optional parameter is the number of instructions
-*   that need to single step. Pressing ESC key stops single tracing of multiple
-*   instructions.
+*   Trace one instruction or source line, optionally following into subroutines.
+*   Optional start address may be specified (prefixed by "="), or
+*   a count giving the number of instructions to be traced.
 *
-*   This command follows the flow into subroutine calls.
+*   T [=start_address] [count]
 *
 *   Keyboard mapped to F8
 *
@@ -212,32 +212,57 @@ BOOL cmdTrace(char *args, int subClass)
 {
     TDISASM Dis;                        // Disassembler interface structure
     TADDRDESC BpAddr;                   // Address of a non-sticky breakpoint
-    DWORD count;
+    DWORD count;                        // Temporary count store
     DWORD dwNextLine;                   // Address of the next line's code
     DWORD dwAddress;                    // Current scanning address
 
     if( *args != 0 )
     {
-        // Optional parameter is the number of instructions to single step
-
-        if( Expression(&count, args, &args) )
+        // Arguments present. Is it start-address?
+        if( *args=='=' )
         {
-            if( count==0 )
-                count = 1;
+            args++;                     // Skip the '=' character
 
-            deb.TraceCount = count;
+            // Set the default selector to current CS
+            evalSel = deb.r->cs;
+
+            if( Expression(&dwAddress, args, &args) )
+            {
+                // Verify that the selector is readable and valid
+                if( VerifySelector(evalSel) )
+                {
+                    // Assign new start address to cs:eip
+                    deb.r->cs  = evalSel;
+                    deb.r->eip = dwAddress;
+                }
+                else
+                    return( TRUE );
+            }
+            else
+            {
+                // Something was bad with the address
+                dprinth(1, "Syntax error");
+                return( TRUE );
+            }
         }
-        else
+
+        // Another optional parameter is the number of instructions to single step
+        if( *args )
         {
-            // Invalid expression - abort trace
-            dprinth(1, "Syntax error");
-            return( TRUE );
+            if( Expression(&count, args, &args) && !*args )
+            {
+                if( count==0 )
+                    count = 1;
+
+                deb.TraceCount = count;
+            }
+            else
+            {
+                // Invalid expression - abort trace
+                dprinth(1, "Syntax error");
+                return( TRUE );
+            }
         }
-    }
-    else
-    {
-        // Single instruction
-        deb.TraceCount = 1;
     }
 
     // Depending on the source mode, we can simply use Trace flag or we need
@@ -247,7 +272,7 @@ BOOL cmdTrace(char *args, int subClass)
     // right place, since we may have it set differenly
     SetSymbolContext(deb.r->cs, deb.r->eip);
 
-    if( (deb.eSrc==SRC_ON || deb.eSrc==SRC_MIXED) && deb.pFnScope && deb.pFnLin )
+    if( (deb.eSrc==SRC_ON) && deb.pFnScope && deb.pFnLin )
     {
         // SOURCE CODE ACTIVE
 
@@ -327,6 +352,50 @@ BOOL cmdTrace(char *args, int subClass)
     return( FALSE );
 }
 
+/******************************************************************************
+*                                                                             *
+*   BOOL MultiTrace(void)                                                     *
+*                                                                             *
+*******************************************************************************
+*
+*   Helper function that is called from the main debugger interrupt handler
+*   to query if another loop of a multiple trace iteration should be performed.
+*
+*   Returns:
+*       TRUE - skip debugger block and continue tracing
+*       FALSE - break into debugger, no multi-tracing, or it is counted to 0
+*
+******************************************************************************/
+BOOL MultiTrace(void)
+{
+    if( deb.TraceCount )
+        deb.TraceCount--;               // Decrement the trace count
+
+    // If the counter is not 0 (or yet 0), we will most likely loop
+    if( deb.TraceCount )
+    {
+        // Trace again without stopping, but first we need to check if the user has pressed
+        // ESC key to stop tracing
+
+        if( GetKey(FALSE)==ESC )
+        {
+            dprinth(1, "Break. 0x%X trace iterations left.", deb.TraceCount );
+
+            deb.TraceCount = 0;     // Multi-trace off
+        }
+        else
+        {
+            // Call regular Trace command to correctly set up trace parameters...
+            
+            cmdTrace("", NULL);
+
+            return( TRUE );             // Do not break, but execute trace command
+        }
+    }
+
+    return( FALSE );                    // No need to trace more, reached the final count
+}
+
 
 /******************************************************************************
 *                                                                             *
@@ -386,8 +455,14 @@ BOOL cmdStep(char *args, int subClass)
             Dis.dwOffset = dwAddress;
             DisassemblerLen(&Dis);
     
-            Dis.bFlags &= SCAN_MASK;            // Mask the scan bits
+            Dis.bFlags &= SCAN_MASK;    // Mask the scan bits
 
+            // If we are in the "P RET" instruction, find if we need to terminate cycling
+            if( deb.fStepRet && Dis.bFlags==SCAN_RET )
+            {
+                deb.fStepRet = FALSE;           // Dont loop any more
+            }
+    
             if( Dis.bFlags==SCAN_RET || Dis.bFlags==SCAN_JUMP || Dis.bFlags==SCAN_COND_JUMP )
             {
                 // Set a delayed Trace
@@ -400,8 +475,7 @@ BOOL cmdStep(char *args, int subClass)
         // set a non-sticky breakpoint at this address
         if( deb.r->eip==dwAddress )
         {
-            deb.TraceCount = 1;
-            deb.fTrace = TRUE;
+            deb.fTrace = TRUE;          // Use CPU Trace Flag
         }
         else
         {
@@ -422,6 +496,12 @@ BOOL cmdStep(char *args, int subClass)
 
         Dis.bFlags &= SCAN_MASK;            // Mask the scan bits
 
+        // If we are in the "P RET" instruction, find if we need to terminate cycling
+        if( deb.fStepRet && Dis.bFlags==SCAN_RET )
+        {
+            deb.fStepRet = FALSE;           // Dont loop any more
+        }
+
         if( Dis.bFlags==SCAN_CALL || Dis.bFlags==SCAN_INT )
         {
             // Call and INT instructions we skip
@@ -435,8 +515,7 @@ BOOL cmdStep(char *args, int subClass)
         {
             // All other instructions we single step
 
-            deb.TraceCount = 1;
-            deb.fTrace = TRUE;
+            deb.fTrace = TRUE;          // Use CPU Trace Flag
         }
     }
 

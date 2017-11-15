@@ -134,7 +134,7 @@ asmlinkage int SyscallInitModule(const char *name, struct module *image)
         if( pSymTab )
         {
             // Get the offset of the init_module global symbol from the symbol table
-            if( SymbolName2Value(pSymTab, &dwInitFunctionSymbol, "init_module") )
+            if( SymbolName2Value(pSymTab, &dwInitFunctionSymbol, "init_module", 11) )
             {
                 dprinth(1, "SYSCALL: Relocating symbols for `%s'", pSymTab->sTableName);
 

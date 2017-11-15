@@ -194,7 +194,7 @@ BOOL ChkTypedefs(TSYMHEADER *pHead, char *pStr)
         }
         else
         {
-            printf("    %03d  TYPEDEF(%2d,%2d) %s=%s\n",
+            printf("    %03d  TYPEDEF(%2d,%2d) %s = %s\n",
                 nTypedefs,
                 pType->list[nTypedefs].maj,
                 pType->list[nTypedefs].min,

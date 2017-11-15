@@ -1124,7 +1124,7 @@ BOOL cmdSrc(char *args, int subClass)
 
     // Reset the symbol context
 //    SetSymbolContext(deb.codeTopAddr.sel, deb.codeTopAddr.offset);
-    SetSymbolContext(deb.r->cs, deb.r->eip);
+//    SetSymbolContext(deb.r->cs, deb.r->eip);
 
     // Redraw all windows
     RecalculateDrawWindows();

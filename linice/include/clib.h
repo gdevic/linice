@@ -64,8 +64,9 @@
 #define ERR_EXP_WHAT                9   // "Expression?? What expression?"
 
 #define ERR_INT_OUTOFMEM            10  // "Internal error: out of memory"
+#define ERR_DIV0                    11  // "Division by zero"
 
-#define MSG_LAST                    11  //  - Last message index -
+#define MSG_LAST                    12  //  - Last message index -
 
 #define ERR_BPINT                   100 // "Invalid interrupt number"
 #define ERR_BPIO                    101 // "Invalid port number"

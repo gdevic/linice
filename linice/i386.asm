@@ -568,7 +568,7 @@ GetByte:
         mov     eax, MEMACCESS_LIM      ; Assume failure with the segment limit
         lsl     ebx, [ebp + 8]          ; Load segment limit into ebx register
         cmp     ebx, [ebp + 12]         ; Compare to what we requested
-        jl      @bad_selector_rb        ; Exit if the limit is exceeded
+        jb      @bad_selector_rb        ; Exit if the limit is exceeded
 
         mov     ax, [ebp + 8]           ; Get the selector
         mov     gs, ax                  ; Store it in the GS
@@ -611,7 +611,7 @@ GetDWORD:
         mov     eax, MEMACCESS_LIM      ; Assume failure with the segment limit
         lsl     ebx, [ebp + 8]          ; Load segment limit into ebx register
         cmp     ebx, [ebp + 12]         ; Compare to what we requested
-        jl      @bad_selector_rd        ; Exit if the limit is exceeded
+        jb      @bad_selector_rd        ; Exit if the limit is exceeded
 
         mov     ax, [ebp + 8]           ; Get the selector
         mov     gs, ax                  ; Store it in the GS
@@ -653,7 +653,7 @@ SetByte:
         mov     eax, MEMACCESS_LIM      ; Assume failure with the segment limit
         lsl     ebx, [ebp + 8]          ; Load segment limit into ebx register
         cmp     ebx, [ebp + 12]         ; Compare to what we requested
-        jl      @bad_selector_wb        ; Exit if the limit is exceeded
+        jb      @bad_selector_wb        ; Exit if the limit is exceeded
 
         mov     ax, [ebp + 8]           ; Get the selector
         mov     gs, ax                  ; Store it in the GS

@@ -232,6 +232,7 @@ typedef struct
 {
     TFRAME r;                           // Register window frame
     TFRAME l;                           // Locals window frame
+    TFRAME w;                           // Watch window frame
     TFRAME d;                           // Data window frame
     TFRAME c;                           // Code window frame
     TFRAME h;                           // Command (history) window frame
@@ -261,6 +262,19 @@ typedef struct
 
 extern TCommand Cmd[];                  // Command structure array
 extern char *sHelp[];                   // Help lines
+
+/////////////////////////////////////////////////////////////////
+// INTERNAL SYMBOL STRUCTURE
+/////////////////////////////////////////////////////////////////
+
+typedef struct
+{
+    char *pName;                        // Pointer to symbol name string
+    char *pType;                        // Pointer to symbol type definition string
+    DWORD Data;                         // Symbol value
+    DWORD Address;                      // Address of a symbol
+
+} TSYMBOL;
 
 /////////////////////////////////////////////////////////////////
 // INTERNAL MOUSE PACKET STRUCTURE
@@ -337,6 +351,7 @@ extern void dputc(UCHAR c);
 
 extern void RegDraw(BOOL fForce);
 extern void LocalsDraw(BOOL fForce);
+extern void WatchDraw(BOOL fForce);
 extern void DataDraw(BOOL fForce, DWORD newOffset);
 extern void CodeDraw(BOOL fForce);
 extern void RecalculateDrawWindows();
@@ -379,11 +394,12 @@ extern char *SymAddress2FunctionName(WORD wSel, DWORD dwOffset);
 extern void *SymTabFindSection(TSYMTAB *pSymTab, BYTE hType);
 extern TSYMSOURCE *SymTabFindSource(TSYMTAB *pSymTab, WORD fileID);
 
-extern BOOL SymbolName2Value(TSYMTAB *pSymTab, DWORD *pValue, char *name);
+extern BOOL SymbolName2Value(TSYMTAB *pSymTab, DWORD *pValue, char *name, int TokenLen);
 extern char *SymAddress2FunctionName(WORD wSel, DWORD dwOffset);
 extern char *SymAddress2Name(WORD wSel, DWORD dwOffset);
 extern DWORD SymLinNum2Address(DWORD line);
 extern TSYMFNLIN *SymAddress2FnLin(WORD wSel, DWORD dwOffset);
+extern BOOL FillLocalScope(TSYMFNSCOPE *pFnScope, DWORD dwOffset);
 extern char *SymFnLin2Line(WORD *pLineNumber, TSYMFNLIN *pFnLin, DWORD dwAddress);
 extern char *SymFnLin2LineExact(WORD *pLineNumber, TSYMFNLIN *pFnLin, DWORD dwAddress);
 extern TSYMFNSCOPE *SymAddress2FnScope(WORD wSel, DWORD dwOffset);

@@ -72,6 +72,9 @@ extern BOOL EvalBreakpoint(void *pBp);
 extern int  BreakpointCheck(TADDRDESC Addr);
 extern void SetSymbolContext(WORD wSel, DWORD dwOffset);
 extern char *Index2String(DWORD index);
+extern BOOL cmdStep(char *args, int subClass);
+extern BOOL MultiTrace(void);
+
 
 /******************************************************************************
 *                                                                             *
@@ -117,76 +120,91 @@ void DebuggerEnterBreak(void)
         //  CR0[16] Write Protect -> 0   so we can write to user pages
         SET_CR0( deb.sysReg.cr0 & ~BITMASK(WP_BIT));
 
-        {
-            // Disarm all breakpoints and adjust counters. Also print why we break.
-            // We dont do this if we are in the single step mode
-//            if( !deb.fTrace )
-//                pBp = DisarmBreakpoints();
-
-            // Find out if we are here because of a breakpoint and disarm all breakpoints
+        // Disarm all breakpoints and adjust counters.
+        // We dont do this if we are in the single step mode
+        if( !deb.fTrace )
             pBp = DisarmBreakpoints();
 
-            // Reset the trace state
-            deb.fTrace = FALSE;
+        {
+            // If we are in the "P RET" cycling-trace mode, call the P command handler
+            // to manage the exit from this kind of loop (hitting RET instruction)
+            // This command will normally return FALSE and we will not enter the inner block code
+            if( deb.fStepRet && cmdStep("", NULL)==FALSE )
+                goto P_RET_Continuation;
+
+            // If the multiple-step trace is on, we wanted more than a single instruction,
+            // (because a trace count could be specified) so we will count down a number of
+            // instructions - MultiTrace() will return TRUE if we need to keep looping
+            if( MultiTrace() )
+                goto T_count_continuation;
 
             {
-                // Set the content variables used in debugging with symbols
-                SetSymbolContext(deb.r->cs, deb.r->eip);
+                // Reset the trace state and the multi-trace state, just in case
+                deb.fTrace = FALSE;
+                deb.TraceCount = 0;
 
-                // Enable output driver and save background
-                dputc(DP_ENABLE_OUTPUT);
-                dputc(DP_SAVEBACKGROUND);
-
-                // Recalculate window locations based on visibility and number of lines
-                // and repaint all windows
-                RecalculateDrawWindows();
-
-                // This function will cause evaluation of a breakpoint condition, and
-                // possibly the action. The action taken may end in continuation of
-                // execution, in which case we jump forward
-                if( EvalBreakpoint(pBp)==FALSE )
                 {
-                    //========================================================================
-                    // MAIN COMMAND PROMPT LOOP
-                    //========================================================================
-                    do
+                    // Set the content variables used in debugging with symbols
+                    SetSymbolContext(deb.r->cs, deb.r->eip);
+
+                    // Enable output driver and save background
+                    dputc(DP_ENABLE_OUTPUT);
+                    dputc(DP_SAVEBACKGROUND);
+
+                    // Recalculate window locations based on visibility and number of lines
+                    // and repaint all windows
+                    RecalculateDrawWindows();
+
+                    // This function will cause evaluation of a breakpoint condition, and
+                    // possibly the action. The action taken may end in continuation of
+                    // execution, in which case we jump forward
+                    if( EvalBreakpoint(pBp)==FALSE )
                     {
-                        EdLin( sCmd );
-
-                        deb.error = NOERROR;                        // Clear the error code
-                        fAcceptNext = CommandExecute( sCmd+1 );     // Skip the prompt
-
-                        // Redraw the debugger screen if we were requested to do so
-                        if( deb.fRedraw )
+                        //========================================================================
+                        // MAIN COMMAND PROMPT LOOP
+                        //========================================================================
+                        do
                         {
-                            RecalculateDrawWindows();
-                            deb.fRedraw = FALSE;
-                        }
+                            EdLin( sCmd );
 
-                        // If there was an error processing the commands, print it
-                        if( deb.error )
-                            dprinth(1, "%s", Index2String(deb.error) );
+                            deb.error = NOERROR;                        // Clear the error code
+                            fAcceptNext = CommandExecute( sCmd+1 );     // Skip the prompt
 
-                    } while( fAcceptNext );
+                            // Redraw the debugger screen if we were requested to do so
+                            if( deb.fRedraw )
+                            {
+                                RecalculateDrawWindows();
+                                deb.fRedraw = FALSE;
+                            }
 
-                    //========================================================================
+                            // If there was an error processing the commands, print it
+                            if( deb.error )
+                                dprinth(1, "%s", Index2String(deb.error) );
+
+                        } while( fAcceptNext );
+
+                        //========================================================================
+                    }
+
+                    // Restore background and disable output driver
+                    dputc(DP_RESTOREBACKGROUND);
+                    dputc(DP_DISABLE_OUTPUT);
                 }
-
-                // Restore background and disable output driver
-                dputc(DP_RESTOREBACKGROUND);
-                dputc(DP_DISABLE_OUTPUT);
             }
-
-            // Arm all breakpoints by inserting INT3 opcode
-            // We dont arm them if we are in single step (Trace) mode!
-            if( !deb.fTrace )
-                ArmBreakpoints();
         }
 
         // Copy the content of the general registers in the prev buffer
         // so the next time when we enter the debugger we will be able
         // to tell what registers had changed
         memcpy(&deb.r_prev, deb.r, sizeof(TREGS));
+
+P_RET_Continuation:
+T_count_continuation:
+
+        // Arm all breakpoints by inserting INT3 opcode
+        // We dont arm them if we are in single step (Trace) mode!
+        if( !deb.fTrace )
+            ArmBreakpoints();
 
         // Restore system registers
         SetSysreg(&deb.sysReg);

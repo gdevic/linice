@@ -58,6 +58,7 @@ static int iLast;                       // Last command entry index
 BOOL Unsupported(char *args, int subClass);
 
 extern BOOL cmdEvaluate(char *args, int subClass);      // eval.c
+extern BOOL cmdEvaluate2(char *args, int subClass);      // evalex.c
 extern BOOL cmdAscii   (char *args, int subClass);      // eval.c
 extern BOOL cmdAltkey  (char *args, int subClass);      // customization.c
 extern BOOL cmdCode    (char *args, int subClass);      // customization.c
@@ -89,6 +90,7 @@ extern BOOL cmdWd      (char *args, int subClass);      // windowcontrol.c
 extern BOOL cmdWc      (char *args, int subClass);      // windowcontrol.c
 extern BOOL cmdWr      (char *args, int subClass);      // windowcontrol.c
 extern BOOL cmdWl      (char *args, int subClass);      // windowcontrol.c
+extern BOOL cmdWw      (char *args, int subClass);      // windowcontrol.c
 extern BOOL cmdCls     (char *args, int subClass);      // windowcontrol.c
 extern BOOL cmdRs      (char *args, int subClass);      // windowcontrol.c
 extern BOOL cmdFlash   (char *args, int subClass);      // windowcontrol.c
@@ -99,6 +101,7 @@ extern BOOL cmdFile    (char *args, int subClass);      // symbols.c
 extern BOOL cmdWhat    (char *args, int subClass);      // symbols.c
 extern BOOL cmdReg     (char *args, int subClass);      // registers.c
 extern BOOL cmdLocals  (char *args, int subClass);      // locals.c
+extern BOOL cmdWatch   (char *args, int subClass);      // watch.c
 extern BOOL cmdGdt     (char *args, int subClass);      // sysinfo.c
 extern BOOL cmdLdt     (char *args, int subClass);      // sysinfo.c
 extern BOOL cmdIdt     (char *args, int subClass);      // sysinfo.c
@@ -129,6 +132,7 @@ extern BOOL cmdFkey    (char *args, int subClass);      // edlin.c
 TCommand Cmd[] = {
 {    ".",        1, 0, cmdDot,         "Locate current instruction", "ex: .",  0 },
 {    "?",        1, 0, cmdEvaluate,    "? expression", "ex: ? ax << 1",   0 },
+{    "/",        1, 0, cmdEvaluate2,   "/ expression", "ex: / ax << 1",   0 },
 //{  "A",        1, 0, Unsupported,    "Assemble [Address]", "ex: A CS:1236",    0 },
 //{  "ADDR",     4, 0, Unsupported,    "ADDR [context-handle | task | *]", "ex: ADDR 80FD602C",   0 },
 {    "ALTKEY",   6, 0, cmdAltkey,      "ALTKEY [ALT letter | CTRL letter]", "ex: ALTKEY ALT D",   0 },
@@ -237,7 +241,7 @@ TCommand Cmd[] = {
 {    "VAR",      3, 0, cmdVar,         "VAR [variable-name] | [[*] | [= expression]]", "ex: VAR myvalue = eax+20",   0 },
 {    "VER",      3, 0, cmdVer,         "VER Display Linice version", "ex: VER",   0 },
 {    "VGA",      3, 0, cmdDisplay,     "VGA Switch to VGA text output", "ex: VGA",   0 },
-//{  "WATCH",    5, 0, Unsupported,    "WATCH address", "ex: WATCH VariableName", 0 },
+{    "WATCH",    5, 0, cmdWatch,       "WATCH address", "ex: WATCH VariableName", 0 },
 {    "WC",       2, 0, cmdWc,          "WC [code-window-size]", "ex: WC 8",    0 },
 {    "WD",       2, 0, cmdWd,          "WD [data-window-size]", "ex: WD 4",    0 },
 {    "WIDTH",    5, 0, cmdResize,      "WIDTH [Number of columns on a display device]", "ex: WIDTH 100", 0 },
@@ -245,7 +249,7 @@ TCommand Cmd[] = {
 {    "WHAT",     4, 0, cmdWhat,        "WHAT expression", "ex: WHAT esi",  0 },
 {    "WR",       2, 0, cmdWr,          "WR Toggle register window", "ex: WR", 0 },
 //{  "WS",       2, 0, Unsupported,    "WS [stack-window-size]", "ex: WS 8",    0 },
-//{  "WW",       2, 0, Unsupported,    "WW Toggle watch window", "ex: WW", 0 },
+{    "WW",       2, 0, cmdWw,          "WW Toggle watch window", "ex: WW", 0 },
 {    "X",        1, 0, cmdXit,         "X Return to host debugger or program", "ex: X", 0 },
 //{  "XG",       2, 0, Unsupported,    "XG [r] address", "ex: XG eip-10", 0 },
 //{  "XP",       2, 0, Unsupported,    "XP", "ex: XP", 0 },
@@ -300,7 +304,7 @@ char *sHelp[] = {
    "HELP   - Help on the specified function",
    "?      - Evaluate expression",
    "VER    - Linice version",
-/* "WATCH  - Add watch", */
+   "WATCH  - Add watch variable",
    "FORMAT - Change format of data window",
 /* "DATA   - Change data window", */
    " DISPLAY SYSTEM INFORMATION",
@@ -383,7 +387,7 @@ char *sHelp[] = {
    "WL     - Toggle locals window",
    "WR     - Toggle register window",
 /* "WS     - Toggle call stack window", */
-/* "WW     - Toggle  watch window", */
+   "WW     - Toggle  watch window",
 /* "EC     - Enter/exit code window", */
    ".      - Locate current instruction",
    " WINDOW CONTROL",

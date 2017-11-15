@@ -365,10 +365,38 @@ BOOL cmdIdt(char *args, int subClass)
 *
 *   Display CPU registers
 *
+*   Additional options:
+*       CPU s       - stores CPU registers into a virtual register slot
+*       CPU r       - restores CPU registers
+*
 ******************************************************************************/
 BOOL cmdCpu(char *args, int subClass)
 {
+    static TREGS CPU;                   // CPU register store
     int nLine = 1;                      // Line counter
+
+    if( *args=='s' )
+    {
+        memcpy(&CPU, deb.r, sizeof(TREGS));
+
+        dprinth(1, "CPU registers saved");
+        
+        return( TRUE );
+    }
+    else
+    if( *args=='r' )
+    {
+        memcpy(deb.r, &CPU, sizeof(TREGS));
+
+        deb.fRedraw = TRUE;
+
+        dprinth(1, "CPU registers recalled");
+
+        // If we changed eip, we need to recalculate the whole context
+        SetSymbolContext(deb.r->cs, deb.r->eip);
+
+        return( TRUE );
+    }
 
     if(dprinth(nLine++, "CPU #%d", deb.cpu)
     && dprinth(nLine++, "CS:EIP=%04X:%08X   SS:ESP=%04X:%08X", deb.r->cs, deb.r->eip, deb.r->ss, deb.r->esp)

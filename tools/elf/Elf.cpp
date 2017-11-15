@@ -4,6 +4,10 @@
 #include "stdafx.h"
 
 #include <string.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <io.h>
 
 #define _CPP
 
@@ -22,6 +26,7 @@ int main(int argc, char* argv[])
 {
     char *sElf, sSym[128], sTable[32], *pName;
     BYTE *pBuf;
+    int out;
 
     if(argc!=1)
 	{
@@ -50,12 +55,19 @@ int main(int argc, char* argv[])
 				sTable[strlen(sTable)-2] = 0;
 			}
 
+        // Redirect standard output to a file
+        out = _creat("Log.txt", _S_IWRITE );
+        close(1);
+        dup(out);
+        close(out);
+        
+
 		pBuf = LoadElf(sElf);
 		ElfToSym(pBuf, sSym, sTable);
 
         fprintf(stderr, "Finished.\n");
 
-		fgetc(stdin);
+//		fgetc(stdin);
 	}
 	else
 	{

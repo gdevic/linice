@@ -60,12 +60,13 @@ static char *Strings[MSG_LAST] = {
 
     "Duplicate breakpoint",                     // ERR_BPDUP                        5
     "No more breakpoints available",            // ERR_BP_TOO_MANY                  6
-    "Debug register is already being used",     // ERR_DRUSED                    7
+    "Debug register is already being used",     // ERR_DRUSED                       7
     "All debug registers used",                 // ERR_DRUSEDUP                     8
 
     "Expression?? What expression?",            // ERR_EXP_WHAT                     9
 
-    "Out of memory"                             // ERR_INT_OUTOFMEM                 10
+    "Out of memory",                            // ERR_INT_OUTOFMEM                 10
+    "Division by zero",                         // ERR_DIV0                         11
 };
 
 /******************************************************************************

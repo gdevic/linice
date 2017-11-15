@@ -1,10 +1,10 @@
 /******************************************************************************
 *                                                                             *
-*   Module:     Eval.c                                                        *
+*   Module:     evalex.c                                                      *
 *                                                                             *
 *   Date:       5/15/97                                                       *
 *                                                                             *
-*   Copyright (c) 1997, 2001 Goran Devic                                      *
+*   Copyright (c) 1997, 2002 Goran Devic                                      *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -19,6 +19,11 @@
 *******************************************************************************
 
     Module Description:
+
+        This is an extended version of expression evaluator, based on eval.c
+        It is extended to handle types associated with symbols.
+
+        ----
 
         This is a generic expresion evaluator used by the linice.
 
@@ -77,9 +82,10 @@
 
 // Predefined default base is hex and there are no literal handlers.
 
-WORD evalSel = 0x0000;                  // Selector result of the expression (optional)
-int nEvalDefaultBase = 16;
-int (*pfnEvalLiteralHandler)( char *sName ) = NULL;
+//WORD evalSel = 0x0000;                  // Selector result of the expression (optional)
+char *evalType;                         // Type string of the expression (optional)
+//int nEvalDefaultBase = 16;
+//int (*pfnEvalLiteralHandler)( char *sName ) = NULL;
 
 /******************************************************************************
 *                                                                             *
@@ -87,7 +93,7 @@ int (*pfnEvalLiteralHandler)( char *sName ) = NULL;
 *                                                                             *
 ******************************************************************************/
 
-BOOL fDecimal = FALSE;      // Prefer decimal number
+static BOOL fDecimal = FALSE;      // Prefer decimal number
 
 typedef struct
 {
@@ -267,14 +273,25 @@ static char *sTokens[] =
 
 // Define stack structure
 
+typedef TSYMBOL TItem;                    // Store items as symbols
+
+//typedef struct
+//{
+//    DWORD Data;                         // Stack item data
+//    char *pType;                        // Stack item type string
+//} TItem;
+
 typedef struct
 {
-    int Data[ MAX_STACK ];              // Stack data
+    TItem item[ MAX_STACK ];            // Stack data
     int Top;                            // Top of stack index
 } TStack;
 
-static const char sDelim[] = ",;\"";    // Expressions delimiters - break chars
-static const char sLiteral[] = "@!_";   // These are allowed in literal names
+static TItem itemBottom =  {  BOTTOM_STACK, NULL  };   // Bottom stack item
+
+static const char sDelim[] = ",;\"";        // Expressions delimiters - break chars
+static const char sLiteral[] = "@!_";       // These are allowed in literal names
+static char *sTypeDefault = "uint";         // Default expression type
 
 /******************************************************************************
 *                                                                             *
@@ -285,8 +302,9 @@ static const char sLiteral[] = "@!_";   // These are allowed in literal names
 extern BOOL GetUserVar(DWORD *pValue, char *sStart, int nLen);
 extern BOOL EvalBreakpointAddress(TADDRDESC *pAddr, int index);
 
+BOOL SymName2LocalSymbol(TSYMBOL *pSymbol, char *pName, int nTokenLen);
 
-int Evaluate( char *sExpr, char **psNext );
+BOOL EvaluateEx( TSYMBOL *pSymbol, char *sExpr, char **psNext );
 
 static DWORD fnByte(DWORD arg) { return(arg & 0xFF); }
 static DWORD fnWord(DWORD arg) { return(arg & 0xFFFF);}
@@ -295,7 +313,7 @@ static DWORD fnHiword(DWORD arg) { return(arg >> 16);}
 
 /******************************************************************************
 *                                                                             *
-*   void Push( TStack *, int Value )                                          *
+*   void Push( TStack *Stack, TItem Item )                                    *
 *                                                                             *
 *******************************************************************************
 *
@@ -303,26 +321,26 @@ static DWORD fnHiword(DWORD arg) { return(arg >> 16);}
 *
 *   Where:
 *       Stack is a pointer to a stack structure
-*       Value is a number to push
+*       Item is the item to push
 *
 *   Returns:
 *       void
 *
 ******************************************************************************/
-static void Push( TStack *Stack, int Value )
+static void Push( TStack *Stack, TItem Item )
 {
     if( Stack->Top < MAX_STACK )
-        Stack->Data[ Stack->Top++ ] = Value;
+        Stack->item[ Stack->Top++ ] = Item;
 }
 
 
 /******************************************************************************
 *                                                                             *
-*   int Pop( TStack * )                                                       *
+*   TItem Pop( TStack *Stack )                                                *
 *                                                                             *
 *******************************************************************************
 *
-*   Returns a value from the top of a given stack.
+*   Returns an item from the top of a given stack.
 *
 *   Where:
 *       Stack is a pointer to a stack structure
@@ -331,25 +349,25 @@ static void Push( TStack *Stack, int Value )
 *       Value from the top of a stack.  The value is removed from the stack.
 *
 ******************************************************************************/
-static int Pop( TStack *Stack )
+static TItem Pop( TStack *Stack )
 {
     if( Stack->Top == 0 )               // If the stack starved, report
         deb.error = ERR_SYNTAX;         // syntax error
 
     if( Stack->Top == 0 )
-        return( BOTTOM_STACK );
+        return( itemBottom );
     else
-        return( Stack->Data[ --Stack->Top ] );
+        return( Stack->item[ --Stack->Top ] );
 }
 
 
 /******************************************************************************
 *                                                                             *
-*   int PopAny( TStack *Stack )                                               *
+*   TItem PopAny( TStack *Stack )                                             *
 *                                                                             *
 *******************************************************************************
 *
-*   Returns a value from the top of a given stack.
+*   Returns an item from the top of a given stack.
 *
 *   Where:
 *       Stack is a pointer to a stack structure
@@ -358,32 +376,32 @@ static int Pop( TStack *Stack )
 *       Value from the top of a stack.  The value is removed from the stack.
 *
 ******************************************************************************/
-static int PopAny( TStack *Stack )
+static TItem PopAny( TStack *Stack )
 {
     if( Stack->Top == 0 )
-        return( BOTTOM_STACK );
+        return( itemBottom );
     else
-        return( Stack->Data[ --Stack->Top ] );
+        return( Stack->item[ --Stack->Top ] );
 }
 
 
 /******************************************************************************
 *                                                                             *
-*   int GetValue( char **sExpr )                                              *
+*   DWORD GetHex(char **psString)                                             *
 *                                                                             *
 *******************************************************************************
 *
-*   Returns a numerical value of a string.  Advances the given pointer.
+*   Converts string to a hex number.
 *
 *   Where:
-*       sExpr is an address of a pointer to a string containing expression.
+*       psString is the address of the string pointer - will be modified
 *
 *   Returns:
-*       Numerical value that the string contains.
+*       Hex number
+*       string pointer advanced to the next non-hex character
 *
 ******************************************************************************/
-
-DWORD GetHex(char **psString)
+static DWORD GetHex(char **psString)
 {
     char *ptr = *psString;
     char nibble;
@@ -423,7 +441,7 @@ DWORD GetHex(char **psString)
 *       string pointer advanced to the next non-decimal character
 *
 ******************************************************************************/
-DWORD GetDec(char **psString)
+static DWORD GetDec(char **psString)
 {
     char *ptr = *psString;
     char digit;
@@ -439,7 +457,7 @@ DWORD GetDec(char **psString)
     return(value);
 }
 
-TRegister *IsRegister(char *ptr, int nTokenLen)
+static TRegister *IsRegister(char *ptr, int nTokenLen)
 {
     TRegister *pReg = &Reg[0];
 
@@ -454,7 +472,7 @@ TRegister *IsRegister(char *ptr, int nTokenLen)
 }
 
 
-TFunction *IsFunc(char *ptr, int nTokenLen)
+static TFunction *IsFunc(char *ptr, int nTokenLen)
 {
     TFunction *pFunc = &Func[0];
 
@@ -470,27 +488,30 @@ TFunction *IsFunc(char *ptr, int nTokenLen)
 
 /******************************************************************************
 *                                                                             *
-*   int GetValue( char **sExpr )                                              *
+*   TItem GetValue( char **sExpr )                                            *
 *                                                                             *
 *******************************************************************************
 *
-*   Returns a numerical value of a string.  Advances the given pointer.
+*   Evaluates a string token into an item structure. Advances the given pointer.
 *
 *   Where:
 *       sExpr is an address of a pointer to a string containing expression.
 *
 *   Returns:
-*       Numerical value that the string contains.
+*       Stack item set up
 *
 ******************************************************************************/
-static int GetValue( char **sExpr )
+static TItem GetValue( char **sExpr )
 {
     TADDRDESC Addr;
+    TItem item;                         // Stack item to return
     int value, n;
     char *sStart = *sExpr, *sTmp;
     TRegister *pReg;
     TFunction *pFunc;
     int nTokenLen;                      // Length of the input token
+
+    item.pType = sTypeDefault;          // Start with default type
 
     // Find the length of the token in the input buffer (We assume it is a token)
     sTmp = sStart;
@@ -558,6 +579,14 @@ static int GetValue( char **sExpr )
         sStart += pReg->nameLen;
     }
     else
+    // Symbol name: local symbol
+    if( SymName2LocalSymbol(&item, sStart, nTokenLen) )
+    {
+        // Symbol name is found and assigned to value in the function above
+        value = item.Data;
+        sStart += nTokenLen;
+    }
+    else
     // The first precedence literal value is the symbol name
     if( SymbolName2Value(pIce->pSymTabCur, (DWORD *)&value, sStart, nTokenLen) )
     {
@@ -621,7 +650,9 @@ End:
     fDecimal = FALSE;
     *sExpr = sStart;
 
-    return( value );
+    item.Data = value;
+
+    return( item );
 }
 
 
@@ -686,51 +717,207 @@ static int TableMatch( char **sTable, char **sToken )
 ******************************************************************************/
 static void Execute( TStack *Values, int Operation )
 {
-    int top;
+    TItem item1, item2, itemTop;
 
     // Perform the operation
     switch( Operation )
     {
-        case OP_BOOL_OR:Push( Values, Pop( Values ) || Pop( Values ) );  break;
-        case OP_BOOL_AND:Push(Values, Pop( Values ) && Pop( Values ) );  break;
-        case OP_OR:     Push( Values, Pop( Values ) |  Pop( Values ) );  break;
-        case OP_XOR:    Push( Values, Pop( Values ) ^  Pop( Values ) );  break;
-        case OP_AND:    Push( Values, Pop( Values ) &  Pop( Values ) );  break;
-        case OP_EQ:     Push( Values, Pop( Values ) == Pop( Values ) );  break;
-        case OP_NE:     Push( Values, Pop( Values ) != Pop( Values ) );  break;
-        case OP_L:      top = Pop( Values ); Push( Values, Pop( Values ) <  top );  break;
-        case OP_LE:     top = Pop( Values ); Push( Values, Pop( Values ) <= top );  break;
-        case OP_G:      top = Pop( Values ); Push( Values, Pop( Values ) >  top );  break;
-        case OP_GE:     top = Pop( Values ); Push( Values, Pop( Values ) >= top );  break;
-        case OP_SHL:    top = Pop( Values ); Push( Values, Pop( Values ) << top );  break;
-        case OP_SHR:    top = Pop( Values ); Push( Values, Pop( Values ) >> top );  break;
-        case OP_PLUS:   Push( Values, Pop( Values ) +  Pop( Values ) );  break;
-        case OP_MINUS:  top = Pop( Values );  Push( Values, Pop( Values ) - top );  break;
-        case OP_TIMES:  Push( Values, Pop( Values ) * Pop( Values ) );   break;
-
-        case OP_DIV:    top = Pop( Values );
-                        if( top != 0 )
-                            Push( Values, Pop( Values ) / top );
-                        else
-                            deb.error = ERR_DIV0;
+        //--------------------------------------------------------------------
+        case OP_BOOL_OR:
+            item2 = Pop(Values);
+            item1 = Pop(Values);
+            itemTop.Data = item1.Data || item2.Data;
+            itemTop.pType = item1.pType;
+            Push(Values, itemTop);
             break;
-        case OP_MOD:    top = Pop( Values );
-                        if( top != 0 )
-                            Push( Values, Pop( Values ) % top );
+        //--------------------------------------------------------------------
+        case OP_BOOL_AND:
+            item2 = Pop(Values);
+            item1 = Pop(Values);
+            itemTop.Data = item1.Data && item2.Data;
+            itemTop.pType = item1.pType;
+            Push(Values, itemTop);
             break;
-        case OP_NOT:    Push( Values, ! Pop( Values ) );  break;
-        case OP_NEG:    Push( Values, -Pop( Values ) );   break;
+        //--------------------------------------------------------------------
+        case OP_OR:     
+            item2 = Pop(Values);
+            item1 = Pop(Values);
+            itemTop.Data = item1.Data | item2.Data;
+            itemTop.pType = item1.pType;
+            Push(Values, itemTop);
+            break;
+        //--------------------------------------------------------------------
+        case OP_XOR:    
+            item2 = Pop(Values);
+            item1 = Pop(Values);
+            itemTop.Data = item1.Data ^ item2.Data;
+            itemTop.pType = item1.pType;
+            Push(Values, itemTop);
+            break;
+        //--------------------------------------------------------------------
+        case OP_AND:    
+            item2 = Pop(Values);
+            item1 = Pop(Values);
+            itemTop.Data = item1.Data & item2.Data;
+            itemTop.pType = item1.pType;
+            Push(Values, itemTop);
+            break;
+        //--------------------------------------------------------------------
+        case OP_EQ:     
+            item2 = Pop(Values);
+            item1 = Pop(Values);
+            itemTop.Data = item1.Data == item2.Data;
+            itemTop.pType = item1.pType;
+            Push(Values, itemTop);
+            break;
+        //--------------------------------------------------------------------
+        case OP_NE:     
+            item2 = Pop(Values);
+            item1 = Pop(Values);
+            itemTop.Data = item1.Data != item2.Data;
+            itemTop.pType = item1.pType;
+            Push(Values, itemTop);
+            break;
+        //--------------------------------------------------------------------
+        case OP_L:      
+            item2 = Pop(Values);
+            item1 = Pop(Values);
+            itemTop.Data = item1.Data < item2.Data;
+            itemTop.pType = item1.pType;
+            Push(Values, itemTop);
+            break;
+        //--------------------------------------------------------------------
+        case OP_LE:     
+            item2 = Pop(Values);
+            item1 = Pop(Values);
+            itemTop.Data = item1.Data <= item2.Data;
+            itemTop.pType = item1.pType;
+            Push(Values, itemTop);
+            break;
+        //--------------------------------------------------------------------
+        case OP_G:      
+            item2 = Pop(Values);
+            item1 = Pop(Values);
+            itemTop.Data = item1.Data > item2.Data;
+            itemTop.pType = item1.pType;
+            Push(Values, itemTop);
+            break;
+        //--------------------------------------------------------------------
+        case OP_GE:     
+            item2 = Pop(Values);
+            item1 = Pop(Values);
+            itemTop.Data = item1.Data >= item2.Data;
+            itemTop.pType = item1.pType;
+            Push(Values, itemTop);
+            break;
+        //--------------------------------------------------------------------
+        case OP_SHL:    
+            item2 = Pop(Values);
+            item1 = Pop(Values);
+            itemTop.Data = item1.Data << item2.Data;
+            itemTop.pType = item1.pType;
+            Push(Values, itemTop);
+            break;
+        //--------------------------------------------------------------------
+        case OP_SHR:    
+            item2 = Pop(Values);
+            item1 = Pop(Values);
+            itemTop.Data = item1.Data >> item2.Data;
+            itemTop.pType = item1.pType;
+            Push(Values, itemTop);
+            break;
+        //--------------------------------------------------------------------
+        case OP_PLUS:   
+            item2 = Pop(Values);
+            item1 = Pop(Values);
+            itemTop.Data = item1.Data + item2.Data;
+            itemTop.pType = item1.pType;
+            Push(Values, itemTop);
+            break;
+        //--------------------------------------------------------------------
+        case OP_MINUS:  
+            item2 = Pop(Values);
+            item1 = Pop(Values);
+            itemTop.Data = item1.Data - item2.Data;
+            itemTop.pType = item1.pType;
+            Push(Values, itemTop);
+            break;
+        //--------------------------------------------------------------------
+        case OP_TIMES:  
+            item2 = Pop(Values);
+            item1 = Pop(Values);
+            itemTop.Data = item1.Data * item2.Data;
+            itemTop.pType = item1.pType;
+            Push(Values, itemTop);
+            break;
+        //--------------------------------------------------------------------
+        case OP_DIV:    
+            item2 = Pop(Values);
+            item1 = Pop(Values);
+            if( item2.Data )
+                itemTop.Data = item1.Data / item2.Data;
+            else
+                deb.error = ERR_DIV0;
+            itemTop.pType = item1.pType;
+            Push(Values, itemTop);
+            break;
+        //--------------------------------------------------------------------
+        case OP_MOD:    
+            item2 = Pop(Values);
+            item1 = Pop(Values);
+            if( item2.Data )
+                itemTop.Data = item1.Data % item2.Data;
+            else
+                deb.error = ERR_DIV0;
+            itemTop.pType = item1.pType;
+            Push(Values, itemTop);
+            break;
+        //--------------------------------------------------------------------
+        case OP_NOT:    
+            item1 = Pop(Values);
+            itemTop.Data = !item1.Data;
+            itemTop.pType = item1.pType;
+            Push(Values, itemTop);
+            break;
+        //--------------------------------------------------------------------
+        case OP_NEG:    
+            item1 = Pop(Values);
+            itemTop.Data = -item1.Data;
+            itemTop.pType = item1.pType;
+            Push(Values, itemTop);
+            break;
+        //--------------------------------------------------------------------
         case OP_POINTER1:
-        case OP_DOT:    Push( Values, Pop( Values ) + Pop( Values ) );   break;  // TEST
-        case OP_PTR:    Push( Values, fnPtr(Pop( Values )) );             break;
-        case OP_LINE:   Push( Values, SymLinNum2Address(Pop( Values )) ); break;  // TEST
-
+        case OP_DOT:    
+            item2 = Pop(Values);
+            item1 = Pop(Values);
+            itemTop.Data = item1.Data;          // TEST
+            itemTop.pType = item1.pType;
+            Push(Values, itemTop);
+            break;
+        //--------------------------------------------------------------------
+        case OP_PTR:    
+            item1 = Pop(Values);
+            itemTop.Data = fnPtr(item1.Data);
+            itemTop.pType = item1.pType;        // TEST
+            Push(Values, itemTop);
+            break;
+        //--------------------------------------------------------------------
+        case OP_LINE:   
+            item1 = Pop(Values);
+            itemTop.Data = SymLinNum2Address(item1.Data);
+            itemTop.pType = item1.pType;        // TEST
+            Push(Values, itemTop);
+            break;
+        //--------------------------------------------------------------------
         case OP_SELECTOR:   // Selector:offset
                 // Whatever we did so far was to find the selector part.
                 // We store it in the global variable and keep the offset on the stack
-                top = Pop( Values );
-                evalSel = Pop( Values );
-                Push( Values, top );
+            item2 = Pop(Values);
+            item1 = Pop(Values);
+            evalSel = item2.Data;
+            itemTop = item2;
+            Push(Values, itemTop);
             break;
     }
 }
@@ -738,7 +925,7 @@ static void Execute( TStack *Values, int Operation )
 
 /******************************************************************************
 *                                                                             *
-*   int Evaluate( char *sExpr, char **psNext )                                *
+*   int EvaluateEx( char *sExpr, char **psNext )                              *
 *                                                                             *
 *******************************************************************************
 *
@@ -758,24 +945,26 @@ static void Execute( TStack *Values, int Operation )
 *       *psNext, if not NULL, is set to the end of the expression
 *
 ******************************************************************************/
-int Evaluate( char *sExpr, char **psNext )
+BOOL EvaluateEx( TSYMBOL *pSymbol, char *sExpr, char **psNext )
 {
     static int nDeep = 0;               // Recursion depth count
     TStack Values, Operators;
+    TItem item;
     int NewOp, OldOp, ExpectValue;
 
     Values.Top = Operators.Top = ExpectValue = 0;
     fDecimal = FALSE;
+    evalType = sTypeDefault;            // Set default type
 
-    // Just in the case that the argument was NULL - return the result of 0.
+    // Just in the case that the argument was NULL - return FALSE
     if( sExpr==NULL )
     {
         if( psNext!=NULL ) *psNext = NULL;
-        return( 0 );
+        return( FALSE );
     }
 
     if( nDeep >= MAX_EVAL_RECURSE )
-        return(0);
+        return(FALSE);
     nDeep++;                            // Inside the function, recursion count
 
     // Loop for any new term and stop when hit one of delimiter characters
@@ -802,7 +991,8 @@ int Evaluate( char *sExpr, char **psNext )
         // If any operator was in front of a value, push it
         if( NewOp )
         {
-            Push( &Operators, NewOp );
+            item.Data = NewOp;
+            Push( &Operators, item );
             ExpectValue = 0;
 
             // If the operator was not -/+, reset decimal radix hint
@@ -820,7 +1010,8 @@ int Evaluate( char *sExpr, char **psNext )
         if( ! NewOp )
             break;
 
-        OldOp = PopAny( &Operators );
+        item = PopAny( &Operators );
+        OldOp = item.Data;
 
         // If the new op priority is less than the one on the stack, we
         // need to go down and evaluate terms
@@ -829,53 +1020,39 @@ int Evaluate( char *sExpr, char **psNext )
             if( NewOp < OldOp )
                 Execute( &Values, OldOp );
             else
-                Push( &Operators, OldOp );
+                Push( &Operators, item );
         }
 
         // Push new operation
-        Push( &Operators, NewOp );
+        item.Data = NewOp;
+        Push( &Operators, item );
     }
 
     // Clean the stack by the means of evaluating expression in RPN
     // This is the only place where we can expect stack to starve,
     // so we can pop anything without a check
-    while( (NewOp = PopAny(&Operators)) != BOTTOM_STACK )
+    while( TRUE )
     {
-        Execute( &Values, NewOp );
+        item = PopAny(&Operators);
+        NewOp = item.Data;
+
+        if( NewOp != BOTTOM_STACK )
+            Execute( &Values, NewOp );
+        else
+            break;
     }
 
     // Store the logical end of the expression
     if( psNext!=NULL ) *psNext = sExpr;
 
     nDeep--;                            // Leaving the function, recursion count
+
     // Return the last value on the stack
-    return( Pop( &Values ) );
-}
+    item = Pop( &Values );
 
+    *pSymbol = item;
 
-/******************************************************************************
-*                                                                             *
-*   BOOL Expression(DWORD *value, char *sExpr, char **psNext )                *
-*                                                                             *
-*******************************************************************************
-*
-*   Evaluates an expression.
-*
-*   Returns:
-*       TRUE - expression ok: *value = result
-*       FALSE - expression was invalid, deb.error contains the expression error code
-*
-******************************************************************************/
-BOOL Expression(DWORD *value, char *sExpr, char **psNext )
-{
-    if( sExpr && *sExpr )
-    {
-        *value = Evaluate( sExpr, psNext );
-
-        if( deb.error != NOERROR )
-            return( FALSE );
-    }
-    else
+    if( deb.error != NOERROR )
         return( FALSE );
 
     return( TRUE );
@@ -891,32 +1068,49 @@ BOOL Expression(DWORD *value, char *sExpr, char **psNext )
 *   Debuger command to evaluate an expression
 *
 ******************************************************************************/
-BOOL cmdEvaluate(char *args, int subClass)
+BOOL cmdEvaluate2(char *args, int subClass)
 {
     static char buf[MAX_STRING];        // Temp output buffer
+    TSYMBOL Symbol;
     int i;
     DWORD value;
+    char *pType;
 
+#if 0
+    if( SymName2LocalSymbol(&Symbol, args)==TRUE )
+    {
+        dprinth(1, "%08X %08X %s %s", Symbol.Address, Symbol.Data, Symbol.pName, Symbol.pType );
+    }
+    else
+    {
+        dprinth(1, "FALSE");
+    }
+#endif
+
+#if 1
     if( *args )
     {
-        if( Expression(&value, args, &args) && (deb.error==NOERROR) )
+        memset(&Symbol, 0, sizeof(Symbol));
+
+        if( EvaluateEx(&Symbol, args, &args) && (deb.error==NOERROR) )
         {
             if( !*args )
             {
-                i = sprintf(buf, " Hex=%08X  Dec=%010u  ", value, value );
+                i = sprintf(buf, " Hex=%08X  Dec=%010u  ", Symbol.Data, Symbol.Data );
 
                 // Print negative decimal only if it is a negative number
-                if( (signed)value<0 )
-                    i += sprintf(buf+i, "(%d)  ", (signed)value);
+                if( (signed)Symbol.Data<0 )
+                    i += sprintf(buf+i, "(%d)  ", (signed)Symbol.Data);
 
                 // Print ASCII representation of that number
                 i += sprintf(buf+i, "\"%c%c%c%c\"",
-                        ((value>>24) & 0xFF) >= ' '? ((value>>24) & 0xFF) : '.',
-                        ((value>>16) & 0xFF) >= ' '? ((value>>16) & 0xFF) : '.',
-                        ((value>> 8) & 0xFF) >= ' '? ((value>> 8) & 0xFF) : '.',
-                        ((value>> 0) & 0xFF) >= ' '? ((value>> 0) & 0xFF) : '.' );
+                        ((Symbol.Data>>24) & 0xFF) >= ' '? ((Symbol.Data>>24) & 0xFF) : '.',
+                        ((Symbol.Data>>16) & 0xFF) >= ' '? ((Symbol.Data>>16) & 0xFF) : '.',
+                        ((Symbol.Data>> 8) & 0xFF) >= ' '? ((Symbol.Data>> 8) & 0xFF) : '.',
+                        ((Symbol.Data>> 0) & 0xFF) >= ' '? ((Symbol.Data>> 0) & 0xFF) : '.' );
 
                 dprinth(1, "%s", buf);
+                dprinth(1, "Type: <%s>", Symbol.pType);
             }
             else
                 dprinth(1, "Syntax error at ->\"%s\"", args);
@@ -924,49 +1118,7 @@ BOOL cmdEvaluate(char *args, int subClass)
     }
     else
         deb.error = ERR_EXP_WHAT;
-
+#endif
     return( TRUE );
 }
 
-
-/******************************************************************************
-*                                                                             *
-*   BOOL cmdAscii(char *args, int subClass)                                   *
-*                                                                             *
-*******************************************************************************
-*
-*   Utility function that dumps the ASCII character table.
-*
-******************************************************************************/
-BOOL cmdAscii(char *args, int subClass)
-{
-    int nLine = 1;                      // Standard line counter
-    int nibble;                         // ASCII index
-
-    if(dprinth(nLine++, "         0 1 2 3 4 5 6 7  8 9 A B C D E F")==FALSE) return( TRUE );
-
-    for(nibble=0; nibble<256; nibble+=16)
-    {
-        if(dprinth(nLine++, " %3d %02X  %c%c %c%c %c%c %c%c %c%c %c%c %c%c %c%c  %c%c %c%c %c%c %c%c %c%c %c%c %c%c %c%c",
-                nibble,
-                nibble,
-                DP_ESCAPE, (nibble==0)? ' ' : nibble+0,
-                DP_ESCAPE, nibble+1,
-                DP_ESCAPE, nibble+2,
-                DP_ESCAPE, nibble+3,
-                DP_ESCAPE, nibble+4,
-                DP_ESCAPE, nibble+5,
-                DP_ESCAPE, nibble+6,
-                DP_ESCAPE, nibble+7,
-                DP_ESCAPE, nibble+8,
-                DP_ESCAPE, nibble+9,
-                DP_ESCAPE, nibble+10,
-                DP_ESCAPE, nibble+11,
-                DP_ESCAPE, nibble+12,
-                DP_ESCAPE, nibble+13,
-                DP_ESCAPE, nibble+14,
-                DP_ESCAPE, nibble+15 )==FALSE) break;
-    }
-
-    return( TRUE );
-}

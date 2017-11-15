@@ -843,7 +843,7 @@ BOOL cmdDdump(char *args, int subClass)
 *
 *   Edit command. If address and a set of data is given, edit stores it.
 *   Otherwise, it opens data window (if it is not already open), and lets
-*   edit it place.
+*   user edit it in-place.
 *
 *   subClass is:
 *       0   E  (the last data size)
@@ -856,9 +856,18 @@ BOOL cmdEdit(char *args, int subClass)
 {
     TADDRDESC EditAddr;                 // Effective edit address
 
-    // If data size was explicitly specified, set it as default
+    // If data size was explicitly specified, redraw data window if it is
+    // different from the default, then set it to be the current format
     if( subClass )
-        deb.DumpSize = subClass;
+    {
+        if( deb.DumpSize != subClass )
+        {
+            deb.DumpSize = subClass;
+
+            RecalculateDrawWindows();
+        }
+    }
+        
 
     if( *args==0 )
     {

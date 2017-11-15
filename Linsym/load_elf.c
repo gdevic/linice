@@ -118,6 +118,8 @@ int ParseSectionsPass1(BYTE *pBuf)
     BOOL fCont;                         // Line continuation?
     char *pSoDir = NULL;                // Source code directory
     int i;
+    int nCurrentSection;                // Current string section offset
+    int nSectionSize;                   // Current section string size
 
     printf("=============================================================================\n");
     printf("||         PARSE SECTIONS PASS 1                                           ||\n");
@@ -250,10 +252,12 @@ int ParseSectionsPass1(BYTE *pBuf)
         // Parse stab section
         pStab = (StabEntry *) (pBuf + SecStab->sh_offset);
         i = SecStab->sh_size / sizeof(StabEntry);
+        nCurrentSection = 0;
+        nSectionSize = 0;
         fCont=FALSE;
         while( i-- )
         {
-            pStr = (char *)pBuf + SecStabstr->sh_offset + pStab->n_strx;
+            pStr = (char *)pBuf + SecStabstr->sh_offset + pStab->n_strx + nCurrentSection;
 #if 0
             printf("unsigned long n_strx  = %08X\n", pStab->n_strx );
             printf("unsigned char n_type  = %02X\n", pStab->n_type );
@@ -264,9 +268,14 @@ int ParseSectionsPass1(BYTE *pBuf)
 
             switch( pStab->n_type )
             {
+                // 0x00 (N_UNDEF) is actually storing the current section string size
                 case N_UNDF:
-                    printf("UNDF  ");
-                    printf("%s\n", pStr);
+                    // We hit another string section, need to advance the string offset of the previous section
+                    nCurrentSection += nSectionSize;
+                    // Save the (new) currect string section size
+                    nSectionSize = pStab->n_value;
+
+                    printf("HdrSym size: %lX\n", pStab->n_value);
                     printf("=========================================================\n");
                 break;
 
@@ -458,7 +467,7 @@ int ParseSectionsPass1(BYTE *pBuf)
 
                             if(sscanf(strchr(pStr, '('), "(%d,%d)", &maj, &min)!=2)
                             {
-                                printf("Error scanning TYPEDEF ID %s\n", pStr);
+                                printf("Error scanning '(' TYPEDEF ID %s\n", pStr);
                                 return -1;
                             }
 
