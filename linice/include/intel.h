@@ -159,7 +159,6 @@ typedef struct
 //-----------------------------------------------------------------------------
 // GDT Gates (Code, Data, Task gates, Call gates, LDT descriptors)
 
-
 typedef struct
 {
     DWORD limitLow      :16;            // Limit [15:0]
@@ -277,7 +276,22 @@ typedef struct
 // CR0 Register Defines
 //-----------------------------------------------------------------------------
 #define PE_BIT          0
+#define MP_BIT          1
+#define EM_BIT          2
+#define TS_BIT          3
+#define ET_BIT          4
+#define NE_BIT          5
+#define WP_BIT          16
+#define AM_BIT          18
+#define NW_BIT          29
+#define CD_BIT          30
 #define PG_BIT          31
+
+//-----------------------------------------------------------------------------
+// CR3 Register Defines
+//-----------------------------------------------------------------------------
+#define PWT_BIT         3
+#define PCD_BIT         4
 
 //-----------------------------------------------------------------------------
 // CR4 Register Defines
@@ -336,15 +350,21 @@ typedef struct
     DWORD cr3;
     DWORD cr4;
 
-    DWORD dr0;
-    DWORD dr1;
-    DWORD dr2;
-    DWORD dr3;
-    DWORD dr6;
+    DWORD dr[4];        // First 4 are debug linear address and for convinience
+    DWORD dr6;          //  we keep them as arrays
     DWORD dr7;
 
-} TSysreg;
+} PACKED TSysreg;
 
+// Define DR7 bits
+#define DR7_EXEC            0           // Bp on execution only
+#define DR7_WRITE           1           // Bp on data writes only
+#define DR7_IO              2           // Bp on IO reads or writes
+#define DR7_DATARW          3           // Bp on data reads/writes, but not exec
+
+#define DR7_LEN1            4           // 1 byte len
+#define DR7_LEN2            8           // 2 byte len
+#define DR7_LEN4            0xC         // 4 byte len
 
 /******************************************************************************
 *                                                                             *

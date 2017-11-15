@@ -193,6 +193,8 @@ int InitPacket(PTINITPACKET pInit)
 
                                         pIce->layout = LAYOUT_US;
 
+                                        deb.bpIndex = -1;
+
                                         deb.fLowercase = pInit->fLowercase;
                                         deb.fPause = TRUE;
 

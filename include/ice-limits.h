@@ -43,6 +43,12 @@
 //
 #define DEVICE_NAME         "ice"       // Define LinIce device name (/dev)
 
+// Length of the module name string (incl. 0)
+#define MAX_MODULE_NAME     16
+
+// Default symbol file signature - should be less than MAX_MODULE_NAME
+#define SYMSIG  "Linice Sym\0x1A"
+
 //////////////////////////////////////////////////////////////////////
 // Define the maxlimum length (including terminating zero) of:
 //  * initialization string
@@ -64,11 +70,10 @@
 #define MAX_MACRO_RECURSE   8
 #define MAX_EVAL_RECURSE    8
 
-// Length of the module name string (incl. 0)
-#define MAX_MODULE_NAME     16
-
-// Default symbol file signature - should be less than MAX_MODULE_NAME
-#define SYMSIG  "Linice Sym\0x1A"
+//////////////////////////////////////////////////////////////////////
+// Define maximum number of breakpoints that we keep
+//
+#define MAX_BREAKPOINTS     256
 
 //////////////////////////////////////////////////////////////////////
 // Define number of bytes per line for data dump command (not tested)

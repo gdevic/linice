@@ -204,6 +204,12 @@ static TRegister Reg[] = {
 { "dx",  2, 0x0000FFFF, 0, offsetof(TREGS, edx) },
 { "edx", 3, 0xFFFFFFFF, 0, offsetof(TREGS, edx) },
 
+{ "cs",  2, 0x0000FFFF, 0, offsetof(TREGS, cs) },
+{ "ds",  2, 0x0000FFFF, 0, offsetof(TREGS, ds) },
+{ "es",  2, 0x0000FFFF, 0, offsetof(TREGS, es) },   // Should go before esi
+{ "fs",  2, 0x0000FFFF, 0, offsetof(TREGS, fs) },
+{ "gs",  2, 0x0000FFFF, 0, offsetof(TREGS, gs) },
+
 { "bp",  2, 0x0000FFFF, 0, offsetof(TREGS, ebp) },
 { "ebp", 3, 0xFFFFFFFF, 0, offsetof(TREGS, ebp) },
 { "sp",  2, 0x0000FFFF, 0, offsetof(TREGS, esp) },
@@ -216,12 +222,6 @@ static TRegister Reg[] = {
 { "efl", 3, 0xFFFFFFFF, 0, offsetof(TREGS, eflags) },
 { "ip",  2, 0x0000FFFF, 0, offsetof(TREGS, eip) },
 { "eip", 3, 0xFFFFFFFF, 0, offsetof(TREGS, eip) },
-
-{ "cs",  2, 0x0000FFFF, 0, offsetof(TREGS, cs) },
-{ "ds",  2, 0x0000FFFF, 0, offsetof(TREGS, ds) },
-{ "es",  2, 0x0000FFFF, 0, offsetof(TREGS, es) },
-{ "fs",  2, 0x0000FFFF, 0, offsetof(TREGS, fs) },
-{ "gs",  2, 0x0000FFFF, 0, offsetof(TREGS, gs) },
 
 { "CFL", 3, 1 << 0,     0, offsetof(TREGS, eflags) },
 { "PFL", 3, 1 << 2,     2, offsetof(TREGS, eflags) },
@@ -274,10 +274,10 @@ typedef struct
 } TFunction;
 
 static TFunction Func[] = {
-{ "byte", 4, 1, fnByte },
-{ "word", 4, 1, fnWord },
-{ "dword", 4, 1, fnDword },
-{ "hiword", 4, 1, fnHiword },
+{ "byte",   4, 1, fnByte },
+{ "word",   4, 1, fnWord },
+{ "dword",  5, 1, fnDword },
+{ "hiword", 6, 1, fnHiword },
 { NULL }
 };
 
@@ -564,6 +564,10 @@ static int GetValue( char **sExpr )
     if( SymbolName2Value((DWORD *)&value, sStart) )
     {
         ; // If found, value will be set
+
+        ; // PROBLEM: If user mistypes the symbol name, this fn
+        ; // will not catch it and GetHex will interpret is as a
+        // hex number???
     }
     else
     // The literal value may be the explicit CPU register value
@@ -592,9 +596,9 @@ static int GetValue( char **sExpr )
     // The literal value may be the built-in function
     if( (pFunc = IsFunc(sStart)) != 0 )
     {
+        sStart += pFunc->nameLen;
         value = Evaluate(sStart, &sStart);
         value = (pFunc->funct)(value);
-        sStart += pFunc->nameLen;
     }
     else
     // If everything else fails, it's gotta be a hex number

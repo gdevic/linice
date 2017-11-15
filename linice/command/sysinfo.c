@@ -100,7 +100,23 @@ static TBITS bitsEFL[] = {
 // Define bits of the register CR0
 static TBITS bitsCR0[] = {
 { BITMASK(PG_BIT), "PG " },
+{ BITMASK(CD_BIT), "CD " },
+{ BITMASK(NW_BIT), "NW " },
+{ BITMASK(AM_BIT), "AM " },
+{ BITMASK(WP_BIT), "WP " },
+{ BITMASK(NE_BIT), "NE " },
+{ BITMASK(ET_BIT), "ET " },
+{ BITMASK(TS_BIT), "TS " },
+{ BITMASK(EM_BIT), "EM " },
+{ BITMASK(MP_BIT), "MP " },
 { BITMASK(PE_BIT), "PE " },
+{ 0 }
+};
+
+// Define bits of the register CR3
+static TBITS bitsCR3[] = {
+{ BITMASK(PCD_BIT), "PCD " },
+{ BITMASK(PWT_BIT), "PWT " },
 { 0 }
 };
 
@@ -354,20 +370,19 @@ BOOL cmdCpu(char *args, int subClass)
     dprinth(3, "ESI=%08X   EDI=%08X   EBP=%08X   EFL=%08X", deb.r->esi, deb.r->edi, deb.r->ebp, deb.r->eflags);
     dprinth(4, "DS=%04X   ES=%04X   FS=%04X   GS=%04X", deb.r->ds, deb.r->es, deb.r->fs, deb.r->gs);
 
-    // Get the system registers
-    GetSysreg(&deb.sysReg);
-
     MkBits(bits, deb.sysReg.cr0, bitsCR0);
     dprinth(5,  "CR0=%08X   %s", deb.sysReg.cr0, bits);
     dprinth(6,  "CR2=%08X", deb.sysReg.cr2);
-    dprinth(7,  "CR3=%08X", deb.sysReg.cr3);
+
+    MkBits(bits, deb.sysReg.cr3, bitsCR3);
+    dprinth(7,  "CR3=%08X   %s", deb.sysReg.cr3, bits);
     MkBits(bits, deb.sysReg.cr4, bitsCR4);
     dprinth(8,  "CR4=%08X   %s", deb.sysReg.cr4, bits);
 
-    dprinth(9,  "DR0=%08X", deb.sysReg.dr0);
-    dprinth(10, "DR1=%08X", deb.sysReg.dr1);
-    dprinth(11, "DR2=%08X", deb.sysReg.dr2);
-    dprinth(12, "DR3=%08X", deb.sysReg.dr3);
+    dprinth(9,  "DR0=%08X", deb.sysReg.dr[0]);
+    dprinth(10, "DR1=%08X", deb.sysReg.dr[1]);
+    dprinth(11, "DR2=%08X", deb.sysReg.dr[2]);
+    dprinth(12, "DR3=%08X", deb.sysReg.dr[3]);
     dprinth(13, "DR6=%08X", deb.sysReg.dr6);
     dprinth(14, "DR7=%08X", deb.sysReg.dr7);
 
@@ -396,7 +411,6 @@ BOOL cmdModule(char *args, int subClass)
     struct module* pMod;                // Pointer to a current module
     int nLen = 0;                       // Assume every module
     BOOL fExact = FALSE;                // Assume all modules
-    struct module_symbol* pSym;         // Module symbols for extra info
 
     pMod = (struct module*) *pmodule;   // Get to the head of the module list
     if( pMod==NULL )
@@ -448,18 +462,10 @@ BOOL cmdModule(char *args, int subClass)
         // For a single module, display additional info
         if( fExact )
         {
-            // Display exported symbols
-            if( (nLen = pMod->nsyms) != 0 )
-            {
-                pSym = pMod->syms;
+//          struct module_symbol* pSym;         // Module symbols for extra info
 
-                while( nLen-- )
-                {
-                    if(!dprinth(nLine++, " %08X  %s", pSym->value, pSym->name) )
-                        break;
-                    pSym++;
-                }
-            }
+            // TODO: What additional info would we like to see???
+            ;
         }
     }
 

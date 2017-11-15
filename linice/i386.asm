@@ -39,6 +39,7 @@ global  strtolower
 global  memset_w
 global  memset_d
 global  GetSysreg
+global  SetSysreg
 global  Outpb
 global  Outpw
 global  Outpd
@@ -631,6 +632,48 @@ GetSysreg:
         mov     [ebx+32], eax
         mov     eax, dr7
         mov     [ebx+36], eax
+
+        pop     ebx
+        pop     ebp
+        ret
+
+;==============================================================================
+;
+;   void SetSysreg( TSysreg * pSys )
+;
+;   Writes system registers back. Only registers that matter are written.
+;
+;   Where:
+;       [ebp + 8 ]        pointer to the SysReg storage
+;
+;==============================================================================
+SetSysreg:
+        push    ebp
+        mov     ebp, esp
+        push    ebx
+
+        mov     ebx, [ebp + 8]
+        mov     eax, [ebx+0 ]
+        mov     cr0, eax
+;       mov     eax, [ebx+4 ]   ; No need to change Page Fault Linear Address
+;       mov     cr2, eax
+;       mov     eax, [ebx+8 ]   ; No need to change PDBR
+;       mov     cr3, eax
+        mov     eax, [ebx+12]
+        mov     cr4, eax
+
+        mov     eax, [ebx+16]
+        mov     dr0, eax
+        mov     eax, [ebx+20]
+        mov     dr1, eax
+        mov     eax, [ebx+24]
+        mov     dr2, eax
+        mov     eax, [ebx+28]
+        mov     dr3, eax
+        mov     eax, [ebx+32]
+        mov     dr6, eax
+        mov     eax, [ebx+36]
+        mov     dr7, eax
 
         pop     ebx
         pop     ebp

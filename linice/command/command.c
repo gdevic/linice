@@ -68,6 +68,11 @@ extern BOOL cmdColor   (char *args, int subClass);      // customization.c
 extern BOOL cmdSerial  (char *args, int subClass);      // customization.c
 extern BOOL cmdXwin    (char *args, int subClass);      // customization.c
 extern BOOL cmdPause   (char *args, int subClass);      // customization.c
+extern BOOL cmdBp      (char *args, int subClass);      // breakpoints.c
+extern BOOL cmdBl      (char *args, int subClass);      // breakpoints.c
+extern BOOL cmdBpet    (char *args, int subClass);      // breakpoints.c
+extern BOOL cmdBstat   (char *args, int subClass);      // breakpoints.c
+extern BOOL cmdBpx     (char *args, int subClass);      // breakpoints.c
 extern BOOL cmdXit     (char *args, int subClass);      // flow.c
 extern BOOL cmdGo      (char *args, int subClass);      // flow.c
 extern BOOL cmdTrace   (char *args, int subClass);      // flow.c
@@ -115,22 +120,22 @@ TCommand Cmd[] = {
 {    "ADDR",     4, 0, Unsupported,    "ADDR [context-handle | task | *]", "ex: ADDR 80FD602C",   0 },
 {    "ALTKEY",   6, 0, cmdAltkey,      "ALTKEY [ALT letter | CTRL letter]", "ex: ALTKEY ALT D",   0 },
 {    "ALTSCR",   6, 0, Unsupported,    "ALTSCR [MONO | VGA | OFF]", "ex: ALTSCR MONO",    0 },
-{    "BC",       2, 0, Unsupported,    "BC list | *", "ex: BC *", 0 },
-{    "BD",       2, 0, Unsupported,    "BD list | *", "ex: BD 1,3,4", 0 },
-{    "BE",       2, 0, Unsupported,    "BE list | *", "ex: BE 1,3,4", 0 },
+{    "BC",       2, 0, cmdBp,          "BC list | *", "ex: BC *", 0 },
+{    "BD",       2, 1, cmdBp,          "BD list | *", "ex: BD 1,3,4", 0 },
+{    "BE",       2, 2, cmdBp,          "BE list | *", "ex: BE 1,3,4", 0 },
 {    "BH",       2, 0, Unsupported,    "BH breakpoint history", "ex: BH", 0 },
-{    "BL",       2, 0, Unsupported,    "BL list current breakpoints", "ex: BL",   0 },
-{    "BPE",      3, 0, Unsupported,    "BPE breakpoint number", "ex: BPE 3",  0 },
-{    "BPINT",    5, 0, Unsupported,    "BPINT interrupt-number [IF expression] [DO bp-action]", "ex: BPINT 50",   0 },
-{    "BPIO",     4, 0, Unsupported,    "BPIO [-h] port [R|W|RW] [debug register] [IF expression] [DO bp-action]", "ex: BPIO 3DA W",   0 },
-{    "BPM",      3, 0, Unsupported,    "BPM[size] address [R|W|RW|X] [debug register] [IF expression] [DO bp-action]", "ex: BPM 1234 RW", 0 },
-{    "BPMB",     4, 0, Unsupported,    "BPMB address [R|W|RW|X] [debug register] [IF expression] [DO bp-action]", "ex: BPMB 333 R",   0 },
-{    "BPMD",     4, 0, Unsupported,    "BPMD address [R|W|RW|X] [debug register] [IF expression] [DO bp-action]", "ex: BPMD EDI W",   0 },
-{    "BPMW",     4, 0, Unsupported,    "BPMW address [R|W|RW|X] [debug register] [IF expression] [DO bp-action]", "ex: BPMW ESP-6 W", 0 },
+{    "BL",       2, 0, cmdBl,          "BL list current breakpoints", "ex: BL",   0 },
+{    "BPE",      3, 0, cmdBpet,        "BPE edit breakpoint number", "ex: BPE 3",  0 },
+{    "BPINT",    5, 2, cmdBpx,         "BPINT interrupt-number [IF expression] [DO bp-action]", "ex: BPINT 50",   0 },
+{    "BPIO",     4, 3, cmdBpx,         "BPIO [-h] port [R|W|RW] [debug register] [IF expression] [DO bp-action]", "ex: BPIO 3DA W",   0 },
+{    "BPM",      3, 4, cmdBpx,         "BPM[size] address [R|W|RW|X] [debug register] [IF expression] [DO bp-action]", "ex: BPM 1234 RW", 0 },
+{    "BPMB",     4, 4, cmdBpx,         "BPMB address [R|W|RW|X] [debug register] [IF expression] [DO bp-action]", "ex: BPMB 333 R",   0 },
+{    "BPMD",     4, 7, cmdBpx,         "BPMD address [R|W|RW|X] [debug register] [IF expression] [DO bp-action]", "ex: BPMD EDI W",   0 },
+{    "BPMW",     4, 5, cmdBpx,         "BPMW address [R|W|RW|X] [debug register] [IF expression] [DO bp-action]", "ex: BPMW ESP-6 W", 0 },
 {    "BPRW",     4, 0, Unsupported,    "BPRW module-name | code selector [R|W|RW|T|TW] [IF expression] [DO bp-action]", "ex: BPR ESI EDI+32 RW",  0 },
-{    "BPT",      3, 0, Unsupported,    "BPT breakpoint number", "ex: BPT 0",  0 },
-{    "BPX",      3, 0, Unsupported,    "BPX address [IF expression] [DO bp-action]", "ex: BPX 282FE0",    0 },
-{    "BSTAT",    5, 0, Unsupported,    "BSTAT [breakpoint #]", "ex: BSTAT 3", 0 },
+{    "BPT",      3, 1, cmdBpet,        "BPT template breakpoint number", "ex: BPT 0",  0 },
+{    "BPX",      3, 1, cmdBpx,         "BPX address [IF expression] [DO bp-action]", "ex: BPX 282FE0",    0 },
+{    "BSTAT",    5, 0, cmdBstat,       "BSTAT [breakpoint #]", "ex: BSTAT 3", 0 },
 {    "C",        1, 0, cmdCompare,     "Compare [-e] address1 L length address2", "ex: C 80000 L 40 EBX",    0 },
 {    "CLS",      3, 0, cmdCls,         "CLS clear window", "ex: CLS", 0 },
 {    "CODE",     4, 0, cmdCode,        "CODE [ON | OFF]", "ex: CODE OFF", 0 },

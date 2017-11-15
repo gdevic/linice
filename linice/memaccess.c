@@ -82,5 +82,12 @@ BYTE AddrGetByte(PTADDRDESC pAddr)
 
 void AddrSetByte(PTADDRDESC pAddr, BYTE value)
 {
-    SetByte(pAddr->sel, pAddr->offset, value);
+    // Since we are writing a byte and the selector value may be of any privilege,
+    // we use kernel ds that has base=0 so we recalculate offset.
+
+    // TODO: Right now we support only user/kernel selectors with base 0
+    //       In order to provide more generic support, we need to recompute
+    //       offset based on the base address of the given selector
+
+    SetByte(__KERNEL_DS, pAddr->offset, value);
 }

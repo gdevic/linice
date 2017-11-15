@@ -65,6 +65,10 @@
 *                                                                             *
 ******************************************************************************/
 
+extern int IsDebugRegAvail(int which);
+extern int ArmDebugReg(int which, TADDRDESC Addr, BYTE type);
+extern void ArmSingleShotInt3(TADDRDESC Addr);
+
 // From linux/reboot.h
 
 extern void machine_restart(char *cmd);
@@ -95,9 +99,85 @@ BOOL cmdXit(char *args, int subClass)
 *
 *   Runs the interrupted program
 *
+*   G [=start-address] [break-address]
+*
+*   If you specify start-address, eip is set to it before executing
+*   If you spcify break-address, a one-time bp is set using a DR, if available
+*       if not, INT3 is used
+*
 ******************************************************************************/
 BOOL cmdGo(char *args, int subClass)
 {
+    TADDRDESC StartAddr, BpAddr;
+    BOOL fStart, fBreak;
+    int dr;
+
+    fStart = fBreak = FALSE;
+
+    if( *args )
+    {
+        // Arguments present. Is it start-address?
+        if( *args=='=' )
+        {
+            // Set the default selector to current CS
+            evalSel = deb.r->cs;
+
+            if( Expression(&StartAddr.offset, args, &args) )
+            {
+                // Assign the complete start address
+                StartAddr.sel = evalSel;
+                fStart = TRUE;
+            }
+            else
+            {
+                // Something was bad with the address
+                dprinth(1, "Syntax error");
+                return( TRUE );
+            }
+        }
+
+        // See if we have the break address
+        if( *args )
+        {
+            // Set the default selector to current CS
+            evalSel = deb.r->cs;
+
+            if( Expression(&BpAddr.offset, args, &args) )
+            {
+                // Assign the complete bp address
+                BpAddr.sel = evalSel;
+                fBreak = TRUE;
+            }
+            else
+            {
+                // Something was bad with the address
+                dprinth(1, "Syntax error");
+                return( TRUE );
+            }
+        }
+
+        // If we specified start address, modify cs:eip
+        if( fStart )
+        {
+            deb.r->cs = StartAddr.sel;
+            deb.r->eip = StartAddr.offset;
+        }
+
+        // If we specified break address, set a one-time bp
+        if( fBreak )
+        {
+            // Try to reserve a debug register for it
+            if( (dr = IsDebugRegAvail(-1)) < 0 )
+            {
+                ArmDebugReg(dr, BpAddr, DR7_EXEC);
+            }
+            else
+            {
+                // We dont have any DR available, use a one-time INT3
+                ArmSingleShotInt3(BpAddr);
+            }
+        }
+    }
 
     return( FALSE );
 }
@@ -205,28 +285,32 @@ BOOL cmdStep(char *args, int subClass)
 ******************************************************************************/
 BOOL cmdZap(char *args, int subClass)
 {
+    TADDRDESC Addr;                     // Address to zap
     int b0;
 
     // Make sure the address is valid
     b0 = GetByte(deb.r->cs, deb.r->eip - 1);
     if( b0==0xCC )
     {
+        Addr.sel = deb.r->cs;
+        Addr.offset = deb.r->eip - 1;
+
         // Zap the INT3
-        SetByte(deb.r->cs, deb.r->eip - 1, 0x90);
+        AddrSetByte(&Addr, 0x90);
     }
     else
     if( b0==0x01 )
     {
         if( GetByte(deb.r->cs, deb.r->eip - 2)==0xCD )
         {
+            Addr.sel = deb.r->cs;
+
             // Zap the 2-byte INT1
+            Addr.offset = deb.r->eip - 1;
+            AddrSetByte(&Addr, 0x90);
 
-            // DANGER!!! We assume CS=DS for a given context that we zap
-
-            // ALSO: need to make page writable and read-only after the zap
-
-            SetByte(deb.r->ds, deb.r->eip - 1, 0x90);
-            SetByte(deb.r->ds, deb.r->eip - 2, 0x90);
+            Addr.offset = deb.r->eip - 2;
+            AddrSetByte(&Addr, 0x90);
         }
     }
 

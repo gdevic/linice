@@ -34,12 +34,13 @@ clean:
 			registers.o	\
 			data.o		\
 			code.o		\
-			customization.o		\
-			windowcontrol.o		\
+			customization.o	\
+			windowcontrol.o	\
 			blockops.o		\
 			ioport.o	\
 			sysinfo.o	\
 			page.o		\
+			breakpoints.o	\
 			pci.o		\
 			flow.o		\
 			history.o	\
@@ -123,6 +124,9 @@ sysinfo.o:		command/sysinfo.c
 
 page.o:		    command/page.c
 	$(CC) $(CFLAGS) -c command/page.c
+
+breakpoints.o:	command/breakpoints.c
+	$(CC) $(CFLAGS) -c command/breakpoints.c
 
 pci.o:		    command/pci.c
 	$(CC) $(CFLAGS) -c command/pci.c

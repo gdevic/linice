@@ -86,9 +86,6 @@ BOOL cmdPage(char *args, int subClass)
     int pages = 1;                      // Number of pages to display
     int nLine = 1;                      // Standard dprinth line counter
 
-    // Get the system registers
-    GetSysreg(&deb.sysReg);
-
     // Get the page directory virtual address
     pPD = (TPage *) (PAGE_OFFSET + deb.sysReg.cr3);
 
@@ -296,9 +293,6 @@ BOOL cmdPhys(char *args, int subClass)
         {
             address_index = address >> 12;
 
-            // Get the system registers
-            GetSysreg(&deb.sysReg);
-
             // Get the page directory virtual address
             pPD = (TPage *) (PAGE_OFFSET + deb.sysReg.cr3);
 
@@ -477,7 +471,6 @@ DWORD UserVirtToPhys(DWORD address)
     DWORD phys = 0;                     // Assume NULL for the return value
     DWORD pg, pt;                       // Directory and page table index
 
-    // Get the system registers
     GetSysreg(&deb.sysReg);
 
     // Get the page directory virtual address

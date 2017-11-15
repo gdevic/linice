@@ -147,6 +147,7 @@ typedef struct
     TREGS  r_prev;                      // previous registers (for color coding of changes)
     TSysreg sysReg;                     // System registers
     int nInterrupt;                     // Interrupt that occurred
+    int bpIndex;                        // Index of the breakpoint that hit (default -1)
 
     int DumpSize;                       // Dx dump value size
     TADDRDESC dataAddr;                 // Data - current display address
@@ -318,7 +319,6 @@ extern int GetByte(WORD sel, DWORD offset);
 extern void SetByte(WORD sel, DWORD offset, BYTE value);
 extern void memset_w(void *dest, WORD data, int size);
 extern void memset_d(void *dest, DWORD data, int size);
-extern void GetSysreg( TSysreg * pSys );
 
 extern BOOL AddrIsPresent(PTADDRDESC pAddr);
 extern BYTE AddrGetByte(PTADDRDESC pAddr);

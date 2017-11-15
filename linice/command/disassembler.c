@@ -611,7 +611,7 @@ StartInstructionNoMODRM:
                  else
                  {
                      dwDword = NEXTDWORD;
-                     nPos += sprintf( pDis->szDisasm+nPos, "%08X", (unsigned int) dwDword );
+                     nPos += sprintf( pDis->szDisasm+nPos, "%04X:%04X", (WORD)(dwDword >> 16), (WORD) (dwDword & 0xFFFF) );
                  }
              break;
 
