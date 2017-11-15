@@ -39,6 +39,9 @@
 #define _CLIB_H_
 
 
+#include <linux/sched.h>
+
+
 ///////////////////////////////////////////////////////////////////////////////
 //
 // types.h
@@ -48,8 +51,6 @@
 #ifndef offsetof
 #define offsetof(s,m) (int)&(((s*)0)->m)
 #endif
-
-typedef unsigned int   size_t;
 
 typedef unsigned char  BYTE;
 typedef unsigned short WORD;
@@ -64,21 +65,14 @@ typedef unsigned int   BOOL;
 #define FALSE   0
 #endif
 
-#define NULL    0L
-
 #define MIN(a,b)        ((a)<(b)?(a):(b))
 #define MAX(a,b)        ((a)<(b)?(b):(a))
 
-///////////////////////////////////////////////////////////////////////////////
-//
-// assert.h
-//
-///////////////////////////////////////////////////////////////////////////////
+#define LONG_MIN                0x80000000
 
-extern void __assert( char *file, int line );
+extern int errno;
 
-#define assert( expr )   ((expr)? (void)0: __assert(__FILE__, __LINE__))
-#define ASSERT( expr )   assert( expr )
+#define MAX_ERRNO    37     // Number of error codes
 
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -117,6 +111,25 @@ extern char _ctype_[257];
 
 #define isascii(c)     ((unsigned)(c) < 128)
 
+
+///////////////////////////////////////////////////////////////////////////////
+//
+// assert.h
+//
+///////////////////////////////////////////////////////////////////////////////
+
+extern void ice_assert( char *file, int line );
+
+#define assert( expr )   ((expr)? (void)0: ice_assert(__FILE__, __LINE__))
+#define ASSERT( expr )   assert( expr )
+
+
+
+#if 0
+
+typedef unsigned int   size_t;
+
+#define NULL    0L
 
 ///////////////////////////////////////////////////////////////////////////////
 //
@@ -215,12 +228,11 @@ typedef char *va_list[1];
 
 typedef char *__va_list[1];
 
-extern int sprintf( char *str, char *format, ... );
+extern int ice_sprintf( char *str, char *format, ... );
 extern int vsprintf( char *dest, char *format, __va_list arg );
 
 extern int scanf( const char *fmt, ... );
 extern int vscanf( const char *fmt, __va_list arg );
-
 
 ///////////////////////////////////////////////////////////////////////////////
 //
@@ -228,7 +240,7 @@ extern int vscanf( const char *fmt, __va_list arg );
 //
 ///////////////////////////////////////////////////////////////////////////////
 
-extern void *malloc( size_t size );
+extern void *ice_malloc( size_t size );
 extern void *calloc( size_t nmemb, size_t size );
 extern void *realloc( void *ptr, size_t size );
 extern void free( void *ptr );
@@ -275,6 +287,7 @@ extern char * strrev( char *s );
 extern char * strset( char *s, int c );
 extern char * strupr( char *s );
 
+#endif
 
 
 #endif //  _CLIB_H_

@@ -18,7 +18,7 @@
     dprint() performs the functionality of printf() with some extra control
     characters that are defined in Display.h file.
 
-    sprintf() is also here since it is basically using the same function.
+    ice_sprintf() is also here since it is basically using the same function.
 
 *******************************************************************************
 *                                                                             *
@@ -74,7 +74,7 @@ static DWORD nMultiline = 0;
 
 /******************************************************************************
 *                                                                             *
-*   sprintf() helper function that stores a character into a string           *
+*   ice_sprintf() helper function that stores a character into a string           *
 *                                                                             *
 ******************************************************************************/
 
@@ -482,11 +482,11 @@ UnsignedInt:
 
 /******************************************************************************
 *                                                                             *
-*   int sprintf( char *buf, const char *format, ... )                         *
+*   int ice_sprintf( char *buf, const char *format, ... )                         *
 *                                                                             *
 *******************************************************************************
 *
-*   Standard sprintf() function that prints into a string.
+*   Standard ice_sprintf() function that prints into a string.
 *
 *   Where:
 *       buf is a pointer to a destination buffer (where to print)
@@ -496,7 +496,7 @@ UnsignedInt:
 *       number of characters actually printed
 *
 ******************************************************************************/
-int sprintf( char *buf, char *format, ... )
+int ice_sprintf( char *buf, char *format, ... )
 {
     TPUTCHAR pfnPutCharSave;
     va_list arg;

@@ -168,14 +168,9 @@ typedef struct
 
 } TGDT_Gate;
 
-#define GET_GDT_BASE(pGDT_Gate) \
-          ( (pGDT_Gate)->baseLow + \
-           ((pGDT_Gate)->baseMid << 16) + \
-           ((pGDT_Gate)->baseHigh << 24) )
+#define GET_GDT_BASE(pGDT_Gate)           ( (pGDT_Gate)->baseLow + ((pGDT_Gate)->baseMid << 16) + ((pGDT_Gate)->baseHigh << 24) )
 
-#define GET_GDT_LIMIT(pGDT_Gate) \
-          ( (pGDT_Gate)->limitLow + \
-           ((pGDT_Gate)->limitHigh << 16) )
+#define GET_GDT_LIMIT(pGDT_Gate)  ( (pGDT_Gate)->limitLow + ((pGDT_Gate)->limitHigh << 16) )
 
 #define DESC_TYPE_TSS16A    0x01        // 16 bit TSS (Available)
 #define DESC_TYPE_LDT       0x02        // LDT (CodeData must be 0)
@@ -241,7 +236,16 @@ typedef struct
 #define VIF_BIT             19
 #define VIP_BIT             20
 #define ID_BIT              21
-
+             
+#undef TF_MASK
+#undef IF_MASK
+#undef IOPL_MASK
+#undef NT_MASK
+#undef VM_MASK
+#undef AC_MASK
+#undef VIF_MASK
+#undef VIP_MASK
+#undef ID_MASK
 
 #define CF_MASK             (1 << CF_BIT)
 #define PF_MASK             (1 << PF_BIT)

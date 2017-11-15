@@ -1,0 +1,1443 @@
+Error loading WIN.COM
+WINICE.DAT
+win.com
+Error loading program file $
+No symbols found $
+Memory allocation error$
+Error reading file $
+File not found $
+Error loading source file $
+Out of space loading symbol information. Increase symbol memory setting.$
+Out of space loading source file$
+SoftICE 4.00 (Windows 95 / Windows 98)
+(C) Copyright 1999 Compuware Corp. All rights reserved.$
+SoftICE is not loaded$
+This version of LDR.EXE requires SoftICE 2.5 or greater
+Could not allocate 128K
+$Error$
+USAGE: WINICE /? /LOAD /SYM /HST /TRA
+       ?    - Display this text
+       LOAD - Load symbol information from file name
+       SYM  - Amount of symbol table memory in decimal K
+       HST  - Amount of additional display history memory in decimal K
+       TRA  - Amount of back trace history memory in decimal K
+ex:    winice /load sample.386 /sym256 /tra 32 /hst 32
+Invalid command line parameter
+$Soft-ICE Requires a 386 or greater Processor
+00000K extended memory allocated for symbols
+00000K extended memory allocated for back trace
+00000K extended memory allocated for exports
+00000K extended memory allocated for display history
+Loading $
+DS=
+ES=
+FS=
+GS=
+ESI=
+EDI=
+ESP=
+EAX=
+EBX=
+ECX=
+EDX=
+EBP=
+ ALT
+CTRL
+SICE
+verPP
+SICE.DAT
+SIWVID
+Int00 Fault in SoftICE at address 00000000 offset 00000000
+Fault Code=00000000
+Hot Key
+Embedded INT 3
+Embedded INT 1
+Invalid Opcode Fault (06h)
+Stack Fault (0Ch).  Fault=
+General Protection Fault (0Dh).  Fault=
+Page Fault (0Eh).  Fault=
+Symbol Loader
+Debug Keyboard Request
+Windows Requested Break Point
+UnhandledException NTSTATUS=
+ Press 'Z' for SoftICE or pass back any other key.
+Break due to
+ Press 'C' to continue, 'R' to return to SoftICE
+SIW95: DeviceIOControl Interface
+  Windows is active, press CTRL D to activate SoftICE
+SIWVID
+MONO
+DDRAW
+WINICE: CheckDisplayHooks failed to replace byte
+WINICE: CheckDisplayHooks failed to read return address
+WINICE: CheckDisplayHooks failed to write return address
+WINICE: CheckDisplayHooks failed to write return address
+WINICE: EnableCalled failed to read parameter
+WINICE: ReEnableCalled failed to read parameter
+WINICE: ControlCalled failed to read parameter
+WINICE: SetPaletteCalled failed because data paged out
+CPU=0
+Idle
+Pend
+Edge
+Leve
+Physical
+Logical
+Processor %02x Registers
+----------------------
+Family:%x Model:%x Stepping:%x Type:%x
+Features:
+EFL=
+IOPL
+                  ID: %x
+             Version: %x
+       Task Priority: %x
+Arbitration Priority: %x
+  Processor Priority: %x
+ Logical Destination: %x
+  Destination Format: %x
+     Spurious Vector: %x
+         LVT (Timer): %x
+ LVT (Perf. Counter): %x
+         LVT (Lint0): %x
+         LVT (Lint1): %x
+         LVT (Error): %x
+   Interrupt Command: %x:%x
+         Timer Count: %x
+       Timer Current: %x
+        Timer Divide: %x
+-------- Local apic --------
+CPU  PCR Base  IDT Base  GDT Base  Pri  TID  Process(ID)   CS:EIP
+Inti  Vector  Delivery  Status  Trigger  Dest Mode  Destination
+Fixed   Low. Pri??      ??      NMI     Reset   ??      ExtINTA IOAPIC
+CR0=00000000
+PEMPEMTSETNEWPAMNWCDPG
+VME PVI TSD DE  PSE PAE MCE PGE PCE
+CF PF AF ZF SF TF IF DF OF NT RF VM AC VIFVIPID
+FPU VME DE PSE TSC MSR PAE MCE CXS APIC MTRR PGE MCA CMOV MMX FXSR KAT .
+Hooking IOAPIC kbd vector at #AL
+NTICE: INT2B error - page fault
+NTICE: INT2B error - cannot find string 1
+NTICE: INT2B error - cannot find string 2
+I/O unit id register: #eax
+I/O unit version register: #eax
+I/O APIC is not being used
+Invalid Processor ID
+  MSR LastExceptionFromIp=#edx
+    MSR LastExceptionToIp=#eax
+  MSR LastBranchFromIp=#eax
+    MSR LastBranchToIp=#eax
+byte
+real
+shorf
+real
+long
+real
+byte
+word
+word
+CS:EIP=%.4x:%.8x  SS:ESP=%.4x:%.8x
+EAX=%.8x  EBX=%.8x  ECX=%.8x  EDX=%.8x
+ESI=%.8x  EDI=%.8x  EBP=%.8x  EFL=%.8x
+DS=%.4x  ES=%.4x  FS=%.4x  GS=%.4x
+odiszapcaxbxcxdxsidibpspipflcsdsssesfsgsalblcldlahbhchdh
+/(){};<>.,&^%!~|=\" '
+Close Current Window
+Copy
+Paste
+Copy&Paste
+Display
+Un-Assemble
+What
+Previous
+EAX=00000000
+EBX=00000000
+ECX=00000000
+EDX=00000000
+EIP=00000000
+ESI=00000000
+EDI=00000000
+EBP=00000000
+ESP=00000000
+IOPL=0
+CR2=00000000
+CR3=00000000
+CS=0000
+DS=0000
+SS=0000
+ES=0000
+FS=0000
+GS=0000
+Invalid Address
+Invalid Expression
+Invalid Indirection
+Invalid Selector
+No Code At This Line Number
+Divide By Zero Error
+SIWHist
+    Press any key to continue; Esc to cancel
+     Enter a command (H for help)
+ Trace simulation is active 00000000
+Invalid command
+A General Protection Violation has occurred
+1234567890-=
+qwertyuiop[]
+asdfghjkl;'`
+\zxcvbnm,./
+!@#$%^&*()_+
+QWERTYUIOP{}
+ASDFGHJKL:"~
+|ZXCVBNM<>?
+1234567890-=
+tyuiop[]
+fghjk
+vbnm,./
+!@#$%^&*()_+
+QWERTYUIOP{}
+ASDFGHJK
+1234567890-=
+qwertyuiop[]
+asdfghjkl;'`
+vbnm,./
+789-456+1230.
+ALT N
+CTRL
+Valid control keys:
+ Enter Esc     Tab: Toggle edit mode
+Valid control keys:
+ Tab Enter Esc
+Valid control keys:
+ Tab Enter Esc    Insert: Toggle flag
+Syntax error
+No more watch variables allowed
+Parameters required
+No search in progress
+Pattern not found
+Pattern found at
+Function not implemented
+Parameter is wrong size
+Page not present
+No embedded INT 1 or INT 3
+Segment limit exceeded
+Not enough screen lines to execute this command
+Command is not valid in Ring 0 code
+Cannot interrupt to a less privileged level
+Unknown command (use H or Help to see a list of all commands)
+Warning: You did not reserve this COM port in WINICE.DAT!
+WheelLines is 00
+Number of lines is 00000
+Key sequence Is
+Flash is off
+Flash is on
+Faults are off
+Faults are on
+I1Here is off
+I1Here is on
+I3Here is off
+I3Here is on
+Mouse is off
+Mouse is on.  Movement Speed is Slow
+Mouse is on.  Movement Speed is Normal
+Mouse is on.  Movement Speed is Fast
+Serial is off
+Serial is on COM1 at
+Dial is off
+Dial is on COM1 at
+P=ATDT
+Answer is off
+Answer is on COM1 at
+Printer is set to
+Pause is off
+Pause is on
+Code is off
+Code is on
+0000
+00000000
+Colors are 00 00 00 00 00
+Tabs are every
+Int 00 at 00000000
+Type TRACE OFF to exit trace simulation mode
+SoftICE 4.00 (Windows 95 / Windows 98)
+Copyright (c) 1991-1999 Compuware Corp. All rights reserved.
+Set variable not found
+Altscr
+Code
+Symbols
+Exclude
+Faults
+Flash
+I1here
+I3here
+Mouse
+WheelLines
+Lowercase
+Reference
+Pause
+Tabs
+Threadp
+Verbose
+CaseSensitive
+Origin
+Font
+ButtonReverse
+ForcePalette
+Verbose is on
+Verbose is off
+Lowercase is on
+Lowercase is off
+Reference is on
+Reference is off
+CaseSensitive is on
+CaseSensitive is off
+Threadp is on
+Threadp is off
+This setting will be used once the UVD is correctly functioning
+WheelLines must be a value between 0 and 50
+LINES cannot be used under VT100 emulation
+LINES support for monochrome only on Hercules compatible cards
+LINES value must be 25 or 43 only for Hercules compatible mono cards!
+Breakpoints not allowed within SoftICE
+
+
+
+No more breakpoints available
+Invalid range
+Range too large
+Illegal count
+Duplicate breakpoint
+Count too large
+BPMW address must be on WORD boundary
+BPMD address must be on DWORD boundary
+BPM breakpoint limit exceeded
+Illegal bit mask
+No backtrace memory allocated
+Backtrace buffer is empty
+Must be in trace simulation mode
+Address not found
+I/O port not found in I/O bitmap
+Debug register I/O breakpoints are not available
+Invalid TSS
+Invalid interrupt number
+Invalid debug register
+Debug register is already being used
+Invalid window handle
+Invalid window procedure address
+Module has no code segments
+Selectors must be the same
+No more BPR buffer space available
+Breakpoint table has been corrupted @%x (%x)
+Cannot use range
+: Overlaps IDT
+: Overlaps GDT
+: Overlaps LDT
+: Overlaps page table
+: Overlaps SoftICE
+All break registers used, use in RAM only
+Valid control keys:
+ PageUp PageDn Esc
+Back trace buffer has been reset
+Trace simulation is on
+Trace simulation is off
+BPINT
+BPIO
+BPM
+BPR
+BPX
+BMSG
+CSIP Checking
+Is off
+Inside the range
+Outside the range
+module
+Valid control keys:
+ Enter Esc    Insert: Select/deselect
+Logging BP %02x: %s
+Terminate Program
+Read Keyboard and Echo
+Display Character
+Auxiliary Input
+Auxiliary Output
+Print Character
+Direct Console I/O
+Direct Console Input
+Read Keyboard
+Display String
+Buffered Keyboard Input
+Check Keyboard Status
+Flush buff/Read Keyboard
+Disk Reset
+Select Disk
+Open File
+Close File
+Search for First Entry
+Search for Next Entry
+Delete File
+Sequential Read
+Sequential Write
+Create File
+Rename File
+UNKNOWN
+Current Disk
+Set Disk Transfer Addr
+Get FAT Ptr
+Get FAT Ptr
+UNKNOWN
+UNKNOWN
+Get Default Drive Parameters
+UNKNOWN
+Random Read
+Random Write
+File Size
+Set Relative Record
+Set Vector
+Create Process ID
+Random Block Read
+Random Block Write
+Parse File Name
+Get Date
+Set Date
+Get Time
+Set Time
+Set/Reset Verify Flag
+Get Disk Transfer Addr
+Get DOS Version Number
+Keep Process
+Get Drive Parameter Block
+CONTROL-C Check
+Get DOS Re-entrancy Flag
+Get Interrupt Vector
+Get Disk Free Space
+Get/Set Switch Character
+Get Country Information
+Create Sub-Directory
+Remove a Directory Entry
+Change Current Directory
+Create a File
+Open a File
+Close a File Handle
+Read From File/Device
+Write to File/Device
+Delete a Directory Entry
+Move a File Pointer
+Change Attributes
+I/O Control for Devices
+Duplicate a File Handle
+Force a Duplicate Handle
+Get Current Drive Dir
+Allocate Memory
+Free Allocated Memory
+Modify Allocated Memory
+Load/Execute a Program
+Terminate a Process
+Get Child's Return Code
+Find Match File
+Find Next Dir Entry
+Set Current Process ID
+Get Current Process ID
+Get DOS Variables
+Set Drive Parameter Block
+Return Verify Flag
+Create Process Header
+Move a Dir Entry
+Get/Set File Time & Date
+UNKNOWN
+Return Extended Error Code
+Create Temporary File
+Create New File
+Lock File Range
+Network Server Call
+User Operation
+Assign Operation
+UNKNOWN
+UNKNOWN
+Get Current Process ID
+UNKNOWN
+Set Printer Flag
+AllocLDTDescriptor
+FreeLDTDescriptor
+MapRealModeSegment
+GetSelectorIncrValue
+LockSelector
+UnlockSelector
+GetSegmentBaseAddr
+SetSegmentBaseAddr
+SetSegmentLimit
+SetDescrAccessRights
+CreateAliasDescriptor
+GetDescriptor
+SetDescriptor
+AllocateSpecificLDTDescr
+AllocateDosMemoryBlock
+FreeDosMemoryBlock
+ResizeDosMemoryBlock
+GetRealModeIntrVector
+SetRealModeIntrVector
+GetProcessorExceptionHandlerVector
+SetProcessorExceptionHandlerVector
+GetProtectedModeIntrVector
+SetProtectedModeIntrVector
+SimulateRealModeIntr
+CallRealModeProcFarFrame
+CallRealModeProcIntFrame
+AllocateRealModeCallback
+FreeRealModeCallback
+GetStateSave_RestoreAddresses
+GetRawCPUModeSwitchAddresses
+GetDPMIVersion
+GetFreeMemoryInformation
+AllocateMemoryBlock
+FreeMemoryBlock
+ResizeMemoryBlock
+LockLinearRegion
+UnlockLinearRegion
+MarkRealModeRegionPageable
+RelockRealModeRegion
+GetPageSize
+Reserved
+Reserved
+MarkPageDemandPagingCandidate
+DiscardPageContents
+PhysicalAddressMapping
+GetAndDisableVirtualInterruptState
+GetAndEnableVirtualInterruptState
+SetDebugWatchpoint
+ClearDebugWatchpoint
+GetStateOfDebugWatchpoint
+ResetDebugWatchpoint
+GetCoprocessorStatus
+SetCoprocessorEmulation
+ (JUMP  )
+ (NO JUMP)
+ VXDCall
+ VXDJmp
+GDTbase=
+  Limit=
+LDTbase=
+  Limit=
+EORERORW
+IDTbase=
+  Limit=
+DPL=f
+Yes
+emptf
+top=
+pc=
+rc=
+Code16  Data16  Code32  Data32  ReservedTSS16   LDT     TSS16   CallG16 TaskG16 IntG16  TrapG16 ReservedTSS32   ReservedTSS32   CallG32 ReservedIntG32  TaskG32 ReservedReservedReservedReservedCallG16 TaskG   IntG16  TrapG16 ReservedReservedReservedReservedCallG32 ReservedIntG32  TrapG32 No LDT
+No TSS
+Sel.  Type      Base      Limit     DPL  Attributes
+Int   Type     Sel:Offset     Attributes Symbol/Owner
+Base address is not present
+TR=0000  BASE=00000000  LIMIT=0000
+LDT=0000  GS=0000  FS=0000  DS=0000  SS=0000  CS=0000  ES=0000  CR3=00000000
+EAX=00000000  EBX=00000000  ECX=00000000  EDX=00000000  EIP=00000000
+ESI=00000000  EDI=00000000  EBP=00000000  ESP=00000000  EFL=00000000
+SS0=0000:00000000  SS1=0000:00000000  SS2=0000:00000000
+Port  Handler   Trapped    Owner
+Page Directory   Physical=00000000  Linear=00000000
+Linear     Physical   Attributes   Type
+Physical   Linear     Attributes   Type      Linear Address Range
+VM      System  ReservedPrivate ReservedRelock  InstanceHooked
+ seconds)
+ milliseconds)
+ microseconds)
+WINICE: Pentium TSC calibration, processor calibrated at 000000 MHZ
+WINICE: Could not calibrate Pentium TSC
+FPS not available
+FPS has unmasked exception
+IEDEZEOEUEPESFESC0C1C2XXXXXXC3B FPU Status Word:
+FPU Control Word:
+PMUMOMZMDMIM
+I/O Map Base=#AX  I/O Map Size=#BX
+%.4x  %.8x  %.8x  %c   %c    %3d  %3d
+Init Order=%x  Reference Data=%x  Version %d.%02d
+PM API=%x (%x:%x)  V86 API=%x (%x:%x)
+Forwarded export symbol (%s) not found
+Offset   Size   Type   Handle
+hMod Base     PEHeader Module Name      File Name
+No Local Heap
+Error Walking Module List
+Error Walking Task List
+Error Walking Window List
+Error Walking Global Heap
+Module Not Found
+Task Not Found
+Invalid Selector/Handle
+Han./Sel.  Address    Length     Owner            Type       Seg/Rsrc
+Total Memory: 00000K
+UserDef Cursor  Bitmap  Icon    Menu    Dialog  String  FontGrp Font    Accel   UserDef ErrTableCursGrp Unknown IconGrp NameTablCode    Code  D Data    ModuleDBTaskDB  BurgerM Alloc   ResourceResourceVxD Name  Address   Length  Seg   ID    DDB       Control   PM  V86  VxD  Win32
+VxD Not Found
+00000 VxD Services
+00000 Win32 Services --------------
+Window Handle   hQueue  QOwner    Class Name        Window Procedure
+TaskName   SS:SP      StackTop  StackBot  StackLow  TaskDB  hQueue  Events
+WINMAIN
+WINICE: Int41 GetFlatByte failed to read from DISPLAY
+WINICE: Int41 PutFlatByte failed to write to DISPLAY
+PROT
+V86
+CS:E
+SS:E
+SP= f
+PROT
+V86
+EAX=
+EBX=
+ECX=
+EDX=
+ESI=
+EDI=
+EBP=
+ECODf
+VM Handle   Status      High Addr   VM ID       Client Regs
+PROGRAM
+No Symbol Table
+No Current Source File
+Only Valid In Source Mode
+Only Valid In VM Mode
+No files Found
+Specified Name Not Found
+No Symbol Tables Are Loaded
+ Bytes Of Symbol Memory Available
+Tables can only be removed from the SoftICE loader
+ at
+ through
+ (UNKNOWN)
+Invalid Stack Frame (SS:BP)
+Seg:
+  Base:
+  Top:
+ CODE
+ DATA
+ LINES
+[NM32]
+$EMPTY_LINE
+SYNTAX_ERROR
+PARAM_SIZE_ERROR
+NO_SIZE
+TYPE_MISMATCH_ERROR
+PARAM_ERROR
+OUT_OF_RANGE
+1200
+2400
+04800
+9600
+19200
+23040
+28800
+38400
+57000
+57600
+115000
+115200
+Attach to serial device has FAILED
+Attach to serial device successful.  Using a BAUD rate of
+Determining fastest possible BAUD rate.... Please wait ...
+CTS not enabled. Please turn on your modem
+Timeout Error
+~+++~~ATH~|
+Error initializing modem
+Aborted by user
+No phone number specified
+Initializing modem
+Ring Detected, Answering Modem...
+Dialing...
+CONNECT
+RING
+NO CARRIER
+ERROR
+CONNECT
+NO DIAL TONE
+BUSY
+NO ANSWER
+V86 Memory MAP  ID=00  Handle=00000000  CRS Ptr=00000000  Linear Addr=00000000
+Start      Length
+Interrupt Vector Table
+ROM BIOS Variables
+I/O System
+Owner Is
+Free Block
+Command Shell
+Block Device
+DOS File Table & Buffers
+System BUS
+ROM BIOS
+NotANumberDenormalInvalidInfinity
+BPMD
+BC
+BE
+BoundsChecker is not active
+Cannot activate BoundsChecker from this location
+KERNEL
+USER
+BCHKWPV
+CS:E
+SS:E
+EAX=
+EBX=
+ECX=
+EDX=
+ESI=
+EDI=
+EBP=
+ECODf
+Used: %dK  Free: %dK
+Free
+Heap: %.8x  Max Size: %dK  Committed: %dK  Segments: %d
+Window Handle   hQueue  SZ  QOwner    Class Name            Window Procedure
+Ring0TCB ID   Context  Ring3TCB ThreadID Process  TaskDB PDB  SZ  Owner
+Invalid TCB
+Invalid Task
+Handle    PGTPTR    Tables  Min Addr  Max Addr  Mutex     Owner
+Invalid Context Handle
+_GetCurrentContext
+Address   Size      EIP       TID   Owner
+System
+Private
+Ring 0
+VM 00
+_HeapAllocate
+HeapBase  Max Size  Committed  Segments  Type      Owner
+TLS Offset 0000 = 00000000
+-------------------------- Dynamically Loaded VxDs ---------------------------
+NT miniport
+Invalid Process
+Base     AllocBase AllocProt      Size     State   Protect  Owner
+Base     AllocBase AllocProt      Size     State   Protect  Owner    Context
+NTKERN
+_GetCurrentContext
+Error: Processor fault occurred in dot command
+DL  proc=#CX:#EDI  help=#AX:#EBX
+inttesphydebbreaddexpsymconquedotsiolinfpoasmmutexcvmsvxdpag[
+query [address [count]]  Display PageQuery information
+mutex                    Display mutex list
+pager                    Display pager list
+exception                Display VxD exception handler list
+vmsg [msg-number]        Display VxD control messages
+vxd [address]            Display VxD location list or VxD name
+phys <address>           Display phys address for NP linear address
+------------------------
+addr                     Display Winice module32/context structures
+export                   Display Winice export32 structures
+sym                      Display Winice symbol table structure
+break <break-number>     Display Winice breakpoint structure
+context [context-handle] Change address context in symbol table
+debug                    Toggle Winice verbose display
+hPD VirginIn  TaintedIn CleanOut  DirtyOut  VirginFree TaintedFree Dirty     Flg
+%2x  %8x  %8x  %8x  %8x  %8x   %8x    %8x  %2x
+_PagerRegister
+Commit
+Reserve
+Free
+%8x  %8x  %8s  %8x  %8s  %8s  %s
+%8x  %8x  %8s  %8x  %8s  %8s  %-8s %-8s
+_PageQuery
+_DestroyMutex
+Mutex     RefCount  PriBoost       TCB     Owner  Flags
+%8x  %8x  %8x  %8x  %8.8s  %s
+    %8x %s is blocked
+Must_Complete | No_Cleanup
+Remove_Exception_Handler
+Exception Range    Handler
+ib=%x is=%x obj1=%x nrva=%x con=%x sel=%x ordb=%x
+npcnt=%x atcnt=%x atrva=%x nprva=%x otrva=%x nam=%s
+sel1=%x off1=%x sel2=%x off2=%x add1=%x add2=%x
+com=%x enab=%x pend=%x ord=%x DR=%x acc=%x typ1=%x typ2=%x
+con=%x hmod=%x pgt1=%x pgt2=%x i3v=%x flgs=%x
+rval=%x mod=%s
+initfl=%x baseptr=%x toptabl=%x srcmod=%x 1stline=%x
+f32=%x segloc=%x ordptr=%x usesel=%x con=%x mode=%x
+startpgcnt=%d  endpgcnt=%d
+******** SoftICE INTERNAL STACK OVERFLOW DETECTED ********
+No effective address
+System data was not present
+%s is not a structure member
+Expecting structure member name
+Macro cannot be used here
+Symbol has not been instantiated
+Assignment operators are not supported
+To many parameters for function
+To few parameters for function
+Typecast (%s) requires opening '('
+Function (%s) requires opening '('
+prefix/postfix ++ and -- are not supported
+Symbol not defined (%s)
+Invalid symbol name (%s)
+Invalid subtraction: Selectors are not the same type
+Expecting value, not address
+Operation cannot be performed on two addresses
+No code at line number
+Invalid Address
+Invalid Indirection
+Unexpected Unary operator ('%s')
+Expecting Unary operator (not '%s')
+Charcter value too large: '%s'
+Character constant is too long: '%s'
+Unterminated character constant: %s
+Invalid character constant: '%s'
+Unknown escape sequence: '%s'
+Unable to evaluate expression
+Unbalanced parentheses in expression
+Expression to complex!
+Unexpected end of expression
+Attempting to divide by zero is totally uncool...
+Value is too large: (%s)
+Expecting operator (not '%s')
+Expecting #,symbol, or register (not '%s')
+Invalid Expression
+Expression?? What expression?
+#%02x:%08x
+UPID
+UTID
+UPDB
+UTCB
+VMMTID
+CONTEXT
+K32XOR
+EVALUE
+EADDR
+BPIndex
+BPMiss
+BPTotal
+BPCount
+BPLog
+CodeAddr
+DataAddr
+VMFL
+NTFL
+IOPL
+NOTYPE
+WSTR
+FLAT
+LONG
+SWORD
+DWORD
+HIBYTE
+HIWORD
+BYTE
+WORD
+TRUE
+NULL
+FALSE
+<eval error>
+*master=%x, type=%x parent=%x ptype=%x
+Initializing Soft-ICE!
+Handle  Class Name                  Owner           Wndw Proc        Styles
+IconTitle
+SwitchWindow
+Dialog
+Desktop
+PopupMenu
+System Superclassed
+Application Global
+Application Private
+System
+Superclassed
+Global
+Private
+GLOBALCLASS
+BYTEALIGNWINDOW
+BYTEALIGNCLIENT
+SAVEBITS
+NOCLOSE
+NOKEYCVT
+PARENTDC
+CLASSDC
+OWNDC
+DBLCLKS
+KEYCVTWINDOW
+HREDRAW
+VREDRAW
+INFOBK
+INFOTEXT
+3DLIGHT
+3DDKSHADOW
+BTNHIGHLIGHT
+INACTIVECAPTIONTEXT
+BTNTEXT
+GRAYTEXT
+BTNSHADOW
+BTNFACE
+HIGHLIGHTTEXT
+HIGHLIGHT
+APPWORKSPACE
+INACTIVEBORDER
+ACTIVEBORDER
+CAPTIONTEXT
+WINDOWTEXT
+MENUTEXT
+WINDOWFRAME
+WINDOW
+MENU
+INACTIVECAPTION
+ACTIVECAPTION
+BACKGROUND
+SCROLLBAR
+CS_%ls
+WndXtra : %04hx
+hSmIcon :
+Menu    : MAKEINTRESOURCE(%x)
+ (error)
+ "%ls"
+Menu    :
+hBrush  :
+hBrush  : COLOR_%ls+1
+hCursor :
+hIcon   :
+ (%04hx)
+ %ls
+hModule :
+ClsXtra : %04hx
+WndProc :
+hDCE    :
+# Wndws : %04hx
+, %ls
+    Style : %08lx
+ (%hFA)
+    Atom  : %04hx
+%hx (%hFA)
+    Next  :
+    Info *:
+    Handle: %04hx (%hFA)
+CLASS
+%04hx    %-28ls%-16ls%hPFS    %08lx
+Handle  Class Name        Owner             Window Procedure
+Error Walking Class List
+USER
+Button
+MDIClient
+Free
+unknown5      : %lx
+unknown4      : %lx
+classAtom     :
+unknown3      : %04hu
+unknown2      : %lx
+hSystemMenu   :
+lastActive    :
+propertyList  :
+unknown1      :
+WndText       :
+ctrlID/hMenu  :
+dwFlags2      : %lx
+dwExStyle     : %lx
+dwStyle       : %lx
+dwFlags1      : %lx
+lpfnWndProc   : %hPFS
+hInstance     : (%04hx) (16 bit hInstance)
+(%04hx)
+%ls
+hModule       :
+    Class         :
+wndClass      : %04hx:%04hx
+hrgnUpdate    :
+  Size        : %02hd
+hQueue        :
+Client RECT   : (%hd,%hd) - (%hd,%hd)
+Window RECT   : (%hd,%hd) - (%hd,%hd)
+Owner         :
+Next          :
+Child         :
+Parent        :
+ Level (%01hx)
+Window Handle : (%04hx)
+      QOwner      :
+%-15ls %04hx    %02hd  %-10ls%-17ls     %hPFS
+E_INTERNAL
+E_OUTOFSTACKSPACE
+E_CORRUPT
+S_ITEMNOTFOUND
+E_USERPOINTER
+E_USERHANDLE
+S_CONTEXTACTIVE
+E_CONTEXTINTERNAL
+E_CONTEXTSWAPPED
+E_CONTEXTINVALID
+E_NOCONTEXT
+S_USERIOABORT
+S_NOMOREITEMS
+E_NOTIMPL
+E_NOINTERFACE
+E_POINTER
+E_HANDLE
+E_INVALIDARG
+E_OUTOFMEMORY
+E_UNEXPECTED
+E_DATANOTPRESENT
+NOERROR
+Internal error
+Out of stack space
+Item corrupt
+Item not found (status)
+Invalid pointer
+Invalid handle
+Context already active (status)
+Invalid context switch (internal)
+Process is swapped
+Invalid context
+Context not found
+User Requested Abort
+No more items (status)
+Functionality not implemented
+Requested interface unknown
+Invalid pointer (internal)
+Invalid handle (internal)
+Invalid argument (internal)
+Out of memory
+Unexpected conditon (internal)
+Data not present
+No error
+Unknown Error: %08x
+%04x:		%s	%s
+(unamed)
+Only named trace buffers can be turned on/off
+Invalid trace buffer handle: %x
+error displaying trace buffer
+Handle	Name	State
+buffer handle: %x, is not in use
+Invalid trace buffer parameter: %s
+unexpected parameter: %s
+expecting on/off, not %s
+unknown option: %s
+System Memory allocated for %s: base=0x%x, size=%dk
+	(scope table inaccessible)
+try/finally
+	%*s%s (%#04x) filter=%#08x, handler=%#08x
+try/except
+%#08x[%#x] (scope table entry inaccessible)
+exception information is inaccessible
+%#08x	%#08x	%#08x	%#04x (%s)
+local unwind
+%#08x	%#08x	%#08x	%02d
+------	--------	------		------
+xFrame	xHandler	xTable		xScope
+%#08x	(exception information is inaccessible)
+There are no try/finally/except handlers installed
+Ring 0
+Socket
+Toolhelp Snapshot
+Mailslot
+Pipe
+Device IOCTL
+Serial
+Memory Mapped file
+Console Screen Buffer
+Console
+Change
+File
+Thread
+Process
+Critical Section
+Mutex
+Event
+Semaphore
+Invalid or not present Object
+Process ID
+Ring 3 Thread ID
+Context Handle
+Process Database (PDB)
+Thread Database (TDB)
+Ring 0 Thread ID
+Ring 0 Thread Handle
+VM ID
+Client Registers Offset
+High Linear Address
+VM Handle
+Module Database Selector
+Module Image Base
+Module PE Header
+Module Entry Structure
+ (HANDLE %x) for Process '%s'
+Ring 0 mutex
+ Heap Base for %s
+ %02x
+Kernel32
+	The value %x is (a) %s
+The name %s was identified and has the value %x
+The value (%x) was not identified as any known type
+The name (%s) was not identified as any known type
+WHAT: expecting expression
+Misc
+Current
+Totals
+Logged
+Action
+Cond.
+SCode
+Status
+Errors
+Misses
+Popups
+Breaks
+Hits
+BP #
+No breakpoints are set
+Breakpoint Statistics
+Breakpoint Statistics for #%02x
+Breakpoint #%02x does not exist
+Expecting breakpoint number
+Bogus Heap Trace Message
+Macro: Memory allocated for %d Macro entries
+MACRO %s = "%s"
+Out of macro memory
+Macro: Invalid parameter reference(s)
+Macro: Unexpected characters after macro body
+Macro: Empty macro body
+Macro: unterminated macro body. Expecting "
+Macro: Expecting parameter # after %%
+Macro: Illegal parameter reference %%%c
+Macro: expecting start of macro body ("macro-body")
+Macro: '%s' %s
+defined
+redefined
+Macro: Unexpected character %c
+Macro: expecting =
+Macro: '%s' deleted
+Macro: '%s' is not defined
+Macro: %s is not a legal macro name
+Expecting Macro Name
+Macro: Command segment to long
+DO: Invalid parameter reference
+Too many macro arguments
+far32
+huge
+near
+generic
+mipscall
+far syscall
+syscall
+far stdcall
+stdcall
+reserved
+far fastcall
+fastcall
+far pascal
+pascal
+XX *
+FAR64 *
+FAR32 *
+HUGE *
+FAR *
+NEAR *
+long
+unsigned qaud
+quad
+unsigned int
+unsigned short
+short
+wchar
+char
+NOTTRANS
+FBASICSTR
+NBASICSTR
+CURRENCY
+void
+(NoType)
+Symbol table not deleted because of outstanding references
+Invalid source package signature in NMS file
+Warning: Symbol usage exceeds 64K; some were thrown away
+Out of symbol memory
+Warning: Module name was truncated to 255 characters
+Warning: Source name was truncated to 255 characters
+Warning: Symbol name was truncated to 255 characters
+Warning: Section/segment name was truncated to 8 characters
+Warning: Line numbers >64K were discarded
+Internal warning: Too many lines passed to SendLineNumbers
+Couldn't find an expected CR/LF in source file
+NMS symbol table is already loaded
+No corresponding .SYM symbol table loaded
+No more tables available
+Invalid hash table section
+Invalid type table section
+Invalid string table section
+Invalid section type (_Nm32Reserved)
+Error relocating NMS symbol file
+Invalid symbol data signature in NMS file
+NMS file version is not supported
+NMS file format is obsolete
+Referenced type is not class/struct or union
+No extended type information for current table
+Type has 'No Type'
+Invalid string-index
+Invalid type-index
+Invalid Type Signature in NMS file
+Invalid Directory Information .NMS filer
+Invalid Directory Signature in NMS file
+Invalid .NMS symbol file
+Symbol table has outstanding refs - not deleted
+No Error!
+Nm32 Error: %x
+Skipping unknown Directory Entry Type - %x
+PASCHAR
+complex
+real
+BOOL
+unsigned
+const
+volatile
+SVWUu
+proc
+enum
+union
+struct
+class
+array
+type(%04X)
+bitfield
+public
+protected
+private
+typedef enum %s %c
+virtual %s%s
+%s ( . . . ) ;
+static	%s ;
+%s {
+virtual
+%s %s %s
+typedef struct
+SITYPES
+<Error: Unable to create type-instance>
+<Warning: type-instance did not expand>
+NTICE: Overflowed allocated source memory!
+NTICE: Loaded symbols from %s
+NTICE: Error loading symbols from %s (code %08x) :-
+NTICE: Could not allocate %d bytes needed for symbol processing
+<Error: Unrecognized format>
+<Error: vtable format not supported>
+<%x: Illegal enum value>
+<Error: Bit format not supported>
+Unexpected size for BOOL
+<Error: Complex format not supported>
+<Error: Real128 format not supported>
+<Error: Real48 format not supported>
+<Error: FAR32 pointer format not supported>
+Error: Type cannot be displayed
+<Error: type too large>
+COM4
+COM3
+COM2
+COM1
+WDMEXPORTS
+MONITOR
+DRAWSIZE
+DDRAW
+VERBOSE
+THREADP
+LBRECORD
+PENTIUM
+NOPIC2
+NOPAGE
+NOLEDS
+NOCONTEXT
+MACROS
+MOUSE
+LOWERCASE
+Couldn't allocate %d bytes for draw buffer. Turning off DirectDraw mode.
+Couldn't allocate %d bytes for draw buffer. Using default (2MB)
+SIWVIDRANGE
+WINICE: Excluding physical memory range %x-%x
+EXCLUDE
+MACRO
+PHONE
+ANSWER
+DINIT
+SVWU
+EFLAGS
+FLAGS
+Huh?
+%s <error creating type-instance>
+Could not evaluate %s
+Invalid command line
+No type information for %s
+	0x%04x	%s	%s
+	Size	Type Name	Typedef
+Types: Invalid command line
+	Addr	Proc Size	Locals	Regs	Prolog	UseBP	Params
+0x%08x   %032b   %d
+Peek failed.
+Poke failed.
+Altscr is off
+Altscr is mono
+Altscr is VGA
+Invalid option
+A monochrome board and monitor are required
+MONO
+ALTSCR
+Timer
+fSendDLLNotifications
+fDebugEventPending
+fNearlyTerminating
+fFaulted
+fTerminating
+fTerminated
+fInitError
+fSignaled
+fLoginScriptHack
+fServiceProcess
+fNukeProcess
+fFileApisAreOem
+fConsoleProcess
+fDosProcess
+fWin16Process
+fExitProcessEvent
+fCreateProcessEvent
+fDebugSingle
+THREAD_PRIORITY_ABOVE_NORMAL
+THREAD_PRIORITY_HIGHEST
+THREAD_PRIORITY_NORMAL
+THREAD_PRIORITY_BELOW_NORMAL
+THREAD_PRIORITY_LOWEST
+fOKToSetThreadOem
+fWasOemNowAnsi
+fNestedCleanAPCs
+fStackOverflow
+fCreateSuspended
+fOpenExeAsImmovableFile
+fDelaySingleStep
+fGrowableStack
+fOnTempStack
+fCancelExceptionAbort
+fCreateThreadEvent
+	Process	pProcess	ProcessID	Threads	Context	DefHeap	DebuggeeCB
+	%s	%08x	%08x	%08x	%08x	%08x	%08x
+PDB is not present
+	BreakTheadId:	%08x	BrkHandlers:	%08x
+	BreakType:	%08x	BreakSem:	%08x	BreakEvent:	%08x
+	hStdError:	%08x	Unknown2:	%08x	InheritCon:	%08x
+	StartupInfo:	%08x	hStdIn:	%08x	hStdOut:	%08x
+	CurrentDir:	%08x	%s
+	CommandLine:	%08x	%s
+	Environment:	%08x	Unknown1:	%08x
+Environment Database
+EDB is not present
+	UTState:	%04x
+	wEnvSel:	%04x	wErrorMode:	%04x	pEvtLdFinish:	%08x
+	HHandleBlks:	%08x	Unknown5:	%08x	pConProvider:	%08x
+	TopExFilter:	%08x	PriorityBase:	%08x	Heapownlist:	%08x
+	ProcDWORD0:	%08x	ProcGroup:	%08x	ParentMODREF:	%08x
+	&crtLoadLock:	%08x	pConsole:	%08x	Unknown4:	%08x
+	DebuggeeCB:	%08x	LHFreeHead:	%08x	InitialR0ID:	%08x
+	ParentPDB:	%08x	MODREFlist:	%08x	Threadlist:	%08x
+	MMFViews:	%08x	pEDB:	%08x	pHandleTable:	%08x
+	R0threads:	%04x	HeapHandle:	%08x	K16TDB:	%04x
+	Threads:	%04x	ThrNotTerm:	%04x	Unknown3:	%08x
+	pPSP:	%08x	PSPSelector:	%04x	MTEIndex:	%04x
+	Flags:	%08x %s
+	DefaultHeap:	%08x	MemContext:	%08x
+	Type:	%8.2x	RefCount:	%08x	TermStatus:	%08x
+	pEvent:	%08x	TermStatus:	%08x	Unknown2:	%08x
+	Type:	%08x	RefCount:	%08x	Unknown1:	%08x
+Process Information for %s at %08x
+Process is not present
+	Handle	Object	Type
+	&TLSArray:	%08x
+	CurrentSS:	%08x	SSTable:	%08x	ThunkSS16:	%08x
+	Except16List:	%08x	ThunkConnect:	%08x	NegStkBase:	%08x
+	DebuggerCB:	%08x	DebuggerTH:	%08x	Context:	%08x
+	EmulatorData:	%08x	ErrorCode:	%08x
+	ptdbx:	%08x	StackBase:	%08x
+	HandleCount:	%08x	WaitNodeList:	%08x	R0hThread:	%08x
+	Status:	%08x	TIBsel:	%04x	EmulatorSel:	%04x
+	Flags:	%08x	%s
+	SelmanList:	%08x	Unknown2:	%08x
+	MsgQueue:	%08x	pTLSarray:	%08x	ppdb:	%08x
+	Win16MtxCnt:	%04x	DebugContext:	%08x	PtrToCurPri:	%08x
+	TIBflags:	%01x %s
+	Unknown1:	%08x	UserPointer:	%08x	pTIB:	%08x
+	BaseOfStack:	%08x	K16TDB:	%04x	StackSel16:	%04x
+	pvExcept:	%08x	TopOfStack:	%08x
+	Type:	%8.2x	RefCount:	%8.4x	Unknown0:	%08x
+Thread is not present
+	LastTlsSetValueEIP:	%08x
+	pCritsec2:	%08x	Unknown6:	%08x	ripString:	%08x
+	pCritsec1:	%08x	pWin16Mutex:	%08x	pWin32Mutex:	%08x
+	Unknown4:	%04x	lp16SwitchRec:	%08x	&Unknown5[5]:	%08x
+	Unknown3:	%08x	WOWchain:	%08x	wSSBig:	%04x
+	&Unknown2[7]:	%08x	pCreateData16:	%08x	APISusCnt:	%08x
+	&TLSArray:	%08x	DeltaPriority:	%08x	%s
+	TermStack:	%08x	EmulatorData:	%08x	ErrorCode:	%08x
+	R0hThread:	%08x	ptdbx:	%08x	StackBase:	%08x
+	HandleCount:	%08x	WaitNodeList:	%08x	Unknown1:	%08x
+	SelmanList:	%08x	UserPointer:	%08x	pTIB:	%08x
+	pEvent:	%08x	pvExcept:	%08x	TopOfStack:	%08x
+	Type:	%08x	RefCount:	%08x	pProcess:	%08x
+Extended Ring3 Thread Information
+= <Error evaluating expression (%x)>
+Error: Unable to create watch
+Expecting WATCH <expression>
+Video memory buffer (%d bytes) is not large enough. Increase it in the SoftICE settings.
+Syntax error
+Origin is (%d, %d)
+There are only %d fonts
+Font is %d
+Width can only be set when SoftICE is configured to use the Universal Video Driver.
+Width will be set to %d when the Universal Video Driver becomes active
+Width must be an even number
+Width must be between %d and %d
+Current screen width is %d
+WINICE: Heap corruption at $%08x. Block=$%08x, size=%d, caller=$%08x, num=%d
+WINICE: Free of unallocated memory at $%08x
+Can't page in because error %08x
+Can't page in because current thread's stack is not present.
+Interrupts must be enabled to page in memory.
+Page at address %08x is already in memory.
+You must be in the popup address context to page in memory at %08x
+Paging is only supported in 32-bit mode.
+Invalid expression
+Invalid Command Line
+ETH: NO XMIT BUFFERS!
+DHCP
+BOOTP
+Invalid command line - type NET HELP for help
+NET STATUS
+NET HELP
+NET STOP
+NET RESET
+NET PING <IP address>
+NET ALLOW <IP address|ANY> [AUTO] [PASSWORD=<password>]
+NET START <IP address|DHCP> [MASK=<subnet mask>] [GATEWAY=<IP address>]
+HELP
+PING succeeded!
+PING failed!
+PING
+Network stopped
+The network is not running
+STOP
+Resetting network
+RESET
+PASSWORD=
+AUTO
+Already connect%s to %d.%d.%d.%d
+Must wait for an IP address to be assigned
+ALLOW
+Error initializing IP stack
+GATEWAY=
+MASK=
+Invalid IP address specified
+Using the network requires a special NDIS driver
+Network support requires a Pentium or better
+START
+Network not configured
+Waiting for IP address to be assigned via BOOTP/DHCP
+%s %d.%d.%d.%d
+Listening for
+Connected to
+Listening for any IP address
+IP gateway is %d.%d.%d.%d
+Subnet mask is %d.%d.%d.%d
+IP address is %d.%d.%d.%d port %d
+IP address is %d.%d.%d.%d
+Node address is %02x%02x%02x%02x%02x%02x
+Network using %s at I/O address %03x and IRQ %d
+STATUS
+Network device failed to connect
+Network device found but had a checksum error!
+Network not currently supported in systems that use an APIC
+Network cannot be used - no packet buffers are available
+Remote connection closed
+Remote connection broken
+This version of WINICE.EXE will not run with Windows 3.1 or below.
+$This version of WINICE.EXE will only run on Windows 3.X
+Win32SDebug
+Win386 Soft-ICE/W Device
+SICE_DDB
+D:\SoftICE\Build\i386\retw95\winice.pdb

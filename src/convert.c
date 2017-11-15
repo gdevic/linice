@@ -53,11 +53,9 @@ static char digits[36] = "0123456789abcdefghijklmnopqrstuvwxyz";
 *                                                                             *
 ******************************************************************************/
 
-extern int printk(char *, ...);
-
 // OK stuck assert here for now...
 
-void __assert(char * file, int line)
+void ice_assert(char * file, int line)
 {
     printk("<1>ASSERTION FAILED: %s LINE %d\n", file, line);
 }    

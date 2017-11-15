@@ -59,7 +59,7 @@ TDeb deb;                               // Debugee state structure
 
 extern void BuildCommandHelpIndex();
 
-void *malloc(size_t size)
+void *ice_malloc(size_t size)
 {
     return( NULL );
 }    

@@ -561,7 +561,7 @@ BOOL CmdCpu(char *args)
     printline("Processor Registers");
     printline("-------------------");
     printline("CS:EIP=%04X:%08X    SS:ESP=%04X:%08X", 
-        deb.r->pmCS, deb.r->eip, deb.r->SS, deb.r->esp );
+        deb.r->pmCS, deb.r->eip, deb.r->ss, deb.r->esp );
     printline("EAX=%08X   EBX=%08X   ECX=%08X   EDX=%08X",
         deb.r->eax, deb.r->ebx, deb.r->ecx, deb.r->edx );
     printline("ESI=%08X   EDI=%08X   EBP=%08X   EFL=%08X",
@@ -755,9 +755,6 @@ void EnterDebugger(void)
     char *p;
     int i;
 
-    AddHistory("LinIce (C) 2000 by Goran Devic");
-    AddHistory("------------------------------");
-
     dprint("%c", DP_SAVEBACKGROUND);
 
     // Recalculate window locations based on visibility and number of lines
@@ -772,6 +769,11 @@ void EnterDebugger(void)
     deb.codeSel    = 0x18;
     deb.codeOffset = deb.r->eip;
 
+    AddHistory("LinIce (C) 2000 by Goran Devic");
+    AddHistory("------------------------------");
+
+    printline("The process is %s pid %d", current->comm, current->pid);
+
     while( TRUE )
     {
         // Print the command window header line
@@ -784,10 +786,6 @@ void EnterDebugger(void)
 
 
         GetCommand( deb.nLines - 2, sCmd );
-
-        // Add the new line into the command history buffer
-
-        AddHistory(sCmd);
 
         // Find the first non-space character
 

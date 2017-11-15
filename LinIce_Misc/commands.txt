@@ -1,0 +1,530 @@
+ADDR
+ALTKEY
+ALTSCR
+ANSWER
+BMSG
+BPE
+BPINT
+BPIO
+BPMB
+BPMD
+BPMW
+BPRW
+BPT
+BPX
+BSTAT
+CLASS
+CODE
+COLOR
+CPU
+CSIP
+DATA
+DEVICE
+DIAL
+DRIVER
+EXIT
+EXP
+FAULTS
+FILE
+FKEY
+FLASH
+FOBJ
+FORMAT
+GENINT
+HBOOT
+HEAP
+HELP
+HERE
+HWND
+I1HERE
+I3HERE
+IRP
+LHEAP
+LINES
+LOCALS
+MACRO
+MAPV86
+MAP32
+NET
+OBJDIR
+PAGE
+PAGEIN
+PAUSE
+PCI
+PEEK
+PHYS
+POKE
+PROC
+QUERY
+SERIAL
+SET
+SHOW
+SIWTR
+STACK
+SYM
+SYMLOC
+TABLE
+TABS
+TASK
+THREAD
+TRACE
+HTSS
+TYPES
+VCALL
+VER
+VXD
+WATCH
+WHAT
+WIDTH
+WMSG
+XFRAME
+XRSET
+ZAP
+? expression
+A [Address]
+ADDR [context-handle | task | *]
+ALTKEY [ALT letter | CTRL letter]
+ALTSCR [MONO | VGA | OFF]
+ANSWER [ON [com-port] [baud-rate] [i=init] | OFF]
+BC list | *
+BD list | *
+BE list | *
+BMSG hWnd [L] [begin-msg [end-msg]] [IF expression]
+BPE breakpoint number
+BPINT interrupt-number [IF expression] [DO bp-action]
+BPIO [-h] port [R|W|RW] [debug register] [IF expression] [DO bp-action]
+BPM[size] address [R|W|RW|X] [debug register] [IF expression] [DO bp-action]
+BPMB address [R|W|RW|X] [debug register] [IF expression] [DO bp-action]
+BPMD address [R|W|RW|X] [debug register] [IF expression] [DO bp-action]
+BPMW address [R|W|RW|X] [debug register] [IF expression] [DO bp-action]
+BPR address address [R|W|RW|T|TW] [IF expression] [DO bp-action]
+BPRW module-name | code selector [R|W|RW|T|TW] [IF expression] [DO bp-action]
+BPT breakpoint number
+BPX address [IF expression] [DO bp-action]
+BSTAT [breakpoint #]
+C address1 L length address2
+CODE [ON | OFF]
+COLOR normal bold reverse help line
+CPU [-I]
+CLASS [-x] [task-name]
+D [address [L length]]
+DATA [window-number(0-3)]
+DEVICE [device-name | address]
+DEX [window-number(0-3)] [expression]
+DIAL [ON [com-port] [baud-rate] [i=init] [p=number] | OFF]
+DB [address [L length]]
+DD [address [L length]]
+DW [address [L length]]
+DL [address [L length]]
+DRIVER [driver-name | address]
+DS [address [L length]]
+DT [address [L length]]
+E [address] [data]
+EB [address] [data]
+ED [address] [data]
+EL [address] [data]
+ES [address] [data]
+ET [address] [data]
+EW [address] [data]
+EXP [partial-name*]
+CSIP [OFF | [NOT] address address | [NOT] module-name]
+F address L length data-string
+FAULTS [ON | OFF]
+FILE [file-name | *]
+FKEY [function-key string]
+FLASH [ON | OFF]
+FOBJ pfile_object
+G [=address] [address]
+GDT [selector | GDT base-address]
+GENINT [NMI | INT1 | INT3 | int-number]
+H or Help [command]
+HEAP [-l] [FREE | mod | sel]
+ [32 [heap32 | process]]
+HWND [-x] [ hwnd | [ [window-level] [task-name] ]
+I port
+I1HERE [ON | OFF]
+I3HERE [ON | OFF]
+IB port
+IDT [int-number | IDT base-address]
+IRP pirp
+IW port
+ID port
+LDT [selector | LDT table selector]
+LINES [25 | 43 | 50 | 60]
+LHEAP [selector | module-name]
+LOCALS
+M address1 L length address2
+MACRO [macro-name] | [[*] | [= "macro-body"]]
+MAPV86 [address]
+MAP32 [-u | -s]|[module-handle | module-name]
+MOD [-u | -s]|[partial-name*]
+O port value
+OB port value
+OBJDIR [object-directory]
+OW port value
+OD port value
+P [RET]
+PAGE [address [L length]]
+PAGEIN address
+PAUSE [ON | OFF]
+PCI [-raw] [bus device function]
+PEEK[size] address
+PHYS physical-address
+POKE[size] address value
+PRN [LPTx | COMx]
+PROC [-xo] [task-name]
+QUERY [[-x] address] [process-type]
+R [-d | register-name | register-name [=] value]
+S [-cu] address L length data-string
+SERIAL [ON|VT100 [com-port] [baud-rate] | OFF]
+SET [setvariable] [ON | OFF] [value]
+SHOW [B | start] [L length]
+SIWTR [name | handle] [ON | OFF]
+SS [line-number] ['search-string']
+STACK [-v | -r][task-name | thread-type | SS:EBP]
+SYM [partial-name* | symbol-name]
+SYMLOC segment | O | R | -C process-type | section selector base
+T [=address] [count]
+THREAD [TCB | ID | task-name]
+TRACE [B | OFF | start]
+TABLE [[R] table-name | AUTOON | AUTOOFF]
+TABS [1 - 8]
+TSS [TSS selector]
+TYPES [type-name]
+U [address [L length]]
+VCALL [partial-name*]
+VM [-s] [VM ID]
+VXD [partial-name*]
+WATCH address
+WC [window-size]
+WD [window-size]
+WF [-D] [B | W | D | F | P | *]
+WIDTH [80-160]
+WL [window-size]
+WHAT expression
+WMSG [partial-name*] [WMSG-number]
+WS [window-size]
+WX [D | F | *]
+XFRAME [frame address]
+XT [R]
+XG [R] address
+ex: ? ax << 1
+ex: A CS:1236
+ex: ADDR 80FD602C
+ex: ALTKEY ALT D
+ex: ALTSCR MONO
+ex: ANSWER ON 1 38400
+ex: BMSG 49AC WM_MOUSEFIRST WM_MOUSELAST
+ex: BPM 1234 RW
+ex: BPMB 333 R
+ex: BPMW ESP-6 W
+ex: BPMD EDI W
+ex: BPR ESI EDI+32 RW
+ex: BPR GENERIC
+ex: BPIO 3DA W
+ex: BPINT 50
+ex: BPX 282FE0
+ex: BPE 3
+ex: BPT 0
+ex: BL
+ex: BH
+ex: BC *
+ex: BD 1,3,4
+ex: BE 1,3,4
+ex: BSTAT 3
+ex: C 80000 L 40 EBX
+ex: CLS
+ex: CODE OFF
+ex: COLOR 30 3E 1F 1E 34
+ex: CLASS USER
+ex: CPU
+ex: D B0000
+ex: DATA 2
+ex: DB ESI+EBX
+ex: DW EDI
+ex: DD EBX+133
+ex: DEVICE HCD0
+ex: DEX 2 esp
+ex: DIAL ON 1 9600 i=atm0x0 p=9,555-5555
+ex: .
+ex: DL EBX
+ex: DRIVER ne2000.sys
+ex: DS EBX
+ex: DT EBX
+ex: E 400000
+ex: EB 324415
+ex: EW ESP-8
+ex: ED 84
+ex: ES DS:EDI
+ex: EL DS:EBX
+ex: ET DS:EBX
+ex: EC
+ex: EXIT
+ex: EXP GLOB*
+ex: CSIP NOT CS:201000 CS:205fff
+ex: F EBX L 50 'ABCD'
+ex: FAULTS ON
+ex: FILE main.c
+ex: FKEY F1 DD ESP; G @ESP
+ex: FLASH ON
+ex: FOBJ EAX
+ex: FORMAT
+ex: G 231456
+ex: GDT 28
+ex: GENINT 2
+ex: H R
+ex: HBOOT
+ex: HEAP GDI
+ex: HERE
+ex: HWND PROGMAN
+ex: I 21
+ex: I1HERE ON
+ex: I3HERE ON
+ex: IB 3DA
+ex: ID DX
+ex: IDT 21
+ex: IW DX
+ex: IRP eax
+ex: LDT 45
+ex: LHEAP DS
+ex: LINES 43
+ex: LOCALS
+ex: M 4000 L 80 8000
+ex: MACRO Oops = "i3here off; genint 3;"
+ex: MAPV86
+ex: MAP32 kernel32
+ex: MOD
+ex: O 21 FF
+ex: OB 21 FF
+ex: OBJDIR \Driver
+ex: OD DX EAX
+ex: OW DX AX
+ex: P
+ex: PAGE DS:0 L 20
+ex: PAGEIN 401000
+ex: PAUSE OFF
+ex: PCI
+ex: PEEKD F8000000
+ex: PHYS A0000
+ex: POKED F8000000 12345678
+ex: PRN LPT1
+ex: PROC -x Explorer
+ex: QUERY PROGMAN
+ex: R EAX=50
+ex: RS
+ex: S 0 L ffffff 'Help',0D,0A
+ex: SERIAL ON 2 19200
+ex: SET FAULTS ON
+ex: SHOW 100
+ex: SIWTR tb-name ON
+ex: SS 40 'if (i==3)'
+ex: STACK
+ex: SYM hDC*
+ex: SYMLOC 9D5
+ex: SRC
+ex: T
+ex: TASK
+ex: TABS 4
+ex: TABLE test
+ex: THREAD
+ex: TRACE 50
+ex: TSS
+ex: TYPE DWORD
+ex: U EIP-10
+ex: VER
+ex: VCALL vpicd*
+ex: VM 1
+ex: VXD VPICD
+ex: WATCH VariableName
+ex: WC 8
+ex: WD 4
+ex: WF
+ex: WIDTH 100
+ex: WL 8
+ex: WHAT system
+ex: WMSG WM_MOU*
+ex: WR
+ex: WS 8
+ex: WW
+ex: WX
+ex: X
+ex: XFRAME EBP
+ex: XRSET
+ex: XT R
+ex: XP
+ex: XG 2000
+ex: ZAP
+Show a trace buffer
+p SETTING BREAK POINTS
+BPM, BPMB, BPMW, BPMD
+       - Breakpoint on memory access
+BPR    - Breakpoint on memory range
+BPIO   - Breakpoint on I/O port access
+BPINT  - Breakpoint on interrupt
+BPX    - Breakpoint on execution
+BMSG   - Breakpoint on Windows message
+BSTAT  - Breakpoint Statistics
+CSIP   - Set CS:EIP range qualifier
+p MANIPULATING BREAK POINTS
+BPE    - Edit breakpoint
+BPT    - Use breakpoint as a template
+BL     - List current breakpoints
+BC     - Clear breakpoint
+BD     - Disable breakpoint
+BE     - Enable breakpoint
+BH     - Breakpoint history
+p DISPLAY/CHANGE MEMORY
+R      - Display/change register contents
+U      - Un-assembles instructions
+D, DB, DW, DD, DS, DL, DT
+       - Display memory
+E, EB, EW, ED, ES, EL, ET
+       - Edit memory
+PEEK   - Read from physical address
+POKE   - Write to physical address
+PAGEIN - Load a page into physical memory (note: not always safe)
+H      - Help on the specified function
+?      - Evaluate expression
+VER    - SoftICE version
+WATCH  - Add watch
+FORMAT - Change format of data window
+DATA   - Change data window
+p DISPLAY SYSTEM INFORMATION
+GDT    - Display global descriptor table
+LDT    - Display local descriptor table
+IDT    - Display interrupt descriptor Table
+TSS    - Display task state segment
+CPU    - Display cpu register information
+PCI    - Display PCI device information
+MOD    - Display windows module list
+HEAP   - Display windows global heap
+LHEAP  - Display windows local heap
+VXD    - Display windows VxD map
+TASK   - Display windows task list
+VCALL  - Display VxD calls
+WMSG   - Display windows messages
+PAGE   - Display page table information
+PHYS   - Display all virtual addresses for physical address
+STACK  - Display call stack
+XFRAME - Display active exception frames
+MAPV86 - Display v86 memory map
+HWND   - Display window handle information
+CLASS  - Display window class information
+VM     - Display virtual machine information
+THREAD - Display thread information
+ADDR   - Display/change address Contexts
+MAP32  - Display 32 bit section map
+PROC   - Display process information
+QUERY  - Display a processes virtual address space map
+WHAT   - Identify the type of an expression
+OBJDIR - Display info about an object directory
+DEVICE - Display info about a device
+DRIVER - Display info about a driver
+FOBJ   - Display info about a file object
+IRP    - Display info about a IRP
+p I/O PORT COMMANDS
+I, IB, IW, ID
+       - Input data from I/O port
+O, OB, OW, OD
+       - Output data to I/O port
+p FLOW CONTROL COMMANDS
+X      - Return to host debugger or program
+G      - Go to address
+T      - Single step one instruction
+P      - Step skipping calls, Int, etc.
+HERE   - Go to current cursor line
+EXIT   - Force an exit to current DOS/Windows program
+GENINT - Generate an interrupt
+HBOOT  - System boot (total reset)
+p MODE CONTROL
+I1HERE - Direct INT1 to SoftICE
+I3HERE - Direct INT3 to SoftICE
+ZAP    - Zap embedded INT1 or INT3
+FAULTS - Enable/disable SoftICE fault trapping
+SET    - Change an internal variable
+p CUSTOMIZATION COMMANDS
+PAUSE  - Controls display scroll mode
+ALTKEY - Set key sequence to invoke window
+FKEY   - Display/set function keys
+DEX    - Display/assign window data expressions
+CODE   - Display instruction bytes in code window
+COLOR  - Display/set screen colors
+ANSWER - Auto-answer and redirect console to modem
+DIAL   - Redirect console to modem
+SERIAL - Redirect console
+TABS   - Set/display tab settings
+LINES  - Set/display number of lines on screen
+WIDTH  - Set/display number of columns on screen
+PRN    - Set printer output port
+PRINT-SCREEN key - Dump screen to printer
+MACRO  - Define a named macro command
+p UTILITY COMMANDS
+A      - Assemble code
+S      - Search for data
+F      - Fill memory with data
+M      - Move data
+C      - Compare two data blocks
+p LINE EDITOR KEY USAGE
+      - Recall previous command line
+      - Recall next command line
+      - Move cursor right
+      - Move cursor left
+BKSP   - Back over last character
+HOME   - Start of line
+END    - End of line
+INS    - Toggle insert mode
+DEL    - Delete character
+ESC    - Cancel current command
+p SCROLLING KEY USAGE
+PageUp      - Display previous page of display history
+PageDn      - Display next page of display history
+Alt-
+       - Scroll data window down one line
+Alt-
+       - Scroll data window up one line
+Alt-PageUp  - Scroll data window down one page
+Alt-PageDn  - Scroll data window up one page
+Ctrl-PageUp - Scroll code window down one page
+Ctrl-PageDn - Scroll code window up one page
+Ctrl-
+      - Scroll code window down one line
+Ctrl-
+      - Scroll code window up one line
+p WINDOW COMMANDS
+WC     - Toggle code window
+WD     - Toggle data window
+WF     - Toggle floating point stack window
+WL     - Toggle locals window
+WR     - Toggle register window
+WS     - Toggle call stack window
+WW     - Toggle watch window
+WX     - Toggle Katmai XMM register window
+EC     - Enable/disable code window
+.      - Locate current instruction
+p WINDOW CONTROL
+CLS    - Clear window
+RS     - Restore program screen
+ALTSCR - Change to alternate display
+FLASH  - Restore screen during P and T
+p SYMBOL/SOURCE COMMANDS
+SYM    - Display symbols
+SYMLOC - Relocate symbol base
+EXP    - Display export symbols
+SRC    - Toggle between source, mixed & code
+TABLE  - Select/remove symbol table
+FILE   - Change/display current source file
+SS     - Search source module for string
+TYPES  - List all types, or display type definition
+LOCALS - Display locals currently in scope
+p BACK TRACE COMMANDS
+SHOW   - Display from backtrace buffer
+TRACE  - Enter back trace simulation mode
+XT     - Step in trace simulation mode
+XP     - Program step in trace simulation mode
+XG     - Go to address in trace simulation mode
+XRSET  - Reset back trace history buffer
+p SPECIAL OPERATORS
+.      - Preceding a decimal number specifies a line number
+$      - Preceding an address specifies SEGMENT addressing
+#      - Preceding an address specifies SELECTOR addressing
+@      - Preceding an address specifies indirection

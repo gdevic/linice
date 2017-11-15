@@ -214,15 +214,30 @@ void Deb_Keyboard_Handler(void)
         if( isalpha(AsciiCode) && fCapsLock )
             AsciiCode ^= 0x20;
 
-        // Shift, Ctrl and Alt keys add extra bits to a code
-        if( fShift && !isascii(AsciiCode) )
-            AsciiCode |= SHIFT;
+        // Ctrl, Alt, shift keys form new codes for funstion keys
+        if( AsciiCode >= F1 && AsciiCode <= F12 )
+        {
+            if( fControl )
+                AsciiCode += 12;
+            else
+            if( fAlt )
+                AsciiCode += 2 * 12;
+            else
+            if( fShift )
+                AsciiCode += 3 * 12;
+        }
+        else
+        {
+            // Shift, Ctrl and Alt keys add extra bits to a code
+            if( fShift && !isascii(AsciiCode) )
+                AsciiCode |= SHIFT;
 
-        if( fControl )
-            AsciiCode |= CTRL;
+            if( fControl )
+                AsciiCode |= CTRL;
 
-        if( fAlt )
-            AsciiCode |= ALT;
+            if( fAlt )
+                AsciiCode |= ALT;
+        }
     }
 
     if( AsciiCode != 0 )

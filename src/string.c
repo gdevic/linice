@@ -166,7 +166,7 @@ int memcmp( const void *s1, const void *s2, size_t n)
 *      Pointer to the destination, s1.
 *
 ******************************************************************************/
-void * memcpy( void *s1, const void *s2, size_t n)
+void * ice_memcpy( void *s1, const void *s2, int n)
 {
     char *original = s1;
 
@@ -243,7 +243,7 @@ void * memmove( void *s1, const void *s2, size_t n)
 *      Pointer to the region, s.
 *
 ******************************************************************************/
-void * memset( void *s, int c, size_t n)
+void * ice_memset( void *s, int c, size_t n)
 {
     char *fill = s;
 
@@ -885,7 +885,7 @@ char * strdup( const char *string )
 {
     char *new;
 
-    new = malloc( strlen(string) + 1);
+    new = ice_malloc( strlen(string) + 1);
 
     if( new == NULL )
         return( NULL );

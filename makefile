@@ -3,7 +3,7 @@ INC1 = /usr/include
 INC2 = h
 
 CC = gcc
-CFLAGS = -Wall -D__KERNEL__ -DMODULE -DLINUX -DDBG -I$(INC1) -I$(INC2)
+CFLAGS = -gdwarf -Wall -D__KERNEL__ -DMODULE -DLINUX -DDBG -O -I$(INC1) -I$(INC2)
 
 
 all: linice.o

@@ -372,6 +372,6 @@ DWORD DebInterruptHandler( DWORD nInt, TRegs *pRegs )
     // Return into the debugee where we left off or where the register structure
     // points to...
 
-    return( NULL );
+    return( 0 );
 }    
 

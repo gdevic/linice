@@ -83,6 +83,6 @@ void PrintRegisters(void)
             (deb.r->eflags & CF_MASK)? 'C' : 'c' );
 
     dprint("CS=%04X   DS=%04X   SS=%04X   ES=%04X   FS=%04X   GS=%04X\n",
-            deb.r->pmCS, deb.r->pmDS, deb.r->SS, deb.r->pmES, deb.r->pmFS, deb.r->pmGS );
+            deb.r->pmCS, deb.r->pmDS, deb.r->ss, deb.r->pmES, deb.r->pmFS, deb.r->pmGS );
 }    
 

@@ -588,6 +588,10 @@ void GetCommand( int nLine, char *sCmdLine )
     // Print the final line and scroll it up
 
     dprint("%c%c%c%s\n", DP_SETCURSOR, 0, 0xFF, sCmd );
+
+    // Add the new line into the command history buffer
+
+    AddHistory(sCmd);
 }
 
 

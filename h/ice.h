@@ -37,8 +37,6 @@
 *                                                                             *
 ******************************************************************************/
 
-extern int printk(char *, ...);
-
 /******************************************************************************
 *                                                                             *
 *   Global Defines, Variables and Macros                                      *
@@ -56,7 +54,7 @@ extern int printk(char *, ...);
 // Define structure that holds debugee state after an interrupt
 /////////////////////////////////////////////////////////////////
 
-typedef struct
+typedef struct tagTRegs
 {
     DWORD       pmES;
     DWORD       pmGS;
@@ -75,12 +73,12 @@ typedef struct
     DWORD       pmCS;
     DWORD       eflags;
     DWORD       esp;
-    DWORD       SS;
+    DWORD       ss;
     DWORD       vmES;
     DWORD       vmDS;
     DWORD       vmFS;
     DWORD       vmGS;
-} PACKED TRegs;
+} TRegs;
 
 
 //--------------------------------------------------------
@@ -270,6 +268,45 @@ extern WORD GetKey( BOOL fBlock );
 #define F10           0x89
 #define F11           0x8A
 #define F12           0x8B
+
+#if 0
+#define CF1           0x8C
+#define CF2           0x8D
+#define CF3           0x8E
+#define CF4           0x8F
+#define CF5           0x90
+#define CF6           0x91
+#define CF7           0x92
+#define CF8           0x93
+#define CF9           0x94
+#define CF10          0x95
+#define CF11          0x96
+#define CF12          0x97
+#define AF1           0x98
+#define AF2           0x99
+#define AF3           0x9A
+#define AF4           0x9B
+#define AF5           0x9C
+#define AF6           0x9D
+#define AF7           0x9E
+#define AF8           0x9F
+#define AF9           0xA0
+#define AF10          0xA1
+#define AF11          0xA2
+#define AF12          0xA3
+#define SF1           0xA4
+#define SF2           0xA5
+#define SF3           0xA6
+#define SF4           0xA7
+#define SF5           0xA8
+#define SF6           0xA9
+#define SF7           0xAA
+#define SF8           0xAB
+#define SF9           0xAC
+#define SF10          0xAD
+#define SF11          0xAE
+#define SF12          0xAF
+#endif
 
 #define BACKSPACE     '\b'
 #define TAB           '\t'

@@ -75,8 +75,6 @@ static DWORD avail = MAX_HISTORY_BUF;
 *                                                                             *
 ******************************************************************************/
 
-DWORD Check(void);
-
 /******************************************************************************
 *                                                                             *
 *   void ClearHistory(void)                                                   *
@@ -109,34 +107,21 @@ void AddHistory(char *sLine)
 {
     DWORD size;
 
-#if 0
-    if( *(sLine+1)=='?' )
-    {
-        Check();
-        return;
-    }
-#endif
-
     // Add the line to the head of the histore buffer, possibly releasing
     // lines from the tail until we get enough space
 
     size = strlen(sLine) + 1 + sizeof(TLine) - 1;
-//dprint(">%d<", size);
+
     // Give it some hefty margin since lines at the end of the buffer 
     // can not be split
 
     while( avail < size + 512 )
     {
-#if 0
-        ClearHistory();
-#else
         // Ok, need to release line by line from the tail
-//dprint("*%d*", avail);
+
         avail += pTail->bSize;
         pTail = pTail->next;
-//memset((void *)pTail->prev, 0xCC, pTail->prev->bSize);
         pTail->prev = NULL;
-#endif
     }
 
     // If the new line record can not fit at the end of the buffer, wrap 
@@ -145,7 +130,7 @@ void AddHistory(char *sLine)
     if( (BYTE *)pHead + size + 32 >= HistoryBuf + MAX_HISTORY_BUF )
     {
         TLine * prev_save;
-//dprint("&w&");
+
         prev_save = pHead->prev;
         pHead = (TLine *) HistoryBuf;
         prev_save->next = pHead;
@@ -272,7 +257,8 @@ DWORD PrintCmd(DWORD hView, int nDir)
 }    
 
 
-DWORD Check(void)
+#if 0
+static DWORD Check(void)
 {
     TLine *p;
 
@@ -292,7 +278,7 @@ DWORD Check(void)
     dputc(DP_RESTOREXY);
 }    
 
-void DumpHistory(void)
+static void DumpHistory(void)
 {
     DWORD count = 1;
     TLine *p;
@@ -308,3 +294,4 @@ void DumpHistory(void)
     }
 }    
 
+#endif
