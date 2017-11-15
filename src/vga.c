@@ -207,7 +207,8 @@ static void RestoreBackground(void)
 ******************************************************************************/
 void vga_putchar( char c )
 {
-    static int xSave, ySave;
+    static int xSave[4], ySave[4];
+    static int iSave = 0;
     static int nRetainCount = 0;
     static BYTE bRetain[5];
     DWORD yTop, yBottom;
@@ -243,6 +244,12 @@ void vga_putchar( char c )
                     // bRetain[3]  - y coordinate
                     // bRetain[4]  - x coordinate
 
+                    if( bRetain[3]==0xFF )
+                        bRetain[3] = vga.y;
+
+                    if( bRetain[4]==0xFF )
+                        bRetain[4] = vga.x;
+
                     while( bRetain[1]-- )
                     {
                         *(BYTE *)(vga.pText + (bRetain[1] + bRetain[4] + bRetain[3] * vga.sizeX) * 2 + 1) = bRetain[2];
@@ -256,6 +263,12 @@ void vga_putchar( char c )
                     // bRetain[0]  - command code
                     // bRetain[1]  - y coordinate
                     // bRetain[2]  - x coordinate
+
+                    if( bRetain[1]==0xFF )
+                        bRetain[1] = vga.y;
+
+                    if( bRetain[2]==0xFF )
+                        bRetain[2] = vga.x;
 
                     vga.x = bRetain[2];
                     vga.y = bRetain[1];
@@ -410,8 +423,9 @@ void vga_putchar( char c )
 
             // Save cursor location
 
-            xSave = vga.x;
-            ySave = vga.y;
+            xSave[iSave] = vga.x;
+            ySave[iSave] = vga.y;
+            iSave = (iSave + 1) & 3;
 
             break;
 
@@ -419,15 +433,20 @@ void vga_putchar( char c )
 
             // Restore saved cursor location
 
-            vga.x = xSave;
-            vga.y = ySave;
+            iSave = (iSave - 1) & 3;
+            vga.x = xSave[iSave];
+            vga.y = ySave[iSave];
 
             break;
 
         case '\n':
 
-            // Go to a new line, possible autoscroll
+            // Go to a new line, possible autoscroll. Clear to the end of the current line
 
+            if( vga.x < vga.sizeX )
+                memset_w(vga.pText + (vga.x + vga.y * vga.sizeX) * 2,
+                         vga.attr,
+                         vga.sizeX - vga.x );
             vga.x = 0;
 
             // Check if we are on the last line of autoscroll
@@ -459,6 +478,7 @@ void vga_putchar( char c )
                          vga.attr,
                          vga.sizeX - vga.x );
             vga.x = 0;
+            nCharsWritten++;
 
             break;
 
@@ -470,7 +490,8 @@ void vga_putchar( char c )
 
             // Advance the print position
 
-            vga.x++;
+            if( vga.x < vga.sizeX )
+                vga.x++;
 
             nCharsWritten++;
 

@@ -16,6 +16,7 @@ global  IssueInt3
 global  GetByte
 global  memset_w
 global  HaltCpu
+global  GetSysreg
 
 ;==============================================================================
 ; We need the following from the other files
@@ -351,29 +352,21 @@ IssueInt3:
 
 ;==============================================================================
 ;
-;   DWORD GetByte( WORD sel, DWORD offset )
+;   DWORD GetByte( DWORD offset )
 ;
-;   Reads a byte from a memory location sel:offset
+;   Reads a byte from a memory location offset
 ;   Returns a BYTE if the address is present, or value greater than 0xFF
 ;   address is not present
 ;
 ;   Where:
-;       [ebp+8]         selector to use
-;       [ebp+12]        offset
+;       [ebp + 8 ]        offset
 ;
 ;==============================================================================
 GetByte:
         push    ebp
         mov     ebp, esp
 
-        mov     eax, 0xFFFFFFFF
-        pop     ebp
-        ret
-
-
-        mov     eax, [ebp+8]            ; Get the selector
-        mov     gs, ax
-        mov     ebx, [ebp+12]           ; Get the offset
+        mov     ebx, [ebp+8]           ; Get the offset
 
         ; Get the byte from the memory, possibly page faulting
         ; if the memory address was not valid.  Anyhow, since
@@ -381,7 +374,10 @@ GetByte:
         ; in EAX register in that case
 
         xor     eax, eax
-        mov     al, [gs:ebx]
+        mov     al, [ebx]
+        nop
+        nop
+        nop
 
         pop     ebp
         ret
@@ -425,4 +421,44 @@ HaltCpu:
         cli
         halt
 
+
+;==============================================================================
+;
+;   void GetSysreg( TSysreg * pSys )
+;
+;   Reads in system registers
+;
+;   Where:
+;       [ebp + 8 ]        sysreg array
+;
+;==============================================================================
+GetSysreg:
+        push    ebp
+        mov     ebp, esp
+
+        mov     ebx, [ebp + 8]
+        mov     eax, cr0
+        mov     [ebx+0], eax
+        mov     eax, cr2
+        mov     [ebx+4], eax
+        mov     eax, cr3
+        mov     [ebx+8], eax
+        mov     eax, cr4
+        mov     [ebx+12], eax
+
+        mov     eax, dr0
+        mov     [ebx+16], eax
+        mov     eax, dr1
+        mov     [ebx+20], eax
+        mov     eax, dr2
+        mov     [ebx+24], eax
+        mov     eax, dr3
+        mov     [ebx+28], eax
+        mov     eax, dr6
+        mov     [ebx+32], eax
+        mov     eax, dr7
+        mov     [ebx+36], eax
+
+        pop     ebp
+        ret
 

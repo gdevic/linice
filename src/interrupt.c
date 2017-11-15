@@ -278,7 +278,7 @@ DWORD DebInterruptHandler( DWORD nInt, TRegs *pRegs )
             case 0x0E:  // PAGE FAULT
                 if( (pRegs->eip > (DWORD) GetByte) && (pRegs->eip < (DWORD) GetByte + 50) )
                 {
-                    pRegs->eip += 3;            // Skip  65 8A 03  mov al, gs:[ebx]
+                    pRegs->eip += 2;            // Skip  8A 03  mov al, gs:[ebx]
                     pRegs->eax  = 0xFFFFFFFF;   // Set invalid address value
                 }
                 else
@@ -328,6 +328,10 @@ DWORD DebInterruptHandler( DWORD nInt, TRegs *pRegs )
 
         deb.r = pRegs;
         deb.nInterrupt = nInt;
+
+        // Disassemble from the address of break
+
+        deb.codeOffset = deb.r->eip;
 
         // Get the current GDT table
 

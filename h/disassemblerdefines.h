@@ -159,7 +159,7 @@ typedef struct
     BYTE    v_instruction;      // Virtual instruction index
     BYTE    access;             // Instruction data access type
     BYTE    flags;              // Miscellaneous flags
-} TOpcodeData;
+} PACKED TOpcodeData;
 
 // `access' field:
 // Data access flags are used with memory access instructions

@@ -80,7 +80,7 @@ typedef struct
     DWORD       vmDS;
     DWORD       vmFS;
     DWORD       vmGS;
-} TRegs;
+} PACKED TRegs;
 
 
 //--------------------------------------------------------
@@ -128,6 +128,7 @@ typedef struct
 {
     TRegs       *r;                     // Pointer to a register structure
     TRegs       rPrev;                  // Previous registers (so we know to color code changed)
+    TSysreg     sysreg;                 // System registers
 
     TSS_Struct  *pTss;                  // Pointer to a TSS structure
 
@@ -159,10 +160,18 @@ typedef struct
     WORD        codeSel;                // Selector to use to disassemble
     DWORD       codeOffset;             // Offset to use to disassemble
 
+    BYTE        colors[5];              // Output color values
+
 } TDeb;
 
 extern TDeb deb;                        // Debugee state structure
 
+
+#define COL_NORMAL          0
+#define COL_BOLD            1
+#define COL_REVERSE         2
+#define COL_HELP            3
+#define COL_LINE            4
 
 /******************************************************************************
 *                                                                             *
@@ -181,6 +190,18 @@ extern void Deb_Keyboard_Handler(void);
 extern void VgaInit(void);
 extern void vga_putchar(char);
 
+extern void Multiline(BOOL fStart);
+extern BOOL printline( char *format, ... );
+
+extern DWORD GetCmdViewTop(void);
+extern DWORD PrintCmd(DWORD hView, int nDir);
+extern void AddHistory(char *sLine);
+extern void ClearHistory(void);
+extern void DumpHistory(void);
+
+extern int nEvaluate(char *sExpr, char **psNext);
+extern int nEvalDefaultBase;
+extern int (*pfnEvalLiteralHandler)(char *sName);
 
 //--------------------------------------------------------
 // Main print function and its control codes
@@ -209,6 +230,28 @@ extern TPUTCHAR pfnPutChar;
 extern int nCharsWritten;
 
 //--------------------------------------------------------
+// Define Linice command structure
+//--------------------------------------------------------
+
+typedef BOOL (*TFNCOMMAND)(char *args);
+
+typedef struct
+{
+    char *sCmd;                     // Command name
+    DWORD nLen;                     // Length of the command string in characters
+    TFNCOMMAND pfnCommand;          // Pointer to a function for the command
+    char *sSyntax;                  // Syntax string
+    char *sExample;                 // Example string
+    DWORD iHelp;                    // Index to description string
+    
+} TCommand;
+
+#define MAX_COMMAND     124
+
+extern TCommand Cmd[MAX_COMMAND];
+extern char *sHelp[];               // Help commands strings
+
+//--------------------------------------------------------
 // Define keyboard codes
 //--------------------------------------------------------
 
@@ -228,19 +271,6 @@ extern WORD GetKey( BOOL fBlock );
 #define F11           0x8A
 #define F12           0x8B
 
-#define SF1           0x90
-#define SF2           0x91
-#define SF3           0x92
-#define SF4           0x93
-#define SF5           0x94
-#define SF6           0x95
-#define SF7           0x96
-#define SF8           0x97
-#define SF9           0x98
-#define SF10          0x99
-#define SF11          0x9A
-#define SF12          0x9B
-
 #define BACKSPACE     '\b'
 #define TAB           '\t'
 #define ENTER         '\n'
@@ -258,8 +288,9 @@ extern WORD GetKey( BOOL fBlock );
 #define INS           29
 #define DEL           30
 
-#define CTRL        0x100             // Add this to ASCII if Ctrl key is pressed
-#define ALT         0x200             // Add this to ASCII if Alt key is pressed
+#define CTRL        0x100               // Add this to ASCII if Ctrl key is pressed
+#define ALT         0x200               // Add this to ASCII if Alt key is pressed
+#define SHIFT       0x300               // Add this to ASCII if Shift key is pressed
 
 
 /******************************************************************************

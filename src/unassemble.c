@@ -43,13 +43,10 @@
 *   Local Defines, Variables and Macros                                       *
 *                                                                             *
 ******************************************************************************/
+#define CODE_BYTES         8
 
-BYTE test[10] = 
-{
-    0x3C, 0xAA
-};
+static char sLine[160];
 
-static char sLine[256];
 
 /******************************************************************************
 *                                                                             *
@@ -66,78 +63,75 @@ extern BYTE Disassembler( TDisassembler *pDis );
 *                                                                             *
 ******************************************************************************/
 
-void PrintCode()
+static DWORD GetDisLine(DWORD addr)
 {
-    DWORD lines;
-    DWORD nLen;
-    BYTE codes[16];
+    static char *hex = "0123456789abcdef";
     TDisassembler dis;
-    WORD sel;
-    DWORD offset;
+    BYTE codes[20];
     int i;
-
-    lines = deb.wc.nLines;
-    deb.codeMode = DC_ASM;              // Initially disassemble pure assembly
-    sel = deb.codeSel;
-    offset = deb.codeOffset;
-
-
-    dis.dwFlags = DIS_DATA32 | DIS_ADDRESS32;
-    dis.wSel = sel;
-//    dis.bpTarget = (BYTE *) offset;
-    dis.bpTarget = (BYTE *) test;
-
+    char *p;
+    
+    dis.dwFlags  = DIS_DATA32 | DIS_ADDRESS32;
+    dis.bpTarget = (BYTE *) addr;
     dis.szDisasm = sLine;
-    dis.pCode = codes;
+    dis.pCode    = codes;
 
-//    while( lines-- > 0 )
+    // If "set code on"
+    if( 1 )
     {
+        memset(sLine, ' ', 2*CODE_BYTES + 2);
 
-codes[15] = 0x88;
+        // Disassemble and store into the line buffer leaving some space for codes
+        dis.szDisasm += 2*CODE_BYTES + 2;
         Disassembler( &dis );
 
-if( codes[15] != 0x88 )
-    dprint("CODES[15] CORRUPTED!!!\n");
-
-        dprint("len: %02X  flags=%X as=%d ", dis.bInstrLen, dis.dwFlags, dis.bAsciiLen );
-        for( i=0; i<dis.bInstrLen;i++ )
+        // Print so many code bytes into the code byte buffer
+        p = sLine;
+        for( i=0; i<dis.bInstrLen && i<CODE_BYTES; i++ )
         {
-            dprint("%02X ", dis.pCode[i]);
+            *p++ = hex[TOPNIBBLE(dis.pCode[i])];
+            *p++ = hex[(dis.pCode[i])&0xF];
         }
-        dprint(" %s\n", dis.szDisasm);
-        dputc('\n');
-                   
-        // Print selector:offset
-
-        // Clean the printout string line
-        memset(sLine, ' ', 256);
-        nLen = 0;
-
-        nLen += sprintf(sLine+nLen, "%04X:%08X  ", sel, (int) offset );
-        dprint("-%d-", nLen);
-
-        // If the code is on, print code bytes
-#if 0
-        if( deb.fSetCode )
-        {
-            for( i=0; i<MIN(dis.bInstrLen, 10); i++)
-            {
-                nLen += sprintf(sLine+nLen, "%02X", codes[i]);
-                dprint("-%d-", nLen);
-            }
-        }
-#endif
-        // Get the disassembled line
-
-        nLen += sprintf(sLine+nLen, "%s", dis.szDisasm );
-        dprint("-%d-", nLen);
-
-        // and finally print it out
-
-        dprint("%s\n", sLine);
-
-        dis.bpTarget += dis.bInstrLen;
-        offset       += dis.bInstrLen;
     }
+    else
+    {
+        // Disassemble and store into the line buffer
+        Disassembler( &dis );
+    }
+
+    return( dis.bInstrLen );
+}    
+
+
+void PrintCode()
+{
+    DWORD lines = deb.wc.nLines;        // Get the number of lines to draw
+    DWORD nLen, addr;
+
+    addr = deb.codeOffset;
+
+    // Print the code window header
+    dputc(DP_SETWRITEATTR);dputc(deb.colors[COL_LINE]);
+    dprint("-Code---------------------------------------------------------------------------\n");
+    dputc(DP_SETWRITEATTR);dputc(deb.colors[COL_NORMAL]);
+    
+    while( lines-- > 0 )
+    {
+        nLen = GetDisLine(deb.codeOffset);
+        dprint("%04X:%08X %s\n", 0x10, deb.codeOffset, sLine);
+        deb.codeOffset += nLen;
+    }
+}    
+
+
+BOOL CmdUnassemble(char *args)
+{
+    DWORD nLen;
+
+    nLen = GetDisLine(deb.codeOffset);
+    dprint("%04X:%08X %s\n", 0x10, deb.codeOffset, sLine);
+    deb.codeOffset += nLen;
+
+    return( TRUE );
 }    
 

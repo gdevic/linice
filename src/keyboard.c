@@ -9,13 +9,11 @@
 *   Author:     Goran Devic
 *
 *******************************************************************************
-.-
+
     Module Description:
 
           This module contains the low-level keyboard handler code.
-          Two keyboard handlers are defined - one for the normal mode of
-          operation and another for the debugger.
--.
+
 *******************************************************************************
 *
 *   Changes:
@@ -71,9 +69,9 @@ static const BYTE ascii_table[2][128] = {
     '?',  ESC,  '!',  '@',  '#',  '$',  '%',  '^',       '&',  '*',  '(',  ')',  '_',  '+',  '\b', '\t',
     'Q',  'W',  'E',  'R',  'T',  'Y',  'U',  'I',       'O',  'P',  '{',  '}',  ENTER,'?',  'A',  'S',
     'D',  'F',  'G',  'H',  'J',  'K',  'L',  ':',       '"',  '~',  '?',  '|',  'Z',  'X',  'C',  'V',
-    'B',  'N',  'M',  '<',  '>',  '?',  '?',  '*',       '?',  ' ',  '?',  SF1,  SF2,  SF3,  SF4,  SF5,
-    SF6,  SF7,  SF8,  SF9,  SF10, NUMLOCK, SCROLL, HOME, UP,   PGUP,'?',   LEFT, '5',  RIGHT,'?',  END,
-    DOWN, PGDN, INS,  DEL, '?',  '?',  '?',   SF11,      SF12,
+    'B',  'N',  'M',  '<',  '>',  '?',  '?',  '*',       '?',  ' ',  '?',  F1,   F2,   F3,   F4,   F5,
+    F6,   F7,   F8,   F9,   F10, NUMLOCK, SCROLL, HOME,  UP,  PGUP,  '?',  LEFT, '5', RIGHT, '?',   END,
+    DOWN, PGDN, INS,  DEL,  '?',  '?',  '?',  F11,       F12,
 }
 };
 
@@ -96,6 +94,7 @@ static BOOL fCapsLock = FALSE;
 *
 *   This handler is used when we snoop on the keyboard
 *   -------------------------------------------------------
+*   THIS DOES NOT WORK (YET?)
 *
 *   This handler gets called every time a keyboard interrupt is issued.
 *   We need to check if the Ice control keys are pressed and interrupt.
@@ -131,12 +130,14 @@ BOOL CheckHotKey(void)
 *                                                                             *
 *******************************************************************************
 *
-*   This handler is used only when the debugger has control
-*   -------------------------------------------------------
+*   This handler is used when the debugger has control.
 *
 *   This is a low-level keyboard handler.  It translates hardware key codes
 *   into ASCII and stores them in a circular keyboard buffer for the use by
 *   the debugger.
+*
+*   A pseudo-ASCII code 16 bit wide is used where the top byte contains
+*   the state of the SHIFT/CONTROL/ALT key.
 *
 ******************************************************************************/
 void Deb_Keyboard_Handler(void)
@@ -213,7 +214,10 @@ void Deb_Keyboard_Handler(void)
         if( isalpha(AsciiCode) && fCapsLock )
             AsciiCode ^= 0x20;
 
-        // Ctrl and Alt keys add extra bits to a code
+        // Shift, Ctrl and Alt keys add extra bits to a code
+        if( fShift && !isascii(AsciiCode) )
+            AsciiCode |= SHIFT;
+
         if( fControl )
             AsciiCode |= CTRL;
 

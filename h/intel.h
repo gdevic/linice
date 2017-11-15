@@ -50,6 +50,14 @@
 #define LOWORD(i)       ((WORD)((i)&0xFFFF))
 #define HIWORD(i)       ((WORD)(((i)>>16) & 0xFFFF))
 
+#define TOPNIBBLE(i)    (((i)>>4)&0xF)
+
+///////////////////////////////////////////////////////////////////////////////
+// Define gcc packed structure
+///////////////////////////////////////////////////////////////////////////////
+
+#define PACKED __attribute__((packed))
+
 ///////////////////////////////////////////////////////////////////////////////
 // Defines of the Intel processor
 ///////////////////////////////////////////////////////////////////////////////
@@ -99,7 +107,7 @@ typedef struct
    WORD      debug;                     // bit 0 is T, debug trap
    WORD      ioperm;                    // io permission offset
 
-} TSS_Struct;
+} PACKED TSS_Struct;
 
 
 //-----------------------------------------------------------------------------
@@ -111,14 +119,12 @@ typedef struct
 typedef struct
 {
     WORD    limit;                      // [0:15]  limit field
-    WORD    baseLow;                    // [0:15] base address
-    WORD    baseHigh;                   // [16:31] base address
-//  DWORD   base;                       // [16:47] base address field
+    DWORD   base;                       // [16:47] base address field
 
-} TDescriptor;
+} PACKED TDescriptor;
 
-#define GET_DESC_BASE(p)    (*(DWORD *)&(p)->baseLow)
-#define SET_DESC_BASE(p, v) ((*(DWORD *)&(p)->baseLow) = (v))
+#define GET_DESC_BASE(p)        (p)->base
+#define SET_DESC_BASE(p, v)     (p)->base = (v)
 
 //-----------------------------------------------------------------------------
 // IDT Gates (Task, Interrupt and Trap)
@@ -203,7 +209,7 @@ typedef struct
     DWORD Flags       : 3;              // Page's kernel flags
     DWORD Index       : 20;             // Physical page index
 
-} TPage;
+} PACKED TPage;
 
 #define CleanTPage(ptr)   (*(DWORD *)ptr=0)
 
@@ -311,6 +317,25 @@ typedef struct
 #define DR6_BD_BIT          13
 #define DR6_BS_BIT          14
 #define DR6_BT_BIT          15
+
+//-----------------------------------------------------------------------------
+// System Registers Defines
+//-----------------------------------------------------------------------------
+typedef struct 
+{
+    DWORD cr0;
+    DWORD cr2;
+    DWORD cr3;
+    DWORD cr4;
+
+    DWORD dr0;
+    DWORD dr1;
+    DWORD dr2;
+    DWORD dr3;
+    DWORD dr6;
+    DWORD dr7;
+
+} TSysreg;
 
 
 // Restore packing value

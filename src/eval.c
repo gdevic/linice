@@ -123,11 +123,13 @@ static char *sTokens[] =
 };
 
 
-static struct Stack                     // Defines stack structure(s)
+// Define stack structure
+
+typedef struct
 {
     int Data[ MAX_STACK ];              // Stack data
     int Top;                            // Top of stack index
-} tagStack;
+} TStack;
 
 
 static const char sDelim[] = ",;\"";    // Expressions delimiters - break chars
@@ -142,7 +144,7 @@ static const char sLiteral[] = "@:_";   // These are allowed in literal names
 
 /******************************************************************************
 *                                                                             *
-*   void Push( struct *Stack, int Value )                                     *
+*   void Push( TStack *, int Value )                                          *
 *                                                                             *
 *******************************************************************************
 *
@@ -156,7 +158,7 @@ static const char sLiteral[] = "@:_";   // These are allowed in literal names
 *       void
 *
 ******************************************************************************/
-static void Push( struct Stack *Stack, int Value )
+static void Push( TStack *Stack, int Value )
 {
     if( Stack->Top < MAX_STACK )
         Stack->Data[ Stack->Top++ ] = Value;
@@ -165,7 +167,7 @@ static void Push( struct Stack *Stack, int Value )
 
 /******************************************************************************
 *                                                                             *
-*   int Pop( struct *Stack )                                                  *
+*   int Pop( TStack * )                                                       *
 *                                                                             *
 *******************************************************************************
 *
@@ -178,7 +180,7 @@ static void Push( struct Stack *Stack, int Value )
 *       Value from the top of a stack.  The value is removed from the stack.
 *
 ******************************************************************************/
-static int Pop( struct Stack *Stack )
+static int Pop( TStack *Stack )
 {
     if( Stack->Top == 0 )
         return( BOTTOM_STACK );
@@ -365,7 +367,7 @@ static int TableMatch( char **sTable, char **sToken )
 
 /******************************************************************************
 *                                                                             *
-*   void Execute( struct Stack *Values, int Operation )                       *
+*   void Execute( TStack *Values, int Operation )                             *
 *                                                                             *
 *******************************************************************************
 *
@@ -379,7 +381,7 @@ static int TableMatch( char **sTable, char **sToken )
 *       Operates on stacks Values and Operators and updates them accordingly.
 *
 ******************************************************************************/
-static void Execute( struct Stack *Values, int Operation )
+static void Execute( TStack *Values, int Operation )
 {
     int top;
 
@@ -476,7 +478,7 @@ static void Execute( struct Stack *Values, int Operation )
 ******************************************************************************/
 int nEvaluate( char *sExpr, char **psNext )
 {
-    struct Stack Values, Operators;
+    TStack Values, Operators;
     int NewOp, OldOp, Operator;
 
     Values.Top = Operators.Top = Operator = 0;

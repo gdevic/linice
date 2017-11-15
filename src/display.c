@@ -60,6 +60,11 @@ int nCharsWritten;                      // Number of written characters
 #define HEX_UPPERCASE    0x0010
 #define NEGATIVE         0x0020
 
+static char *sScroll = "    Press any key to continue; Esc to cancel";
+
+static BOOL fMultiline = FALSE;
+static BOOL fEsc = FALSE;
+static DWORD nMultiline = 0;
 
 /******************************************************************************
 *                                                                             *
@@ -546,5 +551,111 @@ int dprint( char *format, ... )
     va_start( arg, format );
 
     return _print( format, arg );
+}
+
+
+/******************************************************************************
+*                                                                             *
+*   void Multiline(BOOL fStart)                                               *
+*                                                                             *
+*******************************************************************************
+*
+*   Prepares a multi-line output or stops a multiline output.  Such output is
+*   a seria of printline() calls that may need user keypress to proceed or 
+*   break.
+*
+*   Where:
+*       fStart is the start/end of multiline block
+*
+******************************************************************************/
+void Multiline(BOOL fStart)
+{
+    nMultiline = deb.wcmd.nLines;
+    fMultiline = fStart;
+    fEsc = FALSE;
+}    
+
+
+/******************************************************************************
+*                                                                             *
+*   int printline( char *format, ... )                                        *
+*                                                                             *
+*******************************************************************************
+*
+*   This version of print function adds the printed line to the command
+*   history buffer as well as prints it.
+*   Multi-line outputs, if enabled, are also counted and appropriate user
+*   input is processed.
+*
+*   Where:
+*       format is the standard printf() format string
+*       ... standard printf() list of arguments.
+*
+*   Returns:
+*       FALSE if within a multiline block with further output disabled
+*
+******************************************************************************/
+BOOL printline( char *format, ... )
+{
+    TPUTCHAR pfnPutCharSave;
+    va_list arg;
+    char buf[256];
+    int value = 0;
+
+    // If we escaped further prints until the multiline terminator...
+
+    if( fMultiline && fEsc )
+        return( FALSE );
+        
+    // Set the string pointer
+
+    str_buf = buf;
+
+    // Set the output function
+
+    pfnPutCharSave = pfnPutChar;
+    pfnPutChar = sputchar;
+
+    va_start( arg, format );
+
+    _print( format, arg );
+
+    // Zero-terminate the string
+
+    *str_buf = (char)0;
+
+    // Restore original put character function
+
+    pfnPutChar = pfnPutCharSave;
+
+    // Print the string out simply and fast
+
+    while( buf[value] != 0 )
+    {
+        (pfnPutChar)( buf[value] );
+        value++;
+    }
+
+    // If multiline output is enabled, check if we need to ask user to continue...
+
+    if( (fMultiline==TRUE) && (nMultiline--==0) )
+    {
+        dputc(DP_SETWRITEATTR);dputc(deb.colors[COL_HELP]);
+        dprint("%c%c%c%c%s%c", DP_SAVEXY, DP_SETCURSOR, 0, deb.nLines - 1, sScroll, DP_RESTOREXY);
+        dputc(DP_SETWRITEATTR);dputc(deb.colors[COL_NORMAL]);
+
+        if( GetKey(TRUE)==ESC )
+            fEsc = TRUE;
+
+        nMultiline = deb.wcmd.nLines;
+    }
+
+    (pfnPutChar)('\n');
+
+    // Add it to the command history
+
+    AddHistory(buf);
+
+    return( fEsc );
 }
 

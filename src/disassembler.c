@@ -43,6 +43,14 @@
 *                                                                             *
 ******************************************************************************/
 
+
+BYTE test[10] = 
+{
+    0x3C, 0xAA
+};
+
+
+
 /******************************************************************************
 *                                                                             *
 *   External functions (optional)                                             *
@@ -57,27 +65,27 @@
 
 static BYTE GetNextByte(WORD sel, BYTE *offset, BYTE *pCode)
 {
-    *(pCode + 0) = GetByte(sel, (DWORD) offset + 0) & 0xFF;
+    pCode[0] = GetByte((DWORD) offset + 0) & 0xFF;
 
-    return( *(BYTE *) &pCode );
+    return( pCode[0] );
 }    
 
 static WORD GetNextWord(WORD sel, BYTE *offset, BYTE *pCode)
 {
-    *(pCode + 0) = GetByte(sel, (DWORD) offset + 0) & 0xFF;
-    *(pCode + 1) = GetByte(sel, (DWORD) offset + 1) & 0xFF;
+    pCode[0] = GetByte((DWORD) offset + 0) & 0xFF;
+    pCode[1] = GetByte((DWORD) offset + 1) & 0xFF;
 
-    return( *(WORD *) &pCode );
+    return( *(WORD *) pCode );
 }    
 
 static DWORD GetNextDword(WORD sel, BYTE *offset, BYTE *pCode)
 {
-    *(pCode + 0) = GetByte(sel, (DWORD) offset + 0) & 0xFF;
-    *(pCode + 1) = GetByte(sel, (DWORD) offset + 1) & 0xFF;
-    *(pCode + 2) = GetByte(sel, (DWORD) offset + 2) & 0xFF;
-    *(pCode + 3) = GetByte(sel, (DWORD) offset + 3) & 0xFF;
+    pCode[0] = GetByte((DWORD) offset + 0) & 0xFF;
+    pCode[1] = GetByte((DWORD) offset + 1) & 0xFF;
+    pCode[2] = GetByte((DWORD) offset + 2) & 0xFF;
+    pCode[3] = GetByte((DWORD) offset + 3) & 0xFF;
 
-    return( *(DWORD *) &pCode );
+    return( *(DWORD *) pCode );
 }    
 
 
@@ -155,14 +163,10 @@ BYTE Disassembler( TDisassembler *pDis )
     bpTarget = pDis->bpTarget;  // Set internal pointer to a target address
     bpCode = pDis->pCode;       // Set internal pointer to code bytes
 
-nPos += sprintf( pDis->szDisasm+nPos, "HELLO ");
-
-
     do
     {
         bOpcode = NEXTBYTE;     // Get the first opcode byte from the target address
         p = &Op1[bOpcode];      // Get the address of the instruction record
-nPos += sprintf( pDis->szDisasm+nPos, "op %02X ", bOpcode);
 
         if( p->flags & DIS_SPECIAL )
         {

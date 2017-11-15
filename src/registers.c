@@ -66,6 +66,8 @@ static const TRegfield regfield[23] = {
 
 void PrintRegisters(void)
 {
+    dputc(DP_SETWRITEATTR);dputc(deb.colors[COL_NORMAL]);
+
     dprint("EAX=%08X   EBX=%08X   ECX=%08X   EDX=%08X   ESI=%08X\n",
             deb.r->eax, deb.r->ebx, deb.r->ecx, deb.r->edx, deb.r->esi );
 

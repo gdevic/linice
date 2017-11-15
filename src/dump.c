@@ -95,7 +95,9 @@ void PrintData(void)
 
     // Print the data window header
 
-    dprint("--------------------------------------------------------------------------------\n");
+    dputc(DP_SETWRITEATTR);dputc(deb.colors[COL_LINE]);
+    dprint("-Data---------------------------------------------------------------------------\n");
+    dputc(DP_SETWRITEATTR);dputc(deb.colors[COL_NORMAL]);
     
     while( lines-- )
     {
@@ -103,7 +105,7 @@ void PrintData(void)
 
         for( i=0; i<16; i++)
         {
-            if( (value = GetByte(sel, offset + i)) <= 0xFF )
+            if( (value = GetByte(offset + i)) <= 0xFF )
             {
                 MyData.byte[i] = value;
                 fValid[i] = TRUE;

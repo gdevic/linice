@@ -9,7 +9,7 @@
 *   Author:     Goran Devic                                                   *
 *                                                                             *
 *******************************************************************************
-.-
+
     Module Description:
 
     This module contains the code for the command line editor.
@@ -23,10 +23,10 @@
     position.
 
     History buffer contains previous unique lines.  History lines are called
-    using `PgUp'/`PgDn' keys (or alternate `Up'/`Down' keys).
+    using `Up'/`Down' keys.
 
     `ESC' key clears the input line.
--.
+
 *******************************************************************************
 *                                                                             *
 *   Changes:                                                                  *
@@ -62,7 +62,9 @@
 ******************************************************************************/
 
 static char *sEnterCommand   = "     Enter a command (H for help)\r";
+static char *sInvalidCommand = "Invalid command\r";
 
+static char sHelpLine[256];
 
 // History buffer is initially set with index [0] = '/0' that is really an
 // invalid entry. Only the first line contains valid (spaces) line.  That
@@ -93,16 +95,8 @@ static char sHistory[MAX_HISTORY][80] = {
 static char *sCmd;                      // Local pointer to a current cmd line
 static int xCur;                        // X coordinate of a cursor
 static int fInsert = 1;                 // Insert (1) / Overwrite (0) mode
-
-// String that gets returned when a function key is pressed in some combination
-// with shift and control keys
-
-static char *sFunct[] =
-{
-    "F1","F2","F3","F4","F5","F6","F7","F8","F9","F10","F11","F12",
-    "SF1","SF2","SF3","SF4","SF5","SF6","SF7","SF8","SF9","SF10","SF11","SF12",
-    "CF1","CF2","CF3","CF4","CF5","CF6","CF7","CF8","CF9","CF10","CF11","CF12"
-};
+static BOOL fCmdBuf = FALSE;            // Did we use cmd buffer
+static DWORD hView;                     // Handle to a cmd view
 
 /******************************************************************************
 *                                                                             *
@@ -240,8 +234,10 @@ static void NextHistoryLine()
 void GetCommand( int nLine, char *sCmdLine )
 {
     WORD wKey;
-    int i, len;
+    int i;
 
+    fCmdBuf = FALSE;
+    hView = GetCmdViewTop();
 
     // Assign a local cmd line pointer so we dont have to pass it every time
 
@@ -255,21 +251,102 @@ void GetCommand( int nLine, char *sCmdLine )
 
     iHistory = iWriteHistory;
 
-    // Write the help line to enter a command
-
-    dprint("%c%c%c%c%s%c", DP_SAVEXY, DP_SETCURSOR, 0, deb.nLines - 1, sEnterCommand, DP_RESTOREXY);
-
     // Main character loop
 
     do
     {
+        TCommand *pCmd;             // Pointer to the last command record
+        int nFound;                 // How many matches
+        char *tok;                  // Pointer to the first token
+        int nLen;                   // Length of the first token
+
+        // Update the help line with the (partial) command typed
+
+        sHelpLine[0] = '\0';
+        nFound = 0;
+        nLen = 0;
+
+        // Find the first token
+
+        tok = sCmd + 1;
+        while( *tok==' ' )
+            tok++;
+
+        if( *tok != '\0' )
+        {
+            // Find the length of the first token
+
+            while( *(tok+nLen)!=' ' && *(tok+nLen)!='\0' )
+                nLen++;
+
+            // Find (all the) commands that are superset of that token
+
+            for( i=0; i<MAX_COMMAND; i++)
+            {
+                if( strnicmp(Cmd[i].sCmd, tok, nLen)==0 )
+                {
+                    pCmd = &Cmd[i];
+                    if( nFound > 0 )
+                        strcat(sHelpLine, ", ");
+                    strcat(sHelpLine, Cmd[i].sCmd);
+                    nFound++;
+
+                    if( nFound==1 )
+                    {
+                        // If it is an exact match, more than 2 chars, cursor adjacent, bail out
+                        if( pCmd->nLen==nLen && nLen>1 && xCur == tok-sCmd+nLen )
+                            break;
+
+                        // If it is an exact match followed by a space, look no further
+                        if( pCmd->nLen==nLen && xCur > tok-sCmd+nLen )
+                            break;
+                    }
+                }
+                else    // Little shortcut out since our commands are sorted...
+                    if( nFound )
+                        break;
+            }
+
+            if( nFound==0 )
+            {
+                // If we did not find any match, print invalid command
+                strcpy(sHelpLine, sInvalidCommand);
+            }
+            else
+            if( nFound==1 )
+            {
+                // If we found exactly one match, print its syntax or description instead
+                if( xCur > tok-sCmd+nLen )
+                    strcpy(sHelpLine, pCmd->sSyntax);
+                else
+                    strcpy(sHelpLine, sHelp[pCmd->iHelp] + 9);
+                strcat(sHelpLine, "\r");
+            }
+            else
+            {
+                // If we found multiple matches, we've already assembled them...
+                strcat(sHelpLine, "\r");
+            }
+        }
+        else
+        {
+            // Back to the default help line...
+            strcpy(sHelpLine, sEnterCommand);
+        }
+
+        // Print (new) help line
+
+        dputc(DP_SETWRITEATTR);dputc(deb.colors[COL_HELP]);
+        dprint("%c%c%c%c%s%c", DP_SAVEXY, DP_SETCURSOR, 0, deb.nLines - 1, sHelpLine, DP_RESTOREXY);
+        dputc(DP_SETWRITEATTR);dputc(deb.colors[COL_NORMAL]);
+
         // Print the current line
 
-        dprint("%c%c%c%s", DP_SETCURSOR, 0, nLine, sCmd );
+        dprint("%c%c%c%s", DP_SETCURSOR, 0, 0xFF, sCmd );
 
         // Show the cursor
 
-        dprint("%c%c%c%c%c", DP_SETLOCATTR, xCur, nLine, 0x73, 1 );
+        dprint("%c%c%c%c%c", DP_SETLOCATTR, xCur, 0xFF, 0x73, 1 );
 
         // Wait for a key press and get the character from the keyboard
 
@@ -278,20 +355,9 @@ void GetCommand( int nLine, char *sCmdLine )
         // Hide the cursor
 
         if( xCur==79 )
-            dprint("%c%c%c ", DP_SETCURSOR, 79, nLine );
+            dprint("%c%c%c ", DP_SETCURSOR, 79, 0xFF );
         else
-            dprint("%c%c%c%c", DP_SETCURSOR, xCur, nLine, sCmd[xCur] );
-
-        // If a key is a combination of function keys, return the key name
-
-        if( wKey >= F1 && wKey <= SF12)
-        {
-            len = strlen(sFunct[wKey-F1]);
-            strcpy( &sCmd[xCur], sFunct[wKey-F1] );
-            sCmd[xCur + len] = '\0';
-
-            return;
-        }
+            dprint("%c%c%c%c", DP_SETCURSOR, xCur, 0xFF, sCmd[xCur] );
 
         // Depending on the key, perform a special action
 
@@ -340,20 +406,36 @@ void GetCommand( int nLine, char *sCmdLine )
                 break;
 
             case UP:
-            case PGUP:
 
-                // PAGE UP key retrieves the previous line from the history buffer
+                // UP key retrieves the previous line from the history buffer
 
                 PrevHistoryLine();
 
                 break;
 
             case DOWN:
-            case PGDN:
 
-                // PAGE DOWN key retrieves the next line from the history buffer
+                // DOWN key retrieves the next line from the history buffer
 
                 NextHistoryLine();
+
+                break;
+
+            case PGUP:
+
+                // PGUP key scrolls history buffer one screenful up
+
+                fCmdBuf = TRUE;
+                hView = PrintCmd(hView, -1);
+
+                break;
+
+            case PGDN:
+
+                // PGDOWN key scrolls history buffer one screenful down
+
+                fCmdBuf = TRUE;
+                hView = PrintCmd(hView, 1);
 
                 break;
 
@@ -433,29 +515,56 @@ void GetCommand( int nLine, char *sCmdLine )
 
                 break;
 
+            case ' ':
+
+                // IMPORTANT: This case has to be followed by the default case
+                //            It has no break statement.
+
+                // If we pressed SPACE key, and a single command token was found,
+                // complete it if necessary
+
+                if( nFound==1 && xCur==tok-sCmd+nLen && xCur<80-pCmd->nLen)
+                {
+                    // Insert the rest of the suggested command (complete it)
+
+                    if( nLen < pCmd->nLen )
+                    {
+                        memcpy(&sCmd[xCur], pCmd->sCmd+nLen, pCmd->nLen - nLen);
+                        xCur += pCmd->nLen - nLen;
+                    }
+                }
+                // Proceed with adding in the space...
+
             default:
 
-                // Any other character is written in the buffer in insert or
-                // overwrite mode
-
-                if( fInsert && xCur < 78 )
+                if( wKey < 0x7F && isascii(wKey) )
                 {
-                    // Move the buffer right of the cursor to make some space
+                    // Any other character is written in the buffer in insert or
+                    // overwrite mode
 
-                    if( xCur < 78 )
-                        memmove( sCmd + xCur + 1,
-                                 sCmd + xCur,
-                                 78 - xCur );
-                }
+                    if( fInsert && xCur < 78 )
+                    {
+                        // Move the buffer right of the cursor to make some space
 
-                // Store a new character and advance the cursor
+                        if( xCur < 78 )
+                            memmove( sCmd + xCur + 1,
+                                     sCmd + xCur,
+                                     78 - xCur );
+                    }
 
-                if( xCur < 79 )
-                {
-                    sCmd[ xCur ] = wKey;
+                    // Store a new character and advance the cursor
 
                     if( xCur < 79 )
-                        xCur++;
+                    {
+                        sCmd[ xCur ] = wKey;
+
+                        if( xCur < 79 )
+                            xCur++;
+                    }
+                }
+                else    // Combination keys with Alt/Ctrl/Shift key
+                {
+                    ;
                 }
 
                 break;
@@ -470,5 +579,46 @@ void GetCommand( int nLine, char *sCmdLine )
     CursorEnd();
 
     sCmd[ xCur ] = '\0';
+
+    // Restore the last screen of the command window
+
+    if( fCmdBuf==TRUE )
+        PrintCmd(NULL, 0);
+
+    // Print the final line and scroll it up
+
+    dprint("%c%c%c%s\n", DP_SETCURSOR, 0, 0xFF, sCmd );
 }
+
+
+void BuildCommandHelpIndex()
+{
+    
+    TCommand *pCmd;
+    int i, j;
+
+    pCmd = &Cmd[0];
+
+    // Loop over every command structure...
+    for( i=0; i<MAX_COMMAND; i++, pCmd++)
+    {
+        j = 0;
+
+        // Search the help string array for the command
+        while( sHelp[j] != NULL )
+        {
+            // If names exactly match, copy the pointer
+            if( *(sHelp[j]+pCmd->nLen)==' ' )
+            {
+                if( strnicmp(sHelp[j], pCmd->sCmd, pCmd->nLen)==0 )
+                {
+                    pCmd->iHelp = j;
+                    break;
+                }
+            }
+
+            j++;
+        }
+    }
+}    
 

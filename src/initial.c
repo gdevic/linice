@@ -57,6 +57,8 @@ TDeb deb;                               // Debugee state structure
 *                                                                             *
 ******************************************************************************/
 
+extern void BuildCommandHelpIndex();
+
 void *malloc(size_t size)
 {
     return( NULL );
@@ -86,6 +88,10 @@ int init_module(void)
     ASSERT(sizeof(TDescriptor) == 6);
 #endif
 
+    // Build the help index table for commands
+
+    BuildCommandHelpIndex();
+
     // Initialize deb data structure
 
     memset(&deb, 0, sizeof(deb));
@@ -97,9 +103,11 @@ int init_module(void)
     // Set initial window visibility
     deb.wr.fVisible = TRUE;
     deb.wd.fVisible = TRUE;
+    deb.wc.fVisible = TRUE;
 
     deb.wr.nLines = 3;
     deb.wd.nLines = 5;
+    deb.wc.nLines = 5;
 
     deb.nLines = 25;        // Set 25 line display
 
@@ -108,10 +116,14 @@ int init_module(void)
     deb.dumpOffset = 0;     // Start at offset 0
 
     deb.codeMode = DC_ASM;
-    deb.codeSel = 0x18;
-    deb.codeOffset = 0xC0000000;
 
     // Initialize VGA text display subsystem
+
+    deb.colors[0] = 0x07;
+    deb.colors[1] = 0x0B;
+    deb.colors[2] = 0x71;
+    deb.colors[3] = 0x30;
+    deb.colors[4] = 0x02;
 
     VgaInit();
 

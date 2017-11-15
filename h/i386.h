@@ -77,7 +77,6 @@
 
 extern DWORD IceIntHandlers[];
 
-
 /******************************************************************************
 *                                                                             *
 *   Extern functions                                                          *
@@ -93,9 +92,10 @@ extern void WriteCRTC(DWORD BasePort, DWORD index, DWORD value);
 extern void DisableInterrupts();
 extern void EnableInterrupts();
 extern void IssueInt3();
-extern DWORD GetByte(WORD sel, DWORD offset);
+extern DWORD GetByte(DWORD offset);
 extern void memset_w(BYTE *dest, WORD fill, DWORD words);
 extern void HaltCpu(void);
+extern void GetSysreg(TSysreg *);
 
 
 #endif //  _I386_H_

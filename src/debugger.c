@@ -50,37 +50,31 @@ extern void PrintCode(void);
 *                                                                             *
 ******************************************************************************/
 
+BOOL RecalculateWindows();
+
+
 BOOL Unsupported(char *args);
+BOOL CmdEval(char *args);
 BOOL CmdHelp(char *args);
 BOOL CmdGdt(char *args);
+BOOL CmdUnassemble(char *args);
+BOOL CmdCpu(char *args);
+BOOL CmdCls(char *args);
+BOOL CmdWr(char *args);
+BOOL CmdWd(char *args);
+BOOL CmdWc(char *args);
+BOOL CmdColor(char *args);
 
 
 static char sCmd[160];
 
 
-static char *sInvalidCommand = "Invalid command";
-static char *sScroll         = "    Press any key to continue; Esc to cancel";
+static char *sSyntaxError = "Syntax error";
 
 
-typedef BOOL (*TFNCOMMAND)(char *args);
-
-typedef struct
-{
-    char *sCmd;                     // Command name
-    DWORD nLen;                     // Length of the command string in characters
-    TFNCOMMAND pfnCommand;          // Pointer to a function for the command
-    char *sSyntax;                  // Syntax string
-    char *sExample;                 // Example string
-    DWORD flags;                    // Spare flags
-    
-} TCommand;
-
-
-#define MAX_COMMAND     124
-
-static TCommand Cmd[MAX_COMMAND] = {
-{    ".",        1, Unsupported,    ".", "ex: .",  0 },
-{    "?",        1, Unsupported,    "? expression", "ex: ? ax << 1",   0 },
+TCommand Cmd[MAX_COMMAND] = {
+{    ".",        1, Unsupported,    "Locate current instruction", "ex: .",  0 },
+{    "?",        1, CmdEval,        "? expression", "ex: ? ax << 1",   0 },
 {    "A",        1, Unsupported,    "A [Address]", "ex: A CS:1236",    0 },
 {    "ADDR",     4, Unsupported,    "ADDR [context-handle | task | *]", "ex: ADDR 80FD602C",   0 },
 {    "ALTKEY",   6, Unsupported,    "ALTKEY [ALT letter | CTRL letter]", "ex: ALTKEY ALT D",   0 },
@@ -102,10 +96,10 @@ static TCommand Cmd[MAX_COMMAND] = {
 {    "BPX",      3, Unsupported,    "BPX address [IF expression] [DO bp-action]", "ex: BPX 282FE0",    0 },
 {    "BSTAT",    5, Unsupported,    "BSTAT [breakpoint #]", "ex: BSTAT 3", 0 },
 {    "C",        1, Unsupported,    "C address1 L length address2", "ex: C 80000 L 40 EBX",    0 },
-{    "CLS",      3, Unsupported,    "CLS clear window", "ex: CLS", 0 },
+{    "CLS",      3, CmdCls,         "CLS clear window", "ex: CLS", 0 },
 {    "CODE",     4, Unsupported,    "CODE [ON | OFF]", "ex: CODE OFF", 0 },
-{    "COLOR",    5, Unsupported,    "COLOR normal bold reverse help line", "ex: COLOR 30 3E 1F 1E 34", 0 },
-{    "CPU",      3, Unsupported,    "CPU [-I]", "ex: CPU", 0 },
+{    "COLOR",    5, CmdColor,       "COLOR normal bold reverse help line", "ex: COLOR 30 3E 1F 1E 34", 0 },
+{    "CPU",      3, CmdCpu,         "CPU [-I]", "ex: CPU", 0 },
 {    "D",        1, Unsupported,    "D [address [L length]]", "ex: D B0000",   0 },
 {    "DATA",     4, Unsupported,    "DATA [window-number(0-3)]", "ex: DATA 2", 0 },
 {    "DEVICE",   6, Unsupported,    "DEVICE [device-name | address]", "ex: DEVICE HCD0",   0 },
@@ -187,16 +181,16 @@ static TCommand Cmd[MAX_COMMAND] = {
 {    "TABS",     4, Unsupported,    "TABS [1 - 8]", "ex: TABS 4",  0 },
 {    "TSS",      3, Unsupported,    "TSS [TSS selector]", "ex: TSS",   0 },
 {    "TYPES",    5, Unsupported,    "TYPES [type-name]", "ex: TYPE DWORD", 0 },
-{    "U",        1, Unsupported,    "U [address [L length]]", "ex: U EIP-10",  0 },
+{    "U",        1, CmdUnassemble,  "U [address [L length]]", "ex: U EIP-10",  0 },
 {    "VER",      3, Unsupported,    "VER Display LinIce version", "ex: VER",   0 },
 {    "WATCH",    5, Unsupported,    "WATCH address", "ex: WATCH VariableName", 0 },
-{    "WC",       2, Unsupported,    "WC [window-size]", "ex: WC 8",    0 },
-{    "WD",       2, Unsupported,    "WD [window-size]", "ex: WD 4",    0 },
+{    "WC",       2, CmdWc,          "WC [window-size]", "ex: WC 8",    0 },
+{    "WD",       2, CmdWd,          "WD [window-size]", "ex: WD 4",    0 },
 {    "WF",       2, Unsupported,    "WF [-D] [B | W | D | F | P | *]", "ex: WF",   0 },
 {    "WIDTH",    5, Unsupported,    "WIDTH [80-160]", "ex: WIDTH 100", 0 },
 {    "WL",       2, Unsupported,    "WL [window-size]", "ex: WL 8",    0 },
 {    "WHAT",     4, Unsupported,    "WHAT expression", "ex: WHAT system",  0 },
-{    "WR",       2, Unsupported,    "WR Toggle register window", "ex: WR", 0 },
+{    "WR",       2, CmdWr,          "WR Toggle register window", "ex: WR", 0 },
 {    "WS",       2, Unsupported,    "WS [window-size]", "ex: WS 8",    0 },
 {    "WW",       2, Unsupported,    "WW Toggle watch window", "ex: WW",    0 },
 {    "WX",       2, Unsupported,    "WX [D | F | *]", "WX 8",  0 },
@@ -206,10 +200,12 @@ static TCommand Cmd[MAX_COMMAND] = {
 };
 
 
-static char *sHelp[] = {
+char *sHelp[] = {
    " SETTING BREAK POINTS",
-   "BPM, BPMB, BPMW, BPMD",
-   "       - Breakpoint on memory access",
+   "BPM    - Breakpoint on memory access",
+   "BPMB   - Breakpoint on memory access, byte size",
+   "BPMW   - Breakpoint on memory access, word size",
+   "BPMD   - Breakpoint on memory access, double word size",
    "BPR    - Breakpoint on memory range",
    "BPIO   - Breakpoint on I/O port access",
    "BPINT  - Breakpoint on interrupt",
@@ -228,10 +224,20 @@ static char *sHelp[] = {
    " DISPLAY/CHANGE MEMORY",
    "R      - Display/change register contents",
    "U      - Un-assembles instructions",
-   "D, DB, DW, DD, DS, DL, DT",
-   "       - Display memory",
-   "E, EB, EW, ED, ES, EL, ET",
-   "       - Edit memory",
+   "D      - Display memory",
+   "DB     - Display memory, byte size",
+   "DW     - Display memory, word size",
+   "DD     - Display memory, double word size",
+   "DS     - Display memory, short real size",
+   "DL     - Display memory, long real size",
+   "DT     - Display memory, 10-byte real size",
+   "E      - Edit memory",
+   "EB     - Edit memory, byte size",
+   "EW     - Edit memory, word size",
+   "ED     - Edit memory, double word size",
+   "ES     - Edit memory, short real size",
+   "EL     - Edit memory, long real size",
+   "ET     - Edit memory, 10-byte real size",
    "PEEK   - Read from physical address",
    "POKE   - Write to physical address",
    "PAGEIN - Load a page into physical memory (note: not always safe)",
@@ -275,10 +281,14 @@ static char *sHelp[] = {
    "FOBJ   - Display info about a file object",
    "IRP    - Display info about a IRP",
    " I/O PORT COMMANDS",
-   "I, IB, IW, ID",
-   "       - Input data from I/O port",
-   "O, OB, OW, OD",
-   "       - Output data to I/O port",
+   "I      - Input data from I/O port",
+   "IB     - Input data from I/O port, byte size",
+   "IW     - Input data from I/O port, word size",
+   "ID     - Input data from I/O port, double word size",
+   "O      - Output data to I/O port",
+   "OB     - Output data to I/O port, byte size",
+   "OW     - Output data to I/O port, word size",
+   "OD     - Output data to I/O port, double word size",
    " FLOW CONTROL COMMANDS",
    "X      - Return to host debugger or program",
    "G      - Go to address",
@@ -380,7 +390,7 @@ static char *sHelp[] = {
    "$      - Preceding an address specifies SEGMENT addressing",
    "#      - Preceding an address specifies SELECTOR addressing",
    "@      - Preceding an address specifies indirection",
-   ""
+   NULL
 };
 
 
@@ -393,7 +403,7 @@ static char *sHelp[] = {
 
 BOOL Unsupported(char *args)
 {
-    dprint("UNSUPPORTED %s\n", args);
+    printline("UNSUPPORTED %s", args);
 
     return( TRUE );
 }    
@@ -401,26 +411,201 @@ BOOL Unsupported(char *args)
 
 BOOL CmdHelp(char *args)
 {
-    dprint("Help: %s\n", args);
+#if 0
+    DWORD nLine = 0;
 
+    Multiline(TRUE);
+
+    while( sHelp[nLine] != NULL )
+    {
+        if( printline(sHelp[nLine])==TRUE)
+            break;
+
+        nLine++;
+    }
+
+    Multiline(FALSE);
+#endif
     return( FALSE );
+}    
+
+
+BOOL CmdCls(char *args)
+{
+    DWORD nLines = deb.wcmd.nLines;
+
+    dprint("%c%c%c", DP_SETCURSOR, 0, deb.wcmd.yTop);
+
+    while( nLines-- )
+        dputc('\n');
+
+    ClearHistory();
+    PrintCmd(NULL, 0);
+
+    return( TRUE );
+}    
+
+
+BOOL CmdColor(char *args)
+{
+    DWORD value;
+    BYTE bColors[5];
+    int i;
+
+    if( *args==0 )
+    {
+        printline("Colors are %02X %02X %02X %02X %02X",
+                deb.colors[0], deb.colors[1], deb.colors[2], deb.colors[3], deb.colors[4] );
+    }
+    else
+    if( *args=='*' )        // color *   will re-initialize colors
+    {
+        deb.colors[0] = 0x07;
+        deb.colors[1] = 0x0B;
+        deb.colors[2] = 0x71;
+        deb.colors[3] = 0x30;
+        deb.colors[4] = 0x02;
+
+        RecalculateWindows();
+    }
+    else
+    {
+        nEvalDefaultBase = 16;
+
+        for( i=0; i<5; i++)
+        {
+            value = nEvaluate(args, &args);
+            if( value > 0xFF )
+                goto ColSyntaxError;
+            bColors[i] = value & 0xFF;
+            if( i<4 && *args==0 )
+                goto ColSyntaxError;
+        }
+
+        if( *args==0 )
+        {
+            memcpy(&deb.colors, &bColors, 5);
+            RecalculateWindows();
+
+            return( TRUE );
+        }
+
+ColSyntaxError:
+        printline(sSyntaxError);
+    }
+
+    return( TRUE );
+}    
+
+
+BOOL CmdW(char *args, TWnd *pWnd)
+{
+    DWORD value;
+
+    nEvalDefaultBase = 10;
+
+    value = nEvaluate(args, &args);
+    if( value > deb.nLines - 2 )
+        value = deb.nLines - 2;
+
+    if( value != 0 )
+    {
+        pWnd->nLines = value;
+        pWnd->fVisible = TRUE;
+    }
+    else
+    {
+        pWnd->fVisible = !pWnd->fVisible;
+    }
+
+    while( RecalculateWindows()==FALSE )
+        pWnd->nLines--;
+
+    return( TRUE );
+}    
+
+BOOL CmdWr(char *args)
+{
+    return( CmdW(args, &deb.wr) );
+}
+
+BOOL CmdWd(char *args)
+{
+    return( CmdW(args, &deb.wd) );
+}
+
+BOOL CmdWc(char *args)
+{
+    return( CmdW(args, &deb.wc) );
+}
+
+
+BOOL CmdEval(char *args)
+{
+    DWORD value;
+
+    nEvalDefaultBase = 16;
+
+    value = nEvaluate(args, &args);
+
+    printline("Hex=%08X  Dec=%08d", value, value);
+
+    return( TRUE );
+}
+
+
+BOOL CmdCpu(char *args)
+{
+    Multiline(TRUE);
+
+    printline("Processor Registers");
+    printline("-------------------");
+    printline("CS:EIP=%04X:%08X    SS:ESP=%04X:%08X", 
+        deb.r->pmCS, deb.r->eip, deb.r->SS, deb.r->esp );
+    printline("EAX=%08X   EBX=%08X   ECX=%08X   EDX=%08X",
+        deb.r->eax, deb.r->ebx, deb.r->ecx, deb.r->edx );
+    printline("ESI=%08X   EDI=%08X   EBP=%08X   EFL=%08X",
+        deb.r->esi, deb.r->edi, deb.r->ebp, deb.r->eflags );
+    printline("DS=%04X   ES=%04X   FS=%04X   GS=%04X", 
+        deb.r->pmDS, deb.r->pmES, deb.r->pmFS, deb.r->pmGS );
+    printline("CR0=%08X", deb.sysreg.cr0 );
+    printline("CR2=%08X", deb.sysreg.cr2 );
+    printline("CR3=%08X", deb.sysreg.cr3 );
+    printline("CR4=%08X", deb.sysreg.cr4 );
+
+    printline("DR0=%08X", deb.sysreg.dr0 );
+    printline("DR1=%08X", deb.sysreg.dr1 );
+    printline("DR2=%08X", deb.sysreg.dr2 );
+    printline("DR3=%08X", deb.sysreg.dr3 );
+    printline("DR6=%08X", deb.sysreg.dr6 );
+    printline("DR7=%08X", deb.sysreg.dr7 );
+    printline("EFL=%04X", deb.r->eflags );
+
+    Multiline(FALSE);
+
+    return( TRUE );
 }    
 
 
 BOOL CmdGdt(char *args)
 {
-    DWORD lines = deb.wcmd.nLines - 1;
     char *sType;
     TGDT_Gate *pGdt;
     int count;
     DWORD limit;
+    BOOL fEsc = FALSE;
 
     // Set the command window header line
+
     dprint("%c%c%c%c", DP_SAVEXY, DP_SETCURSOR, 0, deb.wcmd.yTop - 1);
+    dputc(DP_SETWRITEATTR);dputc(deb.colors[COL_LINE]);
     dprint("Sel---Type--------Base------Limit-----DPL--Attributes---------------------------\n");
+    dputc(DP_SETWRITEATTR);dputc(deb.colors[COL_NORMAL]);
     dputc(DP_RESTOREXY);
 
-    dprint("GDTbase=%08X  Limit=%04X\n", GET_DESC_BASE(&deb.gdt), deb.gdt.limit );
+    Multiline(TRUE);
+
+    printline("GDTbase=%08X  Limit=%04X", GET_DESC_BASE(&deb.gdt), deb.gdt.limit );
 
     pGdt = deb.pGdt + 1;
 
@@ -444,7 +629,7 @@ BOOL CmdGdt(char *args)
 
         // Print the descriptor value
 
-        dprint("%04X  %s  %08X  %08X  %d    %s\r", 
+        fEsc = printline("%04X  %s  %08X  %08X  %d    %s",
                 count * sizeof(TGDT_Gate), 
                 sType,
                 GET_GDT_BASE(pGdt),
@@ -452,82 +637,84 @@ BOOL CmdGdt(char *args)
                 pGdt->dpl,
                 pGdt->present? "P ":"NP");
 
-
-        // We filled up screenful of data, ask for more...
-
-        if( lines-- == 0 )
-        {
-            dprint("%c%c%c%c%s%c", DP_SAVEXY, DP_SETCURSOR, 0, deb.nLines - 1, sScroll, DP_RESTOREXY);
-
-            if( GetKey(TRUE)==ESC )
-                count = (deb.gdt.limit + 1) / sizeof(TGDT_Gate);    // Force exit
-
-            lines = deb.wcmd.nLines;
-        }
-
-        // Ok, give it a new line...
-        dputc('\n');
+        if( fEsc==TRUE )
+            break;
     }
+
+    Multiline(FALSE);
 
     return( TRUE );
 }    
 
+
 /******************************************************************************
 *                                                                             *
-*   void EnterDebugger(void)                                                  *
+*   BOOL RecalculateWindows(void)                                             *
 *                                                                             *
 *******************************************************************************
 *
-*   Debugger main loop
+*   Recalculates window sizes and returns the status of the current size
+*   requests.
+*
+*   Returns:
+*       TRUE - all requested window 'nLines' are correct
+*       FALSE - can not fit windows using those 'nLines' - must retry!
 *
 ******************************************************************************/
-void EnterDebugger(void)
+BOOL RecalculateWindows()
 {
-    BOOL fContinue = TRUE;
-    char *p;
-    int i;
     DWORD nLine;
-
-
-    dprint("%c", DP_SAVEBACKGROUND);
-
-    // Clear the initial screen and reset the cursor
-    dprint("%c", DP_CLS );
-
-    //=========================================================================
-    // Recalculate window locations based on visibility and number of lines
-
+    
     nLine = 0;
 
     if( deb.wr.fVisible )
     {
         deb.wr.yTop = 0;
         deb.wr.yBottom = 2;
-        nLine = 2;
+        nLine = 3;                      // First available line
     }
 
     if( deb.wd.fVisible )
     {
-        deb.wd.yTop = ++nLine;
+        nLine++;                        // Skip the header line
+        deb.wd.yTop = nLine;
         nLine += deb.wd.nLines;
-        deb.wd.yBottom = nLine;
+        deb.wd.yBottom = nLine - 1;     // Last line
+
+        if( nLine >= deb.nLines - 2 )
+            return( FALSE );
     }
 
     if( deb.wc.fVisible )
     {
-        deb.wc.yTop = ++nLine;
+        nLine++;                        // Skip the header line
+        deb.wc.yTop = nLine;
         nLine += deb.wc.nLines;
-        deb.wc.yBottom = nLine;
+        deb.wc.yBottom = nLine - 1;     // Last line
+
+        if( nLine >= deb.nLines - 2 )
+            return( FALSE );
     }
+    //  et cetera...
 
     // Command window is always visible
 
-    deb.wcmd.yTop = ++nLine;
+    nLine++;                            // Skip the header line
+    deb.wcmd.yTop = nLine;
     deb.wcmd.yBottom = deb.nLines - 2;
     deb.wcmd.nLines = deb.wcmd.yBottom - deb.wcmd.yTop;
-    //  et cetera...
 
-    //=========================================================================
+    if( nLine >= deb.nLines - 2 )
+        return( FALSE );
+
+    // Clear the screen and reset the cursor
+
+    dputc(DP_CLS);
+
+    // Set up the autoscroll region of the command buffer
+
+    dprint("%c%c%c", DP_SETSCROLLREGION, deb.wcmd.yTop, deb.wcmd.yBottom );
+
     // Start painting display...
 
     if( deb.wr.fVisible )
@@ -545,23 +732,62 @@ void EnterDebugger(void)
         PrintCode();
     }
 
-    //=========================================================================
-                                   
-    // Now we know what's the scroll region so we can set it up
+    // Print the content of the command buffer into the command window
+    
+    PrintCmd(NULL, 0);
 
-    dprint("%c%c%c", DP_SETSCROLLREGION, deb.wcmd.yTop, deb.wcmd.yBottom );
+    return( TRUE );
+}   
+ 
 
+/******************************************************************************
+*                                                                             *
+*   void EnterDebugger(void)                                                  *
+*                                                                             *
+*******************************************************************************
+*
+*   Debugger main loop
+*
+******************************************************************************/
+void EnterDebugger(void)
+{
+    BOOL fContinue = TRUE;
+    char *p;
+    int i;
+
+    AddHistory("LinIce (C) 2000 by Goran Devic");
+    AddHistory("------------------------------");
+
+    dprint("%c", DP_SAVEBACKGROUND);
+
+    // Recalculate window locations based on visibility and number of lines
+    // and repaint all windows
+
+    RecalculateWindows();
+
+    // Read system register file
+
+    GetSysreg(&deb.sysreg);
+
+    deb.codeSel    = 0x18;
+    deb.codeOffset = deb.r->eip;
 
     while( TRUE )
     {
         // Print the command window header line
 
         dprint("%c%c%c%c", DP_SAVEXY, DP_SETCURSOR, 0, deb.wcmd.yTop - 1);
+        dputc(DP_SETWRITEATTR);dputc(deb.colors[COL_LINE]);
         dprint("--kernel------------------------------------------------------------------------\n");
+        dputc(DP_SETWRITEATTR);dputc(deb.colors[COL_NORMAL]);
         dputc(DP_RESTOREXY);
 
 
         GetCommand( deb.nLines - 2, sCmd );
+
+        // Add the new line into the command history buffer
+
+        AddHistory(sCmd);
 
         // Find the first non-space character
 
@@ -577,20 +803,21 @@ void EnterDebugger(void)
                 break;
         }
 
-        // Print the new command line as it was typed
-        dprint("\n");
-
         if( i>= 0 )
         {
-            // Command found !!!!  Call its handler code.
+            // Command found !!!!  Find the first non-space character of argument
 
-//dprint("Command: %s   %08X  %s\n", Cmd[i].sCmd, Cmd[i].pfnCommand, Cmd[i].sSyntax );
-//return;
+            p += Cmd[i].nLen;
+            while( (*p==' ') && (*p!=0) ) p++;
 
-            fContinue = (Cmd[i].pfnCommand)( p + Cmd[i].nLen );
+            // Call the command function handler
+
+            fContinue = (Cmd[i].pfnCommand)( p );
 
             if( fContinue==FALSE )
+            {
                 return;
+            }
         }
     }
 }    
