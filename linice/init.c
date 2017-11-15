@@ -129,6 +129,11 @@ int InitPacket(PTINITPACKET pInit)
                 // Set default values for initial windows:
                 // Visible: registers, data and code windows and, of course, history
 
+                pWin->l.fVisible = TRUE;
+                pWin->l.nLines   = 4;
+
+
+
                 pWin->r.fVisible = TRUE;
                 pWin->r.nLines   = 3;
                 pWin->d.fVisible = TRUE;
@@ -192,7 +197,7 @@ int InitPacket(PTINITPACKET pInit)
 
                                         InitEdit();
 
-                                        // Set the default keyboard layout to English
+                                        // Set different default values
 
                                         pIce->layout = LAYOUT_US;
 

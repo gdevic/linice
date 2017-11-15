@@ -32,7 +32,8 @@
 *   DATE     DESCRIPTION OF CHANGES                               AUTHOR      *
 * --------   ---------------------------------------------------  ----------- *
 * 4/28/2000  Original                                             Goran Devic *
-* 5/4/2000   Modified for LinIce                                  Goran Devic *
+* 5/04/2000  Modified for LinIce                                  Goran Devic *
+* 1/13/2002  Cleanup from vmsim; setup for better scanner         Goran Devic *
 * --------   ---------------------------------------------------  ----------- *
 *******************************************************************************
 *   Important Defines                                                         *
@@ -165,51 +166,11 @@ typedef struct
     BYTE    args;               // Number of addressing codes that follow
     BYTE    dest;               // Destination operand addressing code
     BYTE    src;                // Source operand addressing code
-    BYTE    thrid;              // Third operand addressing code
-    BYTE    v_instruction;      // Virtual instruction index
+    BYTE    third;              // Third operand addressing code
+    BYTE    avail;              // Available for future use
     BYTE    access;             // Instruction data access type
     BYTE    flags;              // Miscellaneous flags
 } PACKED TOpcodeData;
-
-// `access' field:
-// Data access flags are used with memory access instructions
-
-#define INSTR_READ                  0x80      // Faulting instruction reads memory
-#define INSTR_WRITE                 0x40      // Faulting instruction writes to memory
-#define INSTR_READ_WRITE            0x20      // Faulting instruction is read-modify-write
-
-// Low nibble contains the data length code - do not change these values as
-// they represent the data width value as well
-
-#define INSTR_BYTE                  0x01      // Byte access instruction
-#define INSTR_WORD                  0x02      // Word access instruction
-#define INSTR_WORD_DWORD            0x03      // Word or dword, depending on operand size
-#define INSTR_DWORD                 0x04      // Dword access instruction
-
-// `flags' field:
-// Disassembler flags; bottom 4 bits are used by the scanner flags
-
-#define DIS_SPECIAL                 0x80      // Special opcode
-#define DIS_NAME_FLAG               0x40      // Name changes
-#define   DIS_GETNAMEFLAG(flags)    (((flags)>>6)&1)
-#define DIS_COPROC                  0x20      // Coprocessor instruction
-#define DIS_MODRM                   0x10      // Use additional Mod R/M byte
-
-// Scanner enums: 4 bits wide
-
-#define SCAN_NATIVE                 0x0     // Native instruction are default 0
-#define SCAN_JUMP                   0x1     // Evaluate new path
-#define SCAN_COND_JUMP              0x2     // Evaluate both paths
-#define SCAN_TERMINATING            0x3     // Terminating instruction needs virtualization
-#define SCAN_TERM_PMODE             0x4     // Terminating instruction in protected mode only
-#define SCAN_SINGLE_STEP            0x5     // Single-step instruction
-
-// Define values stored in meta pages (bits [7:4])
-
-#define META_NATIVE                 0x0     // Native instruction are default 0
-#define META_UNDEF                  0x1     // Undefined/illegal instruction
-#define META_TERMINATING            0x2     // Terminating instruction
-#define META_SINGLE_STEP            0x3     // Execute natively single step
 
 /******************************************************************************
 *                                                                             *

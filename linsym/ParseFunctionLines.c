@@ -138,7 +138,7 @@ BOOL ParseFunctionLines(int fd, int fs, BYTE *pBuf)
                         // as well as the function ending address. Fill in the
                         // missing information and rewrite the header
                         Header.dwSize       = sizeof(TSYMFNLIN) + sizeof(TSYMFNLIN1) * (nLines-1);
-                        Header.dwEndAddress = Header.dwStartAddress + pStab->n_value;
+                        Header.dwEndAddress = Header.dwStartAddress + pStab->n_value - 1;
                         Header.nLines       = nLines;
 
                         // If we did not find any line numbers, all we do here is

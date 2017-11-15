@@ -68,6 +68,9 @@ static TADDRDESC Addr = { 0, 0 };
 *                                                                             *
 ******************************************************************************/
 
+extern void SetSymbolContext(WORD wSel, DWORD dwOffset);
+extern int BreakpointQuery(TADDRDESC Addr);
+
 /******************************************************************************
 *                                                                             *
 *   Functions                                                                 *
@@ -76,14 +79,15 @@ static TADDRDESC Addr = { 0, 0 };
 
 /******************************************************************************
 *                                                                             *
-*   BYTE GetCodeLine(PTADDRDESC pAddr)                                        *
+*   BYTE GetCodeLine(PTADDRDESC pAddr, BOOL fDecodeExtra)                     *
 *                                                                             *
 *******************************************************************************
 *
-*   Prints a disassembly line into the sCodeLine buffer.
+*   Prints a disassembly line into the sCodeLine buffer, a global string buffer.
 *
 *   Where:
 *       pAddr is the address of the requested code
+*       fDecodeExtra if we are able to print some extra info (jump/no jump...)
 *
 *   Returns:
 *       size in bytes of the addressed instruction len
@@ -91,15 +95,19 @@ static TADDRDESC Addr = { 0, 0 };
 *       sCodeLine contains the disassembly of the pAddr-addressed instruction
 *
 ******************************************************************************/
-static BYTE GetCodeLine(PTADDRDESC pAddr)
+static BYTE GetCodeLine(PTADDRDESC pAddr, BOOL fDecodeExtra)
 {
     TDISASM dis;
     int i, pos;
     BYTE bLen;
+    int eCondJump;                      // Conditional jump condition index
+    BOOL fJump;                         // Conditional jump, jump decision
+    DWORD eflags;                       // Temp deb.r->eflags
+    DWORD ecx;                          // Temp cx or ecx for conditional jump
 
     // Disassemble the current instruction
 
-    dis.dwFlags  = DIS_DATA32 | DIS_ADDRESS32;
+    dis.bState  = DIS_DATA32 | DIS_ADDRESS32;
     dis.wSel = pAddr->sel;
     dis.dwOffset = pAddr->offset;
     dis.szDisasm = buf;
@@ -135,6 +143,71 @@ static BYTE GetCodeLine(PTADDRDESC pAddr)
 
     // Append the disassembly buffer into the final sCodeLine buffer
     strcat(sCodeLine, buf);
+
+    // If we are allowed to print some extra information, do it here:
+    if( fDecodeExtra )
+    {
+        eCondJump = -1;
+
+        // If the instruction is a conditional jump, decipher if we will jump or not
+        if( (dis.bFlags & SCAN_MASK)==SCAN_COND_JUMP )
+        {
+            // There are 3 blocks of instructions with SCAN_COND_JUMP:
+            //  1) Opcodes 0x70 - 0x7F                       |
+            //  2) Opcode 0x0F followed by 0x80 - 0x8F       / same pattern
+            //  3) 4 Opcodes at 0xE0 - 0xE4
+
+            if( dis.bCodes[0]>=0x70 && dis.bCodes[0]<=0x7F )
+                eCondJump = dis.bCodes[0]-0x70;
+            else
+            if( dis.bCodes[0]==0x0F && dis.bCodes[1]>=0x80 && dis.bCodes[1]<=0x8F )
+                eCondJump = dis.bCodes[1]-0x80;
+            else
+            if( dis.bCodes[0]>=0xE0 && dis.bCodes[0]<=0xE3 )
+                eCondJump = dis.bCodes[0]-0xE0 + 16;
+
+            fJump = FALSE;              // Assume we will not jump
+            eflags = deb.r->eflags;
+
+            // Assign the proper width of the ecx register to compare
+            if( dis.bState & DIS_DATA32 )
+                ecx = deb.r->ecx;
+            else
+                ecx = deb.r->ecx & 0xFFFF;
+
+            switch( eCondJump )
+            {
+                case 0x00: /* jo   */ if(  eflags&OF_MASK     ) fJump = TRUE;  break;
+                case 0x01: /* jno  */ if( (eflags&OF_MASK)==0 ) fJump = TRUE;  break;
+                case 0x02: /* jb   */ if(  eflags&CF_MASK     ) fJump = TRUE;  break;
+                case 0x03: /* jnb  */ if( (eflags&CF_MASK)==0 ) fJump = TRUE;  break;
+                case 0x04: /* jz   */ if(  eflags&ZF_MASK     ) fJump = TRUE;  break;
+                case 0x05: /* jnz  */ if( (eflags&ZF_MASK)==0 ) fJump = TRUE;  break;
+                case 0x06: /* jbe  */ if(  eflags&CF_MASK    ||   eflags&ZF_MASK     ) fJump = TRUE;  break;
+                case 0x07: /* jnbe */ if( (eflags&CF_MASK)==0 && (eflags&ZF_MASK)==0 ) fJump = TRUE;  break;
+                case 0x08: /* js   */ if(  eflags&SF_MASK     ) fJump = TRUE;  break;
+                case 0x09: /* jns  */ if( (eflags&SF_MASK)==0 ) fJump = TRUE;  break;
+                case 0x0A: /* jp   */ if(  eflags&PF_MASK     ) fJump = TRUE;  break;
+                case 0x0B: /* jnp  */ if( (eflags&PF_MASK)==0 ) fJump = TRUE;  break;
+                case 0x0C: /* jl   */ if( SF_VALUE(eflags) != OF_VALUE(eflags) ) fJump = TRUE;  break;
+                case 0x0D: /* jnl  */ if( SF_VALUE(eflags) == OF_VALUE(eflags) ) fJump = TRUE;  break;
+                case 0x0E: /* jle  */ if(  eflags&ZF_MASK     && (SF_VALUE(eflags) != OF_VALUE(eflags)) ) fJump = TRUE;  break;
+                case 0x0F: /* jnle */ if( (eflags&ZF_MASK)==0 && (SF_VALUE(eflags) == OF_VALUE(eflags)) ) fJump = TRUE;  break;
+
+                case 0x10: /* lpne */ if( (eflags&ZF_MASK)==0 && (ecx!=0) ) fJump = TRUE;  break;
+                case 0x11: /* lpe  */ if(  eflags&ZF_MASK     && (ecx!=0) ) fJump = TRUE;  break;
+                case 0x12: /* loop */ if( ecx!=0 ) fJump = TRUE;  break;
+                case 0x13: /* jcxz */ if( ecx==0 ) fJump = TRUE;  break;
+            }
+
+            // Finally, append the resulting string
+            // TODO: Add output token for right alignment of a text (nice)
+            if( fJump==TRUE )
+                strcat(sCodeLine, " (jump)");
+            else
+                strcat(sCodeLine, " (no jump)");
+        }
+    }
 
     // Make the string lowercased if the variable was set so
     if( deb.fLowercase==TRUE )
@@ -173,7 +246,7 @@ char *GetSourceLine(WORD *pwLine, PTADDRDESC pAddr)
         // Found the function that contains our given address, find the offset
         // inside the function that would reveal the source fild ID and line number
 
-        pLine = SymFnLin2Line(pwLine, pFnLin, pAddr->offset);
+        pLine = SymFnLin2LineExact(pwLine, pFnLin, pAddr->offset);
 
         return( pLine );
     }
@@ -267,13 +340,22 @@ void CodeDraw(BOOL fForce)
 
         while( nLine <= maxLines )
         {
-            // If the address is the current CS:EIP, invert the line color
+            // If the address is the current CS:EIP, invert the line color;
+            // In the same token, send the argument to signal the current cs:eip
             if( Addr.sel==deb.r->cs && Addr.offset==deb.r->eip )
-                col = COL_REVERSE;
+                col = COL_REVERSE,
+                nLen = GetCodeLine(&Addr, TRUE);
             else
-                col = COL_NORMAL;
-
-            nLen = GetCodeLine(&Addr);      // Get the disassembly of the current line anyways
+            {
+                // If a current address contains a breakpoint, highlight it
+                if( BreakpointQuery(Addr) >= 0 )
+                    col = COL_BOLD;
+                else
+                    col = COL_NORMAL;
+                
+                nLen = GetCodeLine(&Addr, FALSE);
+            }
+            
             pLine = sCodeLine;              // Print the default disassembly
 
             // If the source mode is mixed machine code and disassembly,
@@ -344,14 +426,16 @@ void CodeScroll(int Xdir, int Ydir)
     // Scrolling up is really tricky with the Intel x86 machine code.
     // We use the assumption that if you disassemble a lot of code, it
     // eventually 'fixes' itself.
+
+    // TODO: We could also look up for a symbol in a symbol table that is close
     void CodeScrollLineUp()
     {
 #define MAX_UNASM_BACKTRACE     64      // How many bytes we unassemble to find the start
         BYTE bSizes[MAX_UNASM_BACKTRACE];
         int i;                          // Generic counter
 
+        Dis.bState   = DIS_DATA32 | DIS_ADDRESS32;
         Dis.wSel     = deb.codeTopAddr.sel;
-        Dis.dwFlags  = DIS_DATA32 | DIS_ADDRESS32;
         Dis.dwOffset = deb.codeTopAddr.offset - MAX_UNASM_BACKTRACE;
 
         i = 0;
@@ -461,7 +545,7 @@ void CodeScroll(int Xdir, int Ydir)
 
                     Dis.wSel     = deb.codeTopAddr.sel;
                     Dis.dwOffset = deb.codeTopAddr.offset;
-                    Dis.dwFlags  = DIS_DATA32 | DIS_ADDRESS32;
+                    Dis.bState   = DIS_DATA32 | DIS_ADDRESS32;
 
                     bLen = DisassemblerLen(&Dis);
                     deb.codeTopAddr.offset += bLen;
@@ -473,8 +557,8 @@ void CodeScroll(int Xdir, int Ydir)
                     // we can continue at the bottom
 
                     Dis.wSel     = deb.codeTopAddr.sel;
-                    Dis.dwFlags  = DIS_DATA32 | DIS_ADDRESS32;
                     Dis.dwOffset = deb.codeTopAddr.offset;
+                    Dis.bState   = DIS_DATA32 | DIS_ADDRESS32;
 
                     for(i=0; i<pWin->c.nLines-1; i++)
                     {
@@ -543,7 +627,7 @@ BOOL cmdDot(char *args, int subClass)
 {
     // Basically reset the code view to what comes by default on break
 
-    SetCurrentSymbolContext();
+    SetSymbolContext(deb.r->cs, deb.r->eip);
 
     CodeDraw(TRUE);
 

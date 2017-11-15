@@ -71,7 +71,7 @@ extern void ice_free_heap(BYTE *pHeap);
 extern struct module *FindModule(const char *name);
 
 BOOL SymbolTableRemove(char *pTableName, TSYMTAB *pRemove);
-void SymTabRelocate(TSYMTAB *pSymTab, int offCode, int offData);
+void SymTabRelocate(TSYMTAB *pSymTab, int pReloc[], int factor);
 
 /******************************************************************************
 *                                                                             *
@@ -142,6 +142,7 @@ int UserAddSymbolTable(void *pSymUser)
                 if( pPriv )
                 {
                     INFO(("Allocated %d bytes for private symbol table structure\n", sizeof(TSYMPRIV) ));
+                    memset(pPriv, 0, sizeof(TSYMPRIV));
 
                     // Copy the complete symbol table from the use space
                     if( copy_from_user(pSymTab, pSymUser, SymHeader.dwSize)==0 )
@@ -177,9 +178,6 @@ int UserAddSymbolTable(void *pSymUser)
                                 // If the symbol table being loaded describes a kernel module, we need to
                                 // see if that module is already loaded, and if so, relocate its symbols
 
-                                pPriv->relocCode = 0;
-                                pPriv->relocData = 0;
-
                                 // Try to find if a module with that symbol name has already been loaded
                                 image = FindModule(pSymTab->sTableName);
                                 if( image )
@@ -198,8 +196,8 @@ int UserAddSymbolTable(void *pSymUser)
                                         // Get the real kernel address of the init_module function after relocation
                                         pInitFunctionOffset = (BYTE *) image->init;
                             
-                                        // Store private reloc adjustment values
-                                        pSymTab->pPriv->relocCode = (int)(pInitFunctionOffset - dwInitFunctionSymbol);
+                                        // Store private reloc adjustment value for code section
+                                        pSymTab->pPriv->reloc[0] = (int)(pInitFunctionOffset - dwInitFunctionSymbol);
                         
                                         // --- relocating data section ---
                         
@@ -207,29 +205,30 @@ int UserAddSymbolTable(void *pSymUser)
                                         pReloc = (TSYMRELOC *) SymTabFindSection(pSymTab, HTYPE_RELOC);
                                         if( pReloc )
                                         {
-//                                            dprinth(1, "refOffset=%08X symOffset=%08X", pReloc->refOffset, pReloc->symOffset );
-                        
-                                            // Find the address within the code segment from which we will read the offset to
-                                            // our data. Relocation block contains the relative offset from the init_module function
-                                            // to our dword sample that we need to take.
-                        
-                                            dwDataReloc = *(DWORD *) ((DWORD)image->init - pReloc->refOffset);
-                        
-                                            pSymTab->pPriv->relocData = dwDataReloc - pReloc->symOffset;
-                        
+                                            int i;
+
+                                            for(i=1; i<MAX_SYMRELOC; i++)
+                                            {
+                                                // Find the address within the code segment from which we will read the offset to
+                                                // our data. Relocation block contains the relative offset from the init_module function
+                                                // to our dword sample that we need to take.
+                                                if( pReloc->list[i].refFixup )
+                                                {
+                                                    dwDataReloc = *(DWORD *) ((DWORD)image->init + pReloc->list[i].refFixup);
+                                                    pSymTab->pPriv->reloc[i] = dwDataReloc - pReloc->list[i].refOffset;
+                                                }
+                                            }                        
                                         }
                                         else
                                         {
                                             // There was not a single global variable to use for relocation. Odd, but
                                             // possible... In that case it does not really matter not to relocate data...
                         
-                                            dprinth(1, "Symbol table missing HTYPE_RELOC so setting data==code");
-                        
-                                            pSymTab->pPriv->relocData = pSymTab->pPriv->relocCode;
+                                            dprinth(1, "Symbol table missing HTYPE_RELOC");
                                         }
                                 
                                         // Relocate symbol table by the required offset
-                                        SymTabRelocate(pSymTab, pSymTab->pPriv->relocCode, pSymTab->pPriv->relocData);
+                                        SymTabRelocate(pSymTab, pSymTab->pPriv->reloc, 1);
                                     }
                                 }
 
@@ -614,7 +613,7 @@ TSYMSOURCE *SymTabFindSource(TSYMTAB *pSymTab, WORD fileID)
 
 /******************************************************************************
 *                                                                             *
-*   void SymTabRelocate(TSYMTAB *pSymTab, int offCode, int offData)           *
+*   void SymTabRelocate(TSYMTAB *pSymTab, int pReloc[], int factor            *
 *                                                                             *
 *******************************************************************************
 *
@@ -623,11 +622,11 @@ TSYMSOURCE *SymTabFindSource(TSYMTAB *pSymTab, WORD fileID)
 *
 *   Where:
 *       pSymTab is the pointer to a symbol table to relocate
-*       offCode is the code symbols address offset value
-*       offData is the data symbols address offset value
+*       pReloc is address of array of relocation values for each symbol type
+*       factor is 1/-1 for relocation direction
 *
 ******************************************************************************/
-void SymTabRelocate(TSYMTAB *pSymTab, int offCode, int offData)
+void SymTabRelocate(TSYMTAB *pSymTab, int pReloc[], int factor)
 {
     TSYMHEADER *pHead;                  // Generic section header
     DWORD count;
@@ -636,8 +635,8 @@ void SymTabRelocate(TSYMTAB *pSymTab, int offCode, int offData)
     TSYMGLOBAL1 *pGlobal;               // Single global item
     TSYMFNLIN   *pFnLin;                // Function lines section pointer
     TSYMFNSCOPE *pFnScope;              // Function scope section pointer
-    TSYMSTATIC  *pStatic;               // Static symbols section pointer
-    TSYMSTATIC1 *pStatic1;              // Single static item
+//  TSYMSTATIC  *pStatic;               // Static symbols section pointer
+//  TSYMSTATIC1 *pStatic1;              // Single static item
 
     if( pSymTab )
     {
@@ -650,25 +649,16 @@ void SymTabRelocate(TSYMTAB *pSymTab, int offCode, int offData)
             {
                 case HTYPE_GLOBALS:
 
-                    // Data and code are relocated differently
-
                     pGlobals = (TSYMGLOBAL *) pHead;
                     pGlobal  = &pGlobals->global[0];
 
                     for(count=0; count<pGlobals->nGlobals; count++, pGlobal++ )
                     {
-                        if( (pGlobal->bFlags & 1)==0 )
-                        {
-                            // Relocating a code entry
-                            pGlobal->dwStartAddress += offCode;
-                            pGlobal->dwEndAddress   += offCode;
-                        }
-                        else
-                        {
-                            // Relocating a data entry
-                            pGlobal->dwStartAddress += offData;
-                            pGlobal->dwEndAddress   += offData;
-                        }
+                        // pGlobal->bFlags contains the symbol segment that is index
+                        // into the relocation array for that segment type
+
+                        pGlobal->dwStartAddress += pReloc[pGlobal->bFlags] * factor;
+                        pGlobal->dwEndAddress   += pReloc[pGlobal->bFlags] * factor;
                     }
                     break;
 
@@ -679,26 +669,28 @@ void SymTabRelocate(TSYMTAB *pSymTab, int offCode, int offData)
                 case HTYPE_FUNCTION_LINES:
 
                     pFnLin = (TSYMFNLIN *) pHead;
-                    pFnLin->dwStartAddress += offCode;
-                    pFnLin->dwEndAddress   += offCode;
+                    pFnLin->dwStartAddress += pReloc[0] * factor;        // [0] is .text
+                    pFnLin->dwEndAddress   += pReloc[0] * factor;
                     break;
 
                 case HTYPE_FUNCTION_SCOPE:
 
                     pFnScope = (TSYMFNSCOPE *) pHead;
-                    pFnScope->dwStartAddress += offCode;
-                    pFnScope->dwEndAddress   += offCode;
+                    pFnScope->dwStartAddress += pReloc[0] * factor;
+                    pFnScope->dwEndAddress   += pReloc[0] * factor;
                     break;
 
                 case HTYPE_STATIC:
-
+// TODO
+#if 0
                     pStatic  = (TSYMSTATIC *) pHead;
                     pStatic1 = &pStatic->list[0];
 
                     for(count=0; count<pStatic->nStatics; count++, pStatic1++ )
                     {
-                        pStatic1->dwAddress += offData;
+                        pStatic1->dwAddress += offData * factor;
                     }
+#endif
                     break;
 
                 case HTYPE_TYPEDEF:

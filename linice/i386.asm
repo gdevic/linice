@@ -33,8 +33,14 @@ global  IceIntHandlers
 global  ReadCRTC
 global  WriteCRTC
 global  inp
+
+global  MemAccess_START
 global  GetByte
+global  GetDWORD
 global  SetByte
+global  MemAccess_FAULT
+global  MemAccess_END
+
 global  strtolower
 global  memset_w
 global  memset_d
@@ -443,6 +449,8 @@ inp:
 ;       [ebp + 12 ]     offset
 ;
 ;==============================================================================
+MemAccess_START:
+
 GetByte:
         push    ebp
         mov     ebp, esp
@@ -460,15 +468,45 @@ GetByte:
 
         xor     eax, eax
         mov     al, [gs:ebx]
-        nop
-        nop
-        nop
 
         pop     gs
         pop     ebx
         pop     ebp
         ret
 
+
+;==============================================================================
+;
+;   unsigned int GetDWORD( WORD sel, DWORD offset )
+;
+;   Reads a DWORD from a memory location sel:offset
+;
+;   Where:
+;       [ebp + 8 ]      selector
+;       [ebp + 12 ]     offset
+;
+;==============================================================================
+GetDWORD:
+        push    ebp
+        mov     ebp, esp
+        push    ebx
+        push    gs
+
+        mov     ax, [ebp + 8]           ; Get the selector
+        mov     gs, ax                  ; Store it in the GS
+        mov     ebx, [ebp + 12]         ; Get the offset off that selector
+
+        ; Get a DWORD from the memory, possibly page faulting
+        ; if the memory address was not valid.  Anyhow, since
+        ; we installed PF handler, we will return 0xFFFFFFFF
+        ; in EAX register in that case
+
+        mov     eax, [gs:ebx]
+
+        pop     gs
+        pop     ebx
+        pop     ebp
+        ret
 
 ;==============================================================================
 ;
@@ -493,12 +531,22 @@ SetByte:
         mov     ebx, [ebp + 12]         ; Get the offset off that selector
 
         mov     eax, [ebp + 16]         ; Get the byte value
+
+        ; Store a byte to the memory, possibly page faulting
+        ; if the memory address was not valid.  Anyhow, since
+        ; we installed PF handler, we will return 0xFFFFFFFF
+        ; in EAX register in that case
+
         mov     [gs:ebx], al            ; Store the byte
 
+MemAccess_FAULT:
         pop     gs
         pop     ebx
         pop     ebp
         ret
+
+MemAccess_END:
+        nop
 
 
 ;==============================================================================

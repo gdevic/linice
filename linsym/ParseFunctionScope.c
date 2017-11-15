@@ -139,7 +139,7 @@ BOOL ParseFunctionScope(int fd, int fs, BYTE *pBuf)
                         // as well as the function ending address. Fill in the
                         // missing information and rewrite the header
                         Header.dwSize       = sizeof(TSYMFNSCOPE) + sizeof(TSYMFNSCOPE1) * (nTokens-1);
-                        Header.dwEndAddress = Header.dwStartAddress + pStab->n_value;
+                        Header.dwEndAddress = Header.dwStartAddress + pStab->n_value - 1;
                         Header.nTokens      = nTokens;
 
                         // Reposition the file pointer to the start of the header
@@ -301,6 +301,7 @@ BOOL ParseFunctionScope(int fd, int fs, BYTE *pBuf)
                     // Write out one token record
                     list.TokType = TOKTYPE_LBRAC;
                     list.p1      = pStab->n_value;
+                    list.p2      = 0;   // Not used
 
                     write(fd, &list, sizeof(TSYMFNSCOPE1));
 
@@ -314,6 +315,7 @@ BOOL ParseFunctionScope(int fd, int fs, BYTE *pBuf)
                     // Write out one token record
                     list.TokType = TOKTYPE_RBRAC;
                     list.p1      = pStab->n_value;
+                    list.p2      = 0;   // Not used
 
                     write(fd, &list, sizeof(TSYMFNSCOPE1));
 

@@ -49,9 +49,25 @@
 *                                                                             *
 ******************************************************************************/
 
+extern void MemAccess_START();
+extern void MemAccess_END();
+extern void MemAccess_FAULT();
+
 extern DWORD IceIntHandlers[0x30];
 extern DWORD IceIntHandler80;
 
+extern void DebuggerEnterBreak(void);
+extern void DebuggerEnterDelayedTrace(void);
+extern void DebuggerEnterDelayedArm(void);
+
+typedef void (*TDEBUGGER_STATE_FN)(void);
+
+TDEBUGGER_STATE_FN DebuggerEnter[MAX_DEBUGGER_STATE] = 
+{
+    DebuggerEnterBreak,
+    DebuggerEnterDelayedTrace,
+    DebuggerEnterDelayedArm
+};
 
 /******************************************************************************
 *                                                                             *
@@ -68,7 +84,6 @@ TIDT_Gate LinuxIdt[256];
 TIDT_Gate IceIdt[256];
 TDescriptor IceIdtDescriptor;
 
-
 /******************************************************************************
 *                                                                             *
 *   Functions                                                                 *
@@ -79,8 +94,6 @@ extern void LoadIDT(PTDescriptor pIdt);
 extern void KeyboardHandler(void);
 extern void SerialHandler(int port);
 extern void MouseHandler(void);
-
-extern void DebuggerEnter(void);
 
 /******************************************************************************
 *                                                                             *
@@ -286,7 +299,11 @@ DWORD InterruptHandler( DWORD nInt, PTREGS pRegs )
         // Be sure to enable interrupts so we can operate
         sti();
 
-        DebuggerEnter();
+        // Call the debugger entry function of the current state
+        if( pIce->eDebuggerState < MAX_DEBUGGER_STATE )
+            (DebuggerEnter[pIce->eDebuggerState])();
+        else
+            (DebuggerEnter[DEB_STATE_BREAK])();
 
         // Disable interrupts so we can mess with IDT
         cli();
@@ -337,11 +354,16 @@ DWORD InterruptHandler( DWORD nInt, PTREGS pRegs )
                 KeyboardHandler();
                 break;
 
-            case 0x0E:      // PAGE FAULT
-                if( (pRegs->eip > (DWORD) GetByte) && (pRegs->eip < (DWORD) GetByte + 50) )
+            case 0x0E:      // PAGE FAULT - we handle internal page faults
+                // from the very specific functions differently:
+                //  GetByte() and GetDWORD()
+                if( (pRegs->eip > (DWORD)MemAccess_START) && (pRegs->eip < (DWORD)MemAccess_END) )
                 {
-                    pRegs->eip += 2;            // Skip  8A 03  mov al, gs:[ebx]
-                    pRegs->eax  = 0xFFFFFFFF;   // Set invalid address value
+                    // Set the default value for invalid data into eax and
+                    // position EIP to the function epilogue
+
+                    pRegs->eax = 0xFFFFFFFF;
+                    pRegs->eip = (DWORD)MemAccess_FAULT;
 
                     break;
                 }

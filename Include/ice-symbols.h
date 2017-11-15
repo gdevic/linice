@@ -101,7 +101,7 @@ typedef struct
     DWORD dName;                        // Offset to the global symbol name string
     DWORD dwStartAddress;               // Address where the symbol starts
     DWORD dwEndAddress;                 // Address + size of the symbol
-    BYTE  bFlags;                       // [0]: Code (0), Data (1)
+    BYTE  bFlags;                       // Symbol code / data
 
 } PACKED TSYMGLOBAL1;
 
@@ -286,7 +286,7 @@ typedef struct
     WORD min;                           // File definition number
     DWORD dName;                        // Offset to the typedef name string
     DWORD dDef;                         // Offset to the typedef definition string
-
+                                        // if dDef<TYPEDEF__LAST, a basic implied type
 } PACKED TSYMTYPEDEF1;
 
 typedef struct
@@ -306,6 +306,17 @@ typedef struct
 //----------------------------------------------------------------------------
 // HTYPE_RELOC
 // Relocation information for object files (kernel modules).
+//
+// Relocation segment type is [0] - .text section (only refOffset used for init_module')
+//                            [1] - .data
+//                            [n]...
+
+typedef struct
+{
+    DWORD refFixup;                     // Fixup address difference from 'init_module'
+    DWORD refOffset;                    // Symbol real offset before relocation
+
+} PACKED TSYMRELOC1;
 
 typedef struct
 {
@@ -314,8 +325,9 @@ typedef struct
     DWORD dwSize;                       // Total size in bytes
 //  ------------- type dependent section -----------
 
-    DWORD refOffset;                    // Offset at which to take reloc sample in .text section
-    DWORD symOffset;                    // Offset of the symbol in .data section
+    WORD nReloc;                        // Number of elements in the relocation list
+
+    TSYMRELOC1 list[MAX_SYMRELOC];      // Array of symbol relocation references (fixed)
 
 } PACKED TSYMRELOC;
 

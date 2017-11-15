@@ -101,6 +101,8 @@ static char Buf[MAX_STRING];            // Temp line buffer to send line to edit
 
 extern int SerialInit(int com, int baud);
 extern void SerialPrintStat();
+extern void SetSymbolContext(WORD wSel, DWORD dwOffset);
+
 
 /******************************************************************************
 *                                                                             *
@@ -962,6 +964,10 @@ BOOL cmdSrc(char *args, int subClass)
     //  2 = Mixed source and disassembly
 
     deb.eSrc = (deb.eSrc + 1) % 3;
+
+    // Reset the symbol context
+//    SetSymbolContext(deb.codeTopAddr.sel, deb.codeTopAddr.offset);
+    SetSymbolContext(deb.r->cs, deb.r->eip);
 
     // Redraw all windows
     RecalculateDrawWindows();

@@ -153,6 +153,48 @@ BOOL cmdWc(char *args, int subClass)
 
 /******************************************************************************
 *                                                                             *
+*   BOOL cmdWl(char *args, int subClass)                                      *
+*                                                                             *
+*******************************************************************************
+*
+*   WL          - toggle locals window on/off
+*   WL [n]      - sets the locals window size (and opens it)
+*
+******************************************************************************/
+BOOL cmdWl(char *args, int subClass)
+{
+    int value;
+
+    if( *args )
+    {
+        // Argument is present - get the number of lines and activate window
+        value = GetDec(&args);
+
+        // If the number of lines was 0, close window
+        if( value==0 )
+            pWin->l.fVisible = FALSE;
+        else
+        {
+            pWin->l.fVisible = TRUE;
+            pWin->l.nLines = value + 1;
+        }
+    }
+    else
+    {
+        // No arguments - toggle open/close window
+
+        pWin->l.fVisible = !pWin->l.fVisible;
+    }
+
+    // Repaint all windows
+    RecalculateDrawWindows();
+
+    return( TRUE );
+}
+
+
+/******************************************************************************
+*                                                                             *
 *   BOOL cmdWr(char *args, int subClass)                                      *
 *                                                                             *
 *******************************************************************************

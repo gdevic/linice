@@ -33,7 +33,8 @@
 * --------   ---------------------------------------------------  ----------- *
 * 3/17/2000  Original                                             Goran Devic *
 * 4/26/2000  Major rewrite, added coprocessor instructions.       Goran Devic *
-* 5/4/2000   Modified for LinIce                                  Goran Devic *
+* 5/04/2000  Modified for LinIce                                  Goran Devic *
+* 1/13/2002  Cleanup from vmsim; setup for better scanner         Goran Devic *
 * --------   ---------------------------------------------------  ----------- *
 *******************************************************************************
 *   Include Files                                                             *
@@ -44,8 +45,8 @@
 #include "clib.h"                       // Include C library header file
 #include "ice.h"                        // Include main debugger structures
 
-#include "disassemblerdefines.h"        // Include only data declarations
 #include "disassembler.h"               // Include interface header file
+#include "disassemblerdefines.h"        // Include only data declarations
 
 /******************************************************************************
 *                                                                             *
@@ -145,15 +146,17 @@ static DWORD GetNextDword(void)
 *           wSel is the selector of the address of an instruction
 *           dwOffset is the offset of the address of an instruction
 *           (szDisasm is the address of the buffer to print a line, ignored)
-*           dwFlags contains the default operand and address bits
+*           bState contains the default operand and address bits
 *           bCodes[] is the buffer to store code bytes
 *
 *   Returns:
 *       TDisassembler:
 *           bInstrLen is set to instruction length in bytes
-*           dwFlags - has operand and address size flags adjusted
+*           bState - has operand and address size flags adjusted
 *                   - DIS_ILLEGALOP set if that was illegal instruction
 *           bCode[0..bInstrLen] contains code bytes
+*           bAccess - instruction access flags (from the instruction table)
+*           bFlags  - instruction flags (from the instruction table)
 *       BYTE - instruction length in bytes
 *
 *   pDis->wSel and pDis->dwOffset are preserved.
@@ -190,6 +193,10 @@ BYTE DisassemblerLen( PTDISASM pDis )
     nPos = 0;                           // Reset printing position
     sPtr = NULL;                        // Points to no message by default
     bMod = bReg = bRm = 0;              // Initialize these to avoid warning message
+
+    // The following are filled in only by this instruction scanner
+    pDis->dwTargetAddress = 0;
+    pDis->dwTargetData    = 0;
 
     do
     {
@@ -237,19 +244,19 @@ BYTE DisassemblerLen( PTDISASM pDis )
                 continue;
 
             case _OPSIZ:        // Operand size override - toggle
-                pDis->dwFlags ^= DIS_DATA32;
+                pDis->bState ^= DIS_DATA32;
                 continue;
 
             case _ADSIZ:        // Address size override - toggle
-                pDis->dwFlags ^= DIS_ADDRESS32;
+                pDis->bState ^= DIS_ADDRESS32;
                 continue;
 
             case _REPNE:        // REPNE/REPNZ prefix
-                pDis->dwFlags |= DIS_REPNE;
+                pDis->bState |= DIS_REPNE;
                 continue;
 
             case _REP:          // REP/REPE/REPZ prefix
-                pDis->dwFlags |= DIS_REP;
+                pDis->bState |= DIS_REP;
                 continue;
 
             case _2BESC:        // 2 byte escape code 0x0F
@@ -299,7 +306,7 @@ BYTE DisassemblerLen( PTDISASM pDis )
 IllegalOpcode:
 
 //  nPos += sprintf( pDis->szDisasm+nPos, "invalid");
-    pDis->dwFlags |= DIS_ILLEGALOP;
+    pDis->bState |= DIS_ILLEGALOP;
 
     goto DisEnd;
 
@@ -329,8 +336,8 @@ StartInstructionNoMODRM:
 //      nPos += sprintf( pDis->szDisasm+nPos, "%-6s ", sCoprocNames[ p->name ]);
 //  else
 //      nPos += sprintf( pDis->szDisasm+nPos, "%s%-6s ",
-//          sRep[DIS_GETREPENUM(pDis->dwFlags)],
-//          sNames[ p->name + (DIS_GETNAMEFLAG(p->flags) & DIS_GETDATASIZE(pDis->dwFlags)) ] );
+//          sRep[DIS_GETREPENUM(pDis->bState)],
+//          sNames[ p->name + (DIS_GETNAMEFLAG(p->flags) & DIS_GETDATASIZE(pDis->bState)) ] );
 
     // Do instruction argument processing, up to 3 times
 
@@ -349,7 +356,7 @@ StartInstructionNoMODRM:
             goto _E;
 
         case _Ew :                                         // always word size
-            pDis->dwFlags &= ~DIS_DATA32;
+            pDis->bState &= ~DIS_DATA32;
             bW = 1;
             goto _E;
 
@@ -363,7 +370,7 @@ StartInstructionNoMODRM:
 
         case _Mp :                                         // 32 or 48 bit pointer (les,lds,lfs,lss,lgs)
         case _Ep :                                         // Always a memory pointer (call, jmp)
-            if( pDis->dwFlags & DIS_DATA32 )
+            if( pDis->bState & DIS_DATA32 )
                 sPtr = sFwordPtr;
             else
                 sPtr = sDwordPtr;
@@ -374,7 +381,7 @@ StartInstructionNoMODRM:
             if( bMod == 3 )
             {
                 // Registers depending on the w field and data size
-//              nPos += sprintf(pDis->szDisasm+nPos, "%s", sRegs1[DIS_GETDATASIZE(pDis->dwFlags)][bW][bRm] );
+//              nPos += sprintf(pDis->szDisasm+nPos, "%s", sRegs1[DIS_GETDATASIZE(pDis->bState)][bW][bRm] );
 
                 break;
             }
@@ -383,7 +390,7 @@ StartInstructionNoMODRM:
                 if( bW==0 )
                 sPtr = sBytePtr;
             else
-                if( pDis->dwFlags & DIS_DATA32 )
+                if( pDis->bState & DIS_DATA32 )
                 sPtr = sDwordPtr;
             else
                 sPtr = sWordPtr;
@@ -408,7 +415,7 @@ StartInstructionNoMODRM:
             //
             // Special case when sib byte is present in 32 address encoding
             //
-            if( (bRm==4) && (pDis->dwFlags & DIS_ADDRESS32) )
+            if( (bRm==4) && (pDis->bState & DIS_ADDRESS32) )
             {
                 //
                 // Get the s-i-b byte and parse it
@@ -460,9 +467,9 @@ StartInstructionNoMODRM:
             // 16 or 32 address bit cases with mod zero, one or two
             //
             // Special cases when r/m is 5 and mod is 0, immediate d16 or d32
-            if( bMod==0 && ((bRm==6 && !(pDis->dwFlags & DIS_ADDRESS32)) || (bRm==5 && (pDis->dwFlags & DIS_ADDRESS32))) )
+            if( bMod==0 && ((bRm==6 && !(pDis->bState & DIS_ADDRESS32)) || (bRm==5 && (pDis->bState & DIS_ADDRESS32))) )
             {
-                if( pDis->dwFlags & DIS_ADDRESS32 )
+                if( pDis->bState & DIS_ADDRESS32 )
                 {
                     dwDword = NEXTDWORD;
 //                  nPos += sprintf( pDis->szDisasm+nPos," F [%08X]", (unsigned int) dwDword );
@@ -477,7 +484,7 @@ StartInstructionNoMODRM:
             }
 
             // Print the start of the line
-//          nPos += sprintf( pDis->szDisasm+nPos," H [%s", sAdr1[DIS_GETADDRSIZE(pDis->dwFlags)][ bRm ] );
+//          nPos += sprintf( pDis->szDisasm+nPos," H [%s", sAdr1[DIS_GETADDRSIZE(pDis->bState)][ bRm ] );
 
             // Offset (8 or 16) or (8 or 32) bit - 16, 32 bits are unsigned
             if( bMod==1 )
@@ -491,7 +498,7 @@ StartInstructionNoMODRM:
 
             if( bMod==2 )
             {
-                if( pDis->dwFlags & DIS_ADDRESS32 )
+                if( pDis->bState & DIS_ADDRESS32 )
                 {
                     dwDword = NEXTDWORD;
 //                  nPos += sprintf( pDis->szDisasm+nPos," J +%08X", (unsigned int) dwDword );
@@ -513,17 +520,17 @@ StartInstructionNoMODRM:
             break;
 
         case _Gv :                                         // general, (d)word register
-//          nPos += sprintf( pDis->szDisasm+nPos, "%s", sGenReg16_32[DIS_GETDATASIZE(pDis->dwFlags)][ bReg ] );
+//          nPos += sprintf( pDis->szDisasm+nPos, "%s", sGenReg16_32[DIS_GETDATASIZE(pDis->bState)][ bReg ] );
             break;
 
         case _Yb :                                         // ES:(E)DI pointer
         case _Yv :
-//          nPos += sprintf( pDis->szDisasm+nPos, "%s%s", sSegOverrideDefaultES[ bSegOverride ], sYptr[DIS_GETADDRSIZE(pDis->dwFlags)] );
+//          nPos += sprintf( pDis->szDisasm+nPos, "%s%s", sSegOverrideDefaultES[ bSegOverride ], sYptr[DIS_GETADDRSIZE(pDis->bState)] );
             break;
 
         case _Xb :                                         // DS:(E)SI pointer
         case _Xv :
-//          nPos += sprintf( pDis->szDisasm+nPos, "%s%s", sSegOverrideDefaultDS[ bSegOverride ], sXptr[DIS_GETADDRSIZE(pDis->dwFlags)] );
+//          nPos += sprintf( pDis->szDisasm+nPos, "%s%s", sSegOverrideDefaultDS[ bSegOverride ], sXptr[DIS_GETADDRSIZE(pDis->bState)] );
             break;
 
         case _Rd :                                         // general register double word
@@ -554,23 +561,26 @@ StartInstructionNoMODRM:
         case _Jb :                                         // immediate byte, relative offset
             bByte = NEXTBYTE;
 //          nPos += sprintf( pDis->szDisasm+nPos, " K short %08X", (unsigned int)(Addr.offset + (signed char)bByte) );
+            pDis->dwTargetAddress = (unsigned int)(Addr.offset + (signed char)bByte);
             break;
 
         case _Jv :                                         // immediate word or dword, relative offset
-            if( pDis->dwFlags & DIS_DATA32 )
+            if( pDis->bState & DIS_DATA32 )
             {
                 dwDword = NEXTDWORD;
 //              nPos += sprintf( pDis->szDisasm+nPos, " L %08X", (unsigned int)(Addr.offset + (signed long)dwDword) );
+                pDis->dwTargetAddress = (unsigned int)(Addr.offset + (signed long)dwDword);
             }
             else
             {
                 wWord = NEXTWORD;
 //              nPos += sprintf( pDis->szDisasm+nPos, " M %08X", (unsigned int)(Addr.offset + (signed short)wWord) );
+                pDis->dwTargetAddress = (unsigned int)(Addr.offset + (signed short)wWord);
             }
             break;
 
         case _O  :                                         // Simple word or dword offset
-            if( pDis->dwFlags & DIS_ADDRESS32 )           // depending on the address size
+            if( pDis->bState & DIS_ADDRESS32 )           // depending on the address size
             {
                 dwDword = NEXTDWORD;
 //              nPos += sprintf( pDis->szDisasm+nPos," N %s[%08X]", sSegOverride[ bSegOverride ], (unsigned int) dwDword );
@@ -588,7 +598,7 @@ StartInstructionNoMODRM:
             break;
 
         case _Iv :                                         // immediate word or dword
-            if( pDis->dwFlags & DIS_DATA32 )
+            if( pDis->bState & DIS_DATA32 )
             {
                 dwDword = NEXTDWORD;
 //              nPos += sprintf( pDis->szDisasm+nPos, " P %08X", (unsigned int) dwDword );
@@ -606,7 +616,7 @@ StartInstructionNoMODRM:
             break;
 
         case _Ap :                                         // 32 bit or 48 bit pointer (call far, jump far)
-            if( pDis->dwFlags & DIS_DATA32 )
+            if( pDis->bState & DIS_DATA32 )
             {
                 dwDword = NEXTDWORD;
                 wWord = NEXTWORD;
@@ -636,7 +646,7 @@ StartInstructionNoMODRM:
 
         case _eAX: case _eBX: case _eCX: case _eDX:
         case _eSP: case _eBP: case _eSI: case _eDI:
-//          nPos += sprintf( pDis->szDisasm+nPos, "%s", sGenReg16_32[DIS_GETDATASIZE(pDis->dwFlags)][ *pArg - _eAX ]);
+//          nPos += sprintf( pDis->szDisasm+nPos, "%s", sGenReg16_32[DIS_GETDATASIZE(pDis->bState)][ *pArg - _eAX ]);
             break;
 
         case _ST:                                          // Coprocessor ST
@@ -666,6 +676,8 @@ DisEnd:
 
     pDis->bAsciiLen = (BYTE) nPos;
     pDis->bInstrLen = bInstrLen;
+    pDis->bAccess   = p->access;
+    pDis->bFlags    = p->flags;
 
     return bInstrLen;
 }

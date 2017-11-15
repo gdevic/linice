@@ -408,9 +408,11 @@ BOOL cmdCpu(char *args, int subClass)
 BOOL cmdModule(char *args, int subClass)
 {
     int nLine = 1;                      // Line counter
-    struct module* pMod;                // Pointer to a current module
+    struct module* pMod, *pExact=NULL;  // Pointer to a current module and exact module
     int nLen = 0;                       // Assume every module
+    int count;                          // Generic counter
     BOOL fExact = FALSE;                // Assume all modules
+    const char *pModName;               // Pointer to a module name
 
     pMod = (struct module*) *pmodule;   // Get to the head of the module list
     if( pMod==NULL )
@@ -429,16 +431,25 @@ BOOL cmdModule(char *args, int subClass)
         }
 
         // Display all modules matching search criteria
-        dprinth(1, "%c%cModule   Name              Size   Syms Deps init()   cleanup() Use Flags:",
+        dprinth(nLine++, "%c%cModule   Name              Size   Syms Deps init()   cleanup() Use Flags:",
             DP_SETCOLINDEX, COL_BOLD);
 
-        for(; pMod ; pMod = pMod->next )
+        for(; pMod; pMod = pMod->next )
         {
+            // Get the pointer to a module name. We do it using a temp pointer
+            // in order to fake the kernel name from NULL to "kernel"
+            if( *pMod->name )
+                pModName = pMod->name;
+            else
+                pModName = "kernel";
+
             if( nLen != 0 )
             {
-                if( fExact && strcmp(pMod->name, args)!=0 )
+                if( fExact && strcmp(pModName, args)!=0 )
                     continue;
-                if( !fExact && strnicmp(pMod->name, args, nLen)!=0 )
+                if( fExact && strcmp(pModName, args)==0 )
+                    pExact = pMod;
+                if( !fExact && strnicmp(pModName, args, nLen)!=0 )
                     continue;
             }
 
@@ -448,7 +459,7 @@ BOOL cmdModule(char *args, int subClass)
 
             if(!dprinth(nLine++, "%08X %-16s  %-6d  %-3d  %-3d %08X %08X   %d   %2X  %s",
                     (DWORD) pMod,
-                    *pMod->name? pMod->name : "(kernel)",
+                    pModName,
                     pMod->size,
                     pMod->nsyms,
                     pMod->ndeps,
@@ -461,9 +472,36 @@ BOOL cmdModule(char *args, int subClass)
         }
 
         // For a single module, display additional info
-        if( fExact )
+        if( fExact && pExact )
         {
-//          struct module_symbol* pSym;         // Module symbols for extra info
+            struct module_symbol* pSym;         // Module symbols for extra info
+
+            // We will display a list of exported symbols for this module
+            pSym = pExact->syms;
+            if( pSym )
+            {
+                count = pExact->nsyms;
+
+                if( *pExact->name )
+                    pModName = pExact->name;
+                else
+                    pModName = "kernel";
+    
+                // Do some basic sanity check
+                if( pExact->nsyms>0 && pExact->nsyms<2000 )
+                {
+                    for(count=0; count<pExact->nsyms; count++ )
+                    {
+                        // TODO: Check the validity of these pointers before using them!
+
+                        if(!dprinth(nLine++, "%02X) %08X  %s!%s", count, pSym->value, pModName, pSym->name))
+                            break;
+
+                        pSym++;
+                    }
+                }
+            }
+    
 
             // TODO: What additional info would we like to see???
             ;

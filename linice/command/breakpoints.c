@@ -80,7 +80,7 @@ typedef struct
 
     TADDRDESC address;                  // Breakpoint address (sel:offset)
     BYTE origValue;                     // Original value that was there before INT3
-    DWORD dwLinear;                     // Linear address to store into debug register
+    DWORD dwLinear;                     // Virtual linear address of a breakpoint
 
     // Breakpoint statistics
     DWORD Hits;                         // Number of times we evaluated a bp
@@ -182,8 +182,6 @@ BOOL cmdBp(char *args, int subClass)
             switch( subClass )
             {
                 case 0:                 // subClass = 0, BC, clear a breakpoint
-                        bp[index].Flags = 0;
-
                         // Free the command line of a breakpoint and IF/DO statements
                         _kFree(pIce->hHeap, bp[index].pCmd);
 
@@ -599,6 +597,7 @@ void SetNonStickyBreakpoint(TADDRDESC Addr)
     nsbp.address = Addr;
 }
 
+#if 0
 /******************************************************************************
 *                                                                             *
 *   void ClearNonStickyBreakpoint(void)                                       *
@@ -612,6 +611,7 @@ void ClearNonStickyBreakpoint(void)
 {
     nsbp.Flags = 0;
 }
+#endif
 
 /******************************************************************************
 *                                                                             *
@@ -622,6 +622,10 @@ void ClearNonStickyBreakpoint(void)
 *   This function arms all breakpoints. This is done before returning
 *   control to the debugee.
 *
+*   Special case is if a breakpoint exists at the current cs:eip, in which
+*   case we enter the state of a delayed arm (we do a single step after
+*   which we arm all breakpoints and continue)
+*
 *   In addition to all sticky breakpoints, a single non-sticky breakpoint will
 *   be placed. This one is used as a single-shot breakpoint.
 *
@@ -631,50 +635,63 @@ void ArmBreakpoints(void)
     TADDRDESC Addr;                     // Address of a breakpoint
     int index;
 
-    // Arm a single non-sticky breakpoint, if required
-    if( nsbp.Flags & BP_ENABLED )
+    // If the breakpoint would be placed at the current cs:eip..
+    if( BreakpointCheckSpecial() )
     {
-        // Save the original byte and place int3
-        nsbp.origValue = AddrGetByte(&nsbp.address);
-        AddrSetByte(&nsbp.address, 0xCC);
+        // .. enter the delayed arm mode
+
+        pIce->eDebuggerState = DEB_STATE_DELAYED_ARM;
+
+        // Set the single-step trace mode
+        deb.r->eflags |= TF_MASK;
     }
-
-    for(index=0; index<MAX_BREAKPOINTS; index++ )
+    else
     {
-        // Place only enabled breakpoints
-
-        if( bp[index].Flags & BP_ENABLED )
+        // Arm a single non-sticky breakpoint, if required
+        if( nsbp.Flags & BP_ENABLED )
         {
-            switch( bp[index].Type )
+            // Save the original byte and place int3
+            nsbp.origValue = AddrGetByte(&nsbp.address);
+            AddrSetByte(&nsbp.address, 0xCC);
+        }
+
+        for(index=0; index<MAX_BREAKPOINTS; index++ )
+        {
+            // Place only enabled breakpoints
+
+            if( bp[index].Flags & BP_ENABLED )
             {
-                case BP_TYPE_BPX:
-                    // Save the original byte and place int3
-                    bp[index].origValue = AddrGetByte(&bp[index].address);
-                    AddrSetByte(&bp[index].address, 0xCC);
-                    break;
+                switch( bp[index].Type )
+                {
+                    case BP_TYPE_BPX:
+                        // Save the original byte and place int3
+                        bp[index].origValue = AddrGetByte(&bp[index].address);
+                        AddrSetByte(&bp[index].address, 0xCC);
+                        break;
 
-                case BP_TYPE_BPINT:
-                    break;
+                    case BP_TYPE_BPINT:
+                        break;
 
-                case BP_TYPE_BPIO:
-                    // Set the DE (Debugging Extensions) bit in CR4 so we can trap IO accesses
-                    deb.sysReg.cr4 |= BITMASK(DE_BIT);
+                    case BP_TYPE_BPIO:
+                        // Set the DE (Debugging Extensions) bit in CR4 so we can trap IO accesses
+                        deb.sysReg.cr4 |= BITMASK(DE_BIT);
 
 
-                    break;
+                        break;
 
-                case BP_TYPE_BPMB:
-                    break;
+                    case BP_TYPE_BPMB:
+                        break;
 
-                case BP_TYPE_BPMW:
-                    break;
+                    case BP_TYPE_BPMW:
+                        break;
 
-                case BP_TYPE_BPMD:
-                    break;
+                    case BP_TYPE_BPMD:
+                        break;
 
-                default:
-                    dprinth(1, "Invalid BP type %d", bp[index].Type);   // Delete this eventually
-                    break;
+                    default:
+                        dprinth(1, "Invalid BP type %d", bp[index].Type);   // Delete this eventually
+                        break;
+                }
             }
         }
     }
@@ -692,6 +709,11 @@ void ArmBreakpoints(void)
 *   In addition to all sticky breakpoints, a single non-sticky breakpoint
 *   will be disarmed (but not cleared!)
 *
+*   If we break due to our breakpoint INT3, decrement eip to position it on the
+*   valid instruction start that has been overwritten with 0xCC.
+*   We define 'our breakpoint INT3' as DR6=0 && cs:eip-1==BPx
+*   DR6=0 means we did not stop here due to any hardware or trap fault.
+*
 *   Debug registers will be cleared.
 *
 ******************************************************************************/
@@ -699,6 +721,7 @@ void DisarmBreakpoints(void)
 {
     TADDRDESC Addr;                     // Address to reset breakpoint
     int index;
+    int eBPX = -1;                      // Index of a BPX that matches cs:eip-1
 
     for(index=MAX_BREAKPOINTS-1; index>=0; index-- )
     {
@@ -714,6 +737,10 @@ void DisarmBreakpoints(void)
                     {
                         // Restore original value
                         AddrSetByte(&bp[index].address, bp[index].origValue);
+
+                        // If the current cs:eip-1 matches the bpx address, set the index
+                        if( deb.r->cs==bp[index].address.sel && deb.r->eip-1==bp[index].address.offset )
+                            eBPX = index;
                     }
                     else
                         dprinth(1, "ERROR: BP%d not 0xCC!", bp[index].Type );   // Delete this eventually
@@ -741,20 +768,43 @@ void DisarmBreakpoints(void)
         }
     }
 
+    // Print the breakpoint message
+    if( eBPX != -1 )
+    {
+        dprinth(1, "Breakpoint due to BPX %02X", eBPX);
+    }
+
     // Disarm the non-sticky breakpoint, if enabled, and disable it
     if( nsbp.Flags & BP_ENABLED )
     {
         if( AddrGetByte(&nsbp.address)==0xCC )  // Was it INT3?
         {
             AddrSetByte(&nsbp.address, nsbp.origValue);
+
+            // If the current cs:eip-1 matches the bpx address, reset the index from the default
+            if( deb.r->cs==nsbp.address.sel && deb.r->eip-1==nsbp.address.offset )
+                eBPX = MAX_BREAKPOINTS;
         }
         else
             dprinth(1, "ERROR: nsbp not 0xCC!");   // Delete this eventually
+
+        nsbp.Flags = 0;                         // Disable non-sticky breakpoint
+    }
+
+    // If the DR6=0 (no hardware breakpoint hit or a trap fault) and cs:eip-1 was a 
+    // breakpoint, decrement eip
+    if( (eBPX != -1) && (deb.sysReg.dr6 & (DR6_BS_BIT|DR6_BT_BIT|0xF))==0 )
+    {
+        deb.r->eip -= 1;
     }
 
     // Clear the DR7 register since it needs to be rebuilt anyways. This allows us to have temp
-    // non-sticky hardware breakpoints
+    // non-sticky hardware breakpoints. Also, we dont want to trigger hardware breakpoints
+    // while we are in the debugger
     deb.sysReg.dr7 = 0;
+
+    // Clear the DR6 register since CPU never does it
+    deb.sysReg.dr6 = 0;
 }
 
 
@@ -773,7 +823,7 @@ void DisarmBreakpoints(void)
 *       bp index if match is found
 *
 ******************************************************************************/
-BOOL BreakpointCheck(TADDRDESC Addr)
+int BreakpointCheck(TADDRDESC Addr)
 {
     int index;
 
@@ -820,7 +870,63 @@ BOOL BreakpointCheck(TADDRDESC Addr)
 
 /******************************************************************************
 *                                                                             *
-*   BOOL BreakpointCheckSpecial(TADDRDESC Addr)                               *
+*   int BreakpointQuery(TADDRDESC Addr)                                       *
+*                                                                             *
+*******************************************************************************
+*
+*   Checks if any breakpoint address matches given sel:offset
+*
+*   Returns:
+*       -1 if no breakpoint addresses match
+*       bp index if match is found
+*
+******************************************************************************/
+int BreakpointQuery(TADDRDESC Addr)
+{
+    int index;
+
+    for(index=0; index<MAX_BREAKPOINTS; index++ )
+    {
+        // Check only enabled breakpoints
+
+        if( bp[index].Flags & BP_ENABLED )
+        {
+            switch( bp[index].Type )
+            {
+                case BP_TYPE_BPX:
+                    if( bp[index].address.sel==Addr.sel && bp[index].address.offset==Addr.offset )
+                    {
+                        // Found a matching address!
+        
+                        return(index);
+                    }
+                    break;
+
+                case BP_TYPE_BPINT:
+                    break;
+
+                case BP_TYPE_BPIO:
+                    break;
+
+                case BP_TYPE_BPMB:
+                    break;
+
+                case BP_TYPE_BPMW:
+                    break;
+
+                case BP_TYPE_BPMD:
+                    break;
+            }
+        }
+    }
+
+    return(-1);
+}
+
+
+/******************************************************************************
+*                                                                             *
+*   BOOL BreakpointCheckSpecial(void)                                         *
 *                                                                             *
 *******************************************************************************
 *
@@ -829,11 +935,11 @@ BOOL BreakpointCheck(TADDRDESC Addr)
 *   break immediately. We check all the BPX-type breakpoints.
 *
 *   Returns:
-*       TRUE - a bpx-type breakpoint was found at the specified address
+*       TRUE - a bpx-type breakpoint was found at the cs:eip
 *       FALSE - no bpx-type breakpoints at this address
 *
 ******************************************************************************/
-BOOL BreakpointCheckSpecial(TADDRDESC Addr)
+BOOL BreakpointCheckSpecial(void)
 {
     int index;
 
@@ -846,7 +952,7 @@ BOOL BreakpointCheckSpecial(TADDRDESC Addr)
             switch( bp[index].Type )
             {
                 case BP_TYPE_BPX:
-                    if( bp[index].address.sel==Addr.sel && bp[index].address.offset==Addr.offset )
+                    if( bp[index].address.sel==deb.r->cs && bp[index].address.offset==deb.r->eip )
                     {
                         // Found a matching breakpoint!
                         return( TRUE );

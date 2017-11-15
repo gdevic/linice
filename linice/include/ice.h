@@ -76,6 +76,11 @@ typedef struct
 
     BOOL fKbdBreak;                     // Schedule break into the ICE
     BOOL fRunningIce;                   // Is ICE running?
+    DWORD eDebuggerState;               // Debugger state number
+#define DEB_STATE_BREAK             0   //  Default state
+#define DEB_STATE_DELAYED_TRACE     1
+#define DEB_STATE_DELAYED_ARM       2
+#define MAX_DEBUGGER_STATE          3
 
     int layout;                         // Keyboard layout
     char keyFn[4][12][MAX_STRING];      // Key assignments for function keys
@@ -175,6 +180,7 @@ typedef struct
     BOOL fPause;                        // Pause after a screenful of scrolling info
 
     BOOL fTrace;                        // Trace command in progress
+    BOOL fDelayedTrace;                 // Delayed trace request
     DWORD TraceCount;                   // Single trace instr. count to go
 
     BOOL fStep;                         // Single logical step in progress (command P)
@@ -205,6 +211,7 @@ typedef struct
 typedef struct
 {
     TFRAME r;                           // Register window frame
+    TFRAME l;                           // Locals window frame
     TFRAME d;                           // Data window frame
     TFRAME c;                           // Code window frame
     TFRAME h;                           // Command (history) window frame
@@ -310,9 +317,9 @@ extern int PrintLine(char *format,...);
 extern void dputc(UCHAR c);
 
 extern void RegDraw(BOOL fForce);
+extern void LocalsDraw(BOOL fForce);
 extern void DataDraw(BOOL fForce, DWORD newOffset);
 extern void CodeDraw(BOOL fForce);
-extern void HistoryDraw();
 
 extern BOOL CommandExecute( char *pCmd );
 
@@ -325,6 +332,7 @@ extern void ClearHistory(void);
 extern BYTE ReadCRTC(int index);
 extern void WriteCRTC(int index, int value);
 extern int GetByte(WORD sel, DWORD offset);
+extern DWORD GetDWORD(WORD sel, DWORD offset);
 extern void SetByte(WORD sel, DWORD offset, BYTE value);
 extern void memset_w(void *dest, WORD data, int size);
 extern void memset_d(void *dest, DWORD data, int size);
@@ -350,6 +358,7 @@ extern char *SymAddress2FunctionName(WORD wSel, DWORD dwOffset);
 extern char *SymAddress2Name(WORD wSel, DWORD dwOffset);
 extern TSYMFNLIN *SymAddress2FnLin(WORD wSel, DWORD dwOffset);
 extern char *SymFnLin2Line(WORD *pLineNumber, TSYMFNLIN *pFnLin, DWORD dwAddress);
+extern char *SymFnLin2LineExact(WORD *pLineNumber, TSYMFNLIN *pFnLin, DWORD dwAddress);
 extern TSYMFNSCOPE *SymAddress2FnScope(WORD wSel, DWORD dwOffset);
 extern char *SymFnScope2Local(TSYMFNSCOPE *pFnScope, DWORD ebpOffset);
 

@@ -35,6 +35,7 @@ clean:
 			interrupt.o	\
 			command.o	\
 			registers.o	\
+			locals.o	\
 			data.o		\
 			code.o		\
 			customization.o	\
@@ -112,6 +113,9 @@ eval.o:		command/eval.c
 
 registers.o:		command/registers.c
 	$(CC) $(CFLAGS) -c command/registers.c
+
+locals.o:	command/locals.c
+	$(CC) $(CFLAGS) -c command/locals.c
 
 data.o:		command/data.c
 	$(CC) $(CFLAGS) -c command/data.c

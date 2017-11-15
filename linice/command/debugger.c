@@ -70,17 +70,16 @@ extern void ClearNonStickyBreakpoint();
 extern void ArmBreakpoints(void);
 extern void DisarmBreakpoints(void);
 extern int  BreakpointCheck(TADDRDESC Addr);
-extern BOOL BreakpointCheckSpecial(TADDRDESC Addr);
 extern BOOL BreakpointCondition(int index);
-extern void SetCurrentSymbolContext(void);
+extern void SetSymbolContext(WORD wSel, DWORD dwOffset);
 
 /******************************************************************************
 *                                                                             *
-*   void DebuggerEnter(void)                                                  *
+*   void DebuggerEnter * (void)                                               *
 *                                                                             *
 *******************************************************************************
 *
-*   Debugger main loop
+*   Debugger main loop: Functions running at different debugger states
 *
 ******************************************************************************/
 /*
@@ -100,244 +99,13 @@ extern void SetCurrentSymbolContext(void);
             * User INT 3 (2-byte opcode) in kernel/app
 
 */
-#if 0
-void DebuggerEnter(void)
-{
-    static BOOL fReArm = FALSE;         // Rearming of the breakpoints turn
-    BOOL fContinue;
-    TADDRDESC Addr;                     // Current cs:eip
-    BYTE bCsEip;                        // Byte at the current cs:eip
 
-    // Reset the current breakpoint index to none
-    deb.bpIndex = -1;
-
-    SetCurrentSymbolContext();
-
-    // If we are back from the trace, we will evaluate that case later..
-    // For now, do some things in non-trace case:
-    if( !deb.fTrace )
-    {
-        // Check INT3
-        if( deb.nInterrupt==3 )
-        {
-            // First thing to check is the rearm state
-            if( fReArm==TRUE )
-            {
-                // Arm all the breakpoints and continue with the execution of the debugee
-                ArmBreakpoints();
-
-                fReArm = FALSE;                 // Make sure we have this flag cleared
-
-                deb.r->eflags &= ~TF_MASK;      // Abort single step trace
-            
-                return;
-            }
-        
-            // Get a byte from the current cs:eip - we use it to distinguish
-            // a single byte INT3 from a two-byte opcode.
-            Addr.sel = deb.r->cs;
-            Addr.offset = deb.r->eip;
-            bCsEip = AddrGetByte(&Addr);
-
-            // If it is a two-byte INT3 opcode, it can only be user embedded "int 3"
-            if( bCsEip!=0xCC )
-            {
-                goto UserInt3;
-            }
-            else
-            {
-                // Decrement eip since INT3 is an exception where eip points to the next instruction
-                deb.r->eip -= 1;
-                
-            }
-
-            // Check for single one-time bp (command P, command G with break-address)
-            if( NonStickyBreakpointCheck(Addr)==TRUE )
-            {
-                goto EnterDebugger;
-            }
-
-            // Check breakpoints that we placed in the debugee code;
-            // If found, return a positive breakpoint index that we store
-            if( (deb.bpIndex = BreakpointCheck(Addr)) >= 0 )
-            {
-                // Check the IF condition and return to debugee if we dont need to break
-                if( !BreakpointCondition(deb.bpIndex) )
-                {
-                    dprinth(1, "Breakpoint BP%X", deb.bpIndex);
-
-                    goto ReturnToDebugee2;
-                }
-            }
-            else
-            {
-                if( deb.fStep )
-                {
-                    ;
-                }
-UserInt3:
-                // ---- User placed INT 3 -----
-                // We need to revert eip to an instruction following the user INT3
-                if( deb.bpIndex>=0 )
-                    deb.r->eip = Addr.offset;
-
-                // If we dont want to stop on user INT3..
-                if( deb.fI3Here==FALSE )
-                    goto ReturnToDebugee2;
-
-                // If we stopped in the user code, but we want to break in kernel only..
-                if( deb.fI3Kernel && deb.r->eip < PAGE_OFFSET )
-                    goto ReturnToDebugee2;
-
-                dprinth(1, "Breakpoint due to INT3");
-            }
-        }
-        else
-        if( deb.nInterrupt==1 )     // Check INT1
-        {
-            // If we dont want to stop on INT1..
-            if( deb.fI1Here==FALSE )
-                goto ReturnToDebugee2;
-
-            // If we stopped in the user code, but we want to break in kernel only..
-            if( deb.fI1Kernel && deb.r->eip < PAGE_OFFSET )
-                goto ReturnToDebugee2;
-
-            dprinth(1, "Breakpoint due to INT1");
-        }
-    }
-
-EnterDebugger:
-
-    // This is opposite from down below:
-    // If the FLASH is off and the command was P or T, do NOT save screen
-    if( !(deb.fFlash==0 && (deb.fTrace || deb.fStep)) )
-    {
-        // Enable windowing and save background
-        pWin->fEnable = TRUE;
-        dputc(DP_SAVEBACKGROUND);
-    }
-
-    // Set the new CS:EIP for code disasembly
-    deb.codeTopAddr.sel = deb.r->cs;
-    deb.codeTopAddr.offset = deb.r->eip;
-
-    // Recalculate window locations based on visibility and number of lines
-    // and repaint all windows
-    RecalculateDrawWindows();
-
-    // If the Trace bit was set, finish with the trace command
-    if( deb.fTrace )
-    {
-        // What is the instruction trace count?
-        if( --deb.TraceCount )
-        {
-            // Single step another instruction - may be aborted by pressing ESC
-            // Get non-blocking key and check if it is ESC
-            if( GetKey(FALSE) != ESC )
-                goto ReturnToDebugee;
-        }
-        // Abort tracing and enter debugger
-        deb.r->eflags &= ~TF_MASK;
-
-        // Reset the trace state
-        deb.fTrace = FALSE;
-    }
-
-    // Read in all the system state registers
-    GetSysreg(&deb.sysReg);
-
-    // Adjust system registers to running the debugger:
-    //  CR0[16] Write Protect -> 0   so we can write to user pages
-    SET_CR0( deb.sysReg.cr0 & ~BITMASK(WP_BIT));
-
-    // Remove all breakpoints that we placed in the previous run
-    DisarmBreakpoints();
-    ClearNonStickyBreakpoint();
-
-    //========================================================================
-    // MAIN COMMAND PROMPT LOOP
-    //========================================================================
-    do
-    {
-        EdLin( sCmd );
-
-        fContinue = CommandExecute( sCmd+1 );   // Skip the prompt
-
-    } while( fContinue );
-
-    //========================================================================
-
-    // Arm all breakpoints
-    ArmBreakpoints();
-
-    // Restore system registers
-    SetSysreg(&deb.sysReg);
-
-ReturnToDebugee:
-
-    // Copy the content of the general registers in the prev buffer
-    // so the next time when we enter the debugger we will be able
-    // to tell what registers had changed
-    memcpy(&deb.r_prev, deb.r, sizeof(TREGS));
-
-    // If FLASH is off and the command is P or T, do NOT restore screen
-    if( !(deb.fFlash==0 && (deb.fTrace || deb.fStep)) )
-    {
-        // Disable windowing and restore background
-        pWin->fEnable = FALSE;
-        dputc(DP_RESTOREBACKGROUND);
-    }
-
-ReturnToDebugee2:
-
-    // What if the current cs:eip is sitting on a breakpoint???
-    Addr.sel = deb.r->cs;
-    Addr.offset = deb.r->eip;
-    bCsEip = AddrGetByte(&Addr);
-
-    if( bCsEip==0xCC )
-    {
-        // Check all BPX-type breakpoints and a non-sticky bp if the address
-        // match to cs:eip, and if so, we'll need to play a hack and set up
-        // a state machine to arm all the breakpoint only after a single step
-        // is executed
-
-        if( BreakpointCheckSpecial(Addr)==TRUE || NonStickyBreakpointCheck(Addr)==TRUE )
-        {
-            // Remove all the breakpoints :(
-            DisarmBreakpoints();
-            
-            // Set up the single step
-            deb.r->eflags |= TF_MASK;
-
-            // Set up the re-arm flag
-            fReArm = TRUE;
-        }
-        else
-            fReArm = FALSE;             // Make sure we keep this flag cleared
-    }
-
-    // If the fTrap signal flag is set, set it in the eflags register
-    if( deb.fTrace )
-        deb.r->eflags |= TF_MASK;
-
-    // Set RESUME flag on the eflags and return to the client
-    deb.r->eflags |= RF_MASK;
-
-}
-
-#endif
-
-void DebuggerEnter(void)
+void DebuggerEnterBreak(void)
 {
     BOOL fContinue;
     
     // Abort possible single step trace state
     deb.r->eflags &= ~TF_MASK;
-
-    // Reset the trace state
-    deb.fTrace = FALSE;
 
     //-----------------------------------------------------------------------
     {
@@ -351,15 +119,20 @@ void DebuggerEnter(void)
         {
             // Disarm all breakpoints by resetting original opcodes at places
             // where we inserted INT3
-            DisarmBreakpoints();
+            // We dont need to disarm them if we are in single step (Trace) mode!
+            if( !deb.fTrace )
+                DisarmBreakpoints();
 
+            // Reset the trace state
+            deb.fTrace = FALSE;
+    
             {
                 // Enable output driver and save background
                 dputc(DP_ENABLE_OUTPUT);
                 dputc(DP_SAVEBACKGROUND);
 
                 // Set the content variables used in debugging with symbols
-                SetCurrentSymbolContext();
+                SetSymbolContext(deb.r->cs, deb.r->eip);
 
                 // Recalculate window locations based on visibility and number of lines
                 // and repaint all windows
@@ -384,14 +157,16 @@ void DebuggerEnter(void)
             }
 
             // Arm all breakpoints by inserting INT3 opcode
-            ArmBreakpoints();
+            // We dont arm them if we are in single step (Trace) mode!
+            if( !deb.fTrace )
+                ArmBreakpoints();
         }
 
         // Copy the content of the general registers in the prev buffer
         // so the next time when we enter the debugger we will be able
         // to tell what registers had changed
         memcpy(&deb.r_prev, deb.r, sizeof(TREGS));
-    
+
         // Restore system registers
         SetSysreg(&deb.sysReg);
     }
@@ -404,6 +179,54 @@ void DebuggerEnter(void)
     // Set RESUME flag on the eflags and return to the client. This way we dont
     // break on the same condition, if the hardware bp would trigger it at this address
     deb.r->eflags |= RF_MASK;
+
+    return;
+}
+
+void DebuggerEnterDelayedTrace(void)
+{
+    // Delayed Trace - set the Trace flag for this run
+    deb.r->eflags |= TF_MASK;
+    deb.fTrace = TRUE;
+
+    // Exit delayed Trace mode on a next turn
+    deb.fDelayedTrace = FALSE;
+
+    // Set RESUME flag on the eflags and return to the client. This way we dont
+    // break on the same condition, if the hardware bp would trigger it at this address
+    deb.r->eflags |= RF_MASK;
+
+    // Set the debugger state back to the normal
+    pIce->eDebuggerState = DEB_STATE_BREAK;
+
+    return;
+}
+
+void DebuggerEnterDelayedArm(void)
+{
+    // Delayed arm - arm breakpoints and continue
+
+    {
+        // Read in all the system state registers
+        GetSysreg(&deb.sysReg);
+
+        // Adjust system registers to running the debugger:
+        //  CR0[16] Write Protect -> 0   so we can write to user pages
+        SET_CR0( deb.sysReg.cr0 & ~BITMASK(WP_BIT));
+
+        {
+            ArmBreakpoints();
+        }
+    
+        // Restore system registers
+        SetSysreg(&deb.sysReg);
+    }
+
+    // Set the debugger state back to the normal
+    pIce->eDebuggerState = DEB_STATE_BREAK;
+
+    // Clear trace flag
+    deb.r->eflags &= ~TF_MASK;
 
     return;
 }

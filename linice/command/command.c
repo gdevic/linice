@@ -86,6 +86,7 @@ extern BOOL cmdHalt    (char *args, int subClass);      // flow.c
 extern BOOL cmdWd      (char *args, int subClass);      // windowcontrol.c
 extern BOOL cmdWc      (char *args, int subClass);      // windowcontrol.c
 extern BOOL cmdWr      (char *args, int subClass);      // windowcontrol.c
+extern BOOL cmdWl      (char *args, int subClass);      // windowcontrol.c
 extern BOOL cmdCls     (char *args, int subClass);      // windowcontrol.c
 extern BOOL cmdRs      (char *args, int subClass);      // windowcontrol.c
 extern BOOL cmdFlash   (char *args, int subClass);      // windowcontrol.c
@@ -94,6 +95,7 @@ extern BOOL cmdSymbol  (char *args, int subClass);      // symbols.c
 extern BOOL cmdTypes   (char *args, int subClass);      // symbols.c
 extern BOOL cmdFile    (char *args, int subClass);      // symbols.c
 extern BOOL cmdReg     (char *args, int subClass);      // registers.c
+extern BOOL cmdLocals  (char *args, int subClass);      // locals.c
 extern BOOL cmdGdt     (char *args, int subClass);      // sysinfo.c
 extern BOOL cmdLdt     (char *args, int subClass);      // sysinfo.c
 extern BOOL cmdIdt     (char *args, int subClass);      // sysinfo.c
@@ -191,7 +193,7 @@ TCommand Cmd[] = {
 {    "IDT",      3, 0, cmdIdt,         "IDT [int-number | IDT base-address]", "ex: IDT 21",   0 },
 {    "LDT",      3, 0, cmdLdt,         "LDT [selector | LDT table selector]", "ex: LDT 45",   0 },
 {    "LINES",    5, 0, cmdLines,       "LINES [25 | 43 | 50 | 60]", "ex: LINES 43",   0 },
-{    "LOCALS",   6, 0, Unsupported,    "LOCALS", "ex: LOCALS",    0 },
+{    "LOCALS",   6, 0, cmdLocals,      "LOCALS", "ex: LOCALS",    0 },
 {    "M",        1, 0, cmdMove,        "Move source-address L length dest-address", "ex: M 4000 L 80 8000",    0 },
 {    "MACRO",    5, 0, cmdMacro,       "MACRO [macro-name] | [[*] | [= \"macro-body\"]]", "ex: MACRO Oops = \"i3here off; genint 3;\"",   0 },
 {    "MODULE",   6, 0, cmdModule,      "MODULE [module-name | partial-name*]", "ex: MODULE",    0 },
@@ -200,7 +202,7 @@ TCommand Cmd[] = {
 {    "OBJDIR",   6, 0, Unsupported,    "OBJDIR [object-directory]", "ex: OBJDIR Driver", 0 },
 {    "OW",       2, 2, cmdOut,         "OW port value", "ex: OW DX AX",   0 },
 {    "OD",       2, 4, cmdOut,         "OD port value", "ex: OD DX EAX",  0 },
-{    "P",        1, 0, Unsupported,    "P [RET]", "ex: P",    0 },
+{    "P",        1, 0, cmdStep,        "P [RET]", "ex: P",    0 },
 {    "PAGE",     4, 0, cmdPage,        "PAGE [address [L length]]", "ex: PAGE DS:0 L 20", 0 },
 {    "PAGEIN",   6, 0, Unsupported,    "PAGEIN address", "ex: PAGEIN 401000", 0 },
 {    "PAUSE",    5, 0, cmdPause,       "PAUSE [ON | OFF]", "ex: PAUSE OFF",   0 },
@@ -242,7 +244,7 @@ TCommand Cmd[] = {
 {    "WD",       2, 0, cmdWd,          "WD [window-size]", "ex: WD 4",    0 },
 {    "WF",       2, 0, Unsupported,    "WF [-D] [B | W | D | F | P | *]", "ex: WF",   0 },
 {    "WIDTH",    5, 0, Unsupported,    "WIDTH [80-160]", "ex: WIDTH 100", 0 },
-{    "WL",       2, 0, Unsupported,    "WL [window-size]", "ex: WL 8",    0 },
+{    "WL",       2, 0, cmdWl,          "WL [window-size]", "ex: WL 8",    0 },
 {    "WHAT",     4, 0, Unsupported,    "WHAT expression", "ex: WHAT system",  0 },
 {    "WR",       2, 0, cmdWr,          "WR Toggle register window", "ex: WR", 0 },
 {    "WS",       2, 0, Unsupported,    "WS [window-size]", "ex: WS 8",    0 },

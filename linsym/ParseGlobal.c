@@ -63,6 +63,7 @@ BOOL ParseGlobal(int fd, int fs)
     DWORD dwSize;                       // Final size of the above structure
     int nGlobalsStored;                 // Number of global symbols stored
     int i;                              // Counter
+    int eStore;                         // Store this particular symbol
 
     printf("=============================================================================\n");
     printf("||         PARSE GLOBALS                                                   ||\n");
@@ -81,24 +82,34 @@ BOOL ParseGlobal(int fd, int fs)
 
         for( i=0; i<nGlobals; i++ )
         {
-            printf("%c %08X %08X %04X %s\n", 
-               (pGlobals[i].wAttribute==0x11 || pGlobals[i].wAttribute==0x12)? '*':' ', 
-                pGlobals[i].dwAddress, 
-                pGlobals[i].dwEndAddress, 
-                pGlobals[i].wAttribute, 
+            eStore = -1;                // -1 means 'dont store this symbol'
+
+            // Store globals of this kind (MAX_SYMRELOC):
+            //
+            // 0) Program code segment:             0x12  ".text"
+            // 1) Program data segment:             0x11  ".data"    (global variables)
+//          // 2) Program data 2 segment:           0x01  ".data"    (static variables)           DOES NOT WORK THIS WAY
+            // 3) Program data 3 segment:           0x11  ".COMMON"  (uninitialized globals)
+
+            if( pGlobals[i].wAttribute==0x12 && !strcmp(pGlobals[i].SectionName, ".text") )     eStore = 0;
+            if( pGlobals[i].wAttribute==0x11 && !strcmp(pGlobals[i].SectionName, ".data") )     eStore = 1;
+//          if( pGlobals[i].wAttribute==0x01 && !strcmp(pGlobals[i].SectionName, ".data") )     eStore = 2;
+            if( pGlobals[i].wAttribute==0x11 && !strcmp(pGlobals[i].SectionName, "COMMON") )    eStore = 3;
+
+            printf("%c %08X %08X %04X %10s %s\n",
+                eStore<0? ' ': eStore + '0',
+                pGlobals[i].dwAddress,
+                pGlobals[i].dwEndAddress,
+                pGlobals[i].wAttribute,
+                pGlobals[i].SectionName,
                 pGlobals[i].Name);
 
-            // If a global symbol is one of:
-            //  11h - Global symbol (variable)
-            //  12h - Global symbol (function)
-            // store it in the linice symbol table
-            if( pGlobals[i].wAttribute==0x11 || pGlobals[i].wAttribute==0x12 )
+            if( eStore>=0 )
             {
                 pHeader->global[nGlobalsStored].dwStartAddress = pGlobals[i].dwAddress;
                 pHeader->global[nGlobalsStored].dwEndAddress   = pGlobals[i].dwEndAddress;
                 pHeader->global[nGlobalsStored].dName          = dfs;
-                pHeader->global[nGlobalsStored].bFlags         = 
-                    (pGlobals[i].wAttribute==0x11) ? 0x01 : 0x00;
+                pHeader->global[nGlobalsStored].bFlags         = eStore;
 
                 // Copy the symbol name into the strings
                 write(fs, pGlobals[i].Name, strlen(pGlobals[i].Name)+1);
@@ -171,6 +182,20 @@ DWORD GetGlobalSymbolAddress(char *pName)
 }
 
 
+/******************************************************************************
+*                                                                             *
+*   BOOL StoreGlobalSymbols(FILE *fGlobals, int nGlobals)                     *
+*                                                                             *
+*******************************************************************************
+*
+*   Fills in the array of global symbols from the list of symbols in the
+*   file queue.
+*
+*   Where:
+*       fGlobals is the queue file name
+*       nGlobals is the number of symbols (lines) in the file
+*
+******************************************************************************/
 BOOL StoreGlobalSymbols(FILE *fGlobals, int nGlobals)
 {
     TGLOBAL *pGlob;
@@ -187,10 +212,11 @@ BOOL StoreGlobalSymbols(FILE *fGlobals, int nGlobals)
         // Read each global item and store it in the array
         for(i=0; i<nGlobals; i++ )
         {
-            fscanf(fGlobals, "%08X %08X %04X %s\n", 
+            fscanf(fGlobals, "%08X %08X %04X %s %s\n", 
                 &pGlob->dwAddress,
                 &pGlob->dwEndAddress,
                 &pGlob->wAttribute,
+                &pGlob->SectionName,
                 &pGlob->Name);
 
             pGlob++;

@@ -173,6 +173,8 @@ int ParseSectionsPass1(BYTE *pBuf)
     //==============================
     if( SecSymtab && SecStrtab )
     {
+        char *pSecName;         // Pointer to a section name string
+
         pSym = (Elf32_Sym *) (pBuf + SecSymtab->sh_offset);
         pStr = (char *)pBuf + SecStrtab->sh_offset;
         i = SecSymtab->sh_size / sizeof(Elf32_Sym) - 1;
@@ -183,32 +185,30 @@ int ParseSectionsPass1(BYTE *pBuf)
         printf("Symbol table:\n");
         while( i-- )
         {
+            switch(pSym->st_shndx)
+            {
+                case SHN_UNDEF  : pSecName = "EXTERNDEF"; break;
+                case SHN_ABS    : pSecName = "ABSOLUTE";  break;
+                case SHN_COMMON : pSecName = "COMMON";    break;
+                default:          pSecName = pBuf + SecName->sh_offset + Sec[pSym->st_shndx].sh_name;
+            }
+
             printf("\n");
             printf("st_name  = %04X  %s\n", pSym->st_name, pStr+pSym->st_name);
             printf("st_value = %08X\n", pSym->st_value );
             printf("st_size  = %04X\n", pSym->st_size );
             printf("st_info  = %02X\n", pSym->st_info );
             printf("st_other = %02X\n", pSym->st_other );
-            printf("st_shndx = %04X ", pSym->st_shndx);
-            switch(pSym->st_shndx)
-            {
-            case SHN_UNDEF: printf("EXTERNDEF\n");
-                break;
-            case SHN_ABS  : printf("ABSOLUTE\n");
-                break;
-            case SHN_COMMON: printf("COMMON\n");
-                break;
-            default:
-                printf("%s\n", pBuf + SecName->sh_offset + Sec[pSym->st_shndx].sh_name );
-            }
+            printf("st_shndx = %04X  %s\n", pSym->st_shndx, pSecName);
 
             // Save a global symbol with all its attributes so we can select from it later
             // on when we need globals.
-            // We should not have empty symbol string name, so special case a null-string
-            fprintf(fGlobals, "%08X %08X %04X %s\n", 
+            // We should not have empty symbol string name, so special case a null-strings
+            fprintf(fGlobals, "%08X %08X %04X %10s %s\n", 
                 pSym->st_value, 
                 pSym->st_value + pSym->st_size, 
                 pSym->st_info, 
+                strlen(pSecName)? pSecName : "?",
                 strlen(pStr+pSym->st_name)? pStr+pSym->st_name : "?");
 
             nGlobals++;

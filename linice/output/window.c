@@ -78,11 +78,13 @@ static void AdjustToFit(int excess)
     int active = 0;
 
     if( pWin->r.fVisible )  active++;
+    if( pWin->l.fVisible )  active++;
     if( pWin->d.fVisible )  active++;
     if( pWin->c.fVisible )  active++;
 
     newSize = (pOut->sizeY - 5) / (active + 1);
 
+    if( pWin->l.fVisible )  pWin->l.nLines = newSize;
     if( pWin->d.fVisible )  pWin->d.nLines = newSize;
     if( pWin->c.fVisible )  pWin->c.nLines = newSize;
 
@@ -110,6 +112,7 @@ int WindowIsSizeValid()
     int less = pOut->sizeY - 4;
 
     if( pWin->r.fVisible )  less -= pWin->r.nLines;
+    if( pWin->l.fVisible )  less -= pWin->l.nLines;
     if( pWin->d.fVisible )  less -= pWin->d.nLines;
     if( pWin->c.fVisible )  less -= pWin->c.nLines;
 
@@ -124,7 +127,7 @@ int WindowIsSizeValid()
 *
 *   Recalculates windowing parameters and redraws the complete screen.
 *   If the initial window sizes are not valid, it scales them down so the
-*   window configuration can fit on the current screen.
+*   window configuration can fit on within the current screen size.
 *
 ******************************************************************************/
 void RecalculateDrawWindows()
@@ -138,6 +141,7 @@ void RecalculateDrawWindows()
         AdjustToFit( -excess );
 
     AdjustTopBottom(&pWin->r);
+    AdjustTopBottom(&pWin->l);
     AdjustTopBottom(&pWin->d);
     AdjustTopBottom(&pWin->c);
 
@@ -158,6 +162,7 @@ void RecalculateDrawWindows()
         dprint("%c%c%c", DP_SETSCROLLREGIONYY, pWin->h.Top+1+1, pWin->h.Bottom+1);
 
         RegDraw(FALSE);
+        LocalsDraw(FALSE);
         DataDraw(FALSE, deb.dataAddr.offset);
         CodeDraw(FALSE);
         HistoryDraw();

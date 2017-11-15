@@ -173,9 +173,11 @@ DWORD HistoryGetTop(void)
     TLine *p;
     DWORD nLines;
 
-    // Backtrack so many lines in the history buffer
-    nLines = pWin->h.nLines - 1;
+    // Read the linked list of history lines and backtrack either to the first
+    // one or count number of lines in the command history and find the top
+    // one, and that is number of lines-2 (1 for the header and 1 for the cursor)
 
+    nLines = pWin->h.nLines - 2;
     p = pHead;
 
     while( (p!=pTail) && nLines-- )
@@ -205,7 +207,7 @@ DWORD HistoryDisplay(DWORD hView, int nDir)
 {
     TLine *p;
     TLine *pView = (TLine *) hView;
-    DWORD nLines;
+    int nLines;
 
     nLines = pWin->h.nLines - 2;
 
@@ -270,6 +272,7 @@ void HistoryDraw(void)
 
     PrintLine("");
 
+    // Print the last screenful of the command history
     HistoryDisplay(0, 0);
 }
 

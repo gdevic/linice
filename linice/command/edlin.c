@@ -532,6 +532,8 @@ void EdLin( char *sCmdLine )
 
                     break;
 
+                //==================== COMMAND HISTORY WINDOW ======================
+
                 case ESC:
                     // ESC key clears the current buffer
 

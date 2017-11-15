@@ -128,7 +128,7 @@ extern void MouseHandler(PTMPACKET pPacket);
 ******************************************************************************/
 BYTE GetAux()
 {
-    int timeout = 1000;
+    int timeout = 100;
 
     while( ((inp(KBD_STATUS) & STATUS_AUXB)==0 )  && timeout) timeout--;
 

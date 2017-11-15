@@ -106,5 +106,9 @@
 // Define size of the internal debugger memory heap
 #define MAX_HEAP            4096
 
+//////////////////////////////////////////////////////////////////////
+// Dont change this. It is a hardcoded value of number of symbol types
+#define MAX_SYMRELOC        4           // Hardcoded to 4 for up to 4 sections
+
 #endif //  _ICE_LIMITS_H_
 

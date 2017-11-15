@@ -102,6 +102,7 @@ typedef struct
     DWORD dwAddress;                    // Start address of a symbol
     DWORD dwEndAddress;                 // End address of a symbol
     WORD wAttribute;                    // Attributes of a symbol
+    char SectionName[16];               // Section name string
     char Name[MAX_SYMBOL_LEN];          // Symbol canonical name
 } TGLOBAL;
 

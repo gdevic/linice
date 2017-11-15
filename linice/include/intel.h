@@ -268,6 +268,9 @@ typedef struct
 #define VIP_MASK            (1 << VIP_BIT)
 #define ID_MASK             (1 << ID_BIT)
 
+#define SF_VALUE(flags)     ((flags>>SF_BIT)&1)
+#define OF_VALUE(flags)     ((flags>>OF_BIT)&1)
+
 //-----------------------------------------------------------------------------
 
 #define BITMASK(bit)        (1 << (bit))

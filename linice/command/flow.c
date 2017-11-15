@@ -40,6 +40,7 @@
 #include "ice.h"                        // Include main debugger structures
 
 #include "debug.h"                      // Include our dprintk()
+#include "disassembler.h"               // Include disassembler
 
 /******************************************************************************
 *                                                                             *
@@ -59,12 +60,8 @@
 *                                                                             *
 ******************************************************************************/
 
-/******************************************************************************
-*                                                                             *
-*   Functions                                                                 *
-*                                                                             *
-******************************************************************************/
-
+extern DWORD SymFnLinAddress2NextAddress(TSYMFNLIN *pFnLin, DWORD dwAddress);
+extern void SetSymbolContext(WORD wSel, DWORD dwOffset);
 extern void SetNonStickyBreakpoint(TADDRDESC Addr);
 
 // From linux/reboot.h
@@ -72,6 +69,13 @@ extern void SetNonStickyBreakpoint(TADDRDESC Addr);
 extern void machine_restart(char *cmd);
 extern void machine_halt(void);
 extern void machine_power_off(void);
+
+
+/******************************************************************************
+*                                                                             *
+*   Functions                                                                 *
+*                                                                             *
+******************************************************************************/
 
 /******************************************************************************
 *                                                                             *
@@ -100,15 +104,13 @@ BOOL cmdXit(char *args, int subClass)
 *   G [=start-address] [break-address]
 *
 *   If you specify start-address, eip is set to it before executing
-*   If you spcify break-address, a one-time bp is set using a DR, if available
-*       if not, INT3 is used
+*   If you spcify break-address, a one-time breakpoint is set
 *
 ******************************************************************************/
 BOOL cmdGo(char *args, int subClass)
 {
     TADDRDESC StartAddr, BpAddr;
     BOOL fStart, fBreak;
-    int dr;
 
     fStart = fBreak = FALSE;
 
@@ -182,10 +184,18 @@ BOOL cmdGo(char *args, int subClass)
 *   that need to single step. Pressing ESC key stops single tracing of multiple
 *   instructions.
 *
+*   This command follows the flow into subroutine calls.
+*
+*   Keyboard mapped to F8
+*
 ******************************************************************************/
 BOOL cmdTrace(char *args, int subClass)
 {
+    TDISASM Dis;                        // Disassembler interface structure
+    TADDRDESC BpAddr;                   // Address of a non-sticky breakpoint
     DWORD count;
+    DWORD dwNextLine;                   // Address of the next line's code
+    DWORD dwAddress;                    // Current scanning address
 
     if( *args != 0 )
     {
@@ -211,14 +221,86 @@ BOOL cmdTrace(char *args, int subClass)
         deb.TraceCount = 1;
     }
 
-    // If symbols are active and we are in the source mode, step one source line instead
-    if( deb.pFnLin )
+    // Depending on the source mode, we can simply use Trace flag or we need
+    // to scan a block of instructions
+
+    // First, set the current symbol content to make sure our cs:eip is at the
+    // right place, since we may have it set differenly
+    SetSymbolContext(deb.r->cs, deb.r->eip);
+
+    if( (deb.eSrc==1 || deb.eSrc==2) && deb.pFnScope && deb.pFnLin )
     {
-        
+        // SOURCE CODE ACTIVE
+
+        // Get the machine code address of the next line in the source code
+        dwNextLine = SymFnLinAddress2NextAddress(deb.pFnLin, deb.r->eip);
+
+        // Scan the block between current address/line and the next line
+        // and stop if we hit a jump, ret or call
+        for(dwAddress=deb.r->eip; dwAddress<dwNextLine; dwAddress += Dis.bInstrLen)
+        {
+            Dis.bState   = DIS_DATA32 | DIS_ADDRESS32;
+            Dis.wSel     = deb.r->cs;
+            Dis.dwOffset = dwAddress;
+            DisassemblerLen(&Dis);
+    
+            Dis.bFlags &= SCAN_MASK;            // Mask the scan bits
+
+            if( Dis.bFlags==SCAN_JUMP && Dis.dwTargetAddress )
+            {
+                // Jumps that are always taken are followed
+
+                BpAddr.sel    = deb.r->cs;
+                BpAddr.offset = Dis.dwTargetAddress;
+                SetNonStickyBreakpoint(BpAddr);
+
+                return( FALSE );
+            }
+            else
+            if( Dis.bFlags==SCAN_RET || Dis.bFlags==SCAN_COND_JUMP )
+            {
+                // Returns and conditional jumps are delayed traced
+
+                // Set a delayed Trace
+                deb.fDelayedTrace = TRUE;
+                break;
+            }
+            else
+            if( Dis.bFlags==SCAN_CALL )
+            {
+                // If the instruction is a CALL to subroutine, we will follow only if we
+                // have a symbol for that function in our symbol table (not exports!).
+                // That will avoid tracing into common globals such is 'printk'
+
+                if( SymAddress2FunctionName(deb.r->cs, Dis.dwTargetAddress) != NULL )
+                {
+                    // We have our function defined at that address, so place a bp there
+                    BpAddr.sel    = deb.r->cs;
+                    BpAddr.offset = Dis.dwTargetAddress;
+                    SetNonStickyBreakpoint(BpAddr);
+
+                    return( FALSE );
+                }
+            }
+        }
+
+        // If the address is the current cs:eip, we execute a single step, otherwise
+        // set a non-sticky breakpoint at this address
+        if( deb.r->eip==dwAddress )
+        {
+            deb.fTrace = TRUE;
+        }
+        else
+        {
+            BpAddr.sel    = deb.r->cs;
+            BpAddr.offset = dwAddress;
+            SetNonStickyBreakpoint(BpAddr);
+        }
     }
     else
     {
-        // Set the simple machine code trace state
+        // MACHINE CODE OR MIXED - Use CPU Trace Flag
+
         deb.fTrace = TRUE;
     }
 
@@ -236,12 +318,19 @@ BOOL cmdTrace(char *args, int subClass)
 *   Execute one logical program step. Command P.  This skips over the calls,
 *   interrupts, loops and repeated string instructions.
 *
+*   Keyboard mapped to F10
+*
 *   Optional parameter [RET] will single step until a RET or IRET instruction
 *   is hit.
 *
 ******************************************************************************/
 BOOL cmdStep(char *args, int subClass)
 {
+    TDISASM Dis;                        // Disassembler interface structure
+    TADDRDESC BpAddr;                   // Breakpoint address descriptor
+    DWORD dwNextLine;                   // Address of the next line's code
+    DWORD dwAddress;                    // Current scanning address
+
     if( *args != 0 )
     {
         // Argument must be 'RET' - step until the ret instruction
@@ -256,12 +345,81 @@ BOOL cmdStep(char *args, int subClass)
         }
     }
 
-
     deb.fStep = TRUE;
 
-    // Get the size in bytes of the current instruction
+    // First, set the current symbol content to make sure our cs:eip is at the
+    // right place, since we may have it set differenly
+    SetSymbolContext(deb.r->cs, deb.r->eip);
 
-    // Place single one-time execution bp at the instruction after the current one
+    if( (deb.eSrc==1 || deb.eSrc==2) && deb.pFnScope && deb.pFnLin )
+    {
+        // SOURCE CODE ACTIVE
+
+        // Get the machine code address of the next line in the source code
+        dwNextLine = SymFnLinAddress2NextAddress(deb.pFnLin, deb.r->eip);
+
+        // Scan the block between current address/line and the next line
+        // and stop if we hit a jump or ret
+        for(dwAddress=deb.r->eip; dwAddress<dwNextLine; dwAddress += Dis.bInstrLen)
+        {
+            Dis.bState   = DIS_DATA32 | DIS_ADDRESS32;
+            Dis.wSel     = deb.r->cs;
+            Dis.dwOffset = dwAddress;
+            DisassemblerLen(&Dis);
+    
+            Dis.bFlags &= SCAN_MASK;            // Mask the scan bits
+
+            if( Dis.bFlags==SCAN_RET || Dis.bFlags==SCAN_JUMP || Dis.bFlags==SCAN_COND_JUMP )
+            {
+                // Set a delayed Trace
+                deb.fDelayedTrace = TRUE;
+                break;
+            }
+        }
+
+        // If the address is the current cs:eip, we execute a single step, otherwise
+        // set a non-sticky breakpoint at this address
+        if( deb.r->eip==dwAddress )
+        {
+            deb.TraceCount = 1;
+            deb.fTrace = TRUE;
+        }
+        else
+        {
+            BpAddr.sel    = deb.r->cs;
+            BpAddr.offset = dwAddress;
+            SetNonStickyBreakpoint(BpAddr);
+        }
+    }
+    else
+    {
+        // MACHINE CODE OR MIXED - Use CPU Trace Flag or skip calls and ints
+
+        // Get the size in bytes of the current instruction and its flags
+        Dis.bState   = DIS_DATA32 | DIS_ADDRESS32;
+        Dis.wSel     = deb.r->cs;
+        Dis.dwOffset = deb.r->eip;
+        DisassemblerLen(&Dis);
+
+        Dis.bFlags &= SCAN_MASK;            // Mask the scan bits
+
+        if( Dis.bFlags==SCAN_CALL || Dis.bFlags==SCAN_INT )
+        {
+            // Call and INT instructions we skip
+
+            // Set a non-sticky breakpoint at the next instruction
+            BpAddr.sel = deb.r->cs;
+            BpAddr.offset = deb.r->eip + Dis.bInstrLen;
+            SetNonStickyBreakpoint(BpAddr);
+        }
+        else
+        {
+            // All other instructions we single step
+
+            deb.TraceCount = 1;
+            deb.fTrace = TRUE;
+        }
+    }
 
     // Exit into debugee...
     return( FALSE );

@@ -55,7 +55,7 @@ extern void GetSysreg( TSysreg * pSys );
 extern void SetSysreg( TSysreg * pSys );
 extern int ArmDebugReg(int nDr, TADDRDESC Addr);
 extern TSYMTAB *SymTabFind(char *name);
-extern void SymTabRelocate(TSYMTAB *pSymTab, int offCode, int offData);
+extern void SymTabRelocate(TSYMTAB *pSymTab, int pReloc[], int factor);
 extern struct module *FindModule(const char *name);
 
 /******************************************************************************
@@ -151,7 +151,7 @@ asmlinkage int SyscallInitModule(const char *name, struct module *image)
                 pInitFunctionOffset = (BYTE *) image->init;
     
                 // Store private reloc adjustment values
-                pSymTab->pPriv->relocCode = (int)(pInitFunctionOffset - dwInitFunctionSymbol);
+                pSymTab->pPriv->reloc[0] = (int)(pInitFunctionOffset - dwInitFunctionSymbol);
 
                 // --- relocating data section ---
 
@@ -159,40 +159,43 @@ asmlinkage int SyscallInitModule(const char *name, struct module *image)
                 pReloc = (TSYMRELOC *) SymTabFindSection(pSymTab, HTYPE_RELOC);
                 if( pReloc )
                 {
-//                    dprinth(1, "refOffset=%08X symOffset=%08X", pReloc->refOffset, pReloc->symOffset );
+                    int i;
 
-                    // Find the address within the code segment from which we will read the offset to
-                    // our data. Relocation block contains the relative offset from the init_module function
-                    // to our dword sample that we need to take.
+                    for(i=1; i<MAX_SYMRELOC; i++)
+                    {
+                        // Find the address within the code segment from which we will read the offset to
+                        // our data. Relocation block contains the relative offset from the init_module function
+                        // to our dword sample that we need to take.
 
-                    // The only thing is we need to read sample from the user copy since the
-                    // module had not been copied to kernel space...
+                        // The only thing is we need to read sample from the user copy since the
+                        // module had not been copied to kernel space...
 
-                    dwSampleOffset = ((DWORD)image->init - pReloc->refOffset) - (DWORD)pMod;
+                        if( pReloc->list[i].refFixup )
+                        {
+                            dwSampleOffset = ((DWORD)image->init + pReloc->list[i].refFixup) - (DWORD)pMod;
 
-                    dwDataReloc = *(DWORD *) ((DWORD)image + dwSampleOffset);
+                            dwDataReloc = *(DWORD *) ((DWORD)image + dwSampleOffset);
 
-                    // image is in the user address space since we still did not call sys_init_module to
-                    // copy it over to the kernel address space. 
+                            // image is in the user address space since we still did not call sys_init_module to
+                            // copy it over to the kernel address space. 
                     
-                    // TODO: Do we need to be more careful about all these accessing of user space? 
-                    // Remember - we do not have debugger PF/GPF hooked at this point ?!?!?
+                            // TODO: Do we need to be more careful about all these accessing of user space? 
+                            // Remember - we do not have debugger PF/GPF hooked at this point ?!?!?
 
-                    pSymTab->pPriv->relocData = dwDataReloc - pReloc->symOffset;
-
+                            pSymTab->pPriv->reloc[i] = dwDataReloc - pReloc->list[i].refOffset;
+                        }
+                    }
                 }
                 else
                 {
                     // There was not a single global variable to use for relocation. Odd, but
                     // possible... In that case it does not really matter not to relocate data...
 
-                    dprinth(1, "SYSCALL: Symbol table missing HTYPE_RELOC so setting data==code");
-
-                    pSymTab->pPriv->relocData = pSymTab->pPriv->relocCode;
+                    dprinth(1, "SYSCALL: Symbol table missing HTYPE_RELOC");
                 }
         
                 // Relocate symbol table by the required offset
-                SymTabRelocate(pSymTab, pSymTab->pPriv->relocCode, pSymTab->pPriv->relocData);
+                SymTabRelocate(pSymTab, pSymTab->pPriv->reloc, 1);
 
                 // Make that symbol table the current one
 
@@ -240,10 +243,9 @@ asmlinkage int SyscallInitModule(const char *name, struct module *image)
 
         if( pSymTab )
         {
-            SymTabRelocate(pSymTab, -pSymTab->pPriv->relocCode, -pSymTab->pPriv->relocData);
+            SymTabRelocate(pSymTab, pSymTab->pPriv->reloc, -1);
 
-            pSymTab->pPriv->relocCode = 0;
-            pSymTab->pPriv->relocData = 0;
+            memset(&pSymTab->pPriv->reloc, 0, sizeof(pSymTab->pPriv->reloc));
         }
 
         dprinth(1, "SYSCALL: init_module returned nonzero! (%d)", retval);
@@ -280,13 +282,12 @@ asmlinkage int SyscallDeleteModule(const char *name)
         if( pSymTab )
         {
             // Symbol table was loaded.. Relocate it back to 0-based
-            dprinth(1, "SYSCALL: Relocating module symbols back to 0 from %08X\n", pSymTab->pPriv->relocCode);
+            dprinth(1, "SYSCALL: Relocating module symbols back to 0-based");
 
             // Relocate symbol table back by the reloc offset
-            SymTabRelocate(pSymTab, -pSymTab->pPriv->relocCode, -pSymTab->pPriv->relocData);
+            SymTabRelocate(pSymTab, pSymTab->pPriv->reloc, -1 );
 
-            pSymTab->pPriv->relocCode = 0;
-            pSymTab->pPriv->relocData = 0;
+            memset(&pSymTab->pPriv->reloc, 0, sizeof(pSymTab->pPriv->reloc));
         }
     }
     else
