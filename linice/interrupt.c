@@ -39,7 +39,7 @@
 
 #include "clib.h"                       // Include C library header file
 #include "ice.h"                        // Include main debugger structures
-#include "ibm-pc.h"
+#include "ibm-pc.h"                     // Include PC architecture defines
 #include "debug.h"                      // Include our dprintk()
 #include "intel.h"                      // Include processor specific stuff
 
@@ -95,6 +95,15 @@ extern void KeyboardHandler(void);
 extern void SerialHandler(int port);
 extern void MouseHandler(void);
 
+extern DWORD TestAndReset(DWORD *pSpinlock);
+extern DWORD SpinlockTest(DWORD *pSpinlock);
+extern DWORD SpinUntilReset(DWORD *pSpinlock);
+extern void  SpinlockSet(DWORD *pSpinlock);
+extern void  SpinlockReset(DWORD *pSpinlock);
+
+extern void IntAck(int nInt);
+
+
 /******************************************************************************
 *                                                                             *
 *   void HookIdt(PTIDT_Gate pGate, int nIntNumber)                            *
@@ -108,11 +117,16 @@ extern void MouseHandler(void);
 *       nIntNumber is the interrupt number function to hook
 *
 ******************************************************************************/
-static void HookIdt(PTIDT_Gate pGate, int nIntNumber)
+static void HookIdt(TIDT_Gate IDT[], int nEntryNumber, int nIntNumber)
 {
     DWORD IntHandlerFunction;
+    TIDT_Gate *pGate;
 
     IntHandlerFunction = IceIntHandlers[nIntNumber];
+
+    nEntryNumber = IrqRedirect(nEntryNumber);
+
+    pGate = &IDT[nEntryNumber];
 
     pGate->offsetLow  = LOWORD(IntHandlerFunction);
     pGate->offsetHigh = HIWORD(IntHandlerFunction);
@@ -136,6 +150,9 @@ void InterruptInit(void)
 {
     GET_IDT(deb.idt);
 
+    // Initialize our IRQ redirection table for cases when IO APIC is present
+    GetIrqRedirection();
+
     // Copy original Linux IDT to our local buffer
 
     memcpy(LinuxIdt, (void *)deb.idt.base, deb.idt.limit+1);
@@ -146,27 +163,29 @@ void InterruptInit(void)
     IceIdtDescriptor.base = (DWORD) IceIdt;
     IceIdtDescriptor.limit = deb.idt.limit;
 
-    // Hook private IDT with debuger-run hooks
+    // Hook private IDT with debuger-run hooks - this IDT is switched to
+    // during the debugger run, so we want to "hook" most of them
 
     // These are BAD if they happen:
-    HookIdt(&IceIdt[0x00], 0x0);        // Divide error
-    HookIdt(&IceIdt[0x01], 0x1);        // INT 1
-    HookIdt(&IceIdt[0x03], 0x3);        // INT 3
-    HookIdt(&IceIdt[0x04], 0x4);        // Overflow error
-    HookIdt(&IceIdt[0x06], 0x6);        // Invalid opcode
-    HookIdt(&IceIdt[0x08], 0x8);        // Double-fault
-    HookIdt(&IceIdt[0x0A], 0xA);        // Invalid TSS
-    HookIdt(&IceIdt[0x0B], 0xB);        // Segment not present
-    HookIdt(&IceIdt[0x0C], 0xC);        // Stack exception
-    HookIdt(&IceIdt[0x0D], 0xD);        // GP fault
+
+    HookIdt(IceIdt,0x00, 0x0);        // Divide error
+    HookIdt(IceIdt,0x01, 0x1);        // INT 1
+    HookIdt(IceIdt,0x03, 0x3);        // INT 3
+    HookIdt(IceIdt,0x04, 0x4);        // Overflow error
+    HookIdt(IceIdt,0x06, 0x6);        // Invalid opcode
+    HookIdt(IceIdt,0x08, 0x8);        // Double-fault
+    HookIdt(IceIdt,0x0A, 0xA);        // Invalid TSS
+    HookIdt(IceIdt,0x0B, 0xB);        // Segment not present
+    HookIdt(IceIdt,0x0C, 0xC);        // Stack exception
+    HookIdt(IceIdt,0x0D, 0xD);        // GP fault
 
     // These we expect to happen:
-    HookIdt(&IceIdt[0x0E], 0xE);        // Page fault
-    HookIdt(&IceIdt[0x20], 0x20);       // PIT
-    HookIdt(&IceIdt[0x21], 0x21);       // Keyboard
-    HookIdt(&IceIdt[0x23], 0x23);       // COM2
-    HookIdt(&IceIdt[0x24], 0x24);       // COM1
-    HookIdt(&IceIdt[0x2C], 0x2C);       // PS/2 Mouse
+    HookIdt(IceIdt,0x0E, 0x0E);       // Page fault
+    HookIdt(IceIdt,0x20, 0x20);       // PIT
+    HookIdt(IceIdt,0x21, 0x21);       // Keyboard
+    HookIdt(IceIdt,0x23, 0x23);       // COM2
+    HookIdt(IceIdt,0x24, 0x24);       // COM1
+    HookIdt(IceIdt,0x2C, 0x2C);       // PS/2 Mouse
 }
 
 
@@ -176,26 +195,31 @@ void InterruptInit(void)
 *                                                                             *
 *******************************************************************************
 *
-*   Hooks all IDT entries of monitoring debugee.
+*   Hooks IDT entries of monitoring debugee. Modifies individual entries
+*   of Linux kernel IDT in place.
 *
 ******************************************************************************/
 void HookDebuger(void)
 {
     PTIDT_Gate pIdt = (PTIDT_Gate) deb.idt.base;
 
-    // We hook selcted CPU interrupts and traps. This makes debugger active.
+    // We hook selected CPU interrupts and traps. This makes the debugger armed.
 
-    HookIdt(&pIdt[0x01], 0x1);          // Int 1
-    HookIdt(&pIdt[0x03], 0x3);          // Int 3
-    HookIdt(&pIdt[0x08], 0x8);          // Double-fault
+    HookIdt(pIdt, 0x01, 0x1);          // Int 1
+    HookIdt(pIdt, 0x03, 0x3);          // Int 3
+    HookIdt(pIdt, 0x08, 0x8);          // Double-fault
     //
     // TODO: Hooking GPF breaks X on 2.4.x kernel
     //
-//    HookIdt(&pIdt[0x0D], 0xD);          // GP fault
-    HookIdt(&pIdt[0x0E], 0xE);          // Page fault
-    HookIdt(&pIdt[0x20], 0x20);         // PIT
+//    HookIdt(pIdt, 0x0D, 0xD);          // GP fault
+//    HookIdt(pIdt, 0x0E, 0xE);          // Page fault
+    HookIdt(pIdt, 0x20, 0x20);         // PIT
 
-//    HookIdt(&pIdt[0x80], 0x80);         // System call interrupt
+//    HookIdt(pIdt, 0x21, 0x21);         // Keyboard
+//    HookIdt(pIdt, 0x23, 0x23);         // COM2
+//    HookIdt(pIdt, 0x24, 0x24);         // COM1
+
+//    HookIdt(pIdt, 0x80, 0x80);         // System call interrupt
 }
 
 
@@ -247,10 +271,12 @@ void Panic(void)
     }
 
 #if 1
-    cli();
+    LocalCLI();
     while( TRUE );
 #endif
 }
+
+
 
 
 /******************************************************************************
@@ -274,22 +300,17 @@ void Panic(void)
 DWORD InterruptHandler( DWORD nInt, PTREGS pRegs )
 {
     //------------------------------------------------------------------------
-    // Acknowledge the PIC after the current interrupt
-    //
-    void IntAck()
-    {
-        if( (nInt >= 0x28) && (nInt < 0x30) )
-            outp(PIC2, PIC_ACK);
-        if( (nInt >= 0x20) && (nInt < 0x30) )
-            outp(PIC1, PIC_ACK);
-    }
-
-    //------------------------------------------------------------------------
     // Continues running within the debugger. Returns when the debugger
     // issues an execute instruction
     //
     void RunDebugger()
     {
+        // Store the address of the registers into the debugee state structure
+        // and the current interrupt number
+
+        deb.r = pRegs;
+        deb.nInterrupt = nInt;
+
         // Get the current GDT table
         GET_GDT(deb.gdt);
 
@@ -301,7 +322,14 @@ DWORD InterruptHandler( DWORD nInt, PTREGS pRegs )
         SET_IDT(IceIdtDescriptor);
 
         // Be sure to enable interrupts so we can operate
-        sti();
+        LocalSTI();
+
+        // Now that we have enabled local interrupts, we can send a message to
+        // all other CPUs to interrupt what they've been doing and start spinning
+        // on our `in debugger' semaphore. That we do so they dont execute other
+        // code in the 'background'
+        //
+        smpSpinOtherCpus();
 
         // Call the debugger entry function of the current state
         if( pIce->eDebuggerState < MAX_DEBUGGER_STATE )
@@ -309,8 +337,13 @@ DWORD InterruptHandler( DWORD nInt, PTREGS pRegs )
         else
             (DebuggerEnter[DEB_STATE_BREAK])();
 
+        // We are ready to continue execution of the system. The controlling CPU
+        // had been armed, but other CPUs also need to have their debug registers
+        // set up
+//        smpSetSysRegs();
+
         // Disable interrupts so we can mess with IDT
-        cli();
+        LocalCLI();
 
         // Load debugee IDT
         SET_IDT(deb.idt);
@@ -320,22 +353,26 @@ DWORD InterruptHandler( DWORD nInt, PTREGS pRegs )
     }
 
     //------------------------------------------------------------------------
-    DWORD chain = 0;
+    DWORD chain;
     BYTE savePIC1;
 
     // Depending on the execution context, branch
 
-    if(pIce->fRunningIce == TRUE)
+    if( SpinlockTest(&pIce->fRunningIce) )
     {
         //---------------------------------------------
         //  Exception occurred during the Linice run
         //---------------------------------------------
+        chain = 0;                      // By default, do not chain from this handler
+
         pIce->nIntsIce[nInt & 0x3F]++;
 
         // Handle some limited number of interrupts, puke on the rest
 
         switch( nInt )
         {
+            // ---------------- Hardware Interrupts ----------------------
+
             case 0x20:      // Timer
                 // Put all required timers here
                 if( pIce->timer[0] )   pIce->timer[0]--;        // Serial polling
@@ -358,6 +395,8 @@ DWORD InterruptHandler( DWORD nInt, PTREGS pRegs )
                 KeyboardHandler();
                 break;
 
+            // ---------------- CPU Traps and Faults ---------------------
+
             case 0x0E:      // PAGE FAULT - we handle internal page faults
                 // from the very specific functions differently:
                 //  GetByte() and GetDWORD()
@@ -371,16 +410,20 @@ DWORD InterruptHandler( DWORD nInt, PTREGS pRegs )
 
                     break;
                 }
-                chain = GET_IDT_BASE( &LinuxIdt[0x0E] );
+                chain = GET_IDT_BASE( &LinuxIdt[ReverseMapIrq(nInt)] );
                 break;
 
+            // -----------------------------------------------------------
+            // Default case still catches IRQs and traps that we dont process,
+            // such is HDD interrupt etc. We simply bounce them back to kernel
+            // interrupt handler
             default:
-                    deb.r = pRegs;
-                    deb.nInterrupt = nInt;
-                    Panic();
+                chain = GET_IDT_BASE( &LinuxIdt[ReverseMapIrq(nInt)] );
         }
-        // Acknowledge interrupt controller
-        IntAck();
+
+        // Acknowledge the interrupt controller only if we processed interrupt
+        if( !chain )
+            IntAck(nInt);
     }
     else
     {
@@ -389,62 +432,39 @@ DWORD InterruptHandler( DWORD nInt, PTREGS pRegs )
         //---------------------------------------------
         pIce->nIntsPass[nInt & 0x3F]++;
 
-        // Store the address of the registers into the debugee state structure
-        // and the current interrupt number
+        chain = GET_IDT_BASE( &LinuxIdt[ReverseMapIrq(nInt)] );
 
-        deb.r = pRegs;
-        deb.nInterrupt = nInt;
+        // We break into the debugger for all interrupts except the
+        // timer, in which case we need to check for the keyboard activation flag
 
-#if 0       // Pass-through
-        chain = GET_IDT_BASE( &LinuxIdt[nInt] );
-        return( chain );
-#endif
-
-        pIce->fRunningIce = TRUE;
-
-        switch( nInt )
+        if( nInt!=0x20 || (nInt==0x20 && TestAndReset(&pIce->fKbdBreak)) )
         {
-            case 0x0E:                  // Page Fault
-                    chain = GET_IDT_BASE( &LinuxIdt[0x0E] );
-                break;
+            // Store the CPU number that we happen to be using
+            deb.cpu = smp_processor_id();
+        
+            // Limit all IRQ's to the current CPU
+            IoApicClamp( deb.cpu );
 
-            //
-            // TODO: Hooking GPF breaks X on 2.4.x kernel
-            //
-            case 0x0D:                  // GP Fault
-                    chain = GET_IDT_BASE( &LinuxIdt[0x0D] );
-                break;
+            SpinlockSet(&pIce->fRunningIce);
 
-            case 0x20:                  // Programmable Interval Timer
-                // If we scheduled a keyboard break, enter the debugger
-                if( pIce->fKbdBreak )
-                {
-                    pIce->fKbdBreak = FALSE;
+            // Acknowledge the interrupt controller
+            IntAck(nInt);           
 
-                    IntAck();           // Acknowledge the intr. controller
+            // Explicitly enable interrupts on serial ports
+//                    savePIC1 = inp(0x21);
+//                    outp(0x21, savePIC1 & ~((1<<4) | (1<<3)));
 
-                    // Explicitly enable interrupts on serial ports
-                    savePIC1 = inp(0x21);
-                    outp(0x21, savePIC1 & ~((1<<4) | (1<<3)));
+            RunDebugger();      // Run the debugger now
 
-                    RunDebugger();      // Run the debugger now
+            chain = 0;          // Continue into the debugee, do not chain
 
-                    // Restore the state of the PIC1
-                    outp(0x21, savePIC1);
-                }
-                else
-                {
-                    // Chain to the kernel PIT interrupt handler
-                    chain = GET_IDT_BASE( &LinuxIdt[0x20] );
-                }
-                break;
+            // Restore the state of the PIC1
+//                    outp(0x21, savePIC1);
 
-            default:
-                // For all other faults/interrupts that we hooked we run debugger
-                RunDebugger();
+            SpinlockReset(&pIce->fRunningIce);
+
+            IoApicUnclamp();
         }
-
-        pIce->fRunningIce = FALSE;
     }
 
     return( chain );

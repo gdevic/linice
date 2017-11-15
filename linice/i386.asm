@@ -57,7 +57,12 @@ global  Inpd
 
 global  InterruptPoll
 
-global getesp
+global  TestAndReset
+global  SpinlockTest
+global  SpinUntilReset
+global  SpinlockSet
+global  SpinlockReset
+
 
 ;==============================================================================
 ; External definitions that this module uses
@@ -878,9 +883,6 @@ Inpd:
         pop     ebp
         ret
 
-getesp:
-        mov     eax, esp
-        ret
 
 ;==============================================================================
 ;
@@ -890,3 +892,71 @@ getesp:
 InterruptPoll:
         halt
         ret
+
+
+;==============================================================================
+;
+;   Spinlock functions:
+;
+;   DWORD TestAndReset(DWORD *pSpinlock);
+;   DWORD SpinlockTest(DWORD *pSpinlock);
+;   DWORD SpinUntilReset(DWORD *pSpinlock);
+;   void  SpinlockSet(DWORD *pSpinlock);
+;   void  SpinlockReset(DWORD *pSpinlock);
+;
+;==============================================================================
+
+TestAndReset:
+        push    ebp
+        mov     ebp, esp
+        push    edx
+        mov     edx, [ebp+8]
+        xor     eax, eax
+        lock
+        xchg    [edx], eax
+        pop     edx
+        pop     ebp
+        ret
+
+SpinUntilReset:
+        push    ebp
+        mov     ebp, esp
+        push    edx
+        mov     edx, [ebp+8]
+@spin1: cmp     [edx], dword 0
+        jnz     @spin1
+        pop     edx
+        pop     ebp
+        ret
+
+SpinlockSet:
+        push    ebp
+        mov     ebp, esp
+        push    edx
+        mov     edx, [ebp+8]
+        mov     [edx], dword 1
+        pop     edx
+        pop     ebp
+        ret
+
+SpinlockReset:
+        push    ebp
+        mov     ebp, esp
+        push    edx
+        mov     edx, [ebp+8]
+        mov     [edx], dword 0
+        pop     edx
+        pop     ebp
+        ret
+
+SpinlockTest:
+        push    ebp
+        mov     ebp, esp
+        push    edx
+        mov     edx, [ebp+8]
+        mov     eax, [edx]
+        pop     edx
+        pop     ebp
+        ret
+
+        

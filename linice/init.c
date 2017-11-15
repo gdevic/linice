@@ -171,6 +171,15 @@ int InitPacket(PTINITPACKET pInit)
 
                 // Initialize interrupt handling subsystem
 
+
+#if 0
+                deb.fIoApic = TRUE;
+                deb.fSmp    = TRUE;
+#else
+                deb.fIoApic = FALSE;
+                deb.fSmp    = FALSE;
+#endif
+
                 InterruptInit();
 
                 // Allocate heap for the symbol table

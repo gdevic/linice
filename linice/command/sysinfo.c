@@ -165,7 +165,7 @@ extern int CheckSymtab(TSYMTAB *pSymtab);
 
 /******************************************************************************
 *                                                                             *
-*   void MkBits(char *dest, DWORD bitfield, TBITS *bits)                      *
+*   int MkBits(char *dest, DWORD bitfield, TBITS *bits)                       *
 *                                                                             *
 *******************************************************************************
 *
@@ -175,8 +175,10 @@ extern int CheckSymtab(TSYMTAB *pSymtab);
 *     bitfield is the value to examine
 *     bits is the address of the description structure TBITS
 *
+*   Returns: Always 1
+*
 ******************************************************************************/
-void MkBits(char *dest, DWORD bitfield, TBITS *bits)
+int MkBits(char *dest, DWORD bitfield, TBITS *bits)
 {
     *dest = 0;
 
@@ -186,6 +188,8 @@ void MkBits(char *dest, DWORD bitfield, TBITS *bits)
             strcat(dest, bits->name);
         bits++;
     }
+
+    return( 1 );
 }
 
 
@@ -365,29 +369,32 @@ BOOL cmdIdt(char *args, int subClass)
 ******************************************************************************/
 BOOL cmdCpu(char *args, int subClass)
 {
-    dprinth(1, "CS:EIP=%04X:%08X   SS:ESP=%04X:%08X", deb.r->cs, deb.r->eip, deb.r->ss, deb.r->esp);
-    dprinth(2, "EAX=%08X   EBX=%08X   ECX=%08X   EDX=%08X", deb.r->eax, deb.r->ebx, deb.r->ecx, deb.r->edx);
-    dprinth(3, "ESI=%08X   EDI=%08X   EBP=%08X   EFL=%08X", deb.r->esi, deb.r->edi, deb.r->ebp, deb.r->eflags);
-    dprinth(4, "DS=%04X   ES=%04X   FS=%04X   GS=%04X", deb.r->ds, deb.r->es, deb.r->fs, deb.r->gs);
+    int nLine = 1;                      // Line counter
 
-    MkBits(bits, deb.sysReg.cr0, bitsCR0);
-    dprinth(5,  "CR0=%08X   %s", deb.sysReg.cr0, bits);
-    dprinth(6,  "CR2=%08X", deb.sysReg.cr2);
+    if(dprinth(nLine++, "CPU #%d", deb.cpu)
+    && dprinth(nLine++, "CS:EIP=%04X:%08X   SS:ESP=%04X:%08X", deb.r->cs, deb.r->eip, deb.r->ss, deb.r->esp)
+    && dprinth(nLine++, "EAX=%08X   EBX=%08X   ECX=%08X   EDX=%08X", deb.r->eax, deb.r->ebx, deb.r->ecx, deb.r->edx)
+    && dprinth(nLine++, "ESI=%08X   EDI=%08X   EBP=%08X   EFL=%08X", deb.r->esi, deb.r->edi, deb.r->ebp, deb.r->eflags)
+    && dprinth(nLine++, "DS=%04X   ES=%04X   FS=%04X   GS=%04X", deb.r->ds, deb.r->es, deb.r->fs, deb.r->gs)
 
-    MkBits(bits, deb.sysReg.cr3, bitsCR3);
-    dprinth(7,  "CR3=%08X   %s", deb.sysReg.cr3, bits);
-    MkBits(bits, deb.sysReg.cr4, bitsCR4);
-    dprinth(8,  "CR4=%08X   %s", deb.sysReg.cr4, bits);
+    && MkBits(bits, deb.sysReg.cr0, bitsCR0)
+    && dprinth(nLine++, "CR0=%08X   %s", deb.sysReg.cr0, bits)
+    && dprinth(nLine++, "CR2=%08X", deb.sysReg.cr2)
 
-    dprinth(9,  "DR0=%08X", deb.sysReg.dr[0]);
-    dprinth(10, "DR1=%08X", deb.sysReg.dr[1]);
-    dprinth(11, "DR2=%08X", deb.sysReg.dr[2]);
-    dprinth(12, "DR3=%08X", deb.sysReg.dr[3]);
-    dprinth(13, "DR6=%08X", deb.sysReg.dr6);
-    dprinth(14, "DR7=%08X", deb.sysReg.dr7);
+    && MkBits(bits, deb.sysReg.cr3, bitsCR3)
+    && dprinth(nLine++, "CR3=%08X   %s", deb.sysReg.cr3, bits)
+    && MkBits(bits, deb.sysReg.cr4, bitsCR4)
+    && dprinth(nLine++, "CR4=%08X   %s", deb.sysReg.cr4, bits)
 
-    MkBits(bits, deb.r->eflags, bitsEFL);
-    dprinth(15, "EFL=%08X   %s IOPL=%d", deb.r->eflags, bits, (deb.r->eflags >> IOPL_BIT0 & 3));
+    && dprinth(nLine++, "DR0=%08X", deb.sysReg.dr[0])
+    && dprinth(nLine++, "DR1=%08X", deb.sysReg.dr[1])
+    && dprinth(nLine++, "DR2=%08X", deb.sysReg.dr[2])
+    && dprinth(nLine++, "DR3=%08X", deb.sysReg.dr[3])
+    && dprinth(nLine++, "DR6=%08X", deb.sysReg.dr6)
+    && dprinth(nLine++, "DR7=%08X", deb.sysReg.dr7)
+
+    && MkBits(bits, deb.r->eflags, bitsEFL)
+    && dprinth(nLine++, "EFL=%08X   %s IOPL=%d", deb.r->eflags, bits, (deb.r->eflags >> IOPL_BIT0 & 3)) );
 
     return( TRUE );
 }

@@ -130,8 +130,8 @@ int SerialInit(int com, int baud)
             case 0x115200:  Serial.rate = 0x01; break;
         }
     }
-    // Initialize serial port:
-    cli();
+    // Initialize serial port - we'd rather not have interrupts at this time
+    LocalCLI();
 
     // + 3 Data format register:
     // [7]   Access to divisor latch
@@ -185,7 +185,7 @@ int SerialInit(int com, int baud)
         inp(Serial.port + 0);
 
     // Done with initialization of the serial port
-    sti();
+    LocalSTI();
 
     // Now we can initialize and start using a VT100 terminal
     InitVT100();
@@ -303,6 +303,29 @@ void SerialHandler(int IRQ)
 }
 
 
+#if SERIAL_POLLING
+BYTE SerialIn()
+{
+    BYTE status;
+    BYTE value;
+
+    do
+    {
+        status = inp(Serial.port + 5);
+        if( (status & 1)==1 )
+        {
+            value = inp(Serial.port);
+
+            return( value );
+        }
+
+        value = inp(0x80);
+    }
+    while( TRUE );
+}
+#else
+#endif
+
 /******************************************************************************
 *                                                                             *
 *   void SerialOut(BYTE data)                                                 *
@@ -360,14 +383,14 @@ void SerialOut(BYTE data)
         pIce->timer[0] = 50;            // 1/2 second
         while( (Serial.head + 1)==Serial.tail && pIce->timer[0]) ;
 
-        cli();
+        LocalCLI();
 
         Serial.head++;
 
         if( Serial.head>=MAX_SERIAL_BUFFER )
             Serial.head = 0;
 
-        sti();
+        LocalSTI();
     }
 }
 #endif // SERIAL_POLLING

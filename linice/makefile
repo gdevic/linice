@@ -29,13 +29,15 @@ clean:
 			syscall.o		\
 			symbolTable.o	\
 			symbols.o	\
+			types.o	\
 			proc.o		\
 			edlin.o		\
 			debugger.o	\
-			disassembler.o	\
-			disassembler-bytelen.o	\
+			dis.o		\
+			dis_len.o	\
 			i386.o		\
 			interrupt.o	\
+			apic.o	\
 			command.o	\
 			registers.o	\
 			locals.o	\
@@ -83,11 +85,14 @@ errors.o:		errors.c
 syscall.o:		syscall.c
 	$(CC) $(CFLAGS) -c syscall.c
 
-symbols.o:		symbolTable.c
+symbolTable.o:		symbolTable.c
 	$(CC) $(CFLAGS) -c symbolTable.c
 
 symbols.o:		symbols.c
 	$(CC) $(CFLAGS) -c symbols.c
+
+types.o:		types.c
+	$(CC) $(CFLAGS) -c types.c
 
 proc.o:		proc.c
 	$(CC) $(CFLAGS) -c proc.c
@@ -98,17 +103,20 @@ i386.o:		i386.asm
 interrupt.o:		interrupt.c
 	$(CC) $(CFLAGS) -c interrupt.c
 
+apic.o:		apic.c
+	$(CC) $(CFLAGS) -c apic.c
+
 history.o:	history.c
 	$(CC) $(CFLAGS) -c history.c
 
 debugger.o:	command/debugger.c
 	$(CC) $(CFLAGS) -c command/debugger.c
 
-disassembler.o:	command/disassembler.c
-	$(CC) $(CFLAGS) -c command/disassembler.c
+dis.o:	command/disassembler.c
+	$(CC) $(CFLAGS) -c command/disassembler.c -o dis.o
 
-disassembler-bytelen.o:	command/disassembler-bytelen.c
-	$(CC) $(CFLAGS) -c command/disassembler-bytelen.c
+dis_len.o:	command/disassembler-bytelen.c
+	$(CC) $(CFLAGS) -c command/disassembler-bytelen.c -o dis_len.o
 
 edlin.o:	command/edlin.c
 	$(CC) $(CFLAGS) -c command/edlin.c

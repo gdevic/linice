@@ -128,6 +128,9 @@ static BOOL GetSymbolExports(char *pSystemMap)
     char code;
     char sSymbol[128];
 
+
+    // TODO - We should be really reading current global symbols from /proc/ksyms !
+
     // Try default system map or user-supplied
     fp = fopen(pSystemMap, "r");
     if( fp==NULL )
@@ -218,7 +221,7 @@ void OptInstall(char *pSystemMap)
     GetSymbolExports(pSystemMap);
 
     // Load the linice.o device driver module
-    sprintf(sLine, "insmod linice.o ice_debug_level=1 kbd=%d scan=%d pmodule=%d",
+    sprintf(sLine, "insmod -f linice.o ice_debug_level=1 kbd=%d scan=%d pmodule=%d",
         handle_kbd_event,
         handle_scancode,
         module_list);

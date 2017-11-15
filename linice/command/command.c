@@ -94,7 +94,7 @@ extern BOOL cmdRs      (char *args, int subClass);      // windowcontrol.c
 extern BOOL cmdFlash   (char *args, int subClass);      // windowcontrol.c
 extern BOOL cmdTable   (char *args, int subClass);      // symbolTable.c
 extern BOOL cmdSymbol  (char *args, int subClass);      // symbols.c
-extern BOOL cmdTypes   (char *args, int subClass);      // symbols.c
+extern BOOL cmdTypes   (char *args, int subClass);      // types.c
 extern BOOL cmdFile    (char *args, int subClass);      // symbols.c
 extern BOOL cmdWhat    (char *args, int subClass);      // symbols.c
 extern BOOL cmdReg     (char *args, int subClass);      // registers.c
@@ -232,7 +232,7 @@ TCommand Cmd[] = {
 {    "TABLE",    5, 0, cmdTable,       "TABLE [[R] table-name | AUTOON | AUTOOFF]", "ex: TABLE test", 0 },
 {    "TABS",     4, 0, cmdTabs,        "TABS [1 - 8]", "ex: TABS 4",  0 },
 {    "TSS",      3, 0, cmdTss,         "TSS [TSS selector]", "ex: TSS",   0 },
-{    "TYPES",    5, 0, cmdTypes,       "TYPES [type-name]", "ex: TYPE DWORD", 0 },
+{    "TYPES",    5, 0, cmdTypes,       "TYPES [type-name]", "ex: TYPE TagMyType", 0 },
 {    "U",        1, 0, cmdUnasm,       "Unassemble [address [L length]]", "ex: U EIP-10",  0 },
 {    "VAR",      3, 0, cmdVar,         "VAR [variable-name] | [[*] | [= expression]]", "ex: VAR myvalue = eax+20",   0 },
 {    "VER",      3, 0, cmdVer,         "VER Display Linice version", "ex: VER",   0 },

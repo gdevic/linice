@@ -117,56 +117,6 @@ BOOL cmdSymbol(char *args, int subClass)
 
 /******************************************************************************
 *                                                                             *
-*   BOOL cmdTypes(char *args, int subClass)                                   *
-*                                                                             *
-*******************************************************************************
-*
-*   Display type information from the current symbol table
-*
-******************************************************************************/
-BOOL cmdTypes(char *args, int subClass)
-{
-    char buf[MAX_STRING+1];             // Temp string for output
-    TSYMTYPEDEF *pTypes;
-    int nLine = 1;
-    int i;
-
-    if( pIce->pSymTabCur )
-    {
-        if( *args )
-        {
-            ;
-        }
-        else
-        {
-            // If no arguments, list all types:
-
-            pTypes = (TSYMTYPEDEF *) SymTabFindSection(pIce->pSymTabCur, HTYPE_TYPEDEF);
-            if( pTypes )
-            {
-                for(i=0; i<pTypes->nTypedefs; i++ )
-                {
-                    // Since type definitions are really long strings, we would
-                    // fault if they overflow our buffer, so we copy them in a temp
-                    // buffer before printing
-
-                    strncpy(buf, pIce->pSymTabCur->pPriv->pStrings + pTypes->list[i].dName, 32);
-                    strcat(buf, " = ");
-                    strncat(buf, pIce->pSymTabCur->pPriv->pStrings + pTypes->list[i].dDef, MAX_STRING-32);
-
-                    if(dprinth(nLine++, "%s", buf)==FALSE)
-                        break;
-                }
-            }
-        }
-    }
-
-    return( TRUE );
-}
-
-
-/******************************************************************************
-*                                                                             *
 *   BOOL cmdFile(char *args, int subClass)                                    *
 *                                                                             *
 *******************************************************************************
@@ -252,7 +202,7 @@ BOOL cmdFile(char *args, int subClass)
         }
     }
     else
-        dprinth(0, "No symbol table loaded.");
+        dprinth(1, "No symbol table loaded.");
 
     return( TRUE );
 }

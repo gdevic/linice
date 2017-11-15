@@ -141,13 +141,13 @@ CHAR GetKey( BOOL fBlock )
     // Pick up a key from the input queue and return success
     // Get a character from the queue - make it uninterruptible (atomic)
 
-    CLI();
+    LocalCLI();
 
     c = kQueue[ head ];
 
     head = NEXT_KQUEUE( head );
 
-    STI();
+    LocalSTI();
 
     return( c );
 }
@@ -172,7 +172,7 @@ void PutKey( CHAR Key )
 
     // Store a code into the input queue - make it uninterruptible (atomic)
 
-    CLI();
+    LocalCLI();
 
     bNext = NEXT_KQUEUE( tail );
 
@@ -186,6 +186,6 @@ void PutKey( CHAR Key )
         // Hmmm. Not good.
     }
 
-    STI();
+    LocalSTI();
 }
 

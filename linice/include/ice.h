@@ -153,6 +153,13 @@ typedef struct
     PTREGS r;                           // pointer to live registers
     TREGS  r_prev;                      // previous registers (for color coding of changes)
     TSysreg sysReg;                     // System registers
+    BOOL fIoApic;                       // Are we using IO APIC?
+    TIOAPIC0 IoApic0;                   // Initial content of the first IO APIC register
+    TIOAPIC1 IoApic1;                   // Initial content of the second IO APIC register
+    TIOAPICREDIR IoApicRedir[MAX_IOAPICREG];
+                                        // Initial content of IO APIC redirection registers
+    BOOL fSmp;                          // Is this machine a SMP enabled?
+    int cpu;                            // CPU number that the debugger uses
     int nInterrupt;                     // Interrupt that occurred
     int bpIndex;                        // Index of the breakpoint that hit (default -1)
 

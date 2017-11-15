@@ -149,10 +149,10 @@ typedef struct
 } PACKED TIDT_Gate, *PTIDT_Gate;
 
 #define INT_TYPE_TASK       0x5         // Task gate
-#define INT_TYPE_INT16      0x6         // 16 bit interrupt gate
-#define INT_TYPE_TRAP16     0x7         // 16 bit trap gate
-#define INT_TYPE_INT32      0xE         // 32 bit interrupt gate
-#define INT_TYPE_TRAP32     0xF         // 32 bit trap gate
+#define INT_TYPE_INT16      0x6         // 16 bit interrupt gate (clears IF)
+#define INT_TYPE_TRAP16     0x7         // 16 bit trap gate (leaves IF set)
+#define INT_TYPE_INT32      0xE         // 32 bit interrupt gate (clears IF)
+#define INT_TYPE_TRAP32     0xF         // 32 bit trap gate (leaves IF set)
 
 #define GET_IDT_BASE(pIDT_Gate)   ((pIDT_Gate)->offsetLow + ((pIDT_Gate)->offsetHigh << 16))
 
@@ -369,6 +369,60 @@ typedef struct
 #define DR7_LEN2            8           // 2 byte len
 #define DR7_LEN4            0xC         // 4 byte len
 
+
+///////////////////////////////////////////////////////////////////////////////
+// Defines for the Intel IO APIC registers (82379AB Only)
+///////////////////////////////////////////////////////////////////////////////
+
+// Define IO APIC register 0 (Identification register)
+typedef struct
+{
+    DWORD res1          : 24;           // Reserved
+    DWORD Id            : 4;            // IO APIC Identification number
+    DWORD res2          : 4;            // Reserved
+
+} PACKED TIOAPIC0;
+
+// Define IO APIC register 1 (Version register)
+typedef struct
+{
+    DWORD Version       : 8;            // IO APIC Version number
+    DWORD res1          : 8;            // Reserved
+    DWORD nRedir        : 8;            // Maximum redirection entry
+    DWORD res2          : 8;            // Reserved
+
+} PACKED TIOAPIC1;
+
+// Define IO APIC register 2 (Arbitration register)
+typedef struct
+{
+    DWORD res1          : 24;           // Reserved
+    DWORD Id            : 4;            // IO APIC Arbitration value
+    DWORD res2          : 4;            // Reserved
+
+} PACKED TIOAPIC2;
+
+//-----------------------------------------------------------------------------
+// IO APIC I/O Redirection Table Registers
+//-----------------------------------------------------------------------------
+typedef struct
+{
+    DWORD IntVec        : 8;            // Interrupt vector
+    DWORD DelMod        : 3;            // Delivery mode
+    DWORD DestMod       : 1;            // Destination mode
+    DWORD Delivs        : 1;            // Delivery status
+    DWORD IntPol        : 1;            // Interrupt polarity
+    DWORD RemoteIrr     : 1;            // For level-triggered ints
+    DWORD TriggerMode   : 1;            // Level or edge sensitive
+    DWORD Mask          : 1;            // Interrupt mask
+    DWORD res1          :15;            // Reserved
+    WORD  dword2;                       // Reserved (padding)
+    BYTE  res3;                         // Reserved (padding)
+    BYTE  Dest;                         // Destination field
+
+} PACKED TIOAPICREDIR;
+
+
 /******************************************************************************
 *                                                                             *
 *   Extern functions                                                          *
@@ -410,8 +464,8 @@ typedef struct
 #define INT1()           __asm__("int $1" ::);
 #define INT3()           __asm__("int $3" ::);
 
-#define CLI()            __asm__("cli" ::);
-#define STI()            __asm__("sti" ::);
+#define LocalCLI()       __asm__("cli" ::);
+#define LocalSTI()       __asm__("sti" ::);
 
 #define CLTS()           __asm__("clts" ::);
 

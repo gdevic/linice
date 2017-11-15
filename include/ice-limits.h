@@ -144,5 +144,10 @@
 //
 #define TIMER_CARRET        20
 
+//////////////////////////////////////////////////////////////////////
+// Number of IO APIC interrupt redirection registers that we keep
+//
+#define MAX_IOAPICREG       16
+
 #endif //  _ICE_LIMITS_H_
 

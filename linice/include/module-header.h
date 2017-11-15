@@ -44,6 +44,11 @@
 *                                                                             *
 ******************************************************************************/
 
+#define CONFIG_X86_LOCAL_APIC
+#define CONFIG_X86_IO_APIC
+#define CONFIG_SMP
+
+
 #include <linux/autoconf.h>                   // Include our linux configuration
 #include <linux/version.h>                    // Include KERNEL_VERSION macro
 

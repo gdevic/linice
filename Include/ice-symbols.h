@@ -282,8 +282,8 @@ typedef struct
 
 typedef struct
 {
-    WORD maj;                           // File number
-    WORD min;                           // File definition number
+    WORD maj;                           // Type file number
+    WORD min;                           // Type ordinal definition number
     DWORD dName;                        // Offset to the typedef name string
     DWORD dDef;                         // Offset to the typedef definition string
                                         // if dDef<TYPEDEF__LAST, a basic implied type

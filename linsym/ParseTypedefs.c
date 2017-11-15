@@ -119,6 +119,7 @@ BOOL ParseTypedefs(int fd, int fs, BYTE *pBuf)
     char *pDefinition;                  // Temp pointer to a typedef definition string
     int nNameLen;                       // Length of the typedef name string
     int nDefLen;                        // Length of the typedef definition string
+    char cType;                         // Scanned typedef type
 
     Elf32_Ehdr *pElfHeader;             // ELF header
 
@@ -197,10 +198,10 @@ BOOL ParseTypedefs(int fd, int fs, BYTE *pBuf)
                 case N_LSYM:
                     if(pStab->n_value==0)
                     {
-                        int maj, min;
-
                         // If the definition is split into multiple lines, we will concat them
                         // back together and do the final processing on that complete string
+
+                        // TODO: We really need to check if we overflowed the buffer
                         if( pStr[strlen(pStr)-1]=='\\' )
                         {
                             if( pDef==NULL )
@@ -230,23 +231,29 @@ BOOL ParseTypedefs(int fd, int fs, BYTE *pBuf)
 
                             // Do final processing of the typdef definition:
                             // If the type defined here is one of the basic types that we know
-                            // how to process, there is no need to store the complete definition
+                            // how to process, there is no need to store a complete definition
                             // string - we store the name and the definition enum in the dDef field:
 
-                            // Decode typedef ID numbers
-                            if(sscanf(strchr(pDef, '('), "(%d,%d)", &maj, &min)!=2)
+                            // Decode typedef record into a binary structure
+                            if(sscanf(strchr(pDef, ':'), ":%c(%hd,%hd)", &cType, &list.maj, &list.min)!=3)
                             {
                                 printf("Error scanning TYPEDEF ID %s\n", pDef);
                                 return( FALSE );
                             }
 
-                            // Find the address where the typedef name ends and its definition starts
-                            nNameLen = strchr(pDef, '=') - pDef;
-                            pDefinition = pDef + nNameLen + 1;
+                            // Find the address where the literal typedef name ends
+                            nNameLen = strchr(pDef, ':') - pDef;
+
+                            pDefinition = strchr(pDef, '=') + 1;
 
                             nDefLen = strlen(pDefinition);
 
                             list.dName = dfs;
+
+                            // Copy the typedef type (one character) first into the name string
+                            write(fs, &cType, 1);
+                            dfs += 1;
+
                             // Copy the typedef name into the strings and zero terminate it
                             write(fs, pDef, nNameLen);
                             write(fs, "", 1);               // This will append 0
@@ -260,12 +267,9 @@ BOOL ParseTypedefs(int fd, int fs, BYTE *pBuf)
                                 dfs += nDefLen + 1;
                             }
 
-                            list.maj  = maj;
-                            list.min  = min;
-
                             write(fd, &list, sizeof(TSYMTYPEDEF1));
 
-                            printf("TYPEDEF(%d,%d) %s\n", maj, min, pDef);
+                            printf("TYPEDEF(%d,%d) %s\n", list.maj, list.min, pDef);
 
                             pDef = NULL;        // Reset the pointer to a typedef string
 
