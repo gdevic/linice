@@ -2,11 +2,19 @@
 *                                                                             *
 *   Module:     clib.h                                                        *
 *                                                                             *
-*   Date:       03/11/01                                                      *
+*   Date:       09/11/00                                                      *
 *                                                                             *
 *   Copyright (c) 2001 Goran Devic                                            *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
+*                                                                             *
+*   This source code and produced executable is copyrighted by Goran Devic.   *
+*   This source, portions or complete, and its derivatives can not be given,  *
+*   copied, or distributed by any means without explicit written permission   *
+*   of the copyright owner. All other rights, including intellectual          *
+*   property rights, are implicitly reserved. There is no guarantee of any    *
+*   kind that this software would perform, and nobody is liable for the       *
+*   consequences of running it. Use at your own risk.                         *
 *                                                                             *
 *******************************************************************************
 
@@ -21,7 +29,7 @@
 *                                                                             *
 *   DATE     DESCRIPTION OF CHANGES                               AUTHOR      *
 * --------   ---------------------------------------------------  ----------- *
-* 03/11/01   Original                                             Goran Devic *
+* 09/11/00   Original                                             Goran Devic *
 * --------   ---------------------------------------------------  ----------- *
 *******************************************************************************
 *   Important Defines                                                         *
@@ -29,10 +37,10 @@
 #ifndef _CLIB_H_
 #define _CLIB_H_
 
-#include <fs.h>                         // Include file operations file
-#include <ctype.h>                      // Include character types definition
-#include <string.h>                     // Include macros for string/memory
-#include <stdarg.h>                     // Include variable argument header
+#include <linux/fs.h>                         // Include file operations file
+#include <linux/ctype.h>                      // Include character types definition
+#include <linux/string.h>                     // Include macros for string/memory
+// #include <stdarg.h>                     // Include variable argument header
 
 #include "ice-types.h"                  // Include exended data types
 
@@ -42,10 +50,11 @@
 //
 ///////////////////////////////////////////////////////////////////////////////
 
-#define CHAR_SHIFT      0x0100          // <key> + SHIFT
-#define CHAR_ALT        0x0200          // <key> + ALT
-#define CHAR_CTRL       0x0400          // <key> + CTRL
+#define CHAR_SHIFT      0x1000          // <key> + SHIFT
+#define CHAR_ALT        0x2000          // <key> + ALT
+#define CHAR_CTRL       0x4000          // <key> + CTRL
 
+// F1 Code have to start at 0x80 - code in edlin counts on it!
 #define F1            0x80
 #define F2            0x81
 #define F3            0x82
@@ -58,46 +67,6 @@
 #define F10           0x89
 #define F11           0x8A
 #define F12           0x8B
-
-#define SF1           (F1 + 1 * 12)
-#define SF2           (F2 + 1 * 12)
-#define SF3           (F3 + 1 * 12)
-#define SF4           (F4 + 1 * 12)
-#define SF5           (F5 + 1 * 12)
-#define SF6           (F6 + 1 * 12)
-#define SF7           (F7 + 1 * 12)
-#define SF8           (F8 + 1 * 12)
-#define SF9           (F9 + 1 * 12)
-#define SF10          (F10+ 1 * 12)
-#define SF11          (F11+ 1 * 12)
-#define SF12          (F12+ 1 * 12)
-
-#define AF1           (F1 + 2 * 12)
-#define AF2           (F2 + 2 * 12)
-#define AF3           (F3 + 2 * 12)
-#define AF4           (F4 + 2 * 12)
-#define AF5           (F5 + 2 * 12)
-#define AF6           (F6 + 2 * 12)
-#define AF7           (F7 + 2 * 12)
-#define AF8           (F8 + 2 * 12)
-#define AF9           (F9 + 2 * 12)
-#define AF10          (F10+ 2 * 12)
-#define AF11          (F11+ 2 * 12)
-#define AF12          (F12+ 2 * 12)
-
-#define CF1           (F1 + 3 * 12)
-#define CF2           (F2 + 3 * 12)
-#define CF3           (F3 + 3 * 12)
-#define CF4           (F4 + 3 * 12)
-#define CF5           (F5 + 3 * 12)
-#define CF6           (F6 + 3 * 12)
-#define CF7           (F7 + 3 * 12)
-#define CF8           (F8 + 3 * 12)
-#define CF9           (F9 + 3 * 12)
-#define CF10          (F10+ 3 * 12)
-#define CF11          (F11+ 3 * 12)
-#define CF12          (F12+ 3 * 12)
-
 
 #define BACKSPACE     '\b'
 #define TAB           '\t'
@@ -123,3 +92,4 @@ extern void _kFree( BYTE *pHeap, void *mPtr );
 extern void strtolower(char *str);
 
 #endif //  _CLIB_H_
+

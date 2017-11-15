@@ -2,11 +2,19 @@
 *                                                                             *
 *   Module:     ice-types.h                                                   *
 *                                                                             *
-*   Date:       03/09/01                                                      *
+*   Date:       09/09/00                                                      *
 *                                                                             *
 *   Copyright (c) 2001 Goran Devic                                            *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
+*                                                                             *
+*   This source code and produced executable is copyrighted by Goran Devic.   *
+*   This source, portions or complete, and its derivatives can not be given,  *
+*   copied, or distributed by any means without explicit written permission   *
+*   of the copyright owner. All other rights, including intellectual          *
+*   property rights, are implicitly reserved. There is no guarantee of any    *
+*   kind that this software would perform, and nobody is liable for the       *
+*   consequences of running it. Use at your own risk.                         *
 *                                                                             *
 *******************************************************************************
 
@@ -20,8 +28,8 @@
 *                                                                             *
 *   DATE     DESCRIPTION OF CHANGES                               AUTHOR      *
 * --------   ---------------------------------------------------  ----------- *
-* 10/28/00   Original                                             Goran Devic *
-* 03/09/01   Modified for LinIce                                  Goran Devic *
+* 05/28/00   Original                                             Goran Devic *
+* 09/09/00   Modified for LinIce                                  Goran Devic *
 * --------   ---------------------------------------------------  ----------- *
 *******************************************************************************
 *   Important Defines                                                         *
@@ -36,7 +44,7 @@
 
 typedef unsigned char  BYTE;
 typedef unsigned short WORD;
-typedef unsigned long  DWORD;
+typedef unsigned int   DWORD;
 typedef unsigned int   BOOL;
 
 #ifndef TRUE
@@ -62,5 +70,20 @@ typedef unsigned short int CHAR;
 // When we need it, character type is unsigned
 typedef unsigned char UCHAR;
 
+///////////////////////////////////////////////////////////////////////////////
+// Define packed structure for MSVC and gcc
+///////////////////////////////////////////////////////////////////////////////
+#ifdef WINDOWS
+
+#define PACKED
+#pragma pack(1)
+
+#else // !WINDOWS
+
+#define PACKED __attribute__((packed))
+
+#endif // WINDOWS
+
 
 #endif //  _ICE_TYPES_H_
+

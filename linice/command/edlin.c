@@ -2,11 +2,19 @@
 *                                                                             *
 *   Module:     edlin.c                                                       *
 *                                                                             *
-*   Date:       03/10/01                                                      *
+*   Date:       09/10/00                                                      *
 *                                                                             *
 *   Copyright (c) 1997, 2001 Goran Devic                                      *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
+*                                                                             *
+*   This source code and produced executable is copyrighted by Goran Devic.   *
+*   This source, portions or complete, and its derivatives can not be given,  *
+*   copied, or distributed by any means without explicit written permission   *
+*   of the copyright owner. All other rights, including intellectual          *
+*   property rights, are implicitly reserved. There is no guarantee of any    *
+*   kind that this software would perform, and nobody is liable for the       *
+*   consequences of running it. Use at your own risk.                         *
 *                                                                             *
 *******************************************************************************
 
@@ -14,9 +22,9 @@
 
     This module contains the code for the command line editor.
 
-    The line editor supports editing a line of up to (N) characters in length.
-    The last character is always zero-terminator.  Cursor can be moved
-    using `Left'/`Right' keys.
+    The line editor supports editing a line of up to MAX_STRINGS characters
+    in length. The last character is always zero-terminator.
+    Cursor can be moved using `Left'/`Right' keys.
 
     It supports `insert' key for typing modes (insert and overwrite),
     `backspace' and `delete' keys for deletion, `end' and `home' keys for
@@ -27,6 +35,9 @@
 
     `ESC' key clears the input line.
 
+    Function keys invoke immediate execution of the string definition, if
+    string is prefixed by ~, or copy string otherwise.
+
 *******************************************************************************
 *                                                                             *
 *   Changes:                                                                  *
@@ -34,8 +45,8 @@
 *   DATE     DESCRIPTION OF CHANGES                               AUTHOR      *
 * --------   ---------------------------------------------------  ----------- *
 * 8/28/97    Original                                             Goran Devic *
-* 11/17/00   Modified for LinIce                                  Goran Devic *
-* 03/10/01   Second revision                                      Goran Devic *
+* 05/17/00   Modified for LinIce                                  Goran Devic *
+* 09/10/00   Second revision                                      Goran Devic *
 * --------   ---------------------------------------------------  ----------- *
 *******************************************************************************
 *   Include Files                                                             *
@@ -54,6 +65,8 @@
 ******************************************************************************/
 
 #define MAX_CMD     (pOut->sizeX)
+
+char *pCmdEdit = NULL;                  // Push edit line string
 
 /******************************************************************************
 *                                                                             *
@@ -83,7 +96,7 @@ static char sHelpLine[MAX_STRING];
 static int  iHistory;                   // Current history lookup entry index
 static int  iWriteHistory = 0;          // Index which history line to update
 
-static char sHistory[MAX_HISTORY][80] = {
+static char sHistory[MAX_HISTORY][MAX_STRING] = {
 // 12345678901234567890123456789012345678901234567890123456789012345678901234567890
 { "                                                                               \0" },
           { "\0" }, { "\0" }, { "\0" }, { "\0" }, { "\0" }, { "\0" }, { "\0" },
@@ -104,6 +117,22 @@ static DWORD hView;                     // Handle to a history view
 *   Functions                                                                 *
 *                                                                             *
 ******************************************************************************/
+
+extern void CodeScroll(int direction);
+extern char *MacroExpand(char *pCmd);
+
+/******************************************************************************
+*                                                                             *
+*   void InitEdit()                                                           *
+*                                                                             *
+*******************************************************************************
+*
+*   Initialize editing system. Will use later.
+*
+******************************************************************************/
+void InitEdit()
+{
+}
 
 /******************************************************************************
 *                                                                             *
@@ -233,20 +262,37 @@ static void NextHistoryLine()
 ******************************************************************************/
 void EdLin( char *sCmdLine )
 {
+    DWORD newOffset;
     CHAR Key;
-    int i;
+    int i, map;
+    char *pMacro;                       // Macro string that we found to match
+    char *pSource;                      // String source to copy from a Fn key
+    BOOL fSilent;                       // Echo the line or not - used with F-keys
 
     yCur = pOut->y;                     // Store line editor Y coordinate
     fCmdBuf = FALSE;                    // We did not scroll history buffer yet
     hView = HistoryGetTop();            // Get a handle to the current history view
     sCmd = sCmdLine;                    // Local pointer to a command line
     iHistory = iWriteHistory;           // Always lookup from the current history line
+    fSilent = FALSE;                    // Default print out a line
 
     ClearLine();                        // Clear the current command line and reset the cursor
 
+    // When we are requested to edit an existing line, we will have pCmdEdit nonzero,
+    // and in that case copy it into the sCmd buffer instead of clearing it
+    if( pCmdEdit != NULL )
+    {
+        strcpy(sCmd + 1, pCmdEdit);
+        sCmd[strlen(pCmdEdit)+1] = ' ';
+        xCur = strlen(pCmdEdit) + 1;
+        pCmdEdit = NULL;
+
+        dprint("%c%c%c:", DP_SETCURSORXY, 1+xCur, 1+yCur);
+    }
+
     do
     {
-        TCommand *pCmd;                 // Pointer to the last command record
+        TCommand *pCmd = NULL;          // Pointer to the last command record
         int nFound;                     // How many matches
         char *tok;                      // Pointer to the first token
         int nLen;                       // Length of the first token
@@ -300,8 +346,20 @@ void EdLin( char *sCmdLine )
 
             if( nFound==0 )
             {
-                // If we did not find any match, print invalid command
-                strcpy(sHelpLine, sInvalidCommand);
+                // If we did not find any match, look for a possible defined macro that
+                // would be used
+                pMacro = MacroExpand(tok);
+
+                if( pMacro != NULL )
+                {
+                    strncpy(sHelpLine, tok, nLen);
+                    sprintf(sHelpLine+nLen, " = \"%s\"\r", pMacro);
+                }
+                else
+                {
+                    // If we did not find any match, print invalid command
+                    strcpy(sHelpLine, sInvalidCommand);
+                }
             }
             else
             if( nFound==1 )
@@ -339,199 +397,291 @@ void EdLin( char *sCmdLine )
 
         Key = GetKey( TRUE );
 
-        switch( Key )
+        // If the imput key is one of the Function key combinations, copy or exec the string
+        // THIS CODE ASSUMES F1 CODE STARTS AT 0x80 !!!!
+
+        pSource = "";
+
+        if( Key & 0x80 )
         {
-            case ESC:
-                // ESC key clears the current buffer
+            if( Key & CHAR_SHIFT )
+                map = 1;
+            else
+            if( Key & CHAR_ALT )
+                map = 2;
+            else
+            if( Key & CHAR_CTRL )
+                map = 3;
+            else
+                map = 0;
 
-                ClearLine();
+            if( pIce->keyFn[map][Key & 0x1F][0]=='^' )
+            {
+                // First character was ^ execute immediately and silently.
+                // Now, we should really preserve the current line for the next edit pass,
+                // but I can't think of an elegant way to do that yet
 
-                break;
+                fSilent = TRUE;
+                ClearLine();     // Clear the current command line and reset the cursor
 
-            case HOME:
-                // HOME positions the cursor at the column 1 (col 0 is a prompt)
+                // Copy the string into our edit line but skip leading ^
+                pSource = pIce->keyFn[map][Key & 0x1F] + 1;
+            }
+            else
+                // Copy the string into our edit line
+                pSource = pIce->keyFn[map][Key & 0x1F];
+        }
 
-                xCur = 1;
+        do
+        {
+            // Make our Fn-key string being accepted
+            if( *pSource )
+                Key = *pSource++;
 
-                break;
+            switch( Key )
+            {
+                case CHAR_CTRL + PGUP:
+                    // Ctrl + PgUp scrolls code window backward
 
-            case END:
-                // END positions the cursor after the last nonblank character
+                    CodeScroll(-1);
 
-                CursorEnd();
+                    break;
 
-                break;
+                case CHAR_CTRL + PGDN:
+                    // Ctrl + PgDown scrolls code window forward
 
-            case LEFT:
-                // LEFT moves the cursor one character to the left
+                    CodeScroll(1);
 
-                if( xCur > 1 )
-                    xCur--;
+                    break;
 
-                break;
+                case CHAR_ALT + PGUP:
+                    // Alt + PgUp scrolls data window backward
 
-            case RIGHT:
-                // RIGHT moves the cursor one character to the right
+                    newOffset = deb.dataAddr.offset - DATA_BYTES * (pWin->d.nLines - 1);
+                    DataDraw(FALSE, newOffset);
 
-                if( xCur < MAX_CMD-1 )
-                    xCur++;
+                    break;
 
-                break;
+                case CHAR_ALT + PGDN:
+                    // Alt + PgDown scrolls data window forward
 
-            case UP:
-                // UP key retrieves the previous line from the history buffer
+                    newOffset = deb.dataAddr.offset + DATA_BYTES * (pWin->d.nLines - 1);
+                    DataDraw(FALSE, newOffset);
 
-                PrevHistoryLine();
+                    break;
 
-                break;
+                case CHAR_ALT + UP:
+                    // Alt + CursorUp scrolls data window one line back
 
-            case DOWN:
-                // DOWN key retrieves the next line from the history buffer
+                    newOffset = deb.dataAddr.offset - DATA_BYTES;
+                    DataDraw(FALSE, newOffset);
 
-                NextHistoryLine();
+                    break;
 
-                break;
+                case CHAR_ALT + DOWN:
+                    // Alt + CursorDown scrolls data window one line forward
 
-            case PGUP:
-                // PGUP key scrolls history buffer one screenful up
+                    newOffset = deb.dataAddr.offset + DATA_BYTES;
+                    DataDraw(FALSE, newOffset);
 
-                fCmdBuf = TRUE;
-                hView = HistoryDisplay(hView, -1);
+                    break;
 
-                break;
+                case ESC:
+                    // ESC key clears the current buffer
 
-            case PGDN:
-                // PGDOWN key scrolls history buffer one screenful down
+                    ClearLine();
 
-                fCmdBuf = TRUE;
-                hView = HistoryDisplay(hView, 1);
+                    break;
 
-                break;
+                case HOME:
+                    // HOME positions the cursor at the column 1 (col 0 is a prompt)
 
-            case INS:
-                // INSERT key toggles the insert mode
+                    xCur = 1;
 
-                fInsert ^= 1;
+                    break;
 
-                break;
+                case END:
+                    // END positions the cursor after the last nonblank character
 
-            case '\b':
-                // Backspace key deletes a character to the left of the cursor
-                // and moves the cursor to the left
+                    CursorEnd();
 
-                if( xCur > 1 )
-                {
-                    memmove( sCmd + xCur - 1,
-                             sCmd + xCur,
-                             (MAX_CMD-1) - xCur );
+                    break;
 
-                    // Set the last char to be space
+                case LEFT:
+                    // LEFT moves the cursor one character to the left
 
-                    sCmd[MAX_CMD-2] = ' ';
+                    if( xCur > 1 )
+                        xCur--;
 
-                    // Move the cursor one place to the left
+                    break;
 
-                    xCur--;
-                }
-
-                break;
-
-            case DEL:
-                // Delete key deletes the current character and moves the rest
-                // right from the cursor to the right
-
-                if( xCur < 79 )
-                {
-                    memmove( sCmd + xCur,
-                             sCmd + xCur + 1,
-                             (MAX_CMD-1) - xCur );
-
-                    // Set the last char to be space
-
-                    sCmd[MAX_CMD-1] = ' ';
-                }
-
-                break;
-
-            case '\n':
-                // Enter key accepts the line.  If the line is different from
-                // any history line, it copies it to the writing history line.
-                // If the line is identical, do not copy, but use its prevous
-                // copy.
-
-                for( i=0; i<MAX_HISTORY; i++ )
-                {
-                    // Look for the history line that is identical
-
-                    if( !strcmp( sCmd, sHistory[i] ) )
-                        iWriteHistory = i;
-                }
-
-                if( i==MAX_HISTORY )
-                {
-                    // Line is new.  Store it to the history buffer
-
-                    memcpy( sHistory[iWriteHistory], sCmd, MAX_CMD );
-
-                    // Advance write history index
-
-                    iWriteHistory = NEXT_INDEX(iWriteHistory);
-                }
-
-                break;
-
-            case ' ':
-                // IMPORTANT: This case has to be followed by the default case
-                //            It has no break statement.
-
-                // If we pressed SPACE key, and a single command token was found,
-                // complete it if necessary
-
-                if( nFound==1 && xCur==tok-sCmd+nLen && xCur<MAX_CMD-pCmd->nLen)
-                {
-                    // Insert the rest of the suggested command (complete it)
-
-                    if( nLen < pCmd->nLen )
-                    {
-                        memcpy(&sCmd[xCur], pCmd->sCmd+nLen, pCmd->nLen - nLen);
-                        xCur += pCmd->nLen - nLen;
-                    }
-                }
-                // Proceed with adding in the space...
-
-            default:
-                if( Key < 0x7F && isascii(Key) )
-                {
-                    // Any other character is written in the buffer in insert or
-                    // overwrite mode
-
-                    if( fInsert && xCur < MAX_CMD-2 )
-                    {
-                        // Move the buffer right of the cursor to make some space
-
-                        if( xCur < MAX_CMD-2 )
-                            memmove( sCmd + xCur + 1,
-                                     sCmd + xCur,
-                                     (MAX_CMD-2) - xCur );
-                    }
-
-                    // Store a new character and advance the cursor
+                case RIGHT:
+                    // RIGHT moves the cursor one character to the right
 
                     if( xCur < MAX_CMD-1 )
+                        xCur++;
+
+                    break;
+
+                case UP:
+                    // UP key retrieves the previous line from the history buffer
+
+                    PrevHistoryLine();
+
+                    break;
+
+                case DOWN:
+                    // DOWN key retrieves the next line from the history buffer
+
+                    NextHistoryLine();
+
+                    break;
+
+                case PGUP:
+                    // PGUP key scrolls history buffer one screenful up
+
+                    fCmdBuf = TRUE;
+                    hView = HistoryDisplay(hView, -1);
+
+                    break;
+
+                case PGDN:
+                    // PGDOWN key scrolls history buffer one screenful down
+
+                    fCmdBuf = TRUE;
+                    hView = HistoryDisplay(hView, 1);
+
+                    break;
+
+                case INS:
+                    // INSERT key toggles the insert mode
+
+                    fInsert ^= 1;
+
+                    dprint("%c%c", DP_SETCURSORSHAPE, fInsert? 1 : 2 );
+
+                    break;
+
+                case '\b':
+                    // Backspace key deletes a character to the left of the cursor
+                    // and moves the cursor to the left
+
+                    if( xCur > 1 )
                     {
-                        sCmd[ xCur ] = Key;
+                        memmove( sCmd + xCur - 1,
+                                 sCmd + xCur,
+                                 (MAX_CMD-1) - xCur );
+
+                        // Set the last char to be space
+
+                        sCmd[MAX_CMD-2] = ' ';
+
+                        // Move the cursor one place to the left
+
+                        xCur--;
+                    }
+
+                    break;
+
+                case DEL:
+                    // Delete key deletes the current character and moves the rest
+                    // right from the cursor to the right
+
+                    if( xCur < 79 )
+                    {
+                        memmove( sCmd + xCur,
+                                 sCmd + xCur + 1,
+                                 (MAX_CMD-1) - xCur );
+
+                        // Set the last char to be space
+
+                        sCmd[MAX_CMD-1] = ' ';
+                    }
+
+                    break;
+
+                case '\n':
+                    // Enter key accepts the line.  If the line is different from
+                    // any history line, it copies it to the writing history line.
+                    // If the line is identical, do not copy, but use its prevous
+                    // copy.
+
+                    for( i=0; i<MAX_HISTORY; i++ )
+                    {
+                        // Look for the history line that is identical
+
+                        if( !strcmp( sCmd, sHistory[i] ) )
+                            iWriteHistory = i;
+                    }
+
+                    if( i==MAX_HISTORY )
+                    {
+                        // Line is new.  Store it to the history buffer
+
+                        memcpy( sHistory[iWriteHistory], sCmd, MAX_CMD );
+
+                        // Advance write history index
+
+                        iWriteHistory = NEXT_INDEX(iWriteHistory);
+                    }
+
+                    break;
+
+                case ' ':
+                    // IMPORTANT: This case has to be followed by the default case
+                    //            It has no break statement.
+
+                    // If we pressed SPACE key, and a single command token was found,
+                    // complete it if necessary
+
+                    if( nFound==1 && xCur==tok-sCmd+nLen && xCur<MAX_CMD-pCmd->nLen)
+                    {
+                        // Insert the rest of the suggested command (complete it)
+
+                        if( nLen < pCmd->nLen )
+                        {
+                            memcpy(&sCmd[xCur], pCmd->sCmd+nLen, pCmd->nLen - nLen);
+                            xCur += pCmd->nLen - nLen;
+                        }
+                    }
+                    // Proceed with adding in the space...
+
+                default:
+                    if( Key < 0x7F && isascii(Key) )
+                    {
+                        // Any other character is written in the buffer in insert or
+                        // overwrite mode
+
+                        if( fInsert && xCur < MAX_CMD-2 )
+                        {
+                            // Move the buffer right of the cursor to make some space
+
+                            if( xCur < MAX_CMD-2 )
+                                memmove( sCmd + xCur + 1,
+                                         sCmd + xCur,
+                                         (MAX_CMD-2) - xCur );
+                        }
+
+                        // Store a new character and advance the cursor
 
                         if( xCur < MAX_CMD-1 )
-                            xCur++;
-                    }
-                }
-                else    // Combination keys with Alt/Ctrl/Shift key or a function key
-                {
-                    ;
-                }
+                        {
+                            sCmd[ xCur ] = Key;
 
-                break;
+                            if( xCur < MAX_CMD-1 )
+                                xCur++;
+                        }
+                    }
+                    else    // Combination keys with Alt/Ctrl/Shift key or a function key
+                    {
+                        ;
+                    }
+
+                    break;
+            }
+
         }
+        while( *pSource );
 
     } while( Key != '\n' );
 
@@ -550,6 +700,8 @@ void EdLin( char *sCmdLine )
     // Print the final line and scroll it up.. Add it to the history buffer
 
     dprint("%c%c%c", DP_SETCURSORXY, 1+0, 1+yCur);
-    dprinth(1, "%s\n", sCmd);
+
+    if( fSilent==FALSE )
+        dprinth(1, "%s", sCmd);
 }
 

@@ -1,0 +1,78 @@
+/******************************************************************************
+*                                                                             *
+*   Module:     ice-limits.h                                                  *
+*                                                                             *
+*   Date:       09/11/00                                                      *
+*                                                                             *
+*   Copyright (c) 2001 Goran Devic                                            *
+*                                                                             *
+*   Author:     Goran Devic                                                   *
+*                                                                             *
+*   This source code and produced executable is copyrighted by Goran Devic.   *
+*   This source, portions or complete, and its derivatives can not be given,  *
+*   copied, or distributed by any means without explicit written permission   *
+*   of the copyright owner. All other rights, including intellectual          *
+*   property rights, are implicitly reserved. There is no guarantee of any    *
+*   kind that this software would perform, and nobody is liable for the       *
+*   consequences of running it. Use at your own risk.                         *
+*                                                                             *
+*******************************************************************************
+
+    Module Description:
+
+        This header file contains global program limits.
+        If you need to change some parameters, change it here.
+        However, there is no guarrantee that things will work :-}
+
+*******************************************************************************
+*                                                                             *
+*   Major changes:                                                            *
+*                                                                             *
+*   DATE     DESCRIPTION OF CHANGES                               AUTHOR      *
+* --------   ---------------------------------------------------  ----------- *
+* 09/03/00   Initial version                                      Goran Devic *
+* --------   ---------------------------------------------------  ----------- *
+*******************************************************************************
+*   Important Defines                                                         *
+******************************************************************************/
+#ifndef _ICE_LIMITS_H_
+#define _ICE_LIMITS_H_
+
+//////////////////////////////////////////////////////////////////////
+// Define character device that the driver assumes in /dev/*
+//
+#define DEVICE_NAME         "ice"       // Define LinIce device name (/dev)
+
+//////////////////////////////////////////////////////////////////////
+// Define the maxlimum length (including terminating zero) of:
+//  * initialization string
+//  * keyboard function define
+//  * command line buffer
+//
+#define MAX_STRING          256
+
+// Length of the module name string (incl. 0)
+#define MAX_MODULE_NAME     16
+
+// Default symbol file signature - should be less than MAX_MODULE_NAME
+#define SYMSIG  "Linice Sym\0x1A"
+
+//////////////////////////////////////////////////////////////////////
+// Define number of bytes per line for data dump command (not tested)
+// Must be divisible by 4
+#define DATA_BYTES         16
+
+//////////////////////////////////////////////////////////////////////
+// Define maximum X and Y size of the output window in all modes
+// and devices
+#define MAX_X               160
+#define MAX_Y               90
+
+//////////////////////////////////////////////////////////////////////
+// Define if the serial out connection will use polling method or
+// interrupts. As of this writing, interrupts still have some problems
+// (ocasional lost character), so the polling is used.
+#define SERIAL_POLLING      1
+
+
+#endif //  _ICE_LIMITS_H_

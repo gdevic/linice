@@ -1,3 +1,88 @@
+int SourceLineToAddr(int line)
+{
+    return( 0 );
+}
+
+#if 0
+static char *evalError[] = {
+"No effective address",
+"System data was not present",
+"%s is not a structure member",
+"Expecting structure member name",
+"Macro cannot be used here",
+"Symbol has not been instantiated",
+"Assignment operators are not supported",
+"To many parameters for function",
+"To few parameters for function",
+"Typecast (%s) requires opening '('",
+"Function (%s) requires opening '('",
+"prefix/postfix ++ and -- are not supported",
+"Symbol not defined (%s)",
+"Invalid symbol name (%s)",
+"Invalid subtraction: Selectors are not the same type",
+"Expecting value, not address",
+"Operation cannot be performed on two addresses",
+"No code at line number",
+"Invalid Address",
+"Invalid Indirection",
+"Unexpected Unary operator ('%s')",
+"Expecting Unary operator (not '%s')",
+"Charcter value too large: '%s'",
+"Character constant is too long: '%s'",
+"Unterminated character constant: %s",
+"Invalid character constant: '%s'",
+"Unknown escape sequence: '%s'",
+"Unable to evaluate expression",
+"Unbalanced parentheses in expression",
+"Expression to complex!",
+"Unexpected end of expression",
+"Attempting to divide by zero is totally uncool...",
+"Value is too large: (%s)",
+"Expecting operator (not '%s')",
+"Expecting #,symbol, or register (not '%s')",
+"Invalid Expression",
+"Expression?? What expression?"
+};
+
+#endif
+#if 0
+#%02x:%08x
+UPID
+UTID
+UPDB
+UTCB
+VMMTID
+CONTEXT
+K32XOR
+EVALUE
+EADDR
+BPIndex
+BPMiss
+BPTotal
+BPCount
+BPLog
+CodeAddr
+DataAddr
+VMFL
+NTFL
+IOPL
+NOTYPE
+WSTR
+FLAT
+LONG
+SWORD
+DWORD
+HIBYTE
+HIWORD
+BYTE
+WORD
+TRUE
+NULL
+FALSE
+<eval error>
+
+#endif
+
 /******************************************************************************
 *                                                                             *
 *   Module:     Eval.c                                                        *
@@ -8,36 +93,41 @@
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
+*   This source code and produced executable is copyrighted by Goran Devic.   *
+*   This source, portions or complete, and its derivatives can not be given,  *
+*   copied, or distributed by any means without explicit written permission   *
+*   of the copyright owner. All other rights, including intellectual          *
+*   property rights, are implicitly reserved. There is no guarantee of any    *
+*   kind that this software would perform, and nobody is liable for the       *
+*   consequences of running it. Use at your own risk.                         *
+*                                                                             *
 *******************************************************************************
 
     Module Description:
 
-        This is a generic expresion evaluator.  No error checking is
-        performed.
+        This is a generic expresion evaluator used by the linice.
 
         Numbers that are acepted are integers written in the notation with
-        default base of 10.
-
-        A new default base can be reset by changing the global variable
-        `nEvalDefaultBase' to any base from 2 to 16.
+        default base of 16.
 
         Numbers may be expressed in:
-            binary base, add `w' at the end of a binary number;
-            octal base, add `o' at the end of an octal number;
-            decimal base, add `t' at the end of a decimal number;
-            hexadecimal base, add `h' at the end of a hex number.
+            hexadecimal, default number with optional prefix '0x'
+            decimal, prefix '+' or '-'
+            prefix '.' (line operator) changes radix to decimal
+            character constant: 'a', 'ab', 'abc', 'abcd' note symbol: '
+            character value: '\DEC' or '\xHEX'
+            address-type: 18:FFFF or CS:EAX
 
-        Variables (alphanumerical literals) are supported by registering an
-        external function that will handle them to the global variable
-        pfnEvalLiteralHandler.  That function will get the zero-terminated
-        string containing the name of the literal and should return the
-        value associated with it.
 
-        That external function may, in turn, call evaluator.
-        The reentrancy limit is defined as MAX_RECURSE.  If that limit is
-        reached, the resulting value is undefined.
+        Evaluator attempts to evaluate a number in the following order:
+            * if prefix is '0x' evaluate as hex
+            * if prefix is '+' or '-', evaluate as decimal, if that fails,
+                    evaluate as hex
+            * register set values: al, ah, ax, eax,...
+            * symbol name
+            * user variable name (prefix $)
+            * build-in function: byte(), word(), CFL, ...
 
-        Provision is given for multiple expressions in a single string.
 
 *******************************************************************************
 
@@ -51,8 +141,8 @@
 * 05/18/97   Added bitwise, boolean operators                     Goran Devic *
 * 05/20/97   Literal handling                                     Goran Devic *
 * 09/10/97   Literal function may call evaluator                  Goran Devic *
-* 03/11/01   Modified for LinIce                                  Goran Devic *
-* 04/22/01   Further mods for default hex                         Goran Devic *
+* 09/11/00   Modified for LinIce                                  Goran Devic *
+* 10/22/00   Significant mods for linice                          Goran Devic *
 * --------   ---------------------------------------------------  ----------- *
 *******************************************************************************
 *   Include Files                                                             *
@@ -72,6 +162,7 @@
 
 // Predefined default base is hex and there are no literal handlers.
 
+WORD evalSel;               // Selector result of the expression (optional)
 int nEvalDefaultBase = 16;
 int (*pfnEvalLiteralHandler)( char *sName ) = NULL;
 
@@ -82,37 +173,154 @@ int (*pfnEvalLiteralHandler)( char *sName ) = NULL;
 *                                                                             *
 ******************************************************************************/
 
+BOOL fDecimal = FALSE;      // Prefer decimal number
+
+typedef struct
+{
+    char *sName;
+    BYTE nameLen;
+    DWORD Mask;
+    BYTE rShift;
+    BYTE offset;
+}TRegister;
+
+
+// Define offsets to register fields
+static TRegister Reg[] = {
+{ "al",  2, 0x000000FF, 0, offsetof(TREGS, eax) },
+{ "ah",  2, 0x0000FF00, 8, offsetof(TREGS, eax) },
+{ "ax",  2, 0x0000FFFF, 0, offsetof(TREGS, eax) },
+{ "eax", 3, 0xFFFFFFFF, 0, offsetof(TREGS, eax) },
+{ "bl",  2, 0x000000FF, 0, offsetof(TREGS, ebx) },
+{ "bh",  2, 0x0000FF00, 8, offsetof(TREGS, ebx) },
+{ "bx",  2, 0x0000FFFF, 0, offsetof(TREGS, ebx) },
+{ "ebx", 3, 0xFFFFFFFF, 0, offsetof(TREGS, ebx) },
+{ "cl",  2, 0x000000FF, 0, offsetof(TREGS, ecx) },
+{ "ch",  2, 0x0000FF00, 8, offsetof(TREGS, ecx) },
+{ "cx",  2, 0x0000FFFF, 0, offsetof(TREGS, ecx) },
+{ "ecx", 3, 0xFFFFFFFF, 0, offsetof(TREGS, ecx) },
+{ "dl",  2, 0x000000FF, 0, offsetof(TREGS, edx) },
+{ "dh",  2, 0x0000FF00, 8, offsetof(TREGS, edx) },
+{ "dx",  2, 0x0000FFFF, 0, offsetof(TREGS, edx) },
+{ "edx", 3, 0xFFFFFFFF, 0, offsetof(TREGS, edx) },
+
+{ "bp",  2, 0x0000FFFF, 0, offsetof(TREGS, ebp) },
+{ "ebp", 3, 0xFFFFFFFF, 0, offsetof(TREGS, ebp) },
+{ "sp",  2, 0x0000FFFF, 0, offsetof(TREGS, esp) },
+{ "esp", 3, 0xFFFFFFFF, 0, offsetof(TREGS, esp) },
+{ "si",  2, 0x0000FFFF, 0, offsetof(TREGS, esi) },
+{ "esi", 3, 0xFFFFFFFF, 0, offsetof(TREGS, esi) },
+{ "di",  2, 0x0000FFFF, 0, offsetof(TREGS, edi) },
+{ "edi", 3, 0xFFFFFFFF, 0, offsetof(TREGS, edi) },
+{ "fl",  2, 0x0000FFFF, 0, offsetof(TREGS, eflags) },
+{ "efl", 3, 0xFFFFFFFF, 0, offsetof(TREGS, eflags) },
+{ "ip",  2, 0x0000FFFF, 0, offsetof(TREGS, eip) },
+{ "eip", 3, 0xFFFFFFFF, 0, offsetof(TREGS, eip) },
+
+{ "cs",  2, 0x0000FFFF, 0, offsetof(TREGS, cs) },
+{ "ds",  2, 0x0000FFFF, 0, offsetof(TREGS, ds) },
+{ "es",  2, 0x0000FFFF, 0, offsetof(TREGS, es) },
+{ "fs",  2, 0x0000FFFF, 0, offsetof(TREGS, fs) },
+{ "gs",  2, 0x0000FFFF, 0, offsetof(TREGS, gs) },
+
+{ "CFL", 3, 1 << 0,     0, offsetof(TREGS, eflags) },
+{ "PFL", 3, 1 << 2,     2, offsetof(TREGS, eflags) },
+{ "AFL", 3, 1 << 4,     4, offsetof(TREGS, eflags) },
+
+{ "ZFL", 3, 1 << 6,     6, offsetof(TREGS, eflags) },
+{ "SFL", 3, 1 << 7,     7, offsetof(TREGS, eflags) },
+{ "TFL", 3, 1 << 8,     8, offsetof(TREGS, eflags) },
+{ "IFL", 3, 1 << 9,     9, offsetof(TREGS, eflags) },
+{ "DFL", 3, 1 <<10,    10, offsetof(TREGS, eflags) },
+{ "OFL", 3, 1 <<11,    11, offsetof(TREGS, eflags) },
+{ "IOPL",4, 2 <<12,    12, offsetof(TREGS, eflags) },
+{ "NTFL",4, 1 <<14,    14, offsetof(TREGS, eflags) },
+{ "RFL", 3, 1 <<16,    16, offsetof(TREGS, eflags) },
+{ "VMFL",4, 1 <<17,    17, offsetof(TREGS, eflags) },
+
+{ NULL }
+};
+
+
+/*
+{ "DataAddr", 8, 0xFFFFFFFF, 0, 0 },
+{ "CodeAddr", 8, 0xFFFFFFFF, 0, 0 },
+{ "EAddr",    5, 0xFFFFFFFF, 0, 0 },
+{ "Evalue",   6, 0xFFFFFFFF, 0, 0 },
+{ "DataAddr", 8, 0xFFFFFFFF, 0, 0 },
+
+{ "bpcount", 7, 0xFFFFFFFF, 0, 0 },
+{ "bptotal", 7, 0xFFFFFFFF, 0, 0 },
+{ "bpmiss",  6, 0xFFFFFFFF, 0, 0 },
+{ "bplog",   5, 0xFFFFFFFF, 0, 0 },
+{ "bpindex", 7, 0xFFFFFFFF, 0, 0 }, */
+
+
+// Define internal functions that can be performed on a subexpression
+
+typedef DWORD (*TFnPtr)(DWORD);
+
+static DWORD fnByte(DWORD arg);
+static DWORD fnWord(DWORD arg);
+static DWORD fnDword(DWORD arg);
+static DWORD fnHiword(DWORD arg);
+
+typedef struct
+{
+    char *sName;                        // Name of the function
+    BYTE nameLen;                       // Length of the name
+    BYTE nArgs;                         // Number of arguments
+    TFnPtr funct;                       // Function
+} TFunction;
+
+static TFunction Func[] = {
+{ "byte", 4, 1, fnByte },
+{ "word", 4, 1, fnWord },
+{ "dword", 4, 1, fnDword },
+{ "hiword", 4, 1, fnHiword },
+{ NULL }
+};
+
 #define MAX_RECURSE     5               // Max literal reentrancy depth
 
 #define MAX_STACK       10              // Max depth of a stack structure
 
 #define BOTTOM_STACK    0               // Stack empty code
-#define OP_PAREN_START  1               // Priority codes and also indices
-#define OP_PAREN_END    2               //   into the sTokens array
-#define OP_BOOL_OR      3
-#define OP_BOOL_AND     4
-#define OP_OR           5
-#define OP_XOR          6
-#define OP_AND          7
-#define OP_EQ           8
-#define OP_NE           9
-#define OP_SHL          10
-#define OP_SHR          11
-#define OP_L            12
-#define OP_LE           13
-#define OP_G            14
-#define OP_GE           15
-#define OP_PLUS         16
-#define OP_MINUS        17
-#define OP_TIMES        18
-#define OP_DIV          19
-#define OP_MOD          20
-#define OP_NOT          21
+#define OP_SELECTOR     1               // Selector:offset
+#define OP_PAREN_START  2               // Priority codes and also indices
+#define OP_PAREN_END    3               //   into the sTokens array
+#define OP_POINTER1     4
+#define OP_DOT          5
+#define OP_PTR          6
+#define OP_BOOL_OR      7
+#define OP_BOOL_AND     8
+#define OP_OR           9
+#define OP_XOR          10
+#define OP_AND          11
+#define OP_EQ           12
+#define OP_NE           13
+#define OP_SHL          14
+#define OP_SHR          15
+#define OP_L            16
+#define OP_LE           17
+#define OP_G            18
+#define OP_GE           19
+#define OP_PLUS         20
+#define OP_MINUS        21
+#define OP_TIMES        22
+#define OP_DIV          23
+#define OP_MOD          24
+#define OP_NOT          25
+#define OP_LINE         254             // Unary .dot is the line number
 #define OP_NEG          255             // Unary minus has highest priority
 
 static char *sTokens[] =
 {
+    ":",
     "(", ")",
+    "->",
+    ".",
+    "@",
     "||",
     "&&",
     "|", "^", "&",
@@ -136,7 +344,7 @@ typedef struct
 
 
 static const char sDelim[] = ",;\"";    // Expressions delimiters - break chars
-static const char sLiteral[] = "@:_";   // These are allowed in literal names
+static const char sLiteral[] = "@!_";   // These are allowed in literal names
 
 /******************************************************************************
 *                                                                             *
@@ -144,6 +352,14 @@ static const char sLiteral[] = "@:_";   // These are allowed in literal names
 *                                                                             *
 ******************************************************************************/
 
+extern BOOL GetUserVar(DWORD *pValue, char *sStart, int nLen);
+
+int Evaluate( char *sExpr, char **psNext );
+
+static DWORD fnByte(DWORD arg) { return(arg & 0xFF); }
+static DWORD fnWord(DWORD arg) { return(arg & 0xFFFF);}
+static DWORD fnDword(DWORD arg) { return(arg);}
+static DWORD fnHiword(DWORD arg) { return(arg >> 16);}
 
 /******************************************************************************
 *                                                                             *
@@ -207,119 +423,187 @@ static int Pop( TStack *Stack )
 *       Numerical value that the string contains.
 *
 ******************************************************************************/
+
+DWORD GetHex(char **psString)
+{
+    char *ptr = *psString;
+    char nibble;
+    int count = 8;
+    DWORD value = 0;
+
+    while(isxdigit(nibble = *ptr++) && count--)
+    {
+        nibble = tolower(nibble);
+        value <<= 4;
+        value |= (nibble > '9')? nibble - 'a' + 10: nibble - '0';
+    }
+
+    if(count==0)
+    {
+        // Value is too large: (%s)
+    }
+
+    *psString = ptr - 1;
+    return(value);
+}
+
+
+/******************************************************************************
+*                                                                             *
+*   DWORD GetDec(char **psString)                                             *
+*                                                                             *
+*******************************************************************************
+*
+*   Converts string to a decimal number.
+*
+*   Where:
+*       psString is the address of the string pointer - will be modified
+*
+*   Returns:
+*       Decimal number
+*       string pointer advanced to the next non-decimal character
+*
+******************************************************************************/
+DWORD GetDec(char **psString)
+{
+    char *ptr = *psString;
+    char digit;
+    DWORD value = 0;
+
+    while(isdigit(digit = *ptr++))
+    {
+        value *= 10;
+        value += digit - '0';
+    }
+
+    *psString = ptr - 1;
+    return(value);
+}
+
+TRegister *IsRegister(char *ptr)
+{
+    TRegister *pReg = &Reg[0];
+
+    while(pReg->sName!=NULL)
+    {
+        if(strnicmp(pReg->sName, ptr, pReg->nameLen)==0)
+            return(pReg);
+        pReg++;
+    }
+
+    return(NULL);
+}
+
+TFunction *IsFunc(char *ptr)
+{
+    TFunction *pFunc = &Func[0];
+
+    while(pFunc->sName!=NULL)
+    {
+        if(strnicmp(pFunc->sName, ptr, pFunc->nameLen)==0)
+            return(pFunc);
+        pFunc++;
+    }
+
+    return(NULL);
+}
+
 static int GetValue( char **sExpr )
 {
-    static unsigned int nRecurse = 0;
-    int value, base, fSkipBaseChar;
-    char *sStart = *sExpr;
-    char *sEnd = sStart;
-    char ch;
+    int value, n;
+    char *sStart = *sExpr, *sTmp;
+    TRegister *pReg;
+    TFunction *pFunc;
 
-    // Check if the first character is a literal
-    if( isalpha(*sStart) || strchr(sLiteral,*sEnd)!=NULL )
+    // If we switched to decimal radix, try a decimal number first
+    if( fDecimal==TRUE )
     {
-        // Find the end of a literal
-        while( isalnum(*sEnd) || strchr(sLiteral,*sEnd)!=NULL )
-            sEnd++;
-
-        // The following line may also increase the level of recursion
-        if( pfnEvalLiteralHandler != NULL && nRecurse++ < MAX_RECURSE )
-        {
-            ch = *sEnd;
-            *sEnd = '\0';
-
-            value = pfnEvalLiteralHandler( sStart );
-
-            // Decrease the level of recursion
-            nRecurse--;
-
-            // Restore end of literal character and return
-            *sEnd = ch;
-            *sExpr = sEnd;
-
-            return( value );
-        }
-        else
-        {
-            // Not handling literals, return 0
-            *sExpr = sEnd;
-
-            return( 0 );
-        }
+        sTmp = sStart;
+        value = GetDec(&sStart);
+        // If we end up with a hex digit, the number was not decimal
+        if(!isxdigit(*sStart))
+            goto End;
+        sStart = sTmp;  // so revert the string and try defaults..
     }
 
-    // Assume a default base 10 and clear the initial value
-    base  = nEvalDefaultBase;
-    value = 0;
-    fSkipBaseChar = 0;
-
-    // Traverse and find the last character comprising a value
-    do
+    // Check if the first two charcaters represent a hex number
+    if( *sStart=='0' && tolower(*(sStart+1))=='x' )         // 0xHEX
     {
-        // Break out if the current character is not alphanumeric
-        if( !isalnum( *sEnd ) )
-            break;
-
-        // Last char can be 'h' to set base to 16 or 'w' to set base to 2
-        ch = tolower(*sEnd);
-        if( ch=='h' )
-        {
-            base = 16;
-            fSkipBaseChar = 1;
-
-            break;
-        }
-        else
-            // If the last char is `o', the value is octal.
-            if( ch=='o' )
-            {
-                base = 8;
-                fSkipBaseChar = 1;
-
-                break;
-            }
-        else
-            // If the last char is `t', the value is decimal.
-            if( ch=='t' )
-            {
-                // If the next character is also alphanumeric, then this
-                // 'd' cannot be a decimal designator
-                if( !isalnum( *(sEnd+1) ) )
-                {
-                    base = 10;
-                    fSkipBaseChar = 1;
-
-                    break;
-                }
-            }
-        else
-            if( ch=='w' )
-                // If the next character is also alphanumeric, then this
-                // 'b' cannot be a binary designator
-                if( !isalnum( *(sEnd+1) ) )
-                {
-                    base = 2;
-                    fSkipBaseChar = 1;
-
-                    break;
-                };
-
-        sEnd++;
-
-    }while( 1 );
-
-    // Scan from the start of the numerics and multiply/add them
-    while( sStart < sEnd )
+        sStart += 2;
+        value = GetHex(&sStart);
+    }
+    else
+    // Check for character constants: '1', '12', '123', '1234'
+    if( *sStart=='\'' )
     {
-        value *= base;
-        value += (*sStart > '9')? tolower(*sStart) - 'a' + 10 : *sStart - '0';
+        value = 0;
+        n = 4;
         sStart++;
+        while(*sStart && *sStart!='\'' && n--)
+        {
+            value <<= 8;
+            value |= *sStart++;
+        }
     }
+    else
+    // Check if the first two characters represent a character literal
+    if( *sStart=='\\' && *(sStart+1)=='\'' )       // '\DEC' or '\xHEX'
+    {
+        if( *(sStart+2)!='x' || *(sStart+2)!='X' )          // HEX
+        {
+            value = GetHex(&sStart);
+        }
+        else
+        {
+            sStart += 1;
+            value = GetDec(&sStart);
+        }
+    }
+    else
+    // The first precedence literal value is the symbol name
+    if( SymbolName2Value((DWORD *)&value, sStart) )
+    {
+        ; // If found, value will be set
+    }
+    else
+    // The literal value may be the explicit CPU register value
+    if( (pReg = IsRegister(sStart)) != 0 )
+    {
+        value = (DWORD) deb.r + pReg->offset;
+        value = *(DWORD *)value;
+        value = (value & pReg->Mask) >> pReg->rShift;
+        sStart += pReg->nameLen;
+    }
+    else
+    // The literal value may be the user variable
+    if( *sStart=='$' )
+    {
+        // Get the variable string len
+        sTmp = ++sStart;
+        while( *sTmp && (isalpha(*sTmp) || isxdigit(*sTmp)) ) sTmp++;
+        n = sTmp - sStart;
 
-    // Specified bases had extra character that now needs to be skipped
-    sEnd += fSkipBaseChar;
-
-    *sExpr = sEnd;
+        if( GetUserVar((DWORD *)&value, sStart, n)==FALSE )
+        {
+            dprinth(1, "Variable not found");
+        }
+    }
+    else
+    // The literal value may be the built-in function
+    if( (pFunc = IsFunc(sStart)) != 0 )
+    {
+        value = Evaluate(sStart, &sStart);
+        value = (pFunc->funct)(value);
+        sStart += pFunc->nameLen;
+    }
+    else
+    // If everything else fails, it's gotta be a hex number
+    {
+        value = GetHex(&sStart);
+    }
+End:
+    fDecimal = FALSE;
+    *sExpr = sStart;
 
     return( value );
 }
@@ -391,69 +675,44 @@ static void Execute( TStack *Values, int Operation )
     // Perform the operation
     switch( Operation )
     {
-        case OP_BOOL_OR:Push( Values, Pop( Values ) || Pop( Values ) );
-            break;
-
-        case OP_BOOL_AND:Push(Values, Pop( Values ) && Pop( Values ) );
-            break;
-
-        case OP_OR:     Push( Values, Pop( Values ) | Pop( Values ) );
-            break;
-
-        case OP_XOR:    Push( Values, Pop( Values ) ^ Pop( Values ) );
-            break;
-
-        case OP_AND:    Push( Values, Pop( Values ) & Pop( Values ) );
-            break;
-
-        case OP_EQ:     Push( Values, Pop( Values ) == Pop( Values ) );
-            break;
-
-        case OP_NE:     Push( Values, Pop( Values ) != Pop( Values ) );
-            break;
-
-        case OP_L:      Push( Values, Pop( Values ) < Pop( Values ) );
-            break;
-
-        case OP_LE:     Push( Values, Pop( Values ) <= Pop( Values ) );
-            break;
-
-        case OP_G:      Push( Values, Pop( Values ) > Pop( Values ) );
-            break;
-
-        case OP_GE:     Push( Values, Pop( Values ) >= Pop( Values ) );
-            break;
-
-        case OP_SHL:    Push( Values, Pop( Values ) << Pop( Values ) );
-            break;
-
-        case OP_SHR:    Push( Values, Pop( Values ) >> Pop( Values ) );
-            break;
-
-        case OP_PLUS:   Push( Values, Pop( Values ) + Pop( Values ) );
-            break;
-
-        case OP_MINUS:  top = Pop( Values );
-                        Push( Values, Pop( Values ) - top );
-            break;
-
-        case OP_TIMES:  Push( Values, Pop( Values ) * Pop( Values ) );
-            break;
+        case OP_BOOL_OR:Push( Values, Pop( Values ) || Pop( Values ) );  break;
+        case OP_BOOL_AND:Push(Values, Pop( Values ) && Pop( Values ) );  break;
+        case OP_OR:     Push( Values, Pop( Values ) |  Pop( Values ) );  break;
+        case OP_XOR:    Push( Values, Pop( Values ) ^  Pop( Values ) );  break;
+        case OP_AND:    Push( Values, Pop( Values ) &  Pop( Values ) );  break;
+        case OP_EQ:     Push( Values, Pop( Values ) == Pop( Values ) );  break;
+        case OP_NE:     Push( Values, Pop( Values ) != Pop( Values ) );  break;
+        case OP_L:      Push( Values, Pop( Values ) <  Pop( Values ) );  break;
+        case OP_LE:     Push( Values, Pop( Values ) <= Pop( Values ) );  break;
+        case OP_G:      Push( Values, Pop( Values ) >  Pop( Values ) );  break;
+        case OP_GE:     Push( Values, Pop( Values ) >= Pop( Values ) );  break;
+        case OP_SHL:    Push( Values, Pop( Values ) << Pop( Values ) );  break;
+        case OP_SHR:    Push( Values, Pop( Values ) >> Pop( Values ) );  break;
+        case OP_PLUS:   Push( Values, Pop( Values ) +  Pop( Values ) );  break;
+        case OP_MINUS:  top = Pop( Values );  Push( Values, Pop( Values ) - top );  break;
+        case OP_TIMES:  Push( Values, Pop( Values ) * Pop( Values ) );   break;
 
         case OP_DIV:    top = Pop( Values );
                         if( top != 0 )
                             Push( Values, Pop( Values ) / top );
             break;
-
         case OP_MOD:    top = Pop( Values );
                         if( top != 0 )
                             Push( Values, Pop( Values ) % top );
             break;
+        case OP_NOT:    Push( Values, ! Pop( Values ) );  break;
+        case OP_NEG:    Push( Values, -Pop( Values ) );   break;
+        case OP_POINTER1:
+        case OP_DOT:    Push( Values, Pop( Values ) + Pop( Values ) );   break;  // TEST
+        case OP_PTR:    Push( Values, Pop( Values ) + 1 );               break;  // TEST
+        case OP_LINE:   Push( Values, SourceLineToAddr(Pop( Values )) ); break;  // TEST
 
-        case OP_NOT:    Push( Values, ! Pop( Values ) );
-            break;
-
-        case OP_NEG:    Push( Values, -Pop( Values ) );
+        case OP_SELECTOR:   // Selector:offset
+                // Whatever we did so far was to find the selector part.
+                // We store it in the global variable and keep the offset on the stack
+                top = Pop( Values );
+                evalSel = Pop( Values );
+                Push( Values, top );
             break;
     }
 }
@@ -465,7 +724,9 @@ static void Execute( TStack *Values, int Operation )
 *                                                                             *
 *******************************************************************************
 *
-*   Evaluates a string expression and returns its numerical value.
+*   Evaluates a string expression and returns its numerical value. Since this
+*   function can be called recursively from within itself, we limit the
+*   recursion level.
 *
 *   Where:
 *       sExpr is a pointer to a zero-terminated string containing the
@@ -481,10 +742,12 @@ static void Execute( TStack *Values, int Operation )
 ******************************************************************************/
 int Evaluate( char *sExpr, char **psNext )
 {
+    static int nDeep = 0;               // Recursion depth count
     TStack Values, Operators;
-    int NewOp, OldOp, Operator;
+    int NewOp, OldOp, ExpectValue;
 
-    Values.Top = Operators.Top = Operator = 0;
+    Values.Top = Operators.Top = ExpectValue = 0;
+    fDecimal = FALSE;
 
     // Just in the case that the argument was NULL - return the result of 0.
     if( sExpr==NULL )
@@ -493,26 +756,46 @@ int Evaluate( char *sExpr, char **psNext )
         return( 0 );
     }
 
+    if( nDeep >= MAX_EVAL_RECURSE )
+        return(0);
+    nDeep++;                            // Inside the function, recursion count
+
     // Loop for any new term and stop when hit one of delimiter characters
     while( strchr(sDelim,*sExpr)==NULL )
     {
         NewOp = TableMatch( sTokens, &sExpr);
 
-        // Special case is unary minus in front of a value
-        if( Operator==0 && NewOp==OP_MINUS )
-            NewOp = OP_NEG;
+        // Special cases are the unary operands:
+        //    -/+ sets the default radix to 10
+        //    * @ are the pointers
+        //    . is the decimal line number
+        if(ExpectValue==0)
+        {
+            switch(NewOp)
+            {
+            case OP_MINUS:      NewOp = OP_NEG, fDecimal = TRUE; break;
+            case OP_PLUS:       fDecimal = TRUE; continue;
+            case OP_TIMES:
+            case OP_PTR:        NewOp = OP_PTR; break;
+            case OP_DOT:        NewOp = OP_LINE, fDecimal = TRUE; break;
+            }
+        }
 
         // If any operator was in front of a value, push it
         if( NewOp )
         {
             Push( &Operators, NewOp );
-            Operator = 0;               // Expect a value
+            ExpectValue = 0;
+
+            // If the operator was not -/+, reset decimal radix hint
+            if(NewOp!=OP_MINUS && NewOp!=OP_PLUS)
+                fDecimal = FALSE;
 
             continue;
         }
 
         Push( &Values, GetValue( &sExpr ) );
-        Operator = 1;                   // Expect an operator
+        ExpectValue = 1;
         NewOp = TableMatch( sTokens, &sExpr);
 
         // If there are no more operators, break out and clean the stack
@@ -523,10 +806,13 @@ int Evaluate( char *sExpr, char **psNext )
 
         // If the new op priority is less than the one on the stack, we
         // need to go down and evaluate terms
-        if( NewOp < OldOp )
-            Execute( &Values, OldOp );
-        else
-            Push( &Operators, OldOp );
+        if( OldOp != BOTTOM_STACK )
+        {
+            if( NewOp < OldOp )
+                Execute( &Values, OldOp );
+            else
+                Push( &Operators, OldOp );
+        }
 
         // Push new operation
         Push( &Operators, NewOp );
@@ -541,6 +827,7 @@ int Evaluate( char *sExpr, char **psNext )
     // Store the logical end of the expression
     if( psNext!=NULL ) *psNext = sExpr;
 
+    nDeep--;                            // Leaving the function, recursion count
     // Return the last value on the stack
     return( Pop( &Values ) );
 }
@@ -562,11 +849,15 @@ int Evaluate( char *sExpr, char **psNext )
 ******************************************************************************/
 BOOL Expression(DWORD *value, char *sExpr, char **psNext )
 {
-    *value = Evaluate( sExpr, psNext );
+    if( sExpr && *sExpr )
+    {
+        *value = Evaluate( sExpr, psNext );
 
-    // Check for error in evaluation
-//    if( *args != 0 )
-
+        // Check for error in evaluation
+    //    if( *args != 0 )
+    }
+    else
+        return( FALSE );
 
     return( TRUE );
 }
@@ -585,10 +876,16 @@ BOOL cmdEvaluate(char *args, int subClass)
 {
     DWORD value;
 
-    if( Expression(&value, args, &args) )
+    if( *args )
     {
-        dprinth(1, " Decimal=%d  Hex=%08X\n", value, value);
+        if( Expression(&value, args, &args) )
+        {
+            dprinth(1, " Decimal=%d  Hex=%08X", value, value);
+        }
     }
+    else
+        dprinth(1, "Expression?? What expression?");
 
     return( TRUE );
 }
+

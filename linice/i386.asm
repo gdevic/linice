@@ -2,17 +2,27 @@
 ;                                                                             |
 ;   File: i386.asm                                                            |
 ;                                                                             |
-;   Date: 03/11/01                                                            |
+;   Date: 09/11/00                                                            |
 ;                                                                             |
 ;   Copyright (c) 2000 - 2001 Goran Devic                                     |
 ;                                                                             |
 ;   Author:     Goran Devic                                                   |
+;                                                                             |
+;   This source code and produced executable is copyrighted by Goran Devic.   |
+;   This source, portions or complete, and its derivatives can not be given,  |
+;   copied, or distributed by any means without explicit written permission   |
+;   of the copyright owner. All other rights, including intellectual          |
+;   property rights, are implicitly reserved. There is no guarantee of any    |
+;   kind that this software would perform, and nobody is liable for the       |
+;   consequences of running it. Use at your own risk.                         |
 ;                                                                             |
 ;==============================================================================
 ;
 ;   Module description:
 ;
 ;       This module contains all assembly code
+;
+;   NOTE: Dont forget to save/restore all used registers except eax!
 ;
 ;==============================================================================
 ; Define exported data and functions
@@ -24,10 +34,19 @@ global  ReadCRTC
 global  WriteCRTC
 global  inp
 global  GetByte
+global  SetByte
 global  strtolower
 global  memset_w
+global  memset_d
+global  GetSysreg
+global  Outpb
+global  Outpw
+global  Outpd
+global  Inpb
+global  Inpw
+global  Inpd
 
-global testint3
+global getesp
 
 ;==============================================================================
 ; External definitions that this module uses
@@ -351,11 +370,13 @@ GetCRTCAddr:
 ReadCRTC:
         push    ebp
         mov     ebp, esp
+        push    edx
         call    GetCRTCAddr
         mov     eax, [ebp+8]
         out     (dx), al
         inc     dx
         in      al, (dx)
+        pop     edx
         pop     ebp
         ret
 
@@ -374,12 +395,14 @@ ReadCRTC:
 WriteCRTC:
         push    ebp
         mov     ebp, esp
+        push    edx
         call    GetCRTCAddr
         mov     eax, [ebp+8]
         out     (dx), al
         inc     dx
         mov     eax, [ebp+12]
         out     (dx), al
+        pop     edx
         pop     ebp
         ret
 
@@ -446,10 +469,40 @@ GetByte:
 
 ;==============================================================================
 ;
+;   int SetByte( WORD sel, DWORD offset, BYTE byte )
+;
+;   Writes a byte to a memory location at sel:offset
+;
+;   Where:
+;       [ebp + 8 ]      selector
+;       [ebp + 12 ]     offset
+;       [ebp + 16 ]     byte value
+;
+;==============================================================================
+SetByte:
+        push    ebp
+        mov     ebp, esp
+        push    ebx
+        push    gs
+
+        mov     ax, [ebp + 8]           ; Get the selector
+        mov     gs, ax                  ; Store it in the GS
+        mov     ebx, [ebp + 12]         ; Get the offset off that selector
+
+        mov     eax, [ebp + 16]         ; Get the byte value
+        mov     [gs:ebx], al            ; Store the byte
+
+        pop     gs
+        pop     ebx
+        pop     ebp
+        ret
+
+
+;==============================================================================
+;
 ;   memset_w( BYTE *target, WORD filler, DWORD len )
 ;
-;   This function is used from VGA text driver to fill in character/attribute
-;   words.
+;   Fills a buffer with words.
 ;
 ;   Where:
 ;       [ebp+8]         target address
@@ -460,17 +513,51 @@ GetByte:
 memset_w:
         push    ebp
         mov     ebp, esp
+        push    ecx
         push    edi
 
         mov     edi, [ebp+8]
         mov     eax, [ebp+12]
         mov     ecx, [ebp+16]
         or      ecx, ecx
-        jz      @zero
+        jz      @zero_w
         cld
         rep     stosw
-@zero:
+@zero_w:
         pop     edi
+        pop     ecx
+        pop     ebp
+        ret
+
+
+;==============================================================================
+;
+;   memset_d( BYTE *target, DWORD filler, DWORD len )
+;
+;   Fills a buffer with dwords.
+;
+;   Where:
+;       [ebp+8]         target address
+;       [ebp+12]        dword filler
+;       [ebp+16]        length IN DWORDS !!
+;
+;==============================================================================
+memset_d:
+        push    ebp
+        mov     ebp, esp
+        push    ecx
+        push    edi
+
+        mov     edi, [ebp+8]
+        mov     eax, [ebp+12]
+        mov     ecx, [ebp+16]
+        or      ecx, ecx
+        jz      @zero_d
+        cld
+        rep     stosd
+@zero_d:
+        pop     edi
+        pop     ecx
         pop     ebp
         ret
 
@@ -507,7 +594,6 @@ strtolower:
         pop     ebp
         ret
 
-
 ;==============================================================================
 ;
 ;   void GetSysreg( TSysreg * pSys )
@@ -515,12 +601,13 @@ strtolower:
 ;   Reads in the rest of system registers
 ;
 ;   Where:
-;       [ebp + 8 ]        sysreg array
+;       [ebp + 8 ]        pointer to the SysReg storage
 ;
 ;==============================================================================
 GetSysreg:
         push    ebp
         mov     ebp, esp
+        push    ebx
 
         mov     ebx, [ebp + 8]
         mov     eax, cr0
@@ -545,17 +632,106 @@ GetSysreg:
         mov     eax, dr7
         mov     [ebx+36], eax
 
+        pop     ebx
         pop     ebp
         ret
 
+;==============================================================================
+;
+;   void Outpb( DWORD port, DWORD value)
+;   void Outpw( DWORD port, DWORD value)
+;   void Outpd( DWORD port, DWORD value)
+;
+;   Where:
+;       [ebp + 8 ]        port
+;       [ebp + 12 ]       value
+;
+;==============================================================================
+Outpb:
+        push    ebp
+        mov     ebp, esp
+        push    edx
+        push    eax
+        mov     edx, [ebp+8]
+        mov     eax, [ebp+12]
+        out     dx, al
+        pop     eax
+        pop     edx
+        pop     ebp
+        ret
 
-testint3:
-        mov     eax, 1
-        mov     ebx, 2
-        mov     ecx, 3
-        mov     edx, 4
-        mov     esi, 5
-        mov     edi, 6
-        mov     ebp, 7
-        int     3
+Outpw:
+        push    ebp
+        mov     ebp, esp
+        push    edx
+        push    eax
+        mov     edx, [ebp+8]
+        mov     eax, [ebp+12]
+        out     dx, ax
+        pop     eax
+        pop     edx
+        pop     ebp
+        ret
+
+Outpd:
+        push    ebp
+        mov     ebp, esp
+        push    edx
+        push    eax
+        mov     edx, [ebp+8]
+        mov     eax, [ebp+12]
+        out     dx, eax
+        pop     eax
+        pop     edx
+        pop     ebp
+        ret
+
+;==============================================================================
+;
+;   DWORD Inpb( DWORD port )
+;   DWORD Inpw( DWORD port )
+;   DWORD Inpd( DWORD port )
+;
+;   Where:
+;       [ebp + 8 ]      port
+;   Returns:
+;       eax             value
+;
+;==============================================================================
+Inpb:
+        push    ebp
+        mov     ebp, esp
+        push    edx
+        mov     edx, [ebp+8]
+        xor     eax, eax
+        in      al, (dx)
+        pop     edx
+        pop     ebp
+        ret
+
+Inpw:
+        push    ebp
+        mov     ebp, esp
+        push    edx
+        mov     edx, [ebp+8]
+        xor     eax, eax
+        in      ax, (dx)
+        pop     edx
+        pop     ebp
+        ret
+
+Inpd:
+        push    ebp
+        mov     ebp, esp
+        push    edx
+        mov     edx, [ebp+8]
+        xor     eax, eax
+        in      eax, (dx)
+        pop     edx
+        pop     ebp
+        ret
+
+getesp:
+        mov     eax, esp
+        ret
 

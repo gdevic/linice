@@ -2,18 +2,26 @@
 *                                                                             *
 *   Module:     install.c                                                     *
 *                                                                             *
-*   Date:       03/05/01                                                      *
+*   Date:       09/05/00                                                      *
 *                                                                             *
 *   Copyright (c) 2001 Goran Devic                                            *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
+*   This source code and produced executable is copyrighted by Goran Devic.   *
+*   This source, portions or complete, and its derivatives can not be given,  *
+*   copied, or distributed by any means without explicit written permission   *
+*   of the copyright owner. All other rights, including intellectual          *
+*   property rights, are implicitly reserved. There is no guarantee of any    *
+*   kind that this software would perform, and nobody is liable for the       *
+*   consequences of running it. Use at your own risk.                         *
+*                                                                             *
 *******************************************************************************
 
     Module Description:
 
-        This module contains code to load a module and feed it the
-        init parameters as read from the config file
+        This module contains code to load Linice debugger module and feed
+        it the init parameters as read from the config file
 
 *******************************************************************************
 *                                                                             *
@@ -21,23 +29,30 @@
 *                                                                             *
 *   DATE     DESCRIPTION OF CHANGES                               AUTHOR      *
 * --------   ---------------------------------------------------  ----------- *
-* 03/05/01   Initial version                                      Goran Devic *
+* 09/05/00   Initial version                                      Goran Devic *
 * --------   ---------------------------------------------------  ----------- *
 *******************************************************************************
 *   Include Files                                                             *
 ******************************************************************************/
 
-#include <unistd.h>                     // Include standard UNIX header file
 #include <string.h>                     // Include strings header file
 #include <sys/types.h>                  // Include file operations
 #include <sys/stat.h>                   // Include file operations
-#include <sys/ioctl.h>                  // Include ioctl header file
 #include <fcntl.h>                      // Include file control file
 #include <stdio.h>                      // Include standard io file
+#include <stdlib.h>                     // Include standard library
+#include <string.h>                     // Include string library
+
+#ifndef WINDOWS
+#include <unistd.h>                     // Include standard UNIX header file
+#include <sys/ioctl.h>                  // Include ioctl header file
+#define stricmp     strcasecmp          // Weird gnu c call..
+#else // WINDOWS
+#include <io.h>
+#include <malloc.h>
+#endif // WINDOWS
 
 #include "ice-ioctl.h"                  // Include shared header file
-
-#define stricmp     strcasecmp          // Weird gnu c call..
 
 /******************************************************************************
 *                                                                             *
@@ -56,6 +71,9 @@
 DWORD handle_kbd_event = 0;
 DWORD handle_scancode = 0;
 
+// This symbol address is used to access kernel module list
+DWORD module_list = 0;
+
 extern int system2(char *command);
 
 /******************************************************************************
@@ -69,8 +87,15 @@ void GetString(char *p, char *pStr)
     int n = 0;
 
     if(*pStr=='"') pStr++;
+
+    // We dont need heading spaces - get rid of them
+    while( *pStr==' ' ) pStr++;
+
+    // Copy the string
     while((*pStr!='\n') && ((*pStr!='\r')) && (*pStr!='"') && (n++<MAX_STRING))
         *p++ = *pStr++;
+
+    // Zero terminate the destination buffer
     *p = 0;
 }
 
@@ -83,50 +108,69 @@ BOOL AbortLoad(char *sMsg)
     return( getc(stdin)==27 );
 }
 
-BOOL GetKeyboardHandle()
+/******************************************************************************
+*                                                                             *
+*   BOOL GetSymbolExports(char *pSystemMap)                                   *
+*                                                                             *
+*******************************************************************************
+*
+*   Opens system symbol map and scans for exports that we need.
+*
+*   Where:
+*       pSystemMap is default path/name of the system map file
+*
+******************************************************************************/
+static BOOL GetSymbolExports(char *pSystemMap)
 {
     int items, found = 0;
     FILE *fp;
     DWORD address;
     char code;
-    char sFunct[128];
+    char sSymbol[128];
 
-    fp = fopen("/boot/System.map", "r");
+    // Try default system map or user-supplied
+    fp = fopen(pSystemMap, "r");
     if( fp==NULL )
     {
+        // Then try the one in the current directory
         fp = fopen("./System.map", "r");
         if( fp==NULL )
         {
-            if( AbortLoad("Failed to open System.map file... Keyboard hooks will not work!") )
+            if( AbortLoad("Failed to open System.map file!") )
                 exit(-1);
         }
     }
 
-    // Look for the address of keyboard handler functions in the system map file
+    // Look for the addresses of some functions in the system map file
     while( !feof(fp) )
     {
-        items = fscanf(fp, "%X %c %s\n", &address, &code, &sFunct);
-        if( items==3 && strcmp("handle_kbd_event", sFunct)==0 )
+        items = fscanf(fp, "%X %c %s\n", &address, &code, sSymbol);
+        if( items==3 && strcmp("handle_kbd_event", sSymbol)==0 )
         {
             printf("handle_kbd_event = %08X\n", address);
             handle_kbd_event = address;
-            if( found++==2 )
+            if( found++==3 )
                 break;
         }
         else
-        if( items==3 && strcmp("handle_scancode", sFunct)==0 )
+        if( items==3 && strcmp("handle_scancode", sSymbol)==0 )
         {
             printf("handle_scancode = %08X\n", address);
             handle_scancode = address;
-            if( found++==2 )
+            if( found++==3 )
+                break;
+        }
+        else
+        if( items==3 && strcmp("module_list", sSymbol)==0 )
+        {
+            printf("module_list = %08X\n", address);
+            module_list = address;
+            if( found++==3 )
                 break;
         }
     }
 
     fclose(fp);
-
-    if( found < 2 && AbortLoad("Failed to locate kandle_kbd_event/handle_scancode... Keyboard hooks will not work!") )
-        exit(-1);
 
     return( TRUE );
 }
@@ -141,9 +185,13 @@ BOOL GetKeyboardHandle()
 *   Loads linice.o module.  Feeds it the init file so it can configure itself.
 *   Looks for the System.map file and the keyboard routine "handle_kbd_event"
 *   to send to ice.o as a parameter, so it can hook into the keyboard handler.
+*   Looks for symbol "module_list" as well.
+*
+*   Where:
+*       pSystemMap is the default path/name of the System.map file
 *
 ******************************************************************************/
-void OptInstall()
+void OptInstall(char *pSystemMap)
 {
     int hIce;
     FILE *fp;
@@ -151,18 +199,19 @@ void OptInstall()
     char sLine[256], *pStr;
     char sKey[16], sValue[256];
     TINITPACKET Init;
-    int nLine;
+    int nLine, i;
 
     // Remove linice device file (useful when debugging linice)
     // Anyways, this file should not exist there at this point...
-    system2("rm /dev/ice >/dev/null");
+    system2("rm /dev/ice >& /dev/null");
 
-    GetKeyboardHandle();
+    GetSymbolExports(pSystemMap);
 
     // Load the linice.o device driver module
-    sprintf(sLine, "insmod linice.o ice_debug_level=1 kbd=%d scan=%d",
+    sprintf(sLine, "insmod linice.o ice_debug_level=1 kbd=%d scan=%d pmodule=%d",
         handle_kbd_event,
-        handle_scancode);
+        handle_scancode,
+        module_list);
 
     status = system2(sLine);
 
@@ -193,6 +242,8 @@ void OptInstall()
 
         Init.nHistorySize = 16;         // 16 Kb
         Init.nSymbolSize  = 128;        // 128 Kb
+        Init.nMacros      = 32;         // 32 macro entries
+        Init.nVars        = 32;         // 32 user variables
 
         nLine = 0;
 
@@ -223,8 +274,17 @@ void OptInstall()
             if(stricmp(sKey, "sym")==0)
                 sscanf(pStr, "%d", &Init.nSymbolSize);
             else
+            if(stricmp(sKey, "drawsize")==0)
+                sscanf(pStr, "%d", &Init.nDrawSize);
+            else
             if(stricmp(sKey, "hst")==0)
                 sscanf(pStr, "%d", &Init.nHistorySize);
+            else
+            if(stricmp(sKey, "macros")==0)
+                sscanf(pStr, "%d", &Init.nMacros);
+            else
+            if(stricmp(sKey, "vars")==0)
+                sscanf(pStr, "%d", &Init.nVars);
             else
             if(stricmp(sKey, "init")==0)
                  GetString(Init.sInit, pStr); else
@@ -285,13 +345,29 @@ void OptInstall()
             }
         }
 
+        // Modify function key assignments to substitute the trailing semicolon
+        // with the newline character
+        for( i=0; i<48; i++)
+        {
+            if( strlen(Init.keyFn[i]) > 0 )
+            {
+                pStr = Init.keyFn[i] + strlen(Init.keyFn[i]) - 1;
+                if( *pStr==';' )
+                    *pStr = '\n';
+            }
+        }
+
         Init.nSymbolSize *= 1024;       // Make these values kilobytes
+        Init.nDrawSize *= 1024;
         Init.nHistorySize *= 1024;
 #if 0
         printf("fLowercase=%d\n", Init.fLowercase);
         printf("init=\"%s\"\n", Init.sInit);
         printf("sym=%d Kb\n", Init.nSymbolSize);
+        printf("drawsize=%d Kb\n", Init.nDrawSize);
         printf("hst=%d Kb\n", Init.nHistorySize);
+        printf("macros=%d Kb\n", Init.nMacros);
+        printf("vars=%d Kb\n", Init.nVars);
         for(status=0; status<48; status++)
             printf("F%d=\"%s\"\n", status+1, Init.keyFn[status]);
 #endif
@@ -301,8 +377,6 @@ void OptInstall()
         hIce = open("/dev/"DEVICE_NAME, O_RDONLY);
         if( hIce>=0 )
         {
-            int status;
-
             status = ioctl(hIce, ICE_IOCTL_INIT, &Init);
             close(hIce);
 
@@ -320,4 +394,49 @@ void OptInstall()
 
     return;
 }
+
+
+/******************************************************************************
+*                                                                             *
+*   void OptUninstall()                                                       *
+*                                                                             *
+*******************************************************************************
+*
+*   Removes linice.o module
+*
+******************************************************************************/
+void OptUninstall()
+{
+    int hIce;
+    int status;
+
+    // Send the exit ioctl to the driver so it can decrement possibly
+    // multiple usage count to only 1 (useful when loader crashes)
+    hIce = open("/dev/"DEVICE_NAME, O_RDONLY);
+    if( hIce>=0 )
+    {
+        status = ioctl(hIce, ICE_IOCTL_EXIT, 0);
+        close(hIce);
+
+        printf("IOCTL=%d\n", status);
+    }
+    else
+    {
+        printf("Error opening device!\n");
+    }
+
+    // Unload the linice.o device driver module
+    status = system2("rmmod linice");
+
+    // rmmod must return 0 when uninstalling a module correctly
+    if( status==0 )
+    {
+        printf("Linice module removed\n");
+    }
+    else
+    {
+        printf("Error unloading linice module (%d)!\n", status);
+    }
+}
+
 

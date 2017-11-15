@@ -2,11 +2,19 @@
 *                                                                             *
 *   Module:     serial.c                                                      *
 *                                                                             *
-*   Date:       03/11/01                                                      *
+*   Date:       09/11/00                                                      *
 *                                                                             *
 *   Copyright (c) 1996-2001 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
+*                                                                             *
+*   This source code and produced executable is copyrighted by Goran Devic.   *
+*   This source, portions or complete, and its derivatives can not be given,  *
+*   copied, or distributed by any means without explicit written permission   *
+*   of the copyright owner. All other rights, including intellectual          *
+*   property rights, are implicitly reserved. There is no guarantee of any    *
+*   kind that this software would perform, and nobody is liable for the       *
+*   consequences of running it. Use at your own risk.                         *
 *                                                                             *
 *******************************************************************************
 
@@ -20,7 +28,7 @@
 *                                                                             *
 *   DATE     DESCRIPTION OF CHANGES                               AUTHOR      *
 * --------   ---------------------------------------------------  ----------- *
-* 03/11/01   Original                                             Goran Devic *
+* 09/11/00   Original                                             Goran Devic *
 * --------   ---------------------------------------------------  ----------- *
 *******************************************************************************
 *   Include Files                                                             *
@@ -49,32 +57,4 @@
 *   Functions
 ******************************************************************************/
 
-/******************************************************************************
-*                                                                             *
-*   void SerialHandler(int port)                                              *
-*                                                                             *
-*******************************************************************************
-*
-*   This handler is used when the debugger has control.
-*
-*   This is a low-level serial port handler.
-*
-******************************************************************************/
-void SerialHandler(int port)
-{
-    // If mouse has a control over the serial port, send it there
-
-    // Queue mouse packets from the serial port:
-    //
-    //  D7   D6   D5   D4   D3   D2   D1   D0
-    //  X    1    LB   RB   Y7   Y6   X7   X6
-    //  X    0    X5   X4   X3   X2   X1   X0
-    //  X    0    Y5   Y4   Y3   Y2   Y1   Y0
-    //
-
-
-    // Otherwise, it is a remote terminal
-
-    // Or just a junk
-}
 

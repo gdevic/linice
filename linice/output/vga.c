@@ -1,18 +1,26 @@
-/******************************************************************************
+/*****************************************************************************
 *                                                                             *
 *   Module:     vga.c                                                         *
 *                                                                             *
-*   Date:       11/01/00                                                      *
+*   Date:       05/01/00                                                      *
 *                                                                             *
 *   Copyright (c) 2000 Goran Devic                                            *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
+*   This source code and produced executable is copyrighted by Goran Devic.   *
+*   This source, portions or complete, and its derivatives can not be given,  *
+*   copied, or distributed by any means without explicit written permission   *
+*   of the copyright owner. All other rights, including intellectual          *
+*   property rights, are implicitly reserved. There is no guarantee of any    *
+*   kind that this software would perform, and nobody is liable for the       *
+*   consequences of running it. Use at your own risk.                         *
+*                                                                             *
 *******************************************************************************
 
     Module Description:
 
-        VGA text output driver
+        VGA text buffer output driver
 
 *******************************************************************************
 *                                                                             *
@@ -20,8 +28,8 @@
 *                                                                             *
 *   DATE     DESCRIPTION OF CHANGES                               AUTHOR      *
 * --------   ---------------------------------------------------  ----------- *
-* 11/01/00   Original                                             Goran Devic *
-* 03/10/01   Second revision                                      Goran Devic *
+* 05/01/00   Original                                             Goran Devic *
+* 09/10/00   Second revision                                      Goran Devic *
 * --------   ---------------------------------------------------  ----------- *
 *******************************************************************************
 *   Include Files                                                             *
@@ -29,11 +37,11 @@
 
 #include "module-header.h"              // Versatile module header file
 
-#include <asm/page_offset.h>            // We need page offset
-
 #include "clib.h"                       // Include C library header file
 #include "ice.h"                        // Include main debugger structures
 #include "debug.h"                      // Include our dprintk()
+
+#include <asm/page.h>                   // We need page offset
 
 /******************************************************************************
 *                                                                             *
@@ -49,7 +57,7 @@ TOUT outVga;
 *                                                                             *
 ******************************************************************************/
 
-#define LINUX_VGA_TEXT  (PAGE_OFFSET_RAW + 0xB8000)
+#define LINUX_VGA_TEXT  (PAGE_OFFSET + 0xB8000)
 
 #define MAX_SIZEX       80
 #define MAX_SIZEY       60
@@ -98,7 +106,7 @@ static TVga vga;
 ******************************************************************************/
 
 void VgaSprint(char *s);
-void VgaMouse(int x, int y);
+static void VgaMouse(int x, int y);
 
 /******************************************************************************
 *                                                                             *
@@ -158,11 +166,12 @@ static void SaveBackground(void)
 
     // Set up VGA to something we can handle
 
-    WriteCRTC(0x0A, 0);                 // Cursor Start Register
-    WriteCRTC(0x0B, 7);                 // Cursor End Register
-    WriteCRTC(0x0C, 0);                 // Start Address High
-    WriteCRTC(0x0D, 0);                 // Start Address Low
     WriteCRTC(0x18, 0xFF);              // Line Compare Register
+
+    // Adjust the effective text display start address, since Linux
+    // console may have scrolled down
+
+    vga.pText = (BYTE *) LINUX_VGA_TEXT + ((vgaState.CRTC[0x0C] << 8) + vgaState.CRTC[0x0D]) * 2;
 }
 
 
@@ -208,12 +217,28 @@ static void ShowCursorPos(void)
 {
     WORD wOffset;
 
-    // Set the cursor on the VGA screen
+    // Set the cursor on the VGA screen. Offset it by the display start address.
 
     wOffset = outVga.y * 80 + outVga.x;
+    wOffset += (vgaState.CRTC[0x0C] << 8) | vgaState.CRTC[0x0D];
 
     WriteCRTC(0x0E, wOffset >> 8);
     WriteCRTC(0x0F, wOffset & 0xFF);
+
+    // Set the cursor shape depending on the Insert/Overtype mode
+
+    if( outVga.fOvertype )
+    {
+        // Overtype mode - full cursor block
+        WriteCRTC(0x0A, 0);                 // Cursor Start Register
+        WriteCRTC(0x0B, 7);                 // Cursor End Register
+    }
+    else
+    {
+        // Insert mode - line cursor shape
+        WriteCRTC(0x0A, 6);                 // Cursor Start Register
+        WriteCRTC(0x0B, 7);                 // Cursor End Register
+    }
 }
 
 
@@ -233,9 +258,16 @@ static void VgaMouse(int x, int y)
     // Set the mouse cursor on the VGA screen
 
     wOffset = y * 80 + x;
+    wOffset += (vgaState.CRTC[0x0C] << 8) | vgaState.CRTC[0x0D];
 
     WriteCRTC(0x0E, wOffset >> 8);
     WriteCRTC(0x0F, wOffset & 0xFF);
+
+    // Since we use hardware VGA cursor to show the mouse location, set
+    // its shape to block
+
+    WriteCRTC(0x0A, 0);                 // Cursor Start Register
+    WriteCRTC(0x0B, 7);                 // Cursor End Register
 }
 
 
@@ -302,6 +334,10 @@ void VgaSprint(char *s)
             case DP_SETCURSORXY:
                     outVga.x = (*s++)-1;
                     outVga.y = (*s++)-1;
+                break;
+
+            case DP_SETCURSORSHAPE:
+                    outVga.fOvertype = (*s++)-1;
                 break;
 
             case DP_SAVEXY:
@@ -379,4 +415,5 @@ void VgaSprint(char *s)
         ShowCursorPos();
     }
 }
+
 

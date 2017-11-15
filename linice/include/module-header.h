@@ -2,11 +2,19 @@
 *                                                                             *
 *   Module:     module-header.h                                               *
 *                                                                             *
-*   Date:       03/03/01                                                      *
+*   Date:       09/03/00                                                      *
 *                                                                             *
 *   Copyright (c) 2001 Goran Devic                                            *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
+*                                                                             *
+*   This source code and produced executable is copyrighted by Goran Devic.   *
+*   This source, portions or complete, and its derivatives can not be given,  *
+*   copied, or distributed by any means without explicit written permission   *
+*   of the copyright owner. All other rights, including intellectual          *
+*   property rights, are implicitly reserved. There is no guarantee of any    *
+*   kind that this software would perform, and nobody is liable for the       *
+*   consequences of running it. Use at your own risk.                         *
 *                                                                             *
 *******************************************************************************
 
@@ -22,7 +30,7 @@
 *                                                                             *
 *   DATE     DESCRIPTION OF CHANGES                               AUTHOR      *
 * --------   ---------------------------------------------------  ----------- *
-* 03/03/01   Initial version                                      Goran Devic *
+* 09/03/00   Initial version                                      Goran Devic *
 * --------   ---------------------------------------------------  ----------- *
 *******************************************************************************
 *   Important Defines                                                         *
@@ -36,8 +44,8 @@
 *                                                                             *
 ******************************************************************************/
 
-#include <autoconf.h>                   // Include our linux configuration
-#include <version.h>                    // Include KERNEL_VERSION macro
+#include <linux/autoconf.h>                   // Include our linux configuration
+#include <linux/version.h>                    // Include KERNEL_VERSION macro
 
 //-----------------------------------------------------------------------------
 // We had to have this kernel compiled with loadable modules
@@ -47,7 +55,7 @@
 #endif
 
 //-----------------------------------------------------------------------------
-// In 2.2.3 /usr/include/linux/version.h includes a macro for this, 
+// In 2.2.3 /usr/include/linux/version.h includes a macro for this,
 //  but 2.0.35 doesn't - so add it here if necessary
 
 #ifndef KERNEL_VERSION
@@ -71,8 +79,8 @@
 
 
 //-----------------------------------------------------------------------------
-// Are we SMP?  Linux 2.2.x has this in the autoconf file, but prior versions 
-// need it hand coded. 
+// Are we SMP?  Linux 2.2.x has this in the autoconf file, but prior versions
+// need it hand coded.
 
 #ifdef __SMP__
 #undef __SMP__
@@ -100,11 +108,11 @@
 //-----------------------------------------------------------------------------
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,2,0)
 
-/* This function is called when a process closes the 
- * device file. It doesn't have a return value in 
+/* This function is called when a process closes the
+ * device file. It doesn't have a return value in
  * version 2.0.x because it can't fail (you must ALWAYS
- * be able to close a device). In version 2.2.x it is 
- * allowed to fail - but we won't let it. 
+ * be able to close a device). In version 2.2.x it is
+ * allowed to fail - but we won't let it.
  */
 
 #define DEV_CLOSE_RET           int
@@ -126,3 +134,4 @@
 
 
 #endif //  _VERSIONS_H_
+

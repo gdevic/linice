@@ -2,11 +2,19 @@
 *                                                                             *
 *   Module:     symbols.c                                                     *
 *                                                                             *
-*   Date:       03/09/01                                                      *
+*   Date:       09/09/00                                                      *
 *                                                                             *
 *   Copyright (c) 2001 Goran Devic                                            *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
+*                                                                             *
+*   This source code and produced executable is copyrighted by Goran Devic.   *
+*   This source, portions or complete, and its derivatives can not be given,  *
+*   copied, or distributed by any means without explicit written permission   *
+*   of the copyright owner. All other rights, including intellectual          *
+*   property rights, are implicitly reserved. There is no guarantee of any    *
+*   kind that this software would perform, and nobody is liable for the       *
+*   consequences of running it. Use at your own risk.                         *
 *                                                                             *
 *******************************************************************************
 
@@ -14,7 +22,7 @@
 
         This module contains code to load and unload symbol tables.
         They are preprocessed here into constant images that are loaded
-        into ice and used there without much processing.
+        into ice and used there.
 
 *******************************************************************************
 *                                                                             *
@@ -22,21 +30,29 @@
 *                                                                             *
 *   DATE     DESCRIPTION OF CHANGES                               AUTHOR      *
 * --------   ---------------------------------------------------  ----------- *
-* 03/09/01   Initial version                                      Goran Devic *
+* 09/09/00   Initial version                                      Goran Devic *
 * --------   ---------------------------------------------------  ----------- *
 *******************************************************************************
 *   Include Files                                                             *
 ******************************************************************************/
 
-#include <unistd.h>                     // Include standard UNIX header file
 #include <string.h>                     // Include strings header file
 #include <sys/types.h>                  // Include file operations
 #include <sys/stat.h>                   // Include file operations
-#include <sys/ioctl.h>                  // Include ioctl header file
 #include <fcntl.h>                      // Include file control file
 #include <stdio.h>                      // Include standard io file
+#include <malloc.h>                     // Include allocation header
 
-#include "ice-ioctl.h"                  // Include shared header file
+#ifndef WINDOWS
+#include <sys/ioctl.h>                  // Include ioctl header file
+#include <unistd.h>                     // Include standard UNIX header file
+#else // WINDOWS
+#include <io.h>
+#endif // WINDOWS
+
+
+#include "ice-symbols.h"                // Include symbol file defines
+#include "ice-ioctl.h"                  // Include io control codes
 
 #define stricmp     strcasecmp          // Weird gnu c call..
 
@@ -67,44 +83,49 @@ extern int system2(char *command);
 ******************************************************************************/
 void OptAddSymbolTable(char *sName)
 {
-    TSYMTAB Sym;
+    struct stat prop;
     int fd, hIce, status;
     void *pBuf;
 
-    // Open the symbol table file
-    fd = open(sName, O_RDONLY);
-    if( fd>0 )
+    // Get the file length of the symbol file
+    status = stat(sName, &prop);
+    if( status==0 )
     {
-        // Read the symbol table header
-        status = read(fd, &Sym, sizeof(TSYMTAB));
-        if( status==sizeof(TSYMTAB) )
+        // Open the symbol table file
+        fd = open(sName, O_RDONLY);
+        if( fd>0 )
         {
             // Get the total length of the file, allocate memory and load it in
-            pBuf = malloc(Sym.size);
+            pBuf = malloc(prop.st_size);
             if( pBuf )
             {
-                lseek(fd, 0, SEEK_SET);
-                status = read(fd, pBuf, Sym.size);
-                if( status==Sym.size )
+                status=read(fd, pBuf, prop.st_size);
+                if( status == prop.st_size )
                 {
-                    //====================================================================
-                    // Send the synbol file down to the module
-                    //====================================================================
-                    hIce = open("/dev/"DEVICE_NAME, O_RDONLY);
-                    if( hIce>=0 )
+                    // Make sure it is a valid symbol file
+                    if( !strcmp(pBuf, SYMSIG) )
                     {
-//                        printf("IOCTL: %X param: %X\n", ICE_IOCTL_ADD_SYM, pBuf);
+                        //====================================================================
+                        // Send the synbol file down to the module
+                        //====================================================================
+                        hIce = open("/dev/"DEVICE_NAME, O_RDONLY);
+                        if( hIce>=0 )
+                        {
+//                          printf("IOCTL: %X param: %X\n", ICE_IOCTL_ADD_SYM, pBuf);
 
-                        status = ioctl(hIce, ICE_IOCTL_ADD_SYM, pBuf);
-                        close(hIce);
+                            status = ioctl(hIce, ICE_IOCTL_ADD_SYM, pBuf);
+                            close(hIce);
 
-                        printf("IOCTL=%d\n", status);
+                            printf("AddSymbolTable: IOCTL=%d\n", status);
+                        }
+                        else
+                            printf("AddSymbolTable IOCTL Failed!\n");
                     }
                     else
-                        printf("Error opening device!\n");
+                        printf("%s is an invalid Linice symbol file!\n", sName);
                 }
                 else
-                    printf("Error reading symbol table (2) %s\n", sName);
+                    printf("Error reading symbol table %s\n", sName);
 
                 free(pBuf);
             }
@@ -112,10 +133,10 @@ void OptAddSymbolTable(char *sName)
                 printf("Error allocating memory\n");
         }
         else
-            printf("Error reading symbol table %s", sName);
+            printf("Unable to open symbol file %s\n", sName);
     }
     else
-        printf("Unable to open symbol file %s\n", sName);
+        printf("Unable to access symbol file %s\n", sName);
 }
 
 /******************************************************************************
@@ -143,8 +164,9 @@ void OptRemoveSymbolTable(char *sName)
         status = ioctl(hIce, ICE_IOCTL_REMOVE_SYM, sName);
         close(hIce);
 
-        printf("IOCTL=%d\n", status);
+        printf("RemoveSymbolTable: IOCTL=%d\n", status);
     }
     else
         printf("Error opening device!\n");
 }
+

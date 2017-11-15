@@ -2,11 +2,19 @@
 *                                                                             *
 *   Module:     init.c                                                        *
 *                                                                             *
-*   Date:       03/09/01                                                      *
+*   Date:       09/09/00                                                      *
 *                                                                             *
 *   Copyright (c) 2001 Goran Devic                                            *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
+*                                                                             *
+*   This source code and produced executable is copyrighted by Goran Devic.   *
+*   This source, portions or complete, and its derivatives can not be given,  *
+*   copied, or distributed by any means without explicit written permission   *
+*   of the copyright owner. All other rights, including intellectual          *
+*   property rights, are implicitly reserved. There is no guarantee of any    *
+*   kind that this software would perform, and nobody is liable for the       *
+*   consequences of running it. Use at your own risk.                         *
 *                                                                             *
 *******************************************************************************
 
@@ -20,7 +28,7 @@
 *                                                                             *
 *   DATE     DESCRIPTION OF CHANGES                               AUTHOR      *
 * --------   ---------------------------------------------------  ----------- *
-* 03/09/01   Initial version                                      Goran Devic *
+* 09/09/00   Initial version                                      Goran Devic *
 * --------   ---------------------------------------------------  ----------- *
 *******************************************************************************
 *   Include Files                                                             *
@@ -45,39 +53,6 @@
 *                                                                             *
 ******************************************************************************/
 
-typedef struct
-{
-    BYTE code;
-    char *string;
-} TDEFAULTFKEY, *PTDEFAULTFKEY;
-
-TDEFAULTFKEY defaultFKEY[] = {
-    { F2,  "wr" },
-    { F3,  "src" },
-    { F4,  "rs" },
-    { F5,  "x" },
-    { F6,  "ec" },
-    { F7,  "here" },
-    { F8,  "t" },
-    { F9,  "bpx" },
-    { F10, "p" },
-
-    { SF3, "format" },
-
-    { CF8, "xt" },
-    { CF9, "trace" },
-    { CF10,"xp" },
-    { CF11,"show" },
-
-    { AF2, "wd" },
-    { AF3, "wc" },
-    { AF4, "ww" },
-    { AF5, "cls" },
-
-    { 0, NULL }
-};
-
-
 extern PTOUT pOut;                      // Pointer to a current Out class
 extern TOUT outVga;
 
@@ -98,11 +73,9 @@ extern void VgaInit();
 extern void VgaSprint(char *s);
 extern void InterruptInit();
 extern void HookDebuger();
-
-extern void RegDraw();
-extern void DataDraw();
-extern void CodeDraw();
-extern void HistoryDraw();
+extern BOOL InitUserVars(int num);
+extern BOOL InitMacros(int num);
+extern void InitEdit();
 
 extern BYTE *ice_malloc(DWORD size);
 extern void ice_free_heap(BYTE *pHeap);
@@ -127,7 +100,6 @@ extern void ice_free_heap(BYTE *pHeap);
 ******************************************************************************/
 int InitPacket(PTINITPACKET pInit)
 {
-    PTDEFAULTFKEY pKey = defaultFKEY;
     int retval = -EINVAL;
 
     if( pInit->nSize == sizeof(TINITPACKET) )
@@ -151,12 +123,6 @@ int InitPacket(PTINITPACKET pInit)
 
                 VgaInit();
                 pOut = &outVga;
-
-                // Init window drawing functions
-                pWin->r.draw = RegDraw;
-                pWin->d.draw = DataDraw;
-                pWin->c.draw = CodeDraw;
-                pWin->h.draw = HistoryDraw;
 
                 // Set default values for initial windows:
                 // Visible: registers, data and code windows and, of course, history
@@ -183,9 +149,11 @@ int InitPacket(PTINITPACKET pInit)
                 deb.fCode = FALSE;
 
                 // Initialize the default break key
-                deb.BreakKey = CHAR_CTRL | 'q';
+                deb.BreakKey = CHAR_CTRL | 'Q';
 
                 HistoryAdd("LinIce (C) 2000-2001 by Goran Devic\n");
+
+                pIce->nXDrawSize = pInit->nDrawSize;
 
                 // Initialize interrupt handling subsystem
 
@@ -199,49 +167,87 @@ int InitPacket(PTINITPACKET pInit)
                     {
                         INFO(("Allocated %d Kb for symbol pool\n", pInit->nSymbolSize / 1024));
 
-                        // Set the default keyboard layout to English
+                        pIce->nSymbolBufferSize = pIce->nSymbolBufferAvail = pInit->nSymbolSize;
 
-                        pIce->layout = LAYOUT_US;
+                        // Allocate heap for debuggers internal use
 
-                        deb.fLowercase = pInit->fLowercase;
-
-                        // Set up default output colors
-
-                        pIce->col[COL_NORMAL]  = 0x07;
-                        pIce->col[COL_BOLD]    = 0x0F;
-                        pIce->col[COL_REVERSE] = 0x71;
-                        pIce->col[COL_HELP]    = 0x30;
-                        pIce->col[COL_LINE]    = 0x02;
-
-                        // Copy keyboard F-key assignments
-
-                        memcpy(pIce->keyFn , pInit->keyFn , sizeof(pIce->keyFn));
-
-                        // Set the default F-strings for those that are not supplied with init packet
-
-                        while( pKey->code )
+                        if( pIce->hHeap == NULL )
                         {
-                            if( *pIce->keyFn[pKey->code - F1]==0 )  // If still unassigned...
-                                strcpy((void *)pIce->keyFn[pKey->code - F1], pKey->string);
-                            pKey++;
+                            if( (pIce->hHeap = ice_init_heap(MAX_HEAP)) != NULL )
+                            {
+                                // Allocate space for user variables and macros
+
+                                if( InitUserVars(pInit->nVars) )
+                                {
+                                    pIce->nVars = pInit->nVars;
+
+                                    if( InitMacros(pInit->nMacros) )
+                                    {
+                                        pIce->nMacros = pInit->nMacros;
+
+                                        // Initialize command line editor
+
+                                        InitEdit();
+
+                                        // Set the default keyboard layout to English
+
+                                        pIce->layout = LAYOUT_US;
+
+                                        deb.fLowercase = pInit->fLowercase;
+                                        deb.fPause = TRUE;
+
+                                        // Set up default output colors
+
+                                        pIce->col[COL_NORMAL]  = 0x07;
+                                        pIce->col[COL_BOLD]    = 0x0B;
+                                        pIce->col[COL_REVERSE] = 0x71;
+                                        pIce->col[COL_HELP]    = 0x30;
+                                        pIce->col[COL_LINE]    = 0x02;
+
+                                        // Copy keyboard F-key assignments
+
+                                        memcpy(pIce->keyFn , pInit->keyFn , sizeof(pIce->keyFn));
+
+                                        // Now we can hook our master IDT so all the faults will route to
+                                        // debugger.  This effectively makes it active.
+
+                                        HookDebuger();
+
+                                        // Interpret init command string and execute it
+
+                                        INFO(("INIT: ""%s""\n", pInit->sInit));
+
+                                        if( CommandExecute(pInit->sInit)==TRUE )
+                                        {
+                                            // Enter the debugger if the init string did not end with command 'X'
+                                            // Schedule the debugger entry the same way hotkey does:
+
+                                            pIce->fKbdBreak = TRUE;
+                                        }
+                                        retval = 0;
+                                    }
+                                    else
+                                    {
+                                        ERROR(("INIT: Heap too small for MACROS"));
+                                        retval = -ENOMEM;
+                                    }
+                                }
+                                else
+                                {
+                                    ERROR(("INIT: Heap too small for VARS"));
+                                    retval = -ENOMEM;
+                                }
+                            }
+                            else
+                            {
+                                ERROR(("Unable to allocate %d for memory heap!\n", MAX_HEAP));
+                                retval = -ENOMEM;
+                            }
                         }
-
-                        // Now we can hook our master IDT so all the faults will route to
-                        // debugger.  This effectively makes it active.
-
-                        HookDebuger();
-
-                        // Interpret init command string and execute it
-
-                        INFO(("INIT: ""%s""\n", pInit->sInit));
-
-                        if( CommandExecute(pInit->sInit)==TRUE )
+                        else
                         {
-                            // Enter the debugger if the init string did not end with command 'X'
-
-                            INT3();
+                            ERROR(("pIce->hHeap != NULL\n"));
                         }
-                        retval = 0;
                     }
                     else
                     {
@@ -268,3 +274,4 @@ int InitPacket(PTINITPACKET pInit)
 
     return( retval );
 }
+

@@ -1,0 +1,53 @@
+PENTIUM=ON
+NMI=ON
+ECHOKEYS=OFF
+NOLEDS=OFF
+NOPAGE=OFF
+SIWVIDRANGE=ON
+THREADP=ON
+LOWERCASE=ON
+
+SYM=2048
+HST=4096
+MACROS=32
+DRAWSIZE=4096
+
+INIT="lines 43; code on; set lowercase on;"
+
+F1="h;"
+F2="^wr;"
+F3="^src;"
+F4="^rs;"
+F5="^x;"
+F6="^ec;"
+F7="^here;"
+F8="^t;"
+F9="^bpx;"
+F10="^p;"
+F11="^G @SS:ESP;"
+F12="^p ret;"
+SF3="^format;"
+AF1="^wr;"
+AF2="^wd;"
+AF3="^wc;"
+AF4="^ww;"
+AF5="CLS;"
+AF11="^dd dataaddr->0;"
+AF12="^dd dataaddr->4;"
+CF1="altscr off; lines 60; wc 32; wd 8;"
+CF2="^wr;^wd;^wc;"
+
+; WINICE.DAT
+; (SystemRoot\System32\Drivers\WINICE.DAT)
+; for use with SoftICE for Windows NT (versions 3.0 and greater)
+;
+; ***** Examples of export symbols that can be included *****
+;	Change the path to the appropriate drive and directory
+; EXP=\SystemRoot\System32\hal.dll
+; EXP=\SystemRoot\System32\ntoskrnl.exe
+; EXP=\SystemRoot\System32\ntdll.dll
+; EXP=\SystemRoot\System32\kernel32.dll
+; EXP=\SystemRoot\System32\user32.dll
+; EXP=\SystemRoot\System32\csrsrv.dll
+; EXP=\SystemRoot\System32\basesrv.dll
+; EXP=\SystemRoot\System32\winsrv.dll

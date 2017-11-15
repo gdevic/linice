@@ -2,11 +2,19 @@
 *                                                                             *
 *   Module:     window.c                                                      *
 *                                                                             *
-*   Date:       03/11/01                                                      *
+*   Date:       09/11/00                                                      *
 *                                                                             *
 *   Copyright (c) 1997, 2001 Goran Devic                                      *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
+*                                                                             *
+*   This source code and produced executable is copyrighted by Goran Devic.   *
+*   This source, portions or complete, and its derivatives can not be given,  *
+*   copied, or distributed by any means without explicit written permission   *
+*   of the copyright owner. All other rights, including intellectual          *
+*   property rights, are implicitly reserved. There is no guarantee of any    *
+*   kind that this software would perform, and nobody is liable for the       *
+*   consequences of running it. Use at your own risk.                         *
 *                                                                             *
 *******************************************************************************
 
@@ -21,7 +29,7 @@
 *                                                                             *
 *   DATE     REV   DESCRIPTION OF CHANGES                         AUTHOR      *
 * --------   ----  ---------------------------------------------  ----------- *
-* 03/11/01         Original                                       Goran Devic *
+* 09/11/00         Original                                       Goran Devic *
 * --------   ----  ---------------------------------------------  ----------- *
 *******************************************************************************
 *   Include Files                                                             *
@@ -98,7 +106,8 @@ static void AdjustToFit(int excess)
 ******************************************************************************/
 int WindowIsSizeValid()
 {
-    int less = pOut->sizeY - 3;         // Add 3 lines for history and help
+    // Add 4 lines for help, history (2) and history header line
+    int less = pOut->sizeY - 4;
 
     if( pWin->r.fVisible )  less -= pWin->r.nLines;
     if( pWin->d.fVisible )  less -= pWin->d.nLines;
@@ -146,9 +155,11 @@ void RecalculateDrawWindows()
         // Add one to the top Y to skip the header line
         dprint("%c%c%c", DP_SETSCROLLREGIONYY, pWin->h.Top+1+1, pWin->h.Bottom+1);
 
-        if( pWin->r.fVisible )  (pWin->r.draw)();
-        if( pWin->d.fVisible )  (pWin->d.draw)();
-        if( pWin->c.fVisible )  (pWin->c.draw)();
-        (pWin->h.draw)();
+        RegDraw(FALSE);
+        DataDraw(FALSE, deb.dataAddr.offset);
+        CodeDraw(FALSE, deb.codeAddr.offset);
+        HistoryDraw();
+        // HistoryDraw leaves the cursor coordinates at the proper Y-coordinate
     }
 }
+

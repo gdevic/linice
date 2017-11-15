@@ -8,6 +8,14 @@
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
+*   This source code and produced executable is copyrighted by Goran Devic.   *
+*   This source, portions or complete, and its derivatives can not be given,  *
+*   copied, or distributed by any means without explicit written permission   *
+*   of the copyright owner. All other rights, including intellectual          *
+*   property rights, are implicitly reserved. There is no guarantee of any    *
+*   kind that this software would perform, and nobody is liable for the       *
+*   consequences of running it. Use at your own risk.                         *
+*                                                                             *
 *******************************************************************************
 
     Module Description:
@@ -21,7 +29,7 @@
 *   DATE     REV   DESCRIPTION OF CHANGES                         AUTHOR      *
 * --------   ----  ---------------------------------------------  ----------- *
 * 9/4/97     1.00  Original                                       Goran Devic *
-* 10/25/00   2.00  Revised for LinIce                             Goran Devic *
+* 4/25/00    2.00  Revised for LinIce                             Goran Devic *
 * --------   ----  ---------------------------------------------  ----------- *
 *******************************************************************************
 *   Important Defines                                                         *
@@ -122,8 +130,8 @@ typedef struct
 
 } PACKED TDescriptor, *PTDescriptor;
 
-#define GET_DESC_BASE(p)        (p)->base
-#define SET_DESC_BASE(p, v)     (p)->base = (v)
+#define GET_DESC_BASE(p)        ((p)->base)
+#define SET_DESC_BASE(p, v)     ((p)->base = (v))
 
 //-----------------------------------------------------------------------------
 // IDT Gates (Task, Interrupt and Trap)
@@ -138,7 +146,7 @@ typedef struct
     DWORD  present      :  1;           // Present
     DWORD  offsetHigh   : 16;           // Target handler offset [31:16]
 
-} TIDT_Gate, *PTIDT_Gate;
+} PACKED TIDT_Gate, *PTIDT_Gate;
 
 #define INT_TYPE_TASK       0x5         // Task gate
 #define INT_TYPE_INT16      0x6         // 16 bit interrupt gate
@@ -157,21 +165,24 @@ typedef struct
     DWORD limitLow      :16;            // Limit [15:0]
     DWORD baseLow       :16;            // Base [15:0]
     DWORD baseMid       :8;             // Base [23:16]
-    DWORD type          :5;             // Gate type: one of DESC_TYPE_*
+    DWORD type          :4;             // Gate type: one of DESC_TYPE_*
+    DWORD system        :1;             // System segment (0) or data/code (1) [12]
     DWORD dpl           :2;             // Gate privilege level
     DWORD present       :1;             // Gate is present
     DWORD limitHigh     :4;             // Limit [20:16]
     DWORD avail         :1;             // Available to use
-    DWORD               :1;             // Reserved
+    DWORD res           :1;             // Reserved
     DWORD size32        :1;             // Gate size: 1=32 bit, 0=16 bit
     DWORD granularity   :1;             // Granularity of limit: 1=page, 0=byte
     DWORD baseHigh      :8;             // Base [31:24]
 
-} TGDT_Gate, *PTGDT_Gate;
+} PACKED TGDT_Gate, *PTGDT_Gate;
 
 #define GET_GDT_BASE(pGDT_Gate)   ((pGDT_Gate)->baseLow + ((pGDT_Gate)->baseMid << 16) + ((pGDT_Gate)->baseHigh << 24))
 #define GET_GDT_LIMIT(pGDT_Gate)  ((pGDT_Gate)->limitLow + ((pGDT_Gate)->limitHigh << 16))
 
+// System segment types (system[12]=0):
+#define DESC_TYPE_NULL      0x00        // Reserved special purpose type
 #define DESC_TYPE_TSS16A    0x01        // 16 bit TSS (Available)
 #define DESC_TYPE_LDT       0x02        // LDT (CodeData must be 0)
 #define DESC_TYPE_TSS16B    0x03        // 16 bit TSS (Busy)
@@ -180,11 +191,6 @@ typedef struct
 #define DESC_TYPE_TSS32A    0x09        // 32 bit TSS (Available)
 #define DESC_TYPE_TSS32B    0x0B        // 32 bit TSS (Busy)
 #define DESC_TYPE_CALLG32   0x0C        // 32 bit call gate
-
-#define DESC_TYPE_DATA      0x12        // Read/write data
-#define DESC_TYPE_EXEC      0x1A        // Excecute/read
-
-#define DESC_TYPE_NULL      0x00        // Reserved special purpose type
 
 //-----------------------------------------------------------------------------
 // Page directory and page table bits
@@ -198,9 +204,9 @@ typedef struct
     DWORD fWriteThr   : 1;              // Write-through enabled
     DWORD fNoCache    : 1;              // Disable cache
     DWORD fAccessed   : 1;              // Page has been accessed
-    DWORD fDirty      : 1;              // Page has been modified
-    DWORD             : 1;              // Reserved field (set to 0)
-    DWORD fGlobal     : 1;              // Global page
+    DWORD fDirty      : 1;              // Page has been modified (PTE only)
+    DWORD fPS         : 1;              // 4Mb page (PD only)
+    DWORD fGlobal     : 1;              // Global page (PTE only)
     DWORD Flags       : 3;              // Page's kernel flags
     DWORD Index       : 20;             // Physical page index
 
@@ -399,3 +405,4 @@ extern unsigned char inp(unsigned short port);
 //#pragma pack( pop, enter_intel )
 
 #endif //  _INTEL_H_
+

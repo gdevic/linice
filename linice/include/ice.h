@@ -2,11 +2,19 @@
 *                                                                             *
 *   Module:     ice.h                                                         *
 *                                                                             *
-*   Date:       10/27/2000                                                    *
+*   Date:       04/27/2000                                                    *
 *                                                                             *
 *   Copyright (c) 2000 Goran Devic                                            *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
+*                                                                             *
+*   This source code and produced executable is copyrighted by Goran Devic.   *
+*   This source, portions or complete, and its derivatives can not be given,  *
+*   copied, or distributed by any means without explicit written permission   *
+*   of the copyright owner. All other rights, including intellectual          *
+*   property rights, are implicitly reserved. There is no guarantee of any    *
+*   kind that this software would perform, and nobody is liable for the       *
+*   consequences of running it. Use at your own risk.                         *
 *                                                                             *
 *******************************************************************************
 
@@ -20,7 +28,7 @@
 *                                                                             *
 *   DATE     DESCRIPTION OF CHANGES                               AUTHOR      *
 * --------   ---------------------------------------------        ----------- *
-* 10/27/00   Original                                             Goran Devic *
+* 04/27/00   Original                                             Goran Devic *
 * --------   ---------------------------------------------        ----------- *
 *******************************************************************************
 *   Important Defines                                                         *
@@ -30,6 +38,8 @@
 
 #include "intel.h"                      // Include Intel x86 specific defines
 #include "ice-limits.h"                 // Include our limits
+#include "ice-symbols.h"                // Include symbol file defines
+#include "ice-ioctl.h"                  // Include symbol table defines
 
 /******************************************************************************
 *                                                                             *
@@ -42,8 +52,6 @@
 *   Global Defines, Variables and Macros                                      *
 *                                                                             *
 ******************************************************************************/
-// Forward declarations, a strange C thing...
-struct TSYMTAB;
 
 /////////////////////////////////////////////////////////////////
 // THE MAIN DEBUGGER STRUCTURE
@@ -52,26 +60,40 @@ struct TSYMTAB;
 typedef struct
 {
     BYTE *hSymbolBuffer;                // Handle to symbol buffer pool
-    struct TSYMTAB *pSymTab;            // Linked list of symbol tables
+    DWORD nSymbolBufferSize;            // Symbol buffer size
+    DWORD nSymbolBufferAvail;           // Symbol buffer size available
+    DWORD nXDrawSize;                   // DrawSize parameter
+    BYTE *pXDrawBuffer;                 // Draw buffer pointer
+    BYTE *pXFrameBuffer;                // Mapped X frame buffer
+    TSYMTAB *pSymTab;                   // Linked list of symbol tables
+    TSYMTAB *pSymTabCur;                // Pointer to the current symbol table
+    DWORD nVars;                        // Number of user variables
+    DWORD nMacros;                      // Number of macros
+    BYTE *hHeap;                        // Handle to internal memory heap
 
     BYTE *pHistoryBuffer;               // Pointer to a history buffer
     DWORD nHistorySize;                 // History buffer size
 
+    BOOL fKbdBreak;                     // Schedule break into the ICE
     BOOL fRunningIce;                   // Is ICE running?
 
     int layout;                         // Keyboard layout
     char keyFn[4][12][MAX_STRING];      // Key assignments for function keys
+                                        // Fn:0 Shift:1 Alt:2 Control:3
 
-    BYTE col[5];                        // Color attributes
-#define COL_NORMAL          0
-#define COL_BOLD            1
-#define COL_REVERSE         2
-#define COL_HELP            3
-#define COL_LINE            4
+    BYTE col[6];                        // Color attributes (1-5)
+#define COL_NORMAL          1
+#define COL_BOLD            2
+#define COL_REVERSE         3
+#define COL_HELP            4
+#define COL_LINE            5
 
     // Statistics variables
     int nIntsPass[0x40];                // Number of interrupts received
     int nIntsIce[0x40];                 // While debugger run
+
+    // Timers - decremented by the timer interrupt down to zero
+    DWORD timer[2];
 
 } TICE, *PTICE;
 
@@ -123,6 +145,7 @@ typedef struct
     TDescriptor gdt;                    // Linux gdt descriptor
     PTREGS r;                           // pointer to live registers
     TREGS  r_prev;                      // previous registers (for color coding of changes)
+    TSysreg sysReg;                     // System registers
     int nInterrupt;                     // Interrupt that occurred
 
     int DumpSize;                       // Dx dump value size
@@ -133,11 +156,20 @@ typedef struct
 
     BOOL fAltscr;
     BOOL fFaults;
-    BOOL fI1Here;
-    BOOL fI3Here;
+    BOOL fI1Here;                       // Break on INT1
+    BOOL fI1Kernel;                     // Break on INT1 only in kernel code
+    BOOL fI3Here;                       // Break on INT3
+    BOOL fI3Kernel;                     // Break on INT3 only in kernel code
     BOOL fLowercase;
-    BOOL fPause;
     BOOL fSymbols;
+    BOOL fFlash;                        // Restore screen during P and T commands
+    BOOL fPause;                        // Pause after a screenful of scrolling info
+
+    BOOL fTrace;                        // Trace command in progress
+    DWORD TraceCount;                   // Single trace instr. count to go
+
+    BOOL fStep;                         // Single logical step in progress (command P)
+    BOOL fStepRet;                      // Single step until RET instruction (P RET)
 
     CHAR BreakKey;                      // Key combination for break
 
@@ -158,7 +190,6 @@ typedef struct
     // The following are calculated on a fly
     DWORD Top;                          // Top coordinate holding the header line
     DWORD Bottom;                       // Bottom coordinate (inclusive)
-    void (*draw)();                     // Function that draws inside frame
 
 } TFRAME, *PTFRAME;
 
@@ -219,6 +250,7 @@ typedef struct
     BYTE x, y;                          // Current cursor coordinates
     BYTE sizeX, sizeY;                  // Current screen width and height
     BYTE startX, startY;                // Display start coordinates
+    BYTE fOvertype;                     // Cursor shape is overtype? (or insert)
 
     void (*sprint)(char *c);            // Effective print string function
     void (*mouse)(int, int);            // Function that displays mouse cursor
@@ -227,16 +259,23 @@ typedef struct
 
 extern PTOUT pOut;                      // Pointer to a current output device
 
-#define DP_SAVEBACKGROUND       0xFF    // Save background into a private buffer
-#define DP_RESTOREBACKGROUND    0xFE    // Restore saved background
-#define DP_CLS                  0xFD    // Clear screen
-#define DP_SETCURSORXY          0xFC    // Set cursor coordinates (1..x, 1..x)
-#define DP_SAVEXY               0xFB    // Single-level save XY cursor coords
-#define DP_RESTOREXY            0xFA    // Single-level restore XY cursor coords
-#define DP_SETSCROLLREGIONYY    0xF9    // Set top and bottom scroll region
-#define DP_SCROLLUP             0xF8    // Scroll up a scroll region
-#define DP_SCROLLDOWN           0xF7    // Scroll down a scroll region
-#define DP_SETCOLINDEX          0xF6    // Set the current line's color index
+#define DP_SAVEBACKGROUND       0x01    // Save background into a private buffer
+#define DP_RESTOREBACKGROUND    0x02    // Restore saved background
+#define DP_CLS                  0x03    // Clear screen
+#define DP_SETCURSORXY          0x04    // Set cursor coordinates (1..x, 1..x)
+#define DP_SAVEXY               0x05    // Single-level save XY cursor coords
+#define DP_RESTOREXY            0x06    // Single-level restore XY cursor coords
+#define DP_SETSCROLLREGIONYY    0x07    // Set top and bottom scroll region
+#define _BACKSPACE_             0x08    // Backspace code
+#define _TAB_                   0x09    // Tabulation code
+#define _LF_                    0x0A    // Line feed code
+#define DP_SETCOLINDEX          0x0B    // Set the current line's color index
+//                              0x0C    // Reserved
+#define _CR_                    0x0D    // Carriage return code
+#define DP_SCROLLUP             0x0E    // Scroll up a scroll region
+#define DP_SCROLLDOWN           0x0F    // Scroll down a scroll region
+#define DP_SETCURSORSHAPE       0x10    // Set Insert/Overtype cursor shape (1, 2)
+#define DP_AVAIL                0x11    // First available code
 
 
 /******************************************************************************
@@ -252,9 +291,6 @@ extern PTOUT pOut;                      // Pointer to a current output device
 #define MAX_INPUT_QUEUE         32      // Set max input queue size
 
 extern CHAR GetKey( BOOL fBlock );      // Read a key code from the input queue
-#define CHAR_SHIFT              0x0100  // <key> + SHIFT
-#define CHAR_ALT                0x0200  // <key> + ALT
-#define CHAR_CTRL               0x0400  // <key> + CTRL
 
 extern void PutKey( CHAR Key );
 
@@ -262,6 +298,11 @@ extern int dprint( char *format, ... );
 extern BOOL dprinth( int nLineCount, char *format, ... );
 extern int PrintLine(char *format,...);
 extern void dputc(UCHAR c);
+
+extern void RegDraw(BOOL fForce);
+extern void DataDraw(BOOL fForce, DWORD newOffset);
+extern void CodeDraw(BOOL fForce, DWORD newOffset);
+extern void HistoryDraw();
 
 extern BOOL CommandExecute( char *pCmd );
 
@@ -274,15 +315,24 @@ extern void ClearHistory(void);
 extern BYTE ReadCRTC(int index);
 extern void WriteCRTC(int index, int value);
 extern int GetByte(WORD sel, DWORD offset);
+extern void SetByte(WORD sel, DWORD offset, BYTE value);
 extern void memset_w(void *dest, WORD data, int size);
+extern void memset_d(void *dest, DWORD data, int size);
+extern void GetSysreg( TSysreg * pSys );
 
 extern BOOL AddrIsPresent(PTADDRDESC pAddr);
 extern BYTE AddrGetByte(PTADDRDESC pAddr);
+extern void AddrSetByte(PTADDRDESC pAddr, BYTE value);
 
 // Command parser helpers:
 extern BOOL Expression(DWORD *value, char *sExpr, char **psNext );
+extern WORD evalSel;               // Selector result of the expression (optional)
 extern int Evaluate( char *sExpr, char **psNext );
+extern DWORD GetDec(char **psString);
+
 extern int GetOnOff(char *args);
 
+extern BOOL SymbolName2Value(DWORD *pValue, char *name);
 
 #endif //  _ICE_H_
+

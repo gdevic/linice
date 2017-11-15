@@ -2,11 +2,19 @@
 *                                                                             *
 *   Module:     output.c                                                      *
 *                                                                             *
-*   Date:       03/11/01                                                      *
+*   Date:       09/11/00                                                      *
 *                                                                             *
 *   Copyright (c) 1997, 2001 Goran Devic                                      *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
+*                                                                             *
+*   This source code and produced executable is copyrighted by Goran Devic.   *
+*   This source, portions or complete, and its derivatives can not be given,  *
+*   copied, or distributed by any means without explicit written permission   *
+*   of the copyright owner. All other rights, including intellectual          *
+*   property rights, are implicitly reserved. There is no guarantee of any    *
+*   kind that this software would perform, and nobody is liable for the       *
+*   consequences of running it. Use at your own risk.                         *
 *                                                                             *
 *******************************************************************************
 
@@ -18,6 +26,11 @@
     If the first character of a string is '@', a line will be stored in the
     history buffer as well.
 
+    The cache output buffer is also here and some utility functions to deal
+    with it. Cache output buffer is a simple ASCII text buffer to which
+    shadowed print is made. It is used with high-resolution scrolling to
+    read characters to scroll and serial line not to send redundant codes.
+    (TODO)
 
 *******************************************************************************
 *                                                                             *
@@ -25,7 +38,7 @@
 *                                                                             *
 *   DATE     REV   DESCRIPTION OF CHANGES                         AUTHOR      *
 * --------   ----  ---------------------------------------------  ----------- *
-* 03/11/01         Original                                       Goran Devic *
+* 09/11/00         Original                                       Goran Devic *
 * --------   ----  ---------------------------------------------  ----------- *
 *******************************************************************************
 *   Include Files                                                             *
@@ -42,6 +55,8 @@
 *                                                                             *
 ******************************************************************************/
 
+BYTE cacheText[MAX_Y][MAX_X];           // Cache output buffer
+
 /******************************************************************************
 *                                                                             *
 *   Local Defines, Variables and Macros                                       *
@@ -53,6 +68,21 @@
 *   Functions                                                                 *
 *                                                                             *
 ******************************************************************************/
+
+void CacheTextScrollUp(DWORD top, DWORD bottom)
+{
+    // Scroll up all requested lines
+    memmove(&cacheText[top][0], &cacheText[top+1][0], MAX_X * (bottom-top));
+
+    // Clear the last line
+    memset(&cacheText[bottom][0], 0, MAX_X);
+}
+
+void CacheTextCls()
+{
+    // Clear complete cache to spaces
+    memset(cacheText, ' ', MAX_X * MAX_Y);
+}
 
 /******************************************************************************
 *                                                                             *
@@ -200,24 +230,44 @@ BOOL dprinth( int nLineCount, char *format, ... )
         pOut->sprint(pBuf);
 
         // If we are printing to a history buffer, and the line count is reached,
-        // print the help line and wait for a keypress
-        if( (nLineCount % pWin->h.nLines)==0 )
+        // print the help line and wait for a keypress, unless the PAUSE is set to OFF
+        if( nLineCount % ((pWin->h.nLines-1) )==0 )
         {
-            dprint("%c%c%c%c%c%c    Press any key to continue; Esc to cancel\r%c",
-                DP_SAVEXY,
-                DP_SETCURSORXY, 1+0, 1+pOut->sizeY-1,
-                DP_SETCOLINDEX, COL_HELP,
-                DP_RESTOREXY);
-            Key = GetKey(TRUE);
+            if( deb.fPause==TRUE )
+            {
+                // PAUSE is on, so do all that wait for key stuff...
+
+                dprint("%c%c%c%c%c%c    Press any key to continue; Esc to cancel\r%c",
+                    DP_SAVEXY,
+                    DP_SETCURSORXY, 1+0, 1+pOut->sizeY-1,
+                    DP_SETCOLINDEX, COL_HELP,
+                    DP_RESTOREXY);
+                Key = GetKey(TRUE);
+            }
+            else
+            {
+                // PAUSE is FALSE, but still peek a keyboard so we can abort if we want to
+                Key = GetKey(FALSE);
+            }
+
+            // Move cursor to a new line
+            dprint("\n");
+
+            // If ESC was pressed in any case, abort
             if( Key==ESC )
-                return( FALSE );
+                return(FALSE);
         }
+        else
+            dprint("\n");
     }
     else
     {
         // We are printing within a window
+        // Append new line
+        strcat(pBuf, "\n");
         pOut->sprint(pBuf);
     }
 
     return( TRUE );
 }
+
