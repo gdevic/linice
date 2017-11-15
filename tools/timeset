@@ -1,0 +1,29 @@
+#!/bin/sh
+#
+# ntpdate queries the time server using the unpriviledged port (-u)
+# and logs message using syslog (/var/log/messages)
+#
+# A good list of free public time servers can be found on
+# www.eecis.udel.edu/~mills/ntp/servers.htm
+#
+/usr/sbin/ntpdate -u -s clock.cuhk.edu.hk
+if [ "$?" -ne "0" ]; then
+ /usr/sbin/ntpdate -u -s clock.isc.org
+ if [ "$?" -ne "0" ]; then
+  /usr/sbin/ntpdate -u -s clock.nc.fukuoka-u.ac.jp
+  if [ "$?" -ne "0" ]; then
+   /usr/sbin/ntpdate -u -s clock.via.net
+   if [ "$?" -ne "0" ]; then
+    /usr/sbin/ntpdate -u -s navobs1.wustl.edu
+    if [ "$?" -ne "0" ]; then
+     /usr/sbin/ntpdate -u -s ntp.ml.csiro.au
+     if [ "$?" -ne "0" ]; then
+      /usr/sbin/ntpdate -u -s ntp-cup.external.hp.com
+     fi
+    fi
+   fi
+  fi
+ fi
+fi
+# lastly, set the hardware clock chip to what we think it's right time
+/sbin/hwclock --systohc

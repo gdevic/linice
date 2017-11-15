@@ -188,9 +188,9 @@ int InitPacket(PTINITPACKET pInit)
 
                 // Allocate heap for the symbol table
 
-                if( pIce->hSymbolBuffer == NULL )
+                if( pIce->hSymbolBufferHeap == NULL )
                 {
-                    if( (pIce->hSymbolBuffer = ice_init_heap(pInit->nSymbolSize)) != NULL )
+                    if( (pIce->hSymbolBufferHeap = ice_init_heap(pInit->nSymbolSize)) != NULL )
                     {
                         INFO(("Allocated %d Kb for symbol pool\n", pInit->nSymbolSize / 1024));
 
@@ -298,7 +298,7 @@ int InitPacket(PTINITPACKET pInit)
                 }
                 else
                 {
-                    ERROR(("pIce->hSymbolBuffer != NULL\n"));
+                    ERROR(("pIce->hSymbolBufferHeap != NULL\n"));
                 }
 
                 // Restore background and disable output driver

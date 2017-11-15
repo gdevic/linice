@@ -40,6 +40,7 @@
 #include "ice-limits.h"                 // Include our limits
 #include "ice-symbols.h"                // Include symbol file defines
 #include "ice-ioctl.h"                  // Include symbol table defines
+#include "lists.h"                      // Include lists support header file
 
 /******************************************************************************
 *                                                                             *
@@ -59,7 +60,7 @@
 
 typedef struct
 {
-    BYTE *hSymbolBuffer;                // Handle to symbol buffer pool
+    BYTE *hSymbolBufferHeap;            // Handle to symbol buffer memory pool heap
     DWORD nSymbolBufferSize;            // Symbol buffer size
     DWORD nSymbolBufferAvail;           // Symbol buffer size available
     DWORD nXDrawSize;                   // DrawSize parameter
@@ -161,6 +162,10 @@ typedef struct
     int cpu;                            // CPU number that the debugger uses
     int nInterrupt;                     // Interrupt that occurred
     int bpIndex;                        // Index of the breakpoint that hit (default -1)
+
+    TLIST Watch;                        // Watch window data list
+    TLIST Local;                        // Locals window data list
+    TLIST Stack;                        // Stack window data list
 
     int DumpSize;                       // Dx dump value size
     TADDRDESC dataAddr;                 // Data - current display address

@@ -44,6 +44,8 @@ clean:
 			apic.o	\
 			command.o	\
 			registers.o	\
+			lists.o	\
+			queue.o	\
 			locals.o	\
 			watch.o		\
 			data.o		\
@@ -143,6 +145,12 @@ evalex.o:	command/evalex.c
 
 registers.o:		command/registers.c
 	$(CC) $(CFLAGS) -c command/registers.c
+
+lists.o:			command/lists.c
+	$(CC) $(CFLAGS) -c command/lists.c
+
+queue.o:			queue.c
+	$(CC) $(CFLAGS) -c queue.c
 
 locals.o:	command/locals.c
 	$(CC) $(CFLAGS) -c command/locals.c

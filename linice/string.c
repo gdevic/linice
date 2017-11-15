@@ -49,6 +49,8 @@
 *   Functions
 ******************************************************************************/
 
+extern char *_kMallocHeap(int size);
+
 /******************************************************************************
 *
 *   void * memchr( const void *s, int c, size_t n)
@@ -830,7 +832,7 @@ int strcmpi( const char *s1, const char *s2 )
     }
 }
 
-#if 0
+#if 1
 /******************************************************************************
 *
 *   char * strdup( const char *string )
@@ -845,12 +847,15 @@ int strcmpi( const char *s1, const char *s2 )
 *   Returns:
 *       Pointer to the new string or NULL if failed
 *
+*   NOTE: In this implementation, a pIce->hHeap is used
+*
+*
 ******************************************************************************/
 char * strdup( const char *string )
 {
     char *new;
 
-    new = malloc( strlen(string) + 1);
+    new = _kMallocHeap(strlen(string) + 1);
 
     if( new == NULL )
         return( NULL );

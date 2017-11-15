@@ -229,8 +229,8 @@ void IceCleanupModule(void)
     if( pIce->pHistoryBuffer != NULL )
         ice_free(pIce->pHistoryBuffer);
 
-    if( pIce->hSymbolBuffer != NULL )
-        ice_free_heap(pIce->hSymbolBuffer);
+    if( pIce->hSymbolBufferHeap != NULL )
+        ice_free_heap(pIce->hSymbolBufferHeap);
 
     if( pIce->pXDrawBuffer != NULL )
         ice_free_heap(pIce->pXDrawBuffer);

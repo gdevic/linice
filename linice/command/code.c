@@ -322,7 +322,7 @@ void CodeDraw(BOOL fForce)
         // Loop and print all the source lines
         while( (nLine <= maxLines) && (wLine < deb.pSource->nLines) )
         {
-            pLine = pIce->pSymTabCur->pPriv->pStrings + deb.pSource->dLineArray[wLine];
+            pLine = GET_STRING( deb.pSource->dLineArray[wLine] );
 
             // If the current file in the window is the one containing the current function
             // scope, and the line number is the current EIP line number, invert the line color

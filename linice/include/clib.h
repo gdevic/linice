@@ -98,5 +98,9 @@ extern BYTE *ice_init_heap( size_t size );
 extern void * _kMalloc( BYTE *pHeap, DWORD size );
 extern void _kFree( BYTE *pHeap, void *mPtr );
 
+// Use these functions to allocate and free memory from the Ice local heap
+extern char *_kMallocHeap(int size);
+extern char *_kFreeHeap(void *mPtr);
+
 #endif //  _CLIB_H_
 

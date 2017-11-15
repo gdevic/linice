@@ -59,20 +59,6 @@ static TSYMFNSCOPE1 *LocalsQueue[MAX_LOCALS_QUEUE + 1];
 static char buf[MAX_STRING];
 
 
-typedef struct
-{
-    char *pExpression;                  // Expression to watch
-    char *pType;                        // Pointer to expression typedef string
-    BOOL fExpanded;                     // Complex item expanded or collapsed
-    int  nIdent;                        // Subitem: Identation level
-    
-} TWATCH;
-
-#define MAX_WATCH   256                 // Number of lines in the WATCH window
-
-static TWATCH Watch[MAX_WATCH];         // Lines of the watch window
-
-
 /******************************************************************************
 *                                                                             *
 *   External Functions                                                        *
@@ -89,74 +75,57 @@ extern BOOL SymEvalFnScope1(char *pBuf, TSYMFNSCOPE1 *Local);
 
 BOOL FillLocalScopeX(TSYMFNSCOPE1 *LocalsQueue[], TSYMFNSCOPE *pFnScope, DWORD dwOffset);
 
-/******************************************************************************
-*                                                                             *
-*   void WatchDraw(BOOL fForce)                                               *
-*                                                                             *
-*******************************************************************************
-*
-*   Draws watch variables
-*
-******************************************************************************/
-void WatchDraw(BOOL fForce)
-{
-    int maxLines = 9999;
-    int nLine = 1;
-    int i;
-
-    if( pWin->w.fVisible==TRUE )
-    {
-        dprint("%c%c%c%c", DP_SAVEXY, DP_SETCURSORXY, 0+1, pWin->w.Top+1);
-        PrintLine(" Watch");
-
-        maxLines = pWin->w.nLines;
-    }
-    else
-        if( fForce==FALSE )
-            return;
-
-    // Attempt to display locals only if we have function scope defined
-    if( deb.pFnScope )
-    {
-        // This is without type information...
-        // TODO: Type information for local variables
-
-
-        FillLocalScope(LocalsQueue, deb.pFnScope, deb.r->eip);
-
-        i = 0;
-
-        while( LocalsQueue[i]!=NULL && nLine<maxLines)
-        {
-            if( SymEvalFnScope1(buf, LocalsQueue[i])==TRUE )
-            {
-                if( dprinth(nLine++, "%s", buf)==FALSE )
-                    break;
-            }
-
-            i++;
-        }
-    }
-
-
-    if( pWin->w.fVisible==TRUE )
-        dprint("%c", DP_RESTOREXY);
-}
 
 /******************************************************************************
 *                                                                             *
-*   BOOL cmdLocals(char *args, int subClass)                                  *
+*   BOOL cmdWatch(char *args, int subClass)                                   *
 *                                                                             *
 *******************************************************************************
 *
-*   List local variables from the current stack frame to the command window.
+*   Adds a new expression / variable watch to the list of watches
 *
 ******************************************************************************/
+
+extern TITEM *ListAdd(TQueue *pQueue);
+extern void ListDelCur(TQueue *pQueue);
+extern void ListDraw(TLIST *pList, TFRAME *pFrame, BOOL fForce);
+
+
 BOOL cmdWatch(char *args, int subClass)
 {
-    WatchDraw(TRUE);
+    TITEM *pItem;                       // Item to add to watch list
+
+    // Add a watch expression to the root watch list
+
+    if(pItem = ListAdd(&deb.Watch.Item))
+    {
+        // Fill in the item values
+
+        pItem->pExp = strdup(args);
+
+        if( pItem->pExp )
+        {
+            // Successfully added a watch item
+
+            // Draw the watch
+            ListDraw(&deb.Watch, &pWin->w, TRUE);
+            
+            return( TRUE );
+        }
+
+        // Failure, delete the item
+        ListDelCur(&deb.Watch.Item);
+    }
+
+    dprinth(1, "Unable to add a watch.");
 
     return( TRUE );
+}
+
+
+void WatchDraw(BOOL fForce)
+{
+    ListDraw(&deb.Watch, &pWin->w, fForce);
 }
 
 

@@ -69,8 +69,8 @@ char *GetTypeString(TSYMTYPEDEF1 *pType1)
     {
         // Parse type definition string to return the proper type description
 
-        pName = pIce->pSymTabCur->pPriv->pStrings + pType1->dName;
-        pDef = pIce->pSymTabCur->pPriv->pStrings + pType1->dDef;
+        pName = GET_STRING( pType1->dName );
+        pDef = GET_STRING( pType1->dDef );
 
         // If it is a basic type, use the type name as a definition instead and we are done
         if( pType1->dDef <= TYPEDEF__LAST )
@@ -133,7 +133,7 @@ void PrettyPrintType(TSYMTYPEDEF1 *pType1)
     int nTokenLen;                      // Token length
     int nPtrLevel = 0;
 
-    pDef = pIce->pSymTabCur->pPriv->pStrings + pType1->dDef;
+    pDef = GET_STRING( pType1->dDef );
     
     switch( *pDef )
     {
@@ -250,7 +250,7 @@ BOOL cmdTypes(char *args, int subClass)
 
                     for(; nTypedefs>0; nTypedefs--)
                     {
-                        pStr = pIce->pSymTabCur->pPriv->pStrings + pType1->dName;
+                        pStr = GET_STRING( pType1->dName );
 
                         if( !stricmp(pStr+1, args) )
                         {
@@ -259,8 +259,8 @@ BOOL cmdTypes(char *args, int subClass)
                                 fPrinted = TRUE;
 #if 0
                                 if( dprinth(nLine++, "Defined in %s:", 
-                                        pIce->pSymTabCur->pPriv->pStrings + pSource->dSourcePath, 
-                                        pIce->pSymTabCur->pPriv->pStrings + pSource->dSourceName )==FALSE)
+                                        GET_STRING( pSource->dSourcePath ),
+                                        GET_STRING( pSource->dSourceName ) )==FALSE)
                                     return( TRUE );
 #endif
                             }
@@ -298,7 +298,7 @@ BOOL cmdTypes(char *args, int subClass)
 
                     for(; nTypedefs>0; nTypedefs--)
                     {
-                        pStr = pIce->pSymTabCur->pPriv->pStrings + pType1->dName;
+                        pStr = GET_STRING( pType1->dName );
 
                         if( dprinth(nLine++, "(%d,%d) %-30s%s", pType1->maj, pType1->min, pStr+1, GetTypeString(pType1) )==FALSE)
                             return( TRUE );
@@ -396,7 +396,7 @@ TSYMTYPEDEF1 *Type2Typedef(char *pTypeName)
                     // Search by the type name
                     for(; nTypedefs>0; nTypedefs--)
                     {
-                        pStr = pIce->pSymTabCur->pPriv->pStrings + pType1->dName;
+                        pStr = GET_STRING( pType1->dName );
 
                         // Compare only type names
                         if( (*pStr=='T' || *pStr=='t') && !stricmp(pStr+1, pTypeName) )
@@ -451,8 +451,8 @@ TSYMTYPEDEF1 *Typedef2TypedefLeaf(int *pPtrLevel, TSYMTYPEDEF1 *pType1)
 
             // Parse type definition string to return the proper type description
     
-            pName = pIce->pSymTabCur->pPriv->pStrings + pType1->dName;
-            pDef = pIce->pSymTabCur->pPriv->pStrings + pType1->dDef;
+            pName = GET_STRING( pType1->dName );
+            pDef  = GET_STRING( pType1->dDef );
 
             // If we have a pointer type, increase the pointer level count
             if( *pDef=='*' )

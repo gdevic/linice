@@ -99,7 +99,7 @@ BOOL cmdSymbol(char *args, int subClass)
                     if(dprinth(nLine++, " %08X %02d %s",
                         pGlobals->global[i].dwStartAddress,
                         pGlobals->global[i].bFlags,
-                        pIce->pSymTabCur->pPriv->pStrings + pGlobals->global[i].dName)==FALSE)
+                        GET_STRING(pGlobals->global[i].dName))==FALSE)
                     return( TRUE );
                 }
             }
@@ -148,7 +148,7 @@ BOOL cmdFile(char *args, int subClass)
                         pSrc = (TSYMSOURCE *)pHead;
 
                         // Print the source file path/name
-                        if( (dprinth(nLine++, "%s", pIce->pSymTabCur->pPriv->pStrings + pSrc->dSourcePath))==FALSE )
+                        if( (dprinth(nLine++, "%s", GET_STRING(pSrc->dSourcePath)))==FALSE )
                             break;
                     }
 
@@ -168,7 +168,7 @@ BOOL cmdFile(char *args, int subClass)
                     {
                         pSrc = (TSYMSOURCE *)pHead;
 
-                        if( !strcmp(args, pIce->pSymTabCur->pPriv->pStrings + pSrc->dSourceName) )
+                        if( !strcmp(args, GET_STRING(pSrc->dSourceName)) )
                         {
                             deb.pSource = pSrc;             // New source descriptor
                             deb.codeFileTopLine = 1;        // Display at the first source line
@@ -192,7 +192,7 @@ BOOL cmdFile(char *args, int subClass)
 
             if( deb.pSource )
             {
-                dprinth(nLine++, "%s", pIce->pSymTabCur->pPriv->pStrings + deb.pSource->dSourcePath);
+                dprinth(nLine++, "%s", GET_STRING(deb.pSource->dSourcePath));
             }
         }
     }
@@ -421,16 +421,16 @@ char *SymAddress2Name(WORD wSel, DWORD dwOffset)
             // Check for the init_module and cleanup_module special cases
             if( dwOffset==(DWORD)pMod->init )
             {
-                strcpy(sName, pMod->name);          // Copy the module name
-                strcat(sName, "!init_module");      // Append a bang and init_module name
+                // Copy the module name and append a bang and init_module name
+                sprintf(sName, "%s!init_module", pMod->name);
 
                 return( sName );
             }
 
             if( dwOffset==(DWORD)pMod->cleanup )
             {
-                strcpy(sName, pMod->name);          // Copy the module name
-                strcat(sName, "!cleanup_module");   // Append a bang and cleanup_module name
+                // Copy the module name and append a bang and cleanup_module name
+                sprintf(sName, "%s!cleanup_module", pMod->name);
 
                 return( sName );
             }
@@ -443,15 +443,10 @@ char *SymAddress2Name(WORD wSel, DWORD dwOffset)
 
                 if( pSym->value==dwOffset )
                 {
-                    // Found the matching symbol! Form its name and return
+                    // Found the matching symbol! Form its name and return. If a
+                    // module name is found, print it, otherwise it is a kernel
 
-                    if( *pMod->name )
-                        strcpy(sName, pMod->name);      // Copy the module name
-                    else
-                        strcpy(sName, "kernel");        // Otherwise it is a kernel symbol
-
-                    strcat(sName, "!");                 // Append a bang
-                    strcat(sName, pSym->name);          // and the symbol name itself
+                    sprintf(sName, "%s!%s", *pMod->name? pMod->name : "kernel", pSym->name);
 
                     return( sName );
                 }
@@ -658,7 +653,7 @@ char *SymFnLin2LineExact(WORD *pLineNumber, TSYMFNLIN *pFnLin, DWORD dwAddress)
                         // Final check that the line number is not too large
                         if( nLine <= pSrc->nLines )
                         {
-                            return( pIce->pSymTabCur->pPriv->pStrings + pSrc->dLineArray[nLine-1] );
+                            return( GET_STRING(pSrc->dLineArray[nLine-1]) );
                         }
                     }
 
@@ -742,7 +737,7 @@ char *SymFnLin2Line(WORD *pLineNumber, TSYMFNLIN *pFnLin, DWORD dwAddress)
                 // Final check that the line number is not too large
                 if( nLine <= pSrc->nLines )
                 {
-                    return( pIce->pSymTabCur->pPriv->pStrings + pSrc->dLineArray[nLine-1] );
+                    return( GET_STRING(pSrc->dLineArray[nLine-1]) );
                 }
             }
         }
@@ -781,7 +776,7 @@ char *SymAddress2FunctionName(WORD wSel, DWORD dwOffset)
         for(i=0; i<pGlobals->nGlobals; i++ )
         {
             if( pGlobals->global[i].dwStartAddress==dwOffset )
-                return( pIce->pSymTabCur->pPriv->pStrings + pGlobals->global[i].dName );
+                return( GET_STRING(pGlobals->global[i].dName) );
         }
     }
 
@@ -873,7 +868,7 @@ char *SymFnScope2Local(TSYMFNSCOPE *pFnScope, DWORD ebpOffset)
             {
                 if( pFnScope->list[i].p1==ebpOffset )
                 {
-                    pVar = pIce->pSymTabCur->pPriv->pStrings + pFnScope->list[i].p2;
+                    pVar = GET_STRING(pFnScope->list[i].p2);
 
                     // Since that variable name contains the type description, we
                     // need to copy only the name portion
@@ -954,7 +949,7 @@ BOOL SymName2LocalSymbol(TSYMBOL *pSymbol, char *pName, int nTokenLen)
                         else
                         {
                             // All other tokens point to a variable name (P2)
-                            pVar = pIce->pSymTabCur->pPriv->pStrings + pFnScope->list[i].p2;
+                            pVar = GET_STRING(pFnScope->list[i].p2);
 
                             // Compare variable name to what was given as an input parameter
                             pType = strchr(pVar, ':');
@@ -1042,7 +1037,7 @@ BOOL SymEvalFnScope1(char *pBuf, TSYMFNSCOPE1 *pLocal)
         }
 
         // Print the variable name and the value
-        pVar = pIce->pSymTabCur->pPriv->pStrings + pLocal->p2;
+        pVar = GET_STRING(pLocal->p2);
 
         // Since that variable name contains the type description, we
         // need to copy only the name away

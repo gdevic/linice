@@ -1,10 +1,10 @@
 /******************************************************************************
 *                                                                             *
-*   Module:     ice.h                                                         *
+*   Module:     lists.h                                                       *
 *                                                                             *
-*   Date:       04/27/2000                                                    *
+*   Date:       02/04/2003                                                    *
 *                                                                             *
-*   Copyright (c) 2000 Goran Devic                                            *
+*   Copyright (c) 2003 Goran Devic                                            *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -20,7 +20,7 @@
 
     Module Description:
 
-        This header file contains global Ice data structures
+        This header file contains lists structures and protos
 
 *******************************************************************************
 *                                                                             *
@@ -28,19 +28,15 @@
 *                                                                             *
 *   DATE     DESCRIPTION OF CHANGES                               AUTHOR      *
 * --------   ---------------------------------------------        ----------- *
-* 04/27/00   Original                                             Goran Devic *
+* 02/04/00   Original                                             Goran Devic *
 * --------   ---------------------------------------------        ----------- *
 *******************************************************************************
 *   Important Defines                                                         *
 ******************************************************************************/
-#ifndef _MODULE_SYMBOLS_H_
-#define _MODULE_SYMBOLS_H_
+#ifndef _LISTS_H_
+#define _LISTS_H_
 
-/******************************************************************************
-*                                                                             *
-*   Linux kernel Extern functions                                             *
-*                                                                             *
-******************************************************************************/
+#include "queue.h"                      // Include queue definitions
 
 /******************************************************************************
 *                                                                             *
@@ -48,23 +44,34 @@
 *                                                                             *
 ******************************************************************************/
 
-/////////////////////////////////////////////////////////////////
-// PRIVATE DATA OF A SINGLE SYMBOL TABLE
-/////////////////////////////////////////////////////////////////
-// Define structure that is
-
+// Define a list item containing information about an atomic item
 typedef struct
 {
-    struct TSYMTAB *next;               // Next symbol structure in a list
+    char *pExp;                         // Expression which evaluates into an item
+    char *pType;                        // Expression typedef string
 
-    char *pStrings;                     // Pointer to strings
+    BOOL fExpanded;                     // The item is an _expanded_ complex type
+    TQueue SubList;                     // List of elements in a complex type
+    
+} TITEM;
 
-    int reloc[MAX_SYMRELOC];            // Current relocated offset for each symbol section
+// Define a structure TLIST, that holds complete information about a list set,
+// that is, locals, stack or watch window contents
+typedef struct
+{
+    TQueue Item;                        // List of items
+    TITEM *pSelected;                   // Currently selected item
+    TITEM *pWinTop;                     // Current windows top item
+    
+} TLIST;
 
-} TSYMPRIV;
+
+/******************************************************************************
+*                                                                             *
+*   Extern functions                                                          *
+*                                                                             *
+******************************************************************************/
 
 
-#define GET_STRING(offset) (pIce->pSymTabCur->pPriv->pStrings + (offset))
-
-#endif //  _MODULE_SYMBOLS_H_
+#endif //  _LISTS_H_
 
