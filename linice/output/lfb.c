@@ -577,10 +577,17 @@ static void ScrollUp()
 void DgaSprint(char *s)
 {
     BYTE c;
+    DWORD dwTabs;
 
     // Warning: this function is being reentered
     while( (c = *s++) != 0 )
     {
+        if( c==DP_TAB )
+        {
+            for(dwTabs=deb.dwTabs; dwTabs; dwTabs--)
+                DgaSprint(" ");
+        }
+        else
         switch( c )
         {
             case DP_SAVEBACKGROUND:
@@ -661,6 +668,11 @@ void DgaSprint(char *s)
                         ScrollUp();
                     else
                         outDga.y++;
+                break;
+
+            case DP_RIGHTALIGN:
+                    // Right align the rest of the text
+                    outDga.x = outDga.sizeX - strlen(s);
                 break;
 
             default:

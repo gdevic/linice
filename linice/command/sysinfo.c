@@ -583,6 +583,8 @@ BOOL cmdVer(char *args, int subClass)
 ******************************************************************************/
 BOOL cmdProc(char *args, int subClass)
 {
+#if 0
+
     int nLine = 1;
     int pid;
     struct task_struct *pTask;
@@ -650,7 +652,7 @@ BOOL cmdProc(char *args, int subClass)
                 break;
         }
     }
-
+#endif
     return(TRUE);
 }
 
@@ -667,6 +669,8 @@ BOOL cmdProc(char *args, int subClass)
 ******************************************************************************/
 BOOL cmdTss(char *args, int subClass)
 {
+#if 0
+
     int nLine = 1;
     int tr;
     TGDT_Gate *pGdt;
@@ -743,7 +747,7 @@ BOOL cmdTss(char *args, int subClass)
         dprinth(nLine++, "Invalid TSS descriptor %04X", tr);
     }
 
-
+#endif
     return( TRUE );
 }
 

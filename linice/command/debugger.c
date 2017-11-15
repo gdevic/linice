@@ -68,9 +68,9 @@ extern void SetSysreg( TSysreg * pSys );
 extern BOOL NonStickyBreakpointCheck(TADDRDESC Addr);
 extern void ClearNonStickyBreakpoint();
 extern void ArmBreakpoints(void);
-extern void DisarmBreakpoints(void);
+extern void *DisarmBreakpoints(void);
+extern BOOL EvalBreakpoint(void *pBp);
 extern int  BreakpointCheck(TADDRDESC Addr);
-extern BOOL BreakpointCondition(int index);
 extern void SetSymbolContext(WORD wSel, DWORD dwOffset);
 
 /******************************************************************************
@@ -102,7 +102,8 @@ extern void SetSymbolContext(WORD wSel, DWORD dwOffset);
 
 void DebuggerEnterBreak(void)
 {
-    BOOL fContinue;
+    void *pBp = NULL;                   // Pointer to a breakpoint that hit
+    BOOL fAcceptNext;                   // Flag to continue looping inside debugger
     
     // Abort possible single step trace state
     deb.r->eflags &= ~TF_MASK;
@@ -117,39 +118,59 @@ void DebuggerEnterBreak(void)
         SET_CR0( deb.sysReg.cr0 & ~BITMASK(WP_BIT));
 
         {
-            // Disarm all breakpoints by resetting original opcodes at places
-            // where we inserted INT3
-            // We dont need to disarm them if we are in single step (Trace) mode!
-            if( !deb.fTrace )
-                DisarmBreakpoints();
+            // Disarm all breakpoints and adjust counters. Also print why we break.
+            // We dont do this if we are in the single step mode
+//            if( !deb.fTrace )
+//                pBp = DisarmBreakpoints();
+
+            // Find out if we are here because of a breakpoint and disarm all breakpoints
+            pBp = DisarmBreakpoints();
 
             // Reset the trace state
             deb.fTrace = FALSE;
-    
+
             {
+                // Set the content variables used in debugging with symbols
+                SetSymbolContext(deb.r->cs, deb.r->eip);
+
                 // Enable output driver and save background
                 dputc(DP_ENABLE_OUTPUT);
                 dputc(DP_SAVEBACKGROUND);
-
-                // Set the content variables used in debugging with symbols
-                SetSymbolContext(deb.r->cs, deb.r->eip);
 
                 // Recalculate window locations based on visibility and number of lines
                 // and repaint all windows
                 RecalculateDrawWindows();
 
-                //========================================================================
-                // MAIN COMMAND PROMPT LOOP
-                //========================================================================
-                do
+                // This function will cause evaluation of a breakpoint condition, and
+                // possibly the action. The action taken may end in continuation of
+                // execution, in which case we jump forward
+                if( EvalBreakpoint(pBp)==FALSE )
                 {
-                    EdLin( sCmd );
+                    //========================================================================
+                    // MAIN COMMAND PROMPT LOOP
+                    //========================================================================
+                    do
+                    {
+                        EdLin( sCmd );
 
-                    fContinue = CommandExecute( sCmd+1 );   // Skip the prompt
+                        deb.error = NOERROR;                        // Clear the error code
+                        fAcceptNext = CommandExecute( sCmd+1 );     // Skip the prompt
 
-                } while( fContinue );
+                        // Redraw the debugger screen if we were requested to do so
+                        if( deb.fRedraw )
+                        {
+                            RecalculateDrawWindows();
+                            deb.fRedraw = FALSE;
+                        }
 
-                //========================================================================
+                        // If there was an error processing the commands, print it
+                        if( deb.error )
+                            dprinth(1, "%s", Index2String(deb.error) );
+
+                    } while( fAcceptNext );
+
+                    //========================================================================
+                }
 
                 // Restore background and disable output driver
                 dputc(DP_RESTOREBACKGROUND);

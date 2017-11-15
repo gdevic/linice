@@ -49,6 +49,7 @@
 
 extern PTOUT pOut;                      // Pointer to a current Out class
 extern TOUT outVga;                     // VGA output device
+extern TOUT outMda;                     // MDA output device
 extern TOUT outVT100;                   // Serial VT100 output device
 extern TOUT outDga;                     // DGA X-Window frame buffer output device
 
@@ -99,6 +100,7 @@ static char Buf[MAX_STRING];            // Temp line buffer to send line to edit
 *                                                                             *
 ******************************************************************************/
 
+extern void MdaInit();
 extern int SerialInit(int com, int baud);
 extern void SerialPrintStat();
 extern void SetSymbolContext(WORD wSel, DWORD dwOffset);
@@ -284,7 +286,7 @@ static void VarMacro(char *sOp, char *args, TNAMEVAL *pObject, int nElem)
                         pObject[i].pValue = NULL;
                     }
                     else
-                        dprinth(nLine++, "Syntax error");
+                        deb.error = ERR_SYNTAX;
                 }
                 else
                 {
@@ -315,7 +317,7 @@ static void VarMacro(char *sOp, char *args, TNAMEVAL *pObject, int nElem)
                         pObject[i].pName = _kMalloc(pIce->hHeap, nameLen + 1);
                         if( pObject[i].pName==NULL )
                         {
-                            dprinth(nLine++, "Out of memory");
+                            deb.error = ERR_MEMORY;
                             return;
                         }
 
@@ -330,7 +332,7 @@ static void VarMacro(char *sOp, char *args, TNAMEVAL *pObject, int nElem)
                         _kFree(pIce->hHeap, pObject[i].pName);
                         pObject[i].pName = NULL;
 
-                        dprinth(nLine++, "Out of memory");
+                        deb.error = ERR_MEMORY;
                         return;
                     }
 
@@ -545,7 +547,7 @@ BOOL cmdAltkey(char *args, int subClass)
         Key |= toupper(*args);
 
         if( Key==0 || !isalpha(Key & 0x7F) )
-            dprinth(1, "Syntax error");
+            deb.error = ERR_SYNTAX;
         else
             deb.BreakKey = Key;
     }
@@ -748,7 +750,7 @@ BOOL cmdLines(char *args, int subClass)
                 dprinth(1, "Lines have to be in the range [24, 90]");
         }
         else
-            dprinth(1, "Syntax error");
+            deb.error = ERR_SYNTAX;
     }
 
     return( TRUE );
@@ -776,8 +778,16 @@ BOOL cmdColor(char *args, int subClass)
     if( *args==0 )
     {
         // No arguments - display screen colors
-
+#if 0
         dprinth(1, "Colors are %02X %02X %02X %02X %02X",
+            pIce->col[COL_NORMAL],
+            pIce->col[COL_BOLD],
+            pIce->col[COL_REVERSE],
+            pIce->col[COL_HELP],
+            pIce->col[COL_LINE] );
+#endif
+        // IMPROVEMENT: Displayed colors are described
+        dprinth(1, "Colors are: Normal: %02X  Bold: %02X  Reverse: %02X  Help: %02X  Lines: %02X",
             pIce->col[COL_NORMAL],
             pIce->col[COL_BOLD],
             pIce->col[COL_REVERSE],
@@ -827,7 +837,7 @@ BOOL cmdColor(char *args, int subClass)
                 RecalculateDrawWindows();
             }
             else
-                dprinth(1, "Syntax error");
+                deb.error = ERR_SYNTAX;
         }
     }
 
@@ -894,7 +904,7 @@ BOOL cmdSerial(char *args, int subClass)
                         dprinth(1, "Serial port must be 1, 2, 3 or 4");
                 }
 
-                dprinth(1, "Syntax error");
+                deb.error = ERR_SYNTAX;
                 return(TRUE);
             }
 Proceed:
@@ -917,31 +927,50 @@ Proceed:
     return( TRUE );
 }
 
-
 /******************************************************************************
 *                                                                             *
-*   BOOL cmdXwin(char *args, int subClass)                                    *
+*   BOOL cmdDisplay(char *args, int subClass)                                 *
 *                                                                             *
 *******************************************************************************
 *
-*   Sets DGA framebuffer
+*   Switches to a different display output device:
+*
+*   Where:
+*       subClass is one of the following:
+*           0   - VGA
+*           1   - MDA (Monochrome display)
+*           2   - XWIN (DGA X-Window compatible screen)
 *
 ******************************************************************************/
-
-extern void DgaSprint(char *s);
-
-
-BOOL cmdXwin(char *args, int subClass)
+BOOL cmdDisplay(char *args, int subClass)
 {
-#if 1
-    pOut = &outDga;
+    // Restore user screen from the old display device
+    dputc(DP_RESTOREBACKGROUND);
+
+    switch( subClass )
+    {
+        case 0:     // Standard VGA
+            pOut = &outVga;
+            break;
+
+        case 1:     // Standard MDA (Monochrome or Hercules)
+            MdaInit();
+            pOut = &outMda;
+            break;
+
+        case 2:     // DGA-compatible X-Windows display
+            pOut = &outDga;
+            break;
+
+        default:
+    }
+
+    // Save user screen from the new display device
+    dputc(DP_ENABLE_OUTPUT);
+    dputc(DP_SAVEBACKGROUND);
 
     // Redraw all windows
     RecalculateDrawWindows();
-#endif
-
-//    DgaSprint("XWindows rules !");
-//    DgaSprint("X");
 
     return( TRUE );
 }
@@ -971,6 +1000,47 @@ BOOL cmdSrc(char *args, int subClass)
 
     // Redraw all windows
     RecalculateDrawWindows();
+
+    return( TRUE );
+}
+
+
+/******************************************************************************
+*                                                                             *
+*   BOOL cmdTabs(char *args, int subClass)                                    *
+*                                                                             *
+*******************************************************************************
+*
+*   Display or set the tabs setting for the source output
+*
+******************************************************************************/
+BOOL cmdTabs(char *args, int subClass)
+{
+    DWORD dwTabs;
+
+    if( *args )
+    {
+        // Argument is supplied - set the tabs value
+        if( Expression(&dwTabs, args, &args) )
+        {
+            if( dwTabs>=1 && dwTabs<=8 )
+            {
+                deb.dwTabs = dwTabs;
+
+                // Redraw all windows
+                RecalculateDrawWindows();
+            }
+            else
+                dprinth(1, "Tabs value should be 1 - 8");
+        }
+        else
+            deb.error = ERR_SYNTAX;
+    }
+    else
+    {
+        // No arguments - display the tabs value
+        dprinth(1, "TABS are %d", deb.dwTabs);
+    }
 
     return( TRUE );
 }

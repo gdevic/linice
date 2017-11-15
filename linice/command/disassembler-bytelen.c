@@ -650,7 +650,7 @@ StartInstructionNoMODRM:
             break;
 
         case _ST:                                          // Coprocessor ST
-//          nPos += sprintf( pDis->szDisasm+nPos,"%s", sST[9] );
+//          nPos += sprintf( pDis->szDisasm+nPos,"%s", sST[8] );
             break;
 
         case _ST0:                                         // Coprocessor ST(0) - ST(7)

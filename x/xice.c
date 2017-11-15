@@ -42,7 +42,9 @@
 
 #include <X11/extensions/xf86dga.h>
 
-#include <stdio.h>
+#include <stdio.h>                      // Include standard C headers
+#include <stdlib.h>
+#include <string.h>
 
 #include "ice-types.h"                  // Include private data types
 #include "ice-symbols.h"                // Include symbol file defines
@@ -61,22 +63,21 @@
 *                                                                             *
 ******************************************************************************/
 
-Display *display;
-int screen_num;
-XWindowAttributes windowattr;
-
-static char *progname;
-
 typedef struct
 {
-    char *ptr;
-    int  width;
-    int  banksize;
-    int  memsize;
+    char *ptr;                          // Pointer to the DGA framebuffer
+    int  width;                         // Width of the screen
+    int  banksize;                      //
+    int  memsize;                       //
 
-} TMYWIN, *PTMYWIN;
+} TMYWIN;
 
 
+/******************************************************************************
+*                                                                             *
+*   int GetShiftAdj(int mask, int *pWidth)                                    *
+*                                                                             *
+******************************************************************************/
 int GetShiftAdj(int mask, int *pWidth)
 {
     int count;
@@ -104,158 +105,299 @@ int GetShiftAdj(int mask, int *pWidth)
     return(count);
 }
 
-#define RAISE_INTERRUPT(_x)  __asm__ __volatile__("int %0" :: "g" (_x))
 
 /******************************************************************************
 *                                                                             *
-
+*   TXINITPACKET *CollectDisplayInfo(char *sDisplay)                          *
 *                                                                             *
 *******************************************************************************
 *
+*   Query given display and fill in IOCTL packet.
+*
+*   Where:
+*       sDisplay is the string name of the display to query (or NULL for default)
+*
+*   Returns:
+*       Address of the IOCTL packet that is ready to be sent
+*       NULL if error
 *
 ******************************************************************************/
-int main(int argc, char **argv)
+TXINITPACKET *CollectDisplayInfo(char *sDisplay)
 {
-    Window win;
-    unsigned int width, height;         // Window size
-    int x = 0, y = 0;                   // Window position
-    unsigned int border_width = 4;      // Border size
-    unsigned int display_width, display_height;
-    char *window_name = "pIce window";
-    char *icon_name = "basicwin";
-    Pixmap icon_pixmap;
-    XSizeHints size_hints;
-    XEvent report;
-    GC gc;
-    XFontStruct *font_info;
-    char *display_name = NULL;          // Server to connect to
-    Screen *screen_ptr;
-    int event_base, error_base;
-    int flags;
-    TMYWIN mywin;
-    int depth;
-    XVisualInfo *pVisual;
-    long vinfo_mask;
+    static TXINITPACKET Init;           // Init packet sent to the debugger
+
+    Display *display;                   // Display name to connect to
+    XWindowAttributes windowattr;       // Window attributes structure
+    int screen_num;                     // Screen number
+    Screen *screen_ptr;                 // Pointer to screen structure
     XVisualInfo vinfo_template;
+    XVisualInfo *pVisual;
+    TMYWIN mywin;                       // Structure holding window information
+
+    int event_base, error_base;
+    long vinfo_mask;
     int nitems_return;
-    volatile int i, j;
-    int redShift, greenShift, blueShift;
 
+    unsigned int display_width, display_height, depth;
+
+
+    display = XOpenDisplay(sDisplay);
+    if( display )
+    {
+        // Get the screen number and pointers
+        screen_num = DefaultScreen(display);
+        screen_ptr = DefaultScreenOfDisplay(display);
+
+        // Get the root window attributes
+        if( XGetWindowAttributes(display, RootWindow(display, screen_num), &windowattr) )
+        {
+            display_width  = windowattr.width;
+            display_height = windowattr.height;
+
+            // Query the DGA extension - this is specific to XFree86
+            if( XF86DGAQueryExtension(display, &event_base, &error_base) )
+            {
+                if( XF86DGADirectVideo(display, screen_num, XF86DGADirectGraphics) )
+                {
+                    if( XF86DGAGetVideo(display, screen_num, &mywin.ptr, &mywin.width, &mywin.banksize, &mywin.memsize) )
+                    {
+                        XF86DGASetViewPort(display, screen_num, 0, 0);
+                        depth = DefaultDepth(display, screen_num);
+
+                        vinfo_mask = VisualScreenMask;
+                        vinfo_template.screen = screen_num;
+                        pVisual = XGetVisualInfo(display, vinfo_mask, &vinfo_template, &nitems_return);
+
+                        if( pVisual )
+                        {
+                            // Display information that we gathered so far about the screen
+                            fprintf(stderr, "Root window: %d x %d x %d\n", display_width, display_height, depth );
+                            fprintf(stderr, "             address %08X\n", mywin.ptr);
+                            fprintf(stderr, "             banksize %X (%d Kb)\n", mywin.banksize, mywin.banksize/1024);
+                            fprintf(stderr, "             memsize %08X (%d Kb)\n", mywin.memsize, mywin.memsize/1024);
+
+                            switch( depth )
+                            {
+                                case 16:            // 16 bpp - 5-6-5 color components
+                                    Init.redColAdj   = 3;
+                                    Init.greenColAdj = 2;
+                                    Init.blueColAdj  = 3;
+                                break;
+
+                                case 24:            // 24 bpp
+                                    fprintf(stderr, "Pixel depth is 24 bpp.. We will assume 32 bpp !\n");
+                                    depth=32;
+                                    // ... continue into 32 bpp...
+
+                                case 32:            // 32 bpp
+                                    Init.redColAdj   = 0;
+                                    Init.greenColAdj = 0;
+                                    Init.blueColAdj  = 0;
+                                break;
+
+                                // Unsupported pixel format.. Can't use!
+                                default:
+                                    fprintf(stderr, "FAILED: Unsupported pixel depth of %d !\n", depth);
+                                    
+                                    return( NULL );
+                                break;
+                            }
+
+                            // Fill up the Linice IOCTL info packet with the collected data
+                            Init.pFrameBuf = (DWORD) mywin.ptr;
+                            Init.xres      = display_width;
+                            Init.yres      = display_height;
+                            Init.bpp       = depth / 8;
+                            Init.stride    = Init.bpp * mywin.width;
+                            Init.redShift  = GetShiftAdj(pVisual->red_mask, &Init.redColAdj);
+                            Init.greenShift= GetShiftAdj(pVisual->green_mask, &Init.greenColAdj);
+                            Init.blueShift = GetShiftAdj(pVisual->blue_mask, &Init.blueColAdj);
+                            Init.redMask   = pVisual->red_mask;
+                            Init.greenMask = pVisual->green_mask;
+                            Init.blueMask  = pVisual->blue_mask;
+
+                            // Return the address of the init packet
+                            return( &Init );
+                        }
+                        else
+                        {
+                            fprintf(stderr, "FAILED: Could not get visual info\n");
+                        }
+                    }
+                    else
+                    {
+                        fprintf(stderr, "FAILED in XF86DGAGetVideo\n");
+                    }
+                }
+                else
+                {
+                    fprintf(stderr, "FAILED in XF86DGADirectVideo\n");
+                }
+            }
+            else
+            {
+                fprintf(stderr, "FAILED: Unable to query the DGA extension\n");
+                fprintf(stderr, "Your display does not support DGA extensions!\n");
+            }
+        }
+        else
+        {
+            fprintf(stderr, "FAILED: Unable to get root window attributes\n");
+        }
+    }
+    else
+    {
+        fprintf(stderr, "FAILED: Cannot connect to server %s\n", XDisplayName(sDisplay));
+    }
+
+    return( NULL );
+}
+
+
+void WriteConfig(TXINITPACKET *pInit, char *sFile)
+{
+    FILE *fp;
+
+    // Open a configuration file
+    fp = fopen(sFile, "w+b");
+    if( fp )
+    {
+        fprintf(fp, "pFrameBuf   = %X\n", pInit->pFrameBuf   );
+        fprintf(fp, "xres        = %X\n", pInit->xres        );
+        fprintf(fp, "yres        = %X\n", pInit->yres        );
+        fprintf(fp, "bpp         = %X\n", pInit->bpp         );
+        fprintf(fp, "stride      = %X\n", pInit->stride      );
+        fprintf(fp, "redShift    = %X\n", pInit->redShift    );
+        fprintf(fp, "greenShift  = %X\n", pInit->greenShift  );
+        fprintf(fp, "blueShift   = %X\n", pInit->blueShift   );
+        fprintf(fp, "redMask     = %X\n", pInit->redMask     );
+        fprintf(fp, "greenMask   = %X\n", pInit->greenMask   );
+        fprintf(fp, "blueMask    = %X\n", pInit->blueMask    );
+        fprintf(fp, "redColAdj   = %X\n", pInit->redColAdj   );
+        fprintf(fp, "greenColAdj = %X\n", pInit->greenColAdj );
+        fprintf(fp, "blueColAdj  = %X\n", pInit->blueColAdj  );
+        fprintf(fp, "*** Do not modify this file. It has been generated by xice ***\n");
+
+        fclose(fp);
+    }
+    else
+    {
+        printf("(Error writing configuration file %s)\n", sFile);
+    }
+}
+
+
+/******************************************************************************
+*                                                                             *
+*   void Help()                                                               *
+*                                                                             *
+******************************************************************************/
+void Help()
+{
+    printf("Usage: xice [-q] [-h] [server[:display]]\n\n");
+    printf(" -q or --query   Query the availability of a suitable DGA local display\n");
+    printf(" -h or --help    Display help\n");
+    printf(" server:display  Select non-default local server and display\n");
+}
+
+/******************************************************************************
+*                                                                             *
+*   int main(int argc, char **argp)                                           *
+*                                                                             *
+*******************************************************************************
+*
+*   Command line options:
+*
+*       xice [-q] [-h] <server:display>
+*
+*           -q  or  --query
+*               Only query display and return 1 if present or 0 if not present
+*
+*           -h  or  --help
+*               Display help and program usage
+*
+*           Connect to a specific X Windows server and display. Useful if you
+*           have multiple displays and want to select on which one Linice will
+*           pop up. The display still has to be local with DGA support.
+*
+*           If no display supplied, default local will be used.
+*
+*   Returns:
+*       Return value depends on a function.
+*
+******************************************************************************/
+int main(int argc, char **argp)
+{
+    TXINITPACKET *pInit;
+    char *sDisplay = NULL;              // Display string, init to default
     int hIce;
-    int status;
-    TXINITPACKET Init;                  // Init packet to the debugger
+    int status, i;
+    int opt = 0;                        // Detected command line options:
+#define OPT_QUERY       0x0001          // Query active X Window display
+#define OPT_HELP        0x0002          // Display help information
 
-    // Connect to the server
-
-    progname = argv[0];
-    if( (display=XOpenDisplay(display_name))==NULL )
+    // Traverse command line options
+    for(i=1; i<argc; i++ )
     {
-        fprintf(stderr, "%s cannot connect to X server %s\n",
-            progname, XDisplayName(display_name));
-        exit(-1);
+        if( !strcmp(argp[i], "-q") || !strcmp(argp[i], "--query"))
+            opt |= OPT_QUERY;
+        else
+        if( !strcmp(argp[i], "-h") || !strcmp(argp[i], "--help"))
+            opt |= OPT_HELP;
+        else
+        {
+            // It is a display specification
+            sDisplay = argp[i];
+            printf("Using display ""%s""\n", sDisplay);
+        }
     }
 
-    screen_num = DefaultScreen(display);
-    screen_ptr = DefaultScreenOfDisplay(display);
-
-    // Get the root window attributes
-
-    if( XGetWindowAttributes(display, RootWindow(display, screen_num), &windowattr)==0 )
+    if( opt & OPT_HELP )                // Help option?
     {
-        fprintf(stderr, "%s failed to get root window attributes.\n", progname);
-        exit(-1);
+        Help();
     }
 
-    display_width  = windowattr.width;
-    display_height = windowattr.height;
-
-    // Query the DGA extension - this is specific to XFree86
-
-    if( XF86DGAQueryExtension(display, &event_base, &error_base)==0 )
+    if( opt & OPT_QUERY )               // Only query display?
     {
-        fprintf(stderr, "%s failed to query the DGA extension.\n", progname);
-        fprintf(stderr, "Your display does not support DGA extensions.\n");
-        exit(-1);
+        pInit = CollectDisplayInfo(sDisplay);
+
+        if( pInit )
+        {
+            printf("Found a suitable display.\n");
+
+            // At this point we dump relevant information about the display
+            // to a configuration file, that is read by the linice
+            WriteConfig(pInit, XICE_CONFIG_FILE);
+
+            return( 1 );
+        }
+        else
+        {
+            printf("Did not find any suitable displays!\n");
+            return( 0 );
+        }
+    }
+    
+    pInit = CollectDisplayInfo(sDisplay);
+    if( pInit )
+    {
+        // Send the info packet down to the Linice module
+
+        hIce = open("/dev/"DEVICE_NAME, O_RDONLY);
+        if( hIce>=0 )
+        {
+            fprintf(stderr, "IOCTL");
+            status = ioctl(hIce, ICE_IOCTL_XDGA, pInit);
+            fprintf(stderr, " status=%d\n", status);
+            close(hIce);
+        }
+        else
+        {
+            fprintf(stderr, "Error opening debugger device!\n");
+            fprintf(stderr, "Is Linice loaded?\n");
+        }
     }
 
-    if( XF86DGADirectVideo(display, screen_num, XF86DGADirectGraphics)==0 )
-    {
-        fprintf(stderr, "Failed in XF86DGADirectVideo\n");
-        exit(-1);
-    }
-
-    if( XF86DGAGetVideo(display, screen_num, &mywin.ptr, &mywin.width, &mywin.banksize, &mywin.memsize)==0 )
-    {
-        fprintf(stderr, "Failed in XF86DGAGetVideo\n");
-        exit(-1);
-    }
-
-    fprintf(stderr, "Root window: address %08X\n", mywin.ptr);
-    fprintf(stderr, "             width %d\n", mywin.width);
-    fprintf(stderr, "             banksize %X (%d Kb)\n", mywin.banksize, mywin.banksize/1024);
-    fprintf(stderr, "             memsize %08X (%d Kb)\n", mywin.memsize, mywin.memsize/1024);
-
-    XF86DGASetViewPort(display, screen_num, 0, 0);
-
-    depth = DefaultDepth(display, screen_num);
-    fprintf(stderr, "DefaultDepth is %d\n", depth);
-
-    vinfo_mask = VisualScreenMask;
-    vinfo_template.screen = screen_num;
-    pVisual = XGetVisualInfo(display, vinfo_mask, &vinfo_template, &nitems_return);
-
-    if( pVisual )
-    {
-        fprintf(stderr, "Visual: depth = %d\n", pVisual->depth);
-        fprintf(stderr, "Visual: red_mask = %08X\n", pVisual->red_mask);
-        fprintf(stderr, "Visual: green_mask = %08X\n", pVisual->green_mask);
-        fprintf(stderr, "Visual: blue_mask = %08X\n", pVisual->blue_mask);
-        fprintf(stderr, "Visual: bits_per_rgb = %d\n", pVisual->bits_per_rgb);
-
-        XFree(pVisual);
-    }
-    else
-    {
-        fprintf(stderr, "Could not get visual info.\n");
-        exit(-1);
-    }
-
-    fprintf(stderr, "Root window is %d x %d\n", display_width, display_height );
-
-    // If the pixel depth is 24, assume that is 32
-    if( depth==24 )
-        depth=32;
-
-    // Send a IOCTL packet to a linice to start using the framebuffer
-    //====================================================================
-    // Send the init packet down to the module
-    //====================================================================
-    Init.pFrameBuf = (DWORD) mywin.ptr;
-    Init.xres      = display_width;
-    Init.yres      = display_height;
-    Init.bpp       = depth / 8;
-    Init.stride    = Init.bpp * mywin.width;
-    Init.redShift  = GetShiftAdj(pVisual->red_mask, &Init.redColAdj);
-    Init.greenShift= GetShiftAdj(pVisual->green_mask, &Init.greenColAdj);
-    Init.blueShift = GetShiftAdj(pVisual->blue_mask, &Init.blueColAdj);
-    Init.redMask   = pVisual->red_mask;
-    Init.greenMask = pVisual->green_mask;
-    Init.blueMask  = pVisual->blue_mask;
-
-    hIce = open("/dev/"DEVICE_NAME, O_RDONLY);
-    if( hIce>=0 )
-    {
-        status = ioctl(hIce, ICE_IOCTL_XDGA, &Init);
-        close(hIce);
-
-        printf("IOCTL=%d\n", status);
-    }
-    else
-    {
-        printf("Error opening debugger device!\n");
-        exit(-1);
-    }
-
-    return(0);
+    return( 0 );
 }
 

@@ -1,8 +1,9 @@
 INC = /usr/include
-H   = ../Include
+H   = ../include
 
 CC = gcc
 
+#CFLAGS = -O -I$(INC) -I$(H)
 CFLAGS = -gstabs+ -Wall -DDBG -O -I$(INC) -I$(H)
 #CFLAGS = -Wall -O -I$(INC) -I$(H)
 

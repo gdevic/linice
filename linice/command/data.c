@@ -245,3 +245,29 @@ BOOL cmdDdump(char *args, int subClass)
     return( TRUE );
 }
 
+
+/******************************************************************************
+*                                                                             *
+*   BOOL cmdFormat(char *args, int subClass)                                  *
+*                                                                             *
+*******************************************************************************
+*
+*   Changes format of the data window (cycles).
+*
+******************************************************************************/
+BOOL cmdFormat(char *args, int subClass)
+{
+    static int formats[] = { 1, 2, 4, 0 };
+
+    switch( deb.DumpSize )
+    {
+        case 1:     deb.DumpSize = 2;   break;
+        case 2:     deb.DumpSize = 4;   break;
+        case 4:     deb.DumpSize = 1;   break;
+    }
+
+    DataDraw(TRUE, deb.dataAddr.offset);
+
+    return( TRUE );
+}
+

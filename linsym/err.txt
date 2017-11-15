@@ -1,0 +1,18 @@
+gcc -gstabs+ -Wall -DDBG -O -I/usr/include -I../include -c load_elf.c
+In file included from Common.h:82,
+                 from load_elf.c:37:
+/usr/include/asm/fcntl.h:73: parse error before `off_t'
+/usr/include/asm/fcntl.h:73: warning: no semicolon at end of struct or union
+/usr/include/asm/fcntl.h:74: warning: type defaults to `int' in declaration of `l_len'
+/usr/include/asm/fcntl.h:74: warning: data definition has no type or storage class
+/usr/include/asm/fcntl.h:75: parse error before `l_pid'
+/usr/include/asm/fcntl.h:75: warning: type defaults to `int' in declaration of `l_pid'
+/usr/include/asm/fcntl.h:75: warning: data definition has no type or storage class
+/usr/include/asm/fcntl.h:81: parse error before `loff_t'
+/usr/include/asm/fcntl.h:81: warning: no semicolon at end of struct or union
+/usr/include/asm/fcntl.h:82: warning: type defaults to `int' in declaration of `l_len'
+/usr/include/asm/fcntl.h:82: warning: data definition has no type or storage class
+/usr/include/asm/fcntl.h:83: parse error before `l_pid'
+/usr/include/asm/fcntl.h:83: warning: type defaults to `int' in declaration of `l_pid'
+/usr/include/asm/fcntl.h:83: warning: data definition has no type or storage class
+make: *** [load_elf.o] Error 1

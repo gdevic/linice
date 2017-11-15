@@ -32,6 +32,8 @@ global  IceIntHandlers
 
 global  ReadCRTC
 global  WriteCRTC
+global  ReadMdaCRTC
+global  WriteMdaCRTC
 global  inp
 
 global  MemAccess_START
@@ -353,6 +355,8 @@ MISC_INPUT              equ     03CCh
 CRTC_INDEX_MONO         equ     03B4h
 CRTC_INDEX_COLOR        equ     03D4h
 
+MDA_INDEX               equ     03B4h
+MDA_DATA                equ     03B5h
 
 GetCRTCAddr:
         push    ax
@@ -406,6 +410,56 @@ WriteCRTC:
         mov     ebp, esp
         push    edx
         call    GetCRTCAddr
+        mov     eax, [ebp+8]
+        out     (dx), al
+        inc     dx
+        mov     eax, [ebp+12]
+        out     (dx), al
+        pop     edx
+        pop     ebp
+        ret
+
+;==============================================================================
+;
+;   BYTE ReadMdaCRTC(BYTE index)
+;
+;   This MDA helper function reads a CRTC value from a specified CRTC index
+;   register.
+;
+;   Where:
+;       [ebp + 8]   byte index of a CRTC register
+;
+;==============================================================================
+ReadMdaCRTC:
+        push    ebp
+        mov     ebp, esp
+        push    edx
+        mov     dx, MDA_INDEX
+        mov     eax, [ebp+8]
+        out     (dx), al
+        inc     dx
+        in      al, (dx)
+        pop     edx
+        pop     ebp
+        ret
+
+;==============================================================================
+;
+;   void WriteMdaCRTC(int index, int value)
+;
+;   This MDA helper function writes a CRTC value into a specified CRTC index
+;   register
+;
+;   Where:
+;       [ebp + 8]   byte index of a CRTC register
+;       [ebp +12]   new value
+;
+;==============================================================================
+WriteMdaCRTC:
+        push    ebp
+        mov     ebp, esp
+        push    edx
+        mov     dx, MDA_INDEX
         mov     eax, [ebp+8]
         out     (dx), al
         inc     dx

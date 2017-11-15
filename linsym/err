@@ -1,0 +1,15 @@
+gcc -O -I/usr/include -I../include -c install.c
+gcc -O -I/usr/include -I../include -c load_elf.c
+gcc -O -I/usr/include -I../include -c ParseFunctionLines.c
+gcc -O -I/usr/include -I../include -c ParseFunctionScope.c
+gcc -O -I/usr/include -I../include -c ParseGlobal.c
+gcc -O -I/usr/include -I../include -c ParseSource.c
+gcc -O -I/usr/include -I../include -c ParseTypedefs.c
+gcc -O -I/usr/include -I../include -c ParseReloc.c
+gcc -O -I/usr/include -I../include -c HashTable.c
+gcc -O -I/usr/include -I../include -c loader.c
+gcc -O -I/usr/include -I../include -c symbols.c
+gcc -O -I/usr/include -I../include -c symutils.c
+gcc install.o load_elf.o ParseFunctionLines.o ParseFunctionScope.o ParseGlobal.o ParseSource.o ParseTypedefs.o ParseReloc.o HashTable.o loader.o symbols.o symutils.o -o linsym.o
+cp linsym.o ../bin/linsym
+chmod +x ../bin/linsym

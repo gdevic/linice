@@ -70,6 +70,8 @@ static TADDRDESC Addr = { 0, 0 };
 
 extern void SetSymbolContext(WORD wSel, DWORD dwOffset);
 extern int BreakpointQuery(TADDRDESC Addr);
+extern int BreakpointQueryFileLine(WORD file_id, WORD line);
+
 
 /******************************************************************************
 *                                                                             *
@@ -194,18 +196,15 @@ static BYTE GetCodeLine(PTADDRDESC pAddr, BOOL fDecodeExtra)
                 case 0x0E: /* jle  */ if(  eflags&ZF_MASK     && (SF_VALUE(eflags) != OF_VALUE(eflags)) ) fJump = TRUE;  break;
                 case 0x0F: /* jnle */ if( (eflags&ZF_MASK)==0 && (SF_VALUE(eflags) == OF_VALUE(eflags)) ) fJump = TRUE;  break;
 
-                case 0x10: /* lpne */ if( (eflags&ZF_MASK)==0 && (ecx!=0) ) fJump = TRUE;  break;
-                case 0x11: /* lpe  */ if(  eflags&ZF_MASK     && (ecx!=0) ) fJump = TRUE;  break;
-                case 0x12: /* loop */ if( ecx!=0 ) fJump = TRUE;  break;
+                case 0x10: /* lpne */ if( (eflags&ZF_MASK)==0 && (ecx!=1) ) fJump = TRUE;  break;
+                case 0x11: /* lpe  */ if(  eflags&ZF_MASK     && (ecx!=1) ) fJump = TRUE;  break;
+                case 0x12: /* loop */ if( ecx!=1 ) fJump = TRUE;  break;
                 case 0x13: /* jcxz */ if( ecx==0 ) fJump = TRUE;  break;
             }
 
             // Finally, append the resulting string
-            // TODO: Add output token for right alignment of a text (nice)
-            if( fJump==TRUE )
-                strcat(sCodeLine, " (jump)");
-            else
-                strcat(sCodeLine, " (no jump)");
+            sprintf(buf, "\r%c%s", DP_RIGHTALIGN, fJump==TRUE? " (jump)" : " (no jump)");
+            strcat(sCodeLine, buf);
         }
     }
 
@@ -311,7 +310,13 @@ void CodeDraw(BOOL fForce)
             if( (deb.pSource->file_id==deb.pFnScope->file_id) && (wLine==(deb.codeFileEipLine-1)) )
                 col = COL_REVERSE;
             else
-                col = COL_NORMAL;
+            {
+                // If the current file_id and line contains a breakpoint, highlight it
+                if( BreakpointQueryFileLine(deb.pSource->file_id, wLine+1) >= 0 )
+                    col = COL_BOLD;
+                else
+                    col = COL_NORMAL;
+            }
 
             // Make X offset adjustments to the line
             if( deb.codeFileXoffset > strlen(pLine) )

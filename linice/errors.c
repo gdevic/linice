@@ -1,10 +1,10 @@
 /******************************************************************************
 *                                                                             *
-*   Module:     proc.c                                                        *
+*   Module:     errors.c                                                      *
 *                                                                             *
-*   Date:       10/14/00                                                      *
+*   Date:       03/09/02                                                      *
 *                                                                             *
-*   Copyright (c) 2001 Goran Devic                                            *
+*   Copyright (c) 2000 - 2002 Goran Devic                                     *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -20,31 +20,24 @@
 
     Module Description:
 
-        Simple read-only /proc virtual file implementation
+        This module contains code and data strings for error declaration.
 
 *******************************************************************************
 *                                                                             *
-*   Major changes:                                                            *
+*   Changes:                                                                  *
 *                                                                             *
 *   DATE     DESCRIPTION OF CHANGES                               AUTHOR      *
 * --------   ---------------------------------------------------  ----------- *
-* 10/14/00   Initial version                                      Goran Devic *
+* 03/06/02   Original                                             Goran Devic *
 * --------   ---------------------------------------------------  ----------- *
 *******************************************************************************
 *   Include Files                                                             *
 ******************************************************************************/
 
 #include "module-header.h"              // Versatile module header file
-#include <linux/proc_fs.h>              // Include proc filesystem support
-#include <asm/uaccess.h>
-
-#define __NO_VERSION__
-#include <linux/module.h>
 
 #include "clib.h"                       // Include C library header file
 #include "ice.h"                        // Include main debugger structures
-
-#include "debug.h"                      // Include our dprintk()
 
 /******************************************************************************
 *                                                                             *
@@ -58,10 +51,29 @@
 *                                                                             *
 ******************************************************************************/
 
-static int ProcRead(char *buf, char **start, off_t offset, int len, int *unused, int *data);
-static int ProcWrite(struct file *file, char *buf, unsigned long count, void *data);
+static char *Strings[] = {
+    "NOERROR",                          // 0 - No error
+    "Syntax error",                     // ERR_SYNTAX_ERROR                 1
+    "Unknown command or macro",         // ERR_COMMAND                      2
+    "Not yet implemented",              // ERR_NOT_IMPLEMENTED              3
+    "Out of memory",                    // ERR_MEMORY                       4
 
-static struct proc_dir_entry *pProcEntry;
+    "Duplicate breakpoint",             // ERR_BPDUP                        5
+    "No more breakpoints available",    // ERR_BP_TOO_MANY                  6
+    "Debug register is already being used" // ERR_DRUSED                    7
+    "All debug registers used"          // ERR_DRUSEDUP                     8
+
+    "Expression?? What expression?",    // ERR_EXP_WHAT                     9
+
+    "Out of memory"                     // ERR_INT_OUTOFMEM                 10
+};
+
+/******************************************************************************
+*                                                                             *
+*   External Functions                                                        *
+*                                                                             *
+******************************************************************************/
+
 
 
 /******************************************************************************
@@ -70,88 +82,27 @@ static struct proc_dir_entry *pProcEntry;
 *                                                                             *
 ******************************************************************************/
 
-int InitProcFs()
-{
-    pProcEntry = create_proc_entry("linice", 0644, &proc_root);
-    if( pProcEntry )
-    {
-        pProcEntry->read_proc  = ProcRead;
-        pProcEntry->write_proc = ProcWrite;
-    }
-    else
-    {
-        return( -1 );                   // Return failure
-    }
-
-    // Return success    
-    return( 0 );
-}
-
-
-int CloseProcFs()
-{
-    remove_proc_entry("linice", &proc_root);
-
-    return( 0 );
-}
-
-
 /******************************************************************************
 *                                                                             *
-*   int ProcRead(char *buf, char **start, off_t offset, int len, int *unused) *
+*   char *Index2String(DWORD index)                                           *
 *                                                                             *
 *******************************************************************************
 *
-*   Called when /proc/linice is read.
+*   Returns a pointer to a message string indexed by 'index'
 *
 *   Where:
-*       Standard procfs parameters :)
+*       index is the message index
 *
 *   Returns:
-*       Right now we simply return some collected statistics.
+*       String describing the error/message
+*       NULL if the index is incorrect
 *
 ******************************************************************************/
-static int ProcRead(char *buf, char **start, off_t offset, int len, int *unused, int *data)
+char *Index2String(DWORD index)
 {
-    len = 0;
+    if( index < MSG_LAST )
+        return( Strings[index] );
 
-    MOD_INC_USE_COUNT;
-
-    // Print the number of interrupts that we trapped
-
-    len += sprintf(buf+len, "Host ints:      Linice ints:\n");
-    len += sprintf(buf+len, " int1:  %5d     %5d\n", pIce->nIntsPass[0x01], pIce->nIntsIce[0x01]);
-    len += sprintf(buf+len, " int3:  %5d     %5d\n", pIce->nIntsPass[0x03], pIce->nIntsIce[0x03]);
-    len += sprintf(buf+len, " timer: %5d     %5d\n", pIce->nIntsPass[0x20], pIce->nIntsIce[0x20]);
-    len += sprintf(buf+len, " kbd:   %5d     %5d\n", pIce->nIntsPass[0x21], pIce->nIntsIce[0x21]);
-    len += sprintf(buf+len, " com2:  %5d     %5d\n", pIce->nIntsPass[0x23], pIce->nIntsIce[0x23]);
-    len += sprintf(buf+len, " com1:  %5d     %5d\n", pIce->nIntsPass[0x24], pIce->nIntsIce[0x24]);
-    len += sprintf(buf+len, " ps/2:  %5d     %5d\n", pIce->nIntsPass[0x2C], pIce->nIntsIce[0x2C]);
-    len += sprintf(buf+len, " PF:    %5d     %5d\n", pIce->nIntsPass[0x0E], pIce->nIntsIce[0x0E]);
-
-    MOD_DEC_USE_COUNT;
-
-    return( len );
+    return( NULL );
 }
 
-
-/******************************************************************************
-*                                                                             *
-*   int ProcWrite(struct file *file, char *buf, unsigned long count, void *data)
-*                                                                             *
-*******************************************************************************
-*
-*   Called when /proc/linice is written.
-*
-*   Where:
-*       Standard procfs parameters :)
-*
-*   Returns:
-*       We eat all writes for now.
-*
-******************************************************************************/
-static int ProcWrite(struct file *file, char *buf, unsigned long count, void *data)
-{
-    // Return the count of data.
-    return( count );
-}

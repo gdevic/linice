@@ -41,12 +41,9 @@
 #define ASSERT assert
 #include <io.h>
 #include <malloc.h>
-
-//#include <unistd.h>                     // Include standard UNIX header file
 #include <string.h>                     // Include strings header file
 #include <sys/types.h>                  // Include file operations
 #include <sys/stat.h>                   // Include file operations
-//#include <sys/ioctl.h>                  // Include ioctl header file
 #include <fcntl.h>                      // Include file control file
 #include <stdio.h>                      // Include standard io file
 #include <malloc.h>                     // Include memory allocation header
@@ -57,7 +54,6 @@
 #else // WIN32
 
 #define _POSIX_SOURCE
-#define O_BINARY		0				// Win32 needs that one
 
 
 /* A pointer to a position in a file.  */
@@ -67,7 +63,7 @@
    Probably the best long-term answer is to avoid using file_ptr AND off_t
    in this header file, and to handle this in the BFD implementation
    rather than in its interface.  */
-/* typedef off_t	file_ptr; */
+/* typedef off_t    file_ptr; */
 //typedef long int file_ptr;
 
 #define _SYS_TYPES_H
@@ -77,15 +73,19 @@
 
 #include <linux/types.h>
 
-extern int open(const char *path, int oflag, ...);
+#define O_BINARY         0
+#define O_RDONLY         00
+#define O_WRONLY         01
+#define O_RDWR           02
+#define O_CREAT        0100 /* not fcntl */
+#define O_EXCL         0200 /* not fcntl */
+#define O_NOCTTY       0400 /* not fcntl */
+#define O_TRUNC       01000 /* not fcntl */
 
-#include <asm/fcntl.h>                      // Include file control file
 #include <stdio.h>                      // Include standard io file
 #include <unistd.h>                     // Include standard UNIX header file
 #include <string.h>                     // Include strings header file
-//#include <sys/types.h>                  // Include file operations
 #include <sys/stat.h>                   // Include file operations
-//#include <sys/ioctl.h>                  // Include ioctl header file
 #include <malloc.h>                     // Include memory allocation header
 
 #include "linux/elf.h"

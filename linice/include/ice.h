@@ -178,6 +178,8 @@ typedef struct
     BOOL fSymbols;
     BOOL fFlash;                        // Restore screen during P and T commands
     BOOL fPause;                        // Pause after a screenful of scrolling info
+    DWORD dwTabs;                       // Tabs value for source display
+    BYTE fOvertype;                     // Cursor shape is overtype? (or insert)
 
     BOOL fTrace;                        // Trace command in progress
     BOOL fDelayedTrace;                 // Delayed trace request
@@ -185,6 +187,9 @@ typedef struct
 
     BOOL fStep;                         // Single logical step in progress (command P)
     BOOL fStepRet;                      // Single step until RET instruction (P RET)
+
+    BOOL fRedraw;                       // Request to redraw the screen after the current command
+    DWORD error;                        // Error code
 
     CHAR BreakKey;                      // Key combination for break
 
@@ -265,7 +270,6 @@ typedef struct
     BYTE x, y;                          // Current cursor coordinates
     BYTE sizeX, sizeY;                  // Current screen width and height
     BYTE startX, startY;                // Display start coordinates
-    BYTE fOvertype;                     // Cursor shape is overtype? (or insert)
 
     void (*sprint)(char *c);            // Effective print string function
     void (*mouse)(int, int);            // Function that displays mouse cursor
@@ -282,7 +286,7 @@ extern PTOUT pOut;                      // Pointer to a current output device
 #define DP_RESTOREXY            0x06    // Single-level restore XY cursor coords
 #define DP_SETSCROLLREGIONYY    0x07    // Set top and bottom scroll region
 #define _BACKSPACE_             0x08    // Backspace code
-#define _TAB_                   0x09    // Tabulation code
+#define DP_TAB                  0x09    // Tabulation code
 #define _LF_                    0x0A    // Line feed code
 #define DP_SETCOLINDEX          0x0B    // Set the current line's color index
 //                              0x0C    // Reserved
@@ -292,7 +296,8 @@ extern PTOUT pOut;                      // Pointer to a current output device
 #define DP_SETCURSORSHAPE       0x10    // Set Insert/Overtype cursor shape (1, 2)
 #define DP_ENABLE_OUTPUT        0x11    // Enable output driver
 #define DP_DISABLE_OUTPUT       0x12    // Disable output driver
-#define DP_AVAIL                0x13    // First available code
+#define DP_RIGHTALIGN           0x13    // Right align the rest of the line
+#define DP_AVAIL                0x14    // First available code
 
 
 /******************************************************************************
@@ -331,6 +336,8 @@ extern void ClearHistory(void);
 
 extern BYTE ReadCRTC(int index);
 extern void WriteCRTC(int index, int value);
+extern BYTE ReadMdaCRTC(int index);
+extern void WriteMdaCRTC(int index, int value);
 extern int GetByte(WORD sel, DWORD offset);
 extern DWORD GetDWORD(WORD sel, DWORD offset);
 extern void SetByte(WORD sel, DWORD offset, BYTE value);
@@ -356,6 +363,7 @@ extern TSYMSOURCE *SymTabFindSource(TSYMTAB *pSymTab, WORD fileID);
 extern BOOL SymbolName2Value(TSYMTAB *pSymTab, DWORD *pValue, char *name);
 extern char *SymAddress2FunctionName(WORD wSel, DWORD dwOffset);
 extern char *SymAddress2Name(WORD wSel, DWORD dwOffset);
+extern DWORD SymLinNum2Address(DWORD line);
 extern TSYMFNLIN *SymAddress2FnLin(WORD wSel, DWORD dwOffset);
 extern char *SymFnLin2Line(WORD *pLineNumber, TSYMFNLIN *pFnLin, DWORD dwAddress);
 extern char *SymFnLin2LineExact(WORD *pLineNumber, TSYMFNLIN *pFnLin, DWORD dwAddress);

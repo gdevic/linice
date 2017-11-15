@@ -161,6 +161,8 @@ int InitPacket(PTINITPACKET pInit)
                 // Initialize the default break key
                 deb.BreakKey = CHAR_CTRL | 'Q';
 
+                deb.dwTabs = 4;                     // Initial TABS value
+
                 pIce->nXDrawSize = pInit->nDrawSize;
 
                 // Initialize interrupt handling subsystem

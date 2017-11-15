@@ -66,21 +66,6 @@
 
 typedef struct
 {
-    int nSize;                          // Size of this structure in bytes
-    int fLowercase;                     // Initial value of the lowercase variable
-    int nSymbolSize;                    // Size of the simbol buffer
-    int nDrawSize;                      // Size of the X-display framebuffer
-    int nHistorySize;                   // Size of the history buffer
-    int nMacros;                        // Number of macros
-    int nVars;                          // Number of user variables
-
-    char sInit[MAX_STRING];             // Init string
-    char keyFn [4 * 12][MAX_STRING];    // Key assignment for F, SF, AF and CF keys
-
-} PACKED TINITPACKET, *PTINITPACKET;
-
-typedef struct
-{
     DWORD pFrameBuf;                    // Address of the framebuffer
     DWORD xres;                         // X resolution in pixels
     DWORD yres;                         // Y resolution in pixels
@@ -98,6 +83,28 @@ typedef struct
 
 } PACKED TXINITPACKET;
 
+typedef struct
+{
+    int nSize;                          // Size of this structure in bytes
+    int fLowercase;                     // Initial value of the lowercase variable
+    int nSymbolSize;                    // Size of the simbol buffer
+    int nDrawSize;                      // Size of the X-display framebuffer
+    int nHistorySize;                   // Size of the history buffer
+    int nMacros;                        // Number of macros
+    int nVars;                          // Number of user variables
+
+    char sInit[MAX_STRING];             // Init string
+    char keyFn [4 * 12][MAX_STRING];    // Key assignment for F, SF, AF and CF keys
+
+//    TXINITPACKET XInit;                 // Optional XInit packet given at start
+
+} PACKED TINITPACKET, *PTINITPACKET;
+
+// This file name is used to share XWindows parameter data between xice in query
+// mode and linice when loading debugger on X
+
+#define XICE_CONFIG_FILE    ".linice_xwin_config"
+
 /////////////////////////////////////////////////////////////////
 // DEVICE IO CONTROL CODES
 /////////////////////////////////////////////////////////////////
@@ -106,10 +113,11 @@ typedef struct
 //      Sent after the module has been loaded. Send init packet
 //      that contains information from the config file and heyboard
 //      hook addresses. Linice can not operate without this packet
-//      being sent.
+//      being sent. If loader detects a valid active DGA device,
+//      it can also pass XInit structure.
 //
 //  ICE_IOCTL_EXIT
-//      Sent before unloading the module. If the loaded crashes,
+//      Sent before unloading the module. If the loader crashes,
 //      the module usage count will not be 0, and the module will
 //      not unload. This call is sent to reset the usage count to 1
 //
@@ -120,7 +128,7 @@ typedef struct
 //      Sent any time to remove a symbol table.
 //
 //  ICE_IOCTL_XDGA
-//      Sent by the xice to init output to X linear framebuffer
+//      Sent by the xice to init or reset output to X linear framebuffer
 //
 
 #define ICE_IOC_MAGIC       'I'         // Magic IOctl number (8 bits)

@@ -36,7 +36,7 @@
 
 #include "Common.h"                     // Include platform specific set
 
-#include "Primes.h"                     // Include table of prime numbers
+#include "primes.h"                     // Include table of prime numbers
 
 
 /******************************************************************************

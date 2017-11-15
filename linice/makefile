@@ -1,6 +1,7 @@
 # INC = /usr/include/linux
-INC = /usr/src/linux/include/
-H1  = ../Include
+#INC = /usr/src/linux/include/
+INC = /lib/modules/$(uname -r)/build/include
+H1  = ../include
 H2  = include
 
 DEF = -D__KERNEL__ -D_LOOSE_KERNEL_NAMES -DMODULE -DLINUX -DDBG
@@ -23,6 +24,7 @@ clean:
 			memaccess.o	\
 			eval.o		\
 			init.o		\
+			errors.o		\
 			syscall.o		\
 			symbolTable.o	\
 			symbols.o	\
@@ -56,6 +58,7 @@ clean:
 			output.o	\
 			window.o	\
 			vga.o		\
+			mda.o		\
 			lfb.o		\
             vt100o.o
 	$(LD) -r $^ -o ../bin/linice.o
@@ -71,6 +74,9 @@ memaccess.o:	memaccess.c
 
 init.o:		init.c
 	$(CC) $(CFLAGS) -c init.c
+
+errors.o:		errors.c
+	$(CC) $(CFLAGS) -c errors.c
 
 syscall.o:		syscall.c
 	$(CC) $(CFLAGS) -c syscall.c
@@ -173,6 +179,9 @@ window.o:	output/window.c
 
 vga.o:		output/vga.c
 	$(CC) $(CFLAGS) -c output/vga.c
+
+mda.o:		output/mda.c
+	$(CC) $(CFLAGS) -c output/mda.c
 
 lfb.o:		output/lfb.c
 	$(CC) $(CFLAGS) -c output/lfb.c

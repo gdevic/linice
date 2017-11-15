@@ -392,6 +392,57 @@ TSYMFNLIN *SymAddress2FnLin(WORD wSel, DWORD dwOffset)
 
 /******************************************************************************
 *                                                                             *
+*   DWORD SymLinNum2Address(DWORD line)                                       *
+*                                                                             *
+*******************************************************************************
+*
+*   Returns the offset of the code that corresponds to the given source line
+*   number in the current source file. (Used with dot-line_number expression).
+*
+*   Where:
+*       line is the line number
+*   Returns:
+*       address of the code that corresponds to that line number
+*       0 if no address found, no source loaded, etc.
+*
+******************************************************************************/
+DWORD SymLinNum2Address(DWORD line)
+{
+    TSYMHEADER *pHead;                  // Generic section header
+    TSYMFNLIN *pFnLin;
+    WORD n, file_id;
+
+    if( pIce->pSymTabCur && deb.pSource )
+    {
+        pHead = pIce->pSymTabCur->header;
+        file_id = deb.pSource->file_id;
+
+        while( pHead->hType != HTYPE__END )
+        {
+            // Scan all function line records to find our source/line number
+            if( pHead->hType == HTYPE_FUNCTION_LINES )
+            {
+                pFnLin = (TSYMFNLIN *)pHead;
+
+                for(n=0; n<pFnLin->nLines; n++)
+                {
+                    if( pFnLin->list[n].line==line && pFnLin->list[n].file_id==file_id )
+                    {
+                        return( pFnLin->dwStartAddress + pFnLin->list[n].offset );
+                    }
+                }
+            }
+
+            pHead = (TSYMHEADER*)((DWORD)pHead + pHead->dwSize);
+        }
+    }
+
+    return( 0 );
+}
+
+
+/******************************************************************************
+*                                                                             *
 *   DWORD SymFnLinAddress2NextAddress(TSYMFNLIN *pFnLin, DWORD dwAddress)     *
 *                                                                             *
 *******************************************************************************

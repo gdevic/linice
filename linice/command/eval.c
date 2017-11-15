@@ -1,8 +1,3 @@
-int SourceLineToAddr(int line)
-{
-    return( 0 );
-}
-
 #if 0
 static char *evalError[] = {
 "No effective address",
@@ -27,6 +22,7 @@ static char *evalError[] = {
 "Invalid Indirection",
 "Unexpected Unary operator ('%s')",
 "Expecting Unary operator (not '%s')",
+
 "Charcter value too large: '%s'",
 "Character constant is too long: '%s'",
 "Unterminated character constant: %s",
@@ -265,11 +261,18 @@ static DWORD fnWord(DWORD arg);
 static DWORD fnDword(DWORD arg);
 static DWORD fnHiword(DWORD arg);
 
+extern DWORD fnBpCount(void);
+extern DWORD fnBpMiss(void);
+extern DWORD fnBpTotal(void);
+extern DWORD fnBpIndex(void);
+extern DWORD fnBpLog(void);
+
+
 typedef struct
 {
     char *sName;                        // Name of the function
     BYTE nameLen;                       // Length of the name
-    BYTE nArgs;                         // Number of arguments
+    BYTE nArgs;                         // Number of arguments (so far only 0 or 1 supported in code)
     TFnPtr funct;                       // Function
 } TFunction;
 
@@ -278,6 +281,12 @@ static TFunction Func[] = {
 { "word",   4, 1, fnWord },
 { "dword",  5, 1, fnDword },
 { "hiword", 6, 1, fnHiword },
+
+{ "bpcount", 7, 0, fnBpCount },
+{ "bpmiss",  6, 0, fnBpMiss },
+{ "bptotal", 7, 0, fnBpTotal },
+{ "bpIndex", 7, 0, fnBpIndex },
+{ "bplog",   5, 0, fnBpLog },
 { NULL }
 };
 
@@ -353,6 +362,8 @@ static const char sLiteral[] = "@!_";   // These are allowed in literal names
 ******************************************************************************/
 
 extern BOOL GetUserVar(DWORD *pValue, char *sStart, int nLen);
+extern BOOL EvalBreakpointAddress(TADDRDESC *pAddr, int index);
+
 
 int Evaluate( char *sExpr, char **psNext );
 
@@ -510,6 +521,7 @@ TFunction *IsFunc(char *ptr)
 
 static int GetValue( char **sExpr )
 {
+    TADDRDESC Addr;
     int value, n;
     char *sStart = *sExpr, *sTmp;
     TRegister *pReg;
@@ -570,6 +582,40 @@ static int GetValue( char **sExpr )
         // hex number???
     }
     else
+    // Check if it is a breakpoint token 'bpN' or 'bpNN'
+    if( tolower(*sStart)=='b' && tolower(*(sStart+1))=='p' && isxdigit(*(sStart+2)) )
+    {
+        sStart += 2;
+
+        n = (int) GetHex(&sStart);
+        
+        // Preset selector part in the case it changes
+        Addr.sel = evalSel;
+
+        EvalBreakpointAddress(&Addr, n);
+
+        // Store the resulting values
+        value = Addr.offset;
+        evalSel = Addr.sel;
+    }
+    else
+    // The literal value may be the built-in function
+    if( (pFunc = IsFunc(sStart)) != 0 )
+    {
+        sStart += pFunc->nameLen;
+        switch( pFunc->nArgs )
+        {
+            case 0:         // No arguments to a function
+                value = (pFunc->funct)(0);
+            break;
+
+            case 1:         // Single argument to a function
+                value = Evaluate(sStart, &sStart);
+                value = (pFunc->funct)(value);
+            break;
+        }
+    }
+    else
     // The literal value may be the explicit CPU register value
     if( (pReg = IsRegister(sStart)) != 0 )
     {
@@ -591,14 +637,6 @@ static int GetValue( char **sExpr )
         {
             dprinth(1, "Variable not found");
         }
-    }
-    else
-    // The literal value may be the built-in function
-    if( (pFunc = IsFunc(sStart)) != 0 )
-    {
-        sStart += pFunc->nameLen;
-        value = Evaluate(sStart, &sStart);
-        value = (pFunc->funct)(value);
     }
     else
     // If everything else fails, it's gotta be a hex number
@@ -709,7 +747,7 @@ static void Execute( TStack *Values, int Operation )
         case OP_POINTER1:
         case OP_DOT:    Push( Values, Pop( Values ) + Pop( Values ) );   break;  // TEST
         case OP_PTR:    Push( Values, Pop( Values ) + 1 );               break;  // TEST
-        case OP_LINE:   Push( Values, SourceLineToAddr(Pop( Values )) ); break;  // TEST
+        case OP_LINE:   Push( Values, SymLinNum2Address(Pop( Values )) ); break;  // TEST
 
         case OP_SELECTOR:   // Selector:offset
                 // Whatever we did so far was to find the selector part.
@@ -792,8 +830,8 @@ int Evaluate( char *sExpr, char **psNext )
             ExpectValue = 0;
 
             // If the operator was not -/+, reset decimal radix hint
-            if(NewOp!=OP_MINUS && NewOp!=OP_PLUS)
-                fDecimal = FALSE;
+//            if(NewOp!=OP_MINUS && NewOp!=OP_PLUS && NewOp!=OP_LINE)
+//                fDecimal = FALSE;
 
             continue;
         }
@@ -847,8 +885,7 @@ int Evaluate( char *sExpr, char **psNext )
 *
 *   Returns:
 *       TRUE - expression ok: *value = result
-*       FALSE - expression was invalid, appropriate message printed out
-*               via dprinth() function
+*       FALSE - expression was invalid, deb.error contains the expression error code
 *
 ******************************************************************************/
 BOOL Expression(DWORD *value, char *sExpr, char **psNext )
@@ -856,9 +893,6 @@ BOOL Expression(DWORD *value, char *sExpr, char **psNext )
     if( sExpr && *sExpr )
     {
         *value = Evaluate( sExpr, psNext );
-
-        // Check for error in evaluation
-    //    if( *args != 0 )
     }
     else
         return( FALSE );
@@ -888,8 +922,26 @@ BOOL cmdEvaluate(char *args, int subClass)
         }
     }
     else
-        dprinth(1, "Expression?? What expression?");
+        deb.error = ERR_EXP_WHAT;
 
     return( TRUE );
 }
 
+
+BOOL hackED(char *args, int subClass)
+{
+    DWORD address, value;
+
+    if( *args )
+    {
+        if( Expression(&address, args, &args) )
+        {
+            if( Expression(&value, args, &args) )
+
+            dprinth(1, "%08X set to %08X", address, value);
+
+            *(DWORD *)address = value;
+        }
+    }
+    
+}

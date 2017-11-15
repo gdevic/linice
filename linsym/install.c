@@ -201,6 +201,16 @@ void OptInstall(char *pSystemMap)
     TINITPACKET Init;
     int nLine, i;
 
+    //====================================================================
+    // Installation check - If Linice module already installed, return
+    //====================================================================
+    hIce = open("/dev/"DEVICE_NAME, O_RDONLY);
+    if( hIce>=0 )
+    {
+        fprintf(stderr, "Linice module already installed!\n");
+        return;
+    }
+
     // Remove linice device file (useful when debugging linice)
     // Anyways, this file should not exist there at this point...
     system2("rm /dev/ice >& /dev/null");
@@ -357,6 +367,9 @@ void OptInstall(char *pSystemMap)
             }
         }
 
+        // Close the file
+        fclose(fp);
+
         Init.nSymbolSize *= 1024;       // Make these values kilobytes
         Init.nDrawSize *= 1024;
         Init.nHistorySize *= 1024;
@@ -371,6 +384,87 @@ void OptInstall(char *pSystemMap)
         for(status=0; status<48; status++)
             printf("F%d=\"%s\"\n", status+1, Init.keyFn[status]);
 #endif
+
+#if 0
+        //====================================================================
+        // Call xice to query if we are running under X Windows
+        //====================================================================
+
+        status = system2("./xice -q");
+        if( status==-1 )
+        {
+            fprintf(stderr, "Warning: Could not execute xice utility!\n");
+        }
+        else
+        {
+            // If query of xice returned 1, we need to start in XWindow mode
+            if( status==1 )
+            {
+                // Read the configuration file that xice created
+
+                fp = fopen(XICE_CONFIG_FILE, "r");
+                if( fp )
+                {
+                    
+                }
+                else
+                {
+                    fprintf(stderr, "Warning: Unable to open xice config file %s !\n", XICE_CONFIG_FILE);
+
+                    // Read line by line and make sure that the values are what we expect
+                    status = 0;
+                    status += fscanf(fp, "pFrameBuf   = %X\n", &Init.XInit.pFrameBuf    );
+                    status += fscanf(fp, "xres        = %X\n", &Init.XInit.xres         );
+                    status += fscanf(fp, "yres        = %X\n", &Init.XInit.yres         );
+                    status += fscanf(fp, "bpp         = %X\n", &Init.XInit.bpp          );
+                    status += fscanf(fp, "stride      = %X\n", &Init.XInit.stride       );
+                    status += fscanf(fp, "redShift    = %X\n", &Init.XInit.redShift     );
+                    status += fscanf(fp, "greenShift  = %X\n", &Init.XInit.greenShift   );
+                    status += fscanf(fp, "blueShift   = %X\n", &Init.XInit.blueShift    );
+                    status += fscanf(fp, "redMask     = %X\n", &Init.XInit.redMask      );
+                    status += fscanf(fp, "greenMask   = %X\n", &Init.XInit.greenMask    );
+                    status += fscanf(fp, "blueMask    = %X\n", &Init.XInit.blueMask     );
+                    status += fscanf(fp, "redColAdj   = %X\n", &Init.XInit.redColAdj    );
+                    status += fscanf(fp, "greenColAdj = %X\n", &Init.XInit.greenColAdj  );
+                    status += fscanf(fp, "blueColAdj  = %X\n", &Init.XInit.blueColAdj   );
+
+                    if( status == 14 )
+                    {
+                        // Print out what we've read just for informational purposes
+
+                        printf("X-Window display parameters:\n");
+                        printf("  pFrameBuf   = %X\n", Init.XInit.pFrameBuf   );
+                        printf("  xres        = %X\n", Init.XInit.xres        );
+                        printf("  yres        = %X\n", Init.XInit.yres        );
+                        printf("  bpp         = %X\n", Init.XInit.bpp         );
+                        printf("  stride      = %X\n", Init.XInit.stride      );
+                        printf("  redShift    = %X\n", Init.XInit.redShift    );
+                        printf("  greenShift  = %X\n", Init.XInit.greenShift  );
+                        printf("  blueShift   = %X\n", Init.XInit.blueShift   );
+                        printf("  redMask     = %X\n", Init.XInit.redMask     );
+                        printf("  greenMask   = %X\n", Init.XInit.greenMask   );
+                        printf("  blueMask    = %X\n", Init.XInit.blueMask    );
+                        printf("  redColAdj   = %X\n", Init.XInit.redColAdj   );
+                        printf("  greenColAdj = %X\n", Init.XInit.greenColAdj );
+                        printf("  blueColAdj  = %X\n", Init.XInit.blueColAdj  );
+                    }
+                    else
+                    {
+                        fprintf(stderr, "Warning: Could not read xice config file %s formatting!\n", XICE_CONFIG_FILE);
+
+                        // Zero out what we read so we end up with a clean structure since it is not safe to use it
+                        memset(&Init.XInit, 0, sizeof(TXINITPACKET));
+                    }
+
+                    fclose(fp);
+                }
+            }
+            else
+            {
+                printf("`xice -q' returned 0.\n");
+            }
+        }
+#endif
         //====================================================================
         // Send the init packet down to the module
         //====================================================================
@@ -384,7 +478,7 @@ void OptInstall(char *pSystemMap)
         }
         else
         {
-            printf("Error opening device!\n");
+            fprintf(stderr, "Error opening /dev/%s device!\n", DEVICE_NAME);
         }
     }
     else

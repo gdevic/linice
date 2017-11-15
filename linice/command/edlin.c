@@ -77,6 +77,7 @@ char *pCmdEdit = NULL;                  // Push edit line string
 static char *sEnterCommand   = "     Enter a command (H for help)\r";
 static char *sInvalidCommand = "Invalid command\r";
 
+static char sBuf[MAX_STRING];
 static char sHelpLine[MAX_STRING];
 
 // History buffer is initially set with index [0] = '/0' that is really an
@@ -438,6 +439,9 @@ void EdLin( char *sCmdLine )
             if( *pSource )
                 Key = *pSource++;
 
+            // Transform TAB character into a space
+            if( Key==DP_TAB ) Key = ' ';
+
             switch( Key )
             {
                 //======================== CODE WINDOW =========================
@@ -751,5 +755,124 @@ void EdLin( char *sCmdLine )
 
     if( fSilent==FALSE )
         dprinth(1, "%s", sCmd);
+}
+
+
+/******************************************************************************
+*                                                                             *
+*   BOOL cmdFkey(char *args, int subClass)                                    *
+*                                                                             *
+*******************************************************************************
+*
+*   Shows and edit function key assignments.
+*   With no arguments, display function key assignments.
+*   To delete a function key assignment, dont specify definition after the name.
+*
+*   If the definition end with '+', it is incomplete and will cause further edit.
+*
+******************************************************************************/
+BOOL cmdFkey(char *args, int subClass)
+{
+    int nLine = 1;                      // line counter
+    int map, key;                       // Current map and key number
+    char *ptr;                          // Generic pointer to string
+    static char cMap[4] = { ' ', 's', 'a', 'c' };
+
+    if( *args )
+    {
+        // Argument is specified in the form of "<fnkey>[=][assignment]"
+        // <fnkey> is mandatory
+        // [=] is optional
+        // [assignment] is optional, If omitted, fkey definition will be cleared
+        map = 0;
+
+        if( *args=='s' ) args++, map=1;
+        else
+        if( *args=='a' ) args++, map=2;
+        else
+        if( *args=='c' ) args++, map=3;
+
+        if( *args=='f' )
+        {
+            // We need to parse the function key number
+            args++;
+
+            if( *args>='1' && *args<='9' )
+            {
+                key = *args - '0';
+                args++;
+
+                if( *args>='0' && *args<='2' )
+                {
+                    key = key * 10 + *args-'0';
+                    args++;
+                }
+
+                if( key < 12 )
+                {
+                    // We got the right map and the key (1..12) -> (0..11)
+                    key--;
+
+                    // Check for the optional '='
+                    while( *args==' ' ) args++;
+
+                    if( *args=='=' ) args++;
+
+                    ptr = pIce->keyFn[map][key];
+
+                    // If we provided definition, copy it into the store space,
+                    // if we did not, delete previous definition
+                    if( *args )
+                    {
+                        // We provided a new definition + append end of line code
+                        strcpy(ptr, args);
+
+                        // If the definition ends with a '+' we will not append
+                        // newline and the editor will position carret there
+                        ptr += strlen(ptr) - 1;
+                        if( *ptr!='+' )
+                            *(ptr+1) = '\n';
+                        else
+                            *ptr = 0;               // Else delete '+' character
+                    }
+                    else
+                    {
+                        // Delete the previous definition
+                        *ptr = 0;
+                    }
+
+                    return( TRUE );
+                }
+            }
+        }
+
+        // Everything else is an syntax error
+        deb.error = ERR_SYNTAX;
+    }
+    else
+    {
+        // No arguments - display function key assignment
+        for(map=0; map<4; map++)
+        {
+            for(key=0; key<12; key++)
+            {
+                // Print out only defined keys
+                if( *pIce->keyFn[map][key] )
+                {
+                    sprintf(sBuf, "%cf%-2d = %s", cMap[map], key+1, pIce->keyFn[map][key]);
+
+                    // Get rid of newline character at the end
+                    if( (ptr = strchr(sBuf, 0x0A)) ) *ptr = 0;
+                    if( (ptr = strchr(sBuf, 0x0D)) ) *ptr = 0;
+
+                    // Print the function line definition
+                    if( dprinth(nLine++, "%s", sBuf)==FALSE )
+                        return( TRUE );
+                }
+            }
+        }
+    }
+
+    return( TRUE );
 }
 

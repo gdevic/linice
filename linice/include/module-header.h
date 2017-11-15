@@ -66,14 +66,26 @@
 // Define major kernel versions
 
 #ifdef KERNEL_VERSION
-#  if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 1, 0)
-#    define KERNEL_2_1
-#  endif
-#  if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 2, 0)
-#    define KERNEL_2_2
-#  endif
-#  if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 3, 1)
-#    define KERNEL_2_3_1
+#  if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 4, 0)
+#    define KERNEL_4_0
+#  else
+#    if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 3, 1)
+#      define KERNEL_3_1
+#    else
+#      if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 2, 0)
+#        define KERNEL_2_2_0
+#      else
+#        if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 1, 0)
+#          define KERNEL_2_1_0
+#        else
+#          if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 0, 0)
+#            define KERNEL_2_0_0
+#          else
+#            error Unsupported kernel version!
+#          endif
+#        endif
+#      endif
+#    endif
 #  endif
 #endif
 

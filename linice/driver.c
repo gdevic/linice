@@ -42,10 +42,8 @@
 #include <linux/types.h>                // Include kernel data types
 #include <linux/times.h>
 #include <asm/uaccess.h>                // User space memory access functions
-//#include <linux/fs.h>                   // Include file operations file
-#include <linux/devfs_fs_kernel.h>                   // Include file operations file
+#include <linux/devfs_fs_kernel.h>      // Include file operations file
 #include <asm/unistd.h>                 // Include system call numbers
-#include <linux/proc_fs.h>              // Include proc filesystem support
 
 #include "ice-ioctl.h"                  // Include our own IOCTL numbers
 #include "clib.h"                       // Include C library header file
@@ -138,29 +136,14 @@ struct file_operations ice_fops = {
 #endif
 //----------------------------------------------
 
-//=============================================================================
-// PROC VIRTUAL FILE
-//=============================================================================
-
-extern int ProcLinice(char *buf, char **start, off_t offset, int len, int unused);
-
-struct proc_dir_entry linice_proc_entry =
-{
-    0,                                  // low_ino: the inode--dynamic
-    6, "linice",                        // Name len and name string
-    S_IFREG | S_IRUGO,                  // mode
-    1, 0, 0,                            // nlinks, owner, group
-    0,                                  // size - unused
-    NULL,                               // operations - unused
-    &ProcLinice,                        // Read function
-};
-
-
 /******************************************************************************
 *                                                                             *
 *   Local Defines, Variables and Macros                                       *
 *                                                                             *
 ******************************************************************************/
+
+extern int InitProcFs();
+extern int CloseProcFs();
 
 extern unsigned long sys_call_table[];
 typedef asmlinkage int (*PFNMKNOD)(const char *filename, int mode, dev_t dev);
@@ -207,6 +190,9 @@ int init_module(void)
     memset(&Win, 0, sizeof(TWINDOWS));
     pWin = &Win;
 
+//    memset(&Init, 0, sizeof(TINITPACKET));
+//    memset(&XInit, 0, sizeof(TXINITPACKET));
+
     // Register driver
 
     major_device_number = register_chrdev(0, DEVICE_NAME, &ice_fops);
@@ -235,16 +221,16 @@ int init_module(void)
                 KeyboardHook(kbd, scan);
 
                 // Register /proc/linice virtual file
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,4,0)
-                proc_register(&proc_root, &linice_proc_entry);
-#else
-#warning COMPILING WITHOUT PROCFS SUPPORT FOR 2.4
-#endif
+                if( InitProcFs()==0 )
+                {
+                    INFO(("LinIce successfully loaded.\n"));
 
-
-                INFO(("LinIce successfully loaded.\n"));
-
-                return 0;
+                    return 0;
+                }
+                else
+                {
+                    ERROR(("Unable to create /proc entry!\n"));
+                }
             }
             else
             {
@@ -286,9 +272,7 @@ void cleanup_module(void)
     KeyboardUnhook();
 
     // Unregister /proc virtual file
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,4,0)
-    proc_unregister(&proc_root, linice_proc_entry.low_ino);
-#endif
+    CloseProcFs();
 
     // Delete a devce node in the /dev/ directory
     if(sys_unlink != 0)
@@ -361,6 +345,23 @@ static int DriverIOCTL(struct inode *inode, struct file *file, unsigned int ioct
             if( copy_from_user(&Init, (void *)param, sizeof(TINITPACKET))==0 )
             {
                 retval = InitPacket(&Init);
+#if 0
+                // If we also supplied a valid XInit packet at the start,
+                // that means XWindows was running at the time of init.
+                if( Init.XInit.pFrameBuf != 0 )
+                {
+                    // Copy structure into the XInit where it belongs
+                    memcpy(&XInit, (void *)&Init.XInit, sizeof(TXINITPACKET));
+
+                    retval = XInitPacket(&XInit);
+
+                    if( retval==0 )
+                    {
+                        // If everything went well, we can probably switch to using DGA
+//                        pOut = &outDga;
+                    }
+                }
+#endif
             }
             else
                 retval = -EFAULT;       // Faulty memory access
@@ -372,6 +373,7 @@ static int DriverIOCTL(struct inode *inode, struct file *file, unsigned int ioct
             // Copy the X-init block to the driver
             if( copy_from_user(&XInit, (void *)param, sizeof(TXINITPACKET))==0 )
             {
+                dprinth(1, "ICE_IOCTL_XDGA");
                 retval = XInitPacket(&XInit);
             }
             else
@@ -384,12 +386,14 @@ static int DriverIOCTL(struct inode *inode, struct file *file, unsigned int ioct
             // module unload hook function when unloading itself
             UnHookSyscall();
 
+#if 0
             // This loop comes really handy when linice does not want to be unloaded
             while( MOD_IN_USE )
             {
                 MOD_DEC_USE_COUNT;
             }
             MOD_INC_USE_COUNT;          // Back to 1
+#endif
             break;
 
         case ICE_IOCTL_ADD_SYM:         // Add a symbol table

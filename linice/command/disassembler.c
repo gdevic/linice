@@ -360,6 +360,14 @@ StartInstructionNoMODRM:
             sPtr = sFwordPtr;
             goto _E1;
 
+        case _Mw :                                         // word ptr (fadd,...)
+            sPtr = sWordPtr;
+            goto _E1;
+
+        case _Md :                                         // dword ptr (fadd,...)
+            sPtr = sDwordPtr;
+            goto _E1;
+
         case _Mq :                                         // qword ptr (cmpxchg8b)
             sPtr = sQwordPtr;
             goto _E1;

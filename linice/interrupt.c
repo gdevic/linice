@@ -188,9 +188,13 @@ void HookDebuger(void)
     HookIdt(&pIdt[0x01], 0x1);          // Int 1
     HookIdt(&pIdt[0x03], 0x3);          // Int 3
     HookIdt(&pIdt[0x08], 0x8);          // Double-fault
-    HookIdt(&pIdt[0x0D], 0xD);          // GP fault
+    //
+    // TODO: Hooking GPF breaks X on 2.4.x kernel
+    //
+//    HookIdt(&pIdt[0x0D], 0xD);          // GP fault
     HookIdt(&pIdt[0x0E], 0xE);          // Page fault
     HookIdt(&pIdt[0x20], 0x20);         // PIT
+
 //    HookIdt(&pIdt[0x80], 0x80);         // System call interrupt
 }
 
@@ -242,7 +246,7 @@ void Panic(void)
         dprint("%08X  \n", *p++);
     }
 
-#if 0
+#if 1
     cli();
     while( TRUE );
 #endif
@@ -340,7 +344,7 @@ DWORD InterruptHandler( DWORD nInt, PTREGS pRegs )
 
             case 0x21:      // Keyboard interrupt
                 KeyboardHandler();
-            break;
+                break;
 
             case 0x23:      // COM2 / COM4
                 SerialHandler(1);
@@ -402,6 +406,13 @@ DWORD InterruptHandler( DWORD nInt, PTREGS pRegs )
         {
             case 0x0E:                  // Page Fault
                     chain = GET_IDT_BASE( &LinuxIdt[0x0E] );
+                break;
+
+            //
+            // TODO: Hooking GPF breaks X on 2.4.x kernel
+            //
+            case 0x0D:                  // GP Fault
+                    chain = GET_IDT_BASE( &LinuxIdt[0x0D] );
                 break;
 
             case 0x20:                  // Programmable Interval Timer

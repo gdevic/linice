@@ -175,9 +175,16 @@ static void SetCursorPos(void)
 static void SerialSprint(char *s)
 {
     BYTE c;
+    DWORD dwTabs;
 
     while( (c = *s++) != 0 )
     {
+        if( c==DP_TAB )
+        {
+            for(dwTabs=deb.dwTabs; dwTabs; dwTabs--)
+                SerialSprint(" ");
+        }
+        else
         switch( c )
         {
             case DP_SAVEBACKGROUND:
@@ -271,6 +278,11 @@ static void SerialSprint(char *s)
                         outVT100.y++;
                     }
                 break;
+
+            case DP_RIGHTALIGN:
+                    // Right align the rest of the text - this is ignored in serial out;
+                    // Instead, we print a space and continue into a default statement
+                    c = ' ';
 
             default:
                     // All printable characters with few exceptions:

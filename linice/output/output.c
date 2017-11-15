@@ -122,7 +122,7 @@ void dputc(UCHAR c)
 int PrintLine(char *format,...)
 {
     char printBuf[MAX_STRING+1];
-    char *pBuf = printBuf, *p;
+    char *pBuf = printBuf;
     int written;
     va_list arg;
 
@@ -132,24 +132,23 @@ int PrintLine(char *format,...)
     va_end(arg);
 
     // Append enough spaces to fill in a current line width
-    memset(pBuf+written, ' ', pOut->sizeX - written);
-    pBuf[pOut->sizeX] = '\n';
-    pBuf[pOut->sizeX+1]   = 0;
+    memset(&printBuf[written], ' ', pOut->sizeX - written);
+    printBuf[pOut->sizeX] = '\n';
+    printBuf[pOut->sizeX+1]   = 0;
 
     // Change spaces into the graphics line
-    p = pBuf;
-    while( *p )
+    while( *pBuf )
     {
-        if( *p==' ' )
-            *p = 0xC4;                  // Horizontal line extended code
-        p++;
+        if( *pBuf==' ' )
+            *pBuf = 0xC4;               // Horizontal line extended code
+        pBuf++;
     }
 
     // Set the color that is assigned for a header line
     dprint("%c%c", DP_SETCOLINDEX, COL_LINE);
 
     // Send the string to a current output device driver
-    pOut->sprint(pBuf);
+    pOut->sprint(printBuf);
 
     return( pOut->sizeX );
 }
@@ -174,17 +173,16 @@ int PrintLine(char *format,...)
 int dprint( char *format, ... )
 {
     char printBuf[MAX_STRING+1];
-    char *pBuf = printBuf;
     int written;
     va_list arg;
 
     // Print the line into a string
     va_start( arg, format );
-    written = vsprintf(pBuf, format, arg);
+    written = vsprintf(printBuf, format, arg);
     va_end(arg);
 
     // Send the string to a current output device driver
-    pOut->sprint(pBuf);
+    pOut->sprint(printBuf);
 
     return( written );
 }

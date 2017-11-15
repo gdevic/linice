@@ -192,7 +192,7 @@ static void ReadPCIConfig(struct pci_dev *dev, int start, int bytes)
 ******************************************************************************/
 static BOOL DumpPCI(struct pci_dev *pci)
 {
-    int address = 0, count = 0;
+    int address = 0, count = 0, i;
 
     if( opt & PCI_TERSE )
     {
@@ -216,27 +216,17 @@ static BOOL DumpPCI(struct pci_dev *pci)
             GetChipName(pci->vendor, pci->device), GetChipDesc(pci->vendor, pci->device)))  return(FALSE);
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,4,0)
-        if( pci->resource[0].start )
-            if(!dprinth(nLine++, "     Base address 1: %08X", pci->resource[0].start ))  return(FALSE);
-        if( pci->resource[1].start )
-            if(!dprinth(nLine++, "     Base address 2: %08X", pci->resource[1].start ))  return(FALSE);
-        if( pci->resource[2].start )
-            if(!dprinth(nLine++, "     Base address 3: %08X", pci->resource[2].start ))  return(FALSE);
-        if( pci->resource[3].start )
-            if(!dprinth(nLine++, "     Base address 4: %08X", pci->resource[3].start ))  return(FALSE);
+        for(i=0; i<DEVICE_COUNT_RESOURCE; i++)
+        {
+            if( pci->resource[i].start )
+                if(!dprinth(nLine++, "     Base address %d: %08X", i+1, pci->resource[i].start ))  return(FALSE);
+        }
 #else
-        if( pci->base_address[0] )
-            if(!dprinth(nLine++, "     Base address 1: %08X", pci->base_address[0] ))  return(FALSE);
-        if( pci->base_address[1] )
-            if(!dprinth(nLine++, "     Base address 2: %08X", pci->base_address[1] ))  return(FALSE);
-        if( pci->base_address[2] )
-            if(!dprinth(nLine++, "     Base address 3: %08X", pci->base_address[2] ))  return(FALSE);
-        if( pci->base_address[3] )
-            if(!dprinth(nLine++, "     Base address 4: %08X", pci->base_address[3] ))  return(FALSE);
-        if( pci->base_address[4] )
-            if(!dprinth(nLine++, "     Base address 5: %08X", pci->base_address[4] ))  return(FALSE);
-        if( pci->base_address[5] )
-            if(!dprinth(nLine++, "     Base address 6: %08X", pci->base_address[5] ))  return(FALSE);
+        for(i=0; i<6; i++)
+        {
+            if( pci->base_address[i] )
+                if(!dprinth(nLine++, "     Base address %d: %08X", i+1, pci->base_address[0] ))  return(FALSE);
+        }
 #endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,4,0)

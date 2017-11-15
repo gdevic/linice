@@ -57,6 +57,8 @@ static int iLast;                       // Last command entry index
 
 BOOL Unsupported(char *args, int subClass);
 
+extern BOOL hackED     (char *args, int subClass);      // eval.c
+
 extern BOOL cmdEvaluate(char *args, int subClass);      // eval.c
 extern BOOL cmdAltkey  (char *args, int subClass);      // customization.c
 extern BOOL cmdCode    (char *args, int subClass);      // customization.c
@@ -66,9 +68,10 @@ extern BOOL cmdMacro   (char *args, int subClass);      // customization.c
 extern BOOL cmdLines   (char *args, int subClass);      // customization.c
 extern BOOL cmdColor   (char *args, int subClass);      // customization.c
 extern BOOL cmdSerial  (char *args, int subClass);      // customization.c
-extern BOOL cmdXwin    (char *args, int subClass);      // customization.c
 extern BOOL cmdPause   (char *args, int subClass);      // customization.c
 extern BOOL cmdSrc     (char *args, int subClass);      // customization.c
+extern BOOL cmdTabs    (char *args, int subClass);      // customization.c
+extern BOOL cmdDisplay (char *args, int subClass);      // customization.c
 extern BOOL cmdBp      (char *args, int subClass);      // breakpoints.c
 extern BOOL cmdBl      (char *args, int subClass);      // breakpoints.c
 extern BOOL cmdBpet    (char *args, int subClass);      // breakpoints.c
@@ -110,6 +113,7 @@ extern BOOL cmdPeek    (char *args, int subClass);      // page.c
 extern BOOL cmdPoke    (char *args, int subClass);      // page.c
 extern BOOL cmdPci     (char *args, int subClass);      // pci.c
 extern BOOL cmdDdump   (char *args, int subClass);      // data.c
+extern BOOL cmdFormat  (char *args, int subClass);      // data.c
 extern BOOL cmdUnasm   (char *args, int subClass);      // code.c
 extern BOOL cmdDot     (char *args, int subClass);      // code.c
 extern BOOL cmdOut     (char *args, int subClass);      // ioport.c
@@ -119,6 +123,7 @@ extern BOOL cmdSearch  (char *args, int subClass);      // blockops.c
 extern BOOL cmdCompare (char *args, int subClass);      // blockops.c
 extern BOOL cmdMove    (char *args, int subClass);      // blockops.c
 extern BOOL cmdHelp    (char *args, int subClass);      // command.c
+extern BOOL cmdFkey    (char *args, int subClass);      // edlin.c
 
 TCommand Cmd[] = {
 {    ".",        1, 0, cmdDot,         "Locate current instruction", "ex: .",  0 },
@@ -134,7 +139,7 @@ TCommand Cmd[] = {
 {    "BL",       2, 0, cmdBl,          "BL list current breakpoints", "ex: BL",   0 },
 {    "BPE",      3, 0, cmdBpet,        "BPE edit breakpoint number", "ex: BPE 3",  0 },
 {    "BPINT",    5, 2, cmdBpx,         "BPINT interrupt-number [IF expression] [DO bp-action]", "ex: BPINT 50",   0 },
-{    "BPIO",     4, 3, cmdBpx,         "BPIO [-h] port [R|W|RW] [debug register] [IF expression] [DO bp-action]", "ex: BPIO 3DA W",   0 },
+{    "BPIO",     4, 3, cmdBpx,         "BPIO port [R|W|RW] [debug register] [IF expression] [DO bp-action]", "ex: BPIO 3DA W",   0 },
 {    "BPM",      3, 4, cmdBpx,         "BPM[size] address [R|W|RW|X] [debug register] [IF expression] [DO bp-action]", "ex: BPM 1234 RW", 0 },
 {    "BPMB",     4, 4, cmdBpx,         "BPMB address [R|W|RW|X] [debug register] [IF expression] [DO bp-action]", "ex: BPMB 333 R",   0 },
 {    "BPMD",     4, 7, cmdBpx,         "BPMD address [R|W|RW|X] [debug register] [IF expression] [DO bp-action]", "ex: BPMD EDI W",   0 },
@@ -162,7 +167,7 @@ TCommand Cmd[] = {
 {    "E",        1, 0, Unsupported,    "Edit [address] [data]", "ex: E 400000",  0 },
 {    "EB",       2, 1, Unsupported,    "EB [address] [data]", "ex: EB 324415",    0 },
 {    "EC",       2, 0, Unsupported,    "EC Enable/disable code window", "ex: EC", 0 },
-{    "ED",       2, 3, Unsupported,    "ED [address] [data]", "ex: ED 84",    0 },
+{    "ED",       2, 3, hackED,         "ED [address] [data]", "ex: ED 84",    0 },
 {    "EL",       2, 0, Unsupported,    "EL [address] [data]", "ex: EL DS:EBX",    0 },
 {    "ES",       2, 0, Unsupported,    "ES [address] [data]", "ex: ES DS:EDI",    0 },
 {    "ET",       2, 0, Unsupported,    "ET [address] [data]", "ex: ET DS:EBX",    0 },
@@ -172,10 +177,10 @@ TCommand Cmd[] = {
 {    "F",        1, 0, cmdFill,        "Fill address L length data-string", "ex: F EBX L 50 'ABCD'", 0 },
 {    "FAULTS",   6, 0, Unsupported,    "FAULTS [ON | OFF]", "ex: FAULTS ON",  0 },
 {    "FILE",     4, 0, cmdFile,        "FILE [file-name | *]", "ex: FILE main.c", 0 },
-{    "FKEY",     4, 0, Unsupported,    "FKEY [function-key string]", "ex: FKEY F1 DD ESP; G @ESP",    0 },
+{    "FKEY",     4, 0, cmdFkey,        "FKEY [function-key string]", "ex: FKEY F1 DD ESP; G @ESP",    0 },
 {    "FLASH",    5, 0, cmdFlash,       "FLASH [ON | OFF]", "ex: FLASH ON",    0 },
 {    "FOBJ",     4, 0, Unsupported,    "FOBJ pfile_object", "ex: FOBJ EAX",   0 },
-{    "FORMAT",   6, 0, Unsupported,    "FORMAT Change format of data window", "ex: FORMAT",   0 },
+{    "FORMAT",   6, 0, cmdFormat,      "FORMAT Change format of data window", "ex: FORMAT",   0 },
 {    "G",        1, 0, cmdGo,          "G [=address] [address]", "ex: G 231456",  0 },
 {    "GDT",      3, 0, cmdGdt,         "GDT [selector | GDT base-address]", "ex: GDT 28", 0 },
 {    "GENINT",   6, 0, Unsupported,    "GENINT [NMI | INT1 | INT3 | int-number]", "ex: GENINT 2", 0 },
@@ -184,6 +189,7 @@ TCommand Cmd[] = {
 {    "HBOOT",    5, 0, cmdHboot,       "HBOOT System boot (total reset)", "ex: HBOOT",    0 },
 {    "HEAP",     4, 0, Unsupported,    "HEAP [-l] [FREE | mod | sel]", "ex: HEAP GDI",    0 },
 {    "HERE",     4, 0, Unsupported,    "HERE Got to current cursor line", "ex: HERE", 0 },
+{    "HELP",     4, 0, cmdHelp,        "Help [command]", "ex: HELP R",  0 },
 {    "I",        1, 1, cmdIn,          "I port", "ex: I 21",  0 },
 {    "I1HERE",   6, 0, cmdI1here,      "I1HERE [ON | OFF | KERNEL]", "ex: I1HERE ON",  0 },
 {    "I3HERE",   6, 0, cmdI3here,      "I3HERE [ON | OFF | KERNEL]", "ex: I3HERE ON",  0 },
@@ -196,6 +202,7 @@ TCommand Cmd[] = {
 {    "LOCALS",   6, 0, cmdLocals,      "LOCALS", "ex: LOCALS",    0 },
 {    "M",        1, 0, cmdMove,        "Move source-address L length dest-address", "ex: M 4000 L 80 8000",    0 },
 {    "MACRO",    5, 0, cmdMacro,       "MACRO [macro-name] | [[*] | [= \"macro-body\"]]", "ex: MACRO Oops = \"i3here off; genint 3;\"",   0 },
+{    "MDA",      3, 1, cmdDisplay,     "MDA Switch to Monochrome text output", "ex: MDA",   0 },
 {    "MODULE",   6, 0, cmdModule,      "MODULE [module-name | partial-name*]", "ex: MODULE",    0 },
 {    "O",        1, 1, cmdOut,         "O port value", "ex: O 21 FF", 0 },
 {    "OB",       2, 1, cmdOut,         "OB port value", "ex: OB 21 FF",   0 },
@@ -216,12 +223,12 @@ TCommand Cmd[] = {
 {    "POKEB",    5, 0, cmdPoke,        "POKEB address value", "ex: POKEB F8000000 AA", 0 },
 {    "POKED",    5, 2, cmdPoke,        "POKED address value", "ex: POKED F8000000 12345678", 0 },
 {    "POKEW",    5, 1, cmdPoke,        "POKEW address value", "ex: POKEW F8000000 55AA", 0 },
-{    "PRN",      3, 0, Unsupported,    "PRN [LPTx | COMx]", "ex: PRN LPT1",   0 },
-{    "PROC",     4, 0, cmdProc,        "PROC [-xo] [task-name]", "ex: PROC -x Explorer",  0 },
-{    "QUERY",    5, 0, Unsupported,    "QUERY [[-x] address] [process-type]", "ex: QUERY PROGMAN",    0 },
-{    "R",        1, 0, cmdReg,         "R [-d | register-name | register-name [=] value]", "ex: R EAX=50",    0 },
+{    "PRN",      3, 0, Unsupported,    "PRN [LPTx | COMx]", "ex: PRN LPT1", 0 },
+{    "PROC",     4, 0, cmdProc,        "PROC [-xo] [task-name]", "ex: PROC -x Explorer", 0 },
+{    "QUERY",    5, 0, Unsupported,    "QUERY [[-x] address] [process-type]", "ex: QUERY PROGMAN", 0 },
+{    "R",        1, 0, cmdReg,         "R [-d | register-name | register-name [=] value]", "ex: R EAX=50", 0 },
 {    "RS",       2, 0, cmdRs,          "RS Restore program screen", "ex: RS", 0 },
-{    "S",        1, 0, cmdSearch,      "Search [-c] address L length data-string", "ex: S 0 L ffffff 'Help',0D,0A",   0 },
+{    "S",        1, 0, cmdSearch,      "Search [-c] address L length data-string", "ex: S 0 L ffffff 'Help',0D,0A", 0 },
 {    "SERIAL",   6, 0, cmdSerial,      "SERIAL [ON|VT100 [com-port] [baud-rate] | OFF]", "ex: SERIAL ON 2 19200", 0 },
 {    "SET",      3, 0, cmdSet,         "SET [setvariable] [ON | OFF] [value]", "ex: SET FAULTS ON",   0 },
 {    "SHOW",     4, 0, Unsupported,    "SHOW [B | start] [L length]", "ex: SHOW 100", 0 },
@@ -233,26 +240,27 @@ TCommand Cmd[] = {
 {    "THREAD",   6, 0, Unsupported,    "THREAD [TCB | ID | task-name]", "ex: THREAD", 0 },
 {    "TRACE",    5, 0, Unsupported,    "TRACE [B | OFF | start]", "ex: TRACE 50", 0 },
 {    "TABLE",    5, 0, cmdTable,       "TABLE [[R] table-name | AUTOON | AUTOOFF]", "ex: TABLE test", 0 },
-{    "TABS",     4, 0, Unsupported,    "TABS [1 - 8]", "ex: TABS 4",  0 },
+{    "TABS",     4, 0, cmdTabs,        "TABS [1 - 8]", "ex: TABS 4",  0 },
 {    "TSS",      3, 0, cmdTss,         "TSS [TSS selector]", "ex: TSS",   0 },
 {    "TYPES",    5, 0, cmdTypes,       "TYPES [type-name]", "ex: TYPE DWORD", 0 },
 {    "U",        1, 0, cmdUnasm,       "Unassemble [address [L length]]", "ex: U EIP-10",  0 },
 {    "VAR",      3, 0, cmdVar,         "VAR [variable-name] | [[*] | [= expression]]", "ex: VAR myvalue = eax+20",   0 },
 {    "VER",      3, 0, cmdVer,         "VER Display LinIce version", "ex: VER",   0 },
+{    "VGA",      3, 0, cmdDisplay,     "VGA Switch to VGA text output", "ex: VGA",   0 },
 {    "WATCH",    5, 0, Unsupported,    "WATCH address", "ex: WATCH VariableName", 0 },
 {    "WC",       2, 0, cmdWc,          "WC [window-size]", "ex: WC 8",    0 },
 {    "WD",       2, 0, cmdWd,          "WD [window-size]", "ex: WD 4",    0 },
-{    "WF",       2, 0, Unsupported,    "WF [-D] [B | W | D | F | P | *]", "ex: WF",   0 },
+{    "WF",       2, 0, Unsupported,    "WF [-D] [B | W | D | F | P | *]", "ex: WF", 0 },
 {    "WIDTH",    5, 0, Unsupported,    "WIDTH [80-160]", "ex: WIDTH 100", 0 },
 {    "WL",       2, 0, cmdWl,          "WL [window-size]", "ex: WL 8",    0 },
 {    "WHAT",     4, 0, Unsupported,    "WHAT expression", "ex: WHAT system",  0 },
 {    "WR",       2, 0, cmdWr,          "WR Toggle register window", "ex: WR", 0 },
 {    "WS",       2, 0, Unsupported,    "WS [window-size]", "ex: WS 8",    0 },
-{    "WW",       2, 0, Unsupported,    "WW Toggle watch window", "ex: WW",    0 },
+{    "WW",       2, 0, Unsupported,    "WW Toggle watch window", "ex: WW", 0 },
 {    "WX",       2, 0, Unsupported,    "WX [D | F | *]", "WX 8",  0 },
-{    "X",        1, 0, cmdXit,         "X Return to host debugger or program", "ex: X",   0 },
+{    "X",        1, 0, cmdXit,         "X Return to host debugger or program", "ex: X", 0 },
 {    "XFRAME",   6, 0, Unsupported,    "XFRAME [frame address]", "ex: XFRAME EBP",    0 },
-{    "XWIN",     4, 0, cmdXwin,        "XWIN", "ex: XWIN",    0 },
+{    "XWIN",     4, 2, cmdDisplay,     "XWIN Switch to DGA-compatible X-Window display", "ex: XWIN",   0 },
 {    "ZAP",      3, 0, cmdZap,         "ZAP Zap embeded INT1 or INT3", "ex: ZAP", 0 },
 {    NULL,       0, 0, NULL,           NULL, 0 }
 };
@@ -373,8 +381,6 @@ char *sHelp[] = {
    "COLOR  - Display/set screen colors",
    "ANSWER - Auto-answer and redirect console to modem",
    "DIAL   - Redirect console to modem",
-   "SERIAL - Redirect console to a serial terminal",
-   "XWIN   - Redirect console to DGA frame buffer",
    "TABS   - Set/display tab settings",
    "LINES  - Set/display number of lines on screen",
    "WIDTH  - Set/display number of columns on screen",
@@ -410,6 +416,10 @@ char *sHelp[] = {
    "EC     - Enable/disable code window",
    ".      - Locate current instruction",
    " WINDOW CONTROL",
+   "VGA    - Switch to a VGA text display",
+   "MDA    - Switch to a MDA (Monochrome) text display",
+   "XWIN   - Redirect console to a DGA frame buffer",
+   "SERIAL - Redirect console to a serial terminal",
    "CLS    - Clear window",
    "RS     - Restore program screen",
    "ALTSCR - Change to alternate display",
@@ -457,6 +467,8 @@ extern char *MacroExpand(char *pCmd);
 *
 *   Executes commands stored in a string. If the command contains a macro,
 *   this function is called recursively.
+*
+*   We also exit if there was an error evaluating a command.
 *
 *   Where:
 *       pOrigCmd is the string with commands. Multiple commands may be separated
@@ -539,7 +551,8 @@ BOOL CommandExecute( char *pOrigCmd )
             }
             else
             {
-                dprinth(1, "Unknown command or macro");
+                deb.error = ERR_COMMAND;
+                return( TRUE );
             }
         }
 
@@ -636,7 +649,7 @@ BOOL cmdHelp(char *args, int subClass)
         else
         {
             // Nope - user typed invalid command
-            dprinth(1, "Command %s is not valid", args);
+            deb.error = ERR_COMMAND;
         }
     }
     else
@@ -666,7 +679,7 @@ BOOL cmdHelp(char *args, int subClass)
 ******************************************************************************/
 BOOL Unsupported(char *args, int subClass)
 {
-    dprinth(1, "Not yet implemented.");
+    deb.error = ERR_NOT_IMPLEMENTED;
 
     return( TRUE );
 }
@@ -702,7 +715,7 @@ int GetOnOff(char *args)
     if( len==6 && strnicmp(args, "kernel", 6)==0 )
         return( 4 );                    // KERNEL
 
-    dprinth(1, "Syntax error");
+    deb.error = ERR_SYNTAX;
 
     return( 0 );
 }

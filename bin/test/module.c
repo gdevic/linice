@@ -1,5 +1,9 @@
-#define MODULE
-#include <linux/module.h>
+/*	1	2	3	4	5	6	7
+1	2	3	4	5	6	7	8	9	0
+-	=	q	
+*/
+	#define MODULE
+	#include <linux/module.h>
 
 int global = 10;
 static int static_var = 1;
@@ -7,9 +11,9 @@ int global2;
 
 int init_module(void)
 {
-    int i;
+	int i;
 
-    printk("<1>init_module\n");
+	printk("<1>init_module\n");
 
     static_fn();
 
