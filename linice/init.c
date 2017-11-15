@@ -81,6 +81,7 @@ extern void InterruptInit();
 extern void HookDebuger();
 extern void HookSyscall(void);
 extern void HookSwitch(void);
+extern void HookPrintk(void);
 extern BOOL InitUserVars(int num);
 extern BOOL InitMacros(int num);
 extern void InitEdit();
@@ -154,25 +155,26 @@ int InitPacket(PTINITPACKET pInit)
 
                 // Set default values for initial windows:
                 // Visible: registers, data and code windows and, of course, history
+                // We need to set number of lines even if it is invisible at start
 
-                pWin->l.fVisible = TRUE;
-                pWin->l.nLines   = 4;
-
-                pWin->w.fVisible = TRUE;
-                pWin->w.nLines   = 4;       // We need to set number of lines even if it is invisible at start
-
-
-                pWin->r.fVisible = TRUE;
+                pWin->r.fVisible = TRUE;    // Registers
                 pWin->r.nLines   = 3;
-                pWin->d.fVisible = TRUE;
+                pWin->l.fVisible = FALSE;   // Locals
+                pWin->l.nLines   = 4;
+                pWin->w.fVisible = FALSE;   // Watch
+                pWin->w.nLines   = 4;
+                pWin->s.fVisible = FALSE;   // Stack
+                pWin->s.nLines   = 4;
+                pWin->d.fVisible = TRUE;    // Data
                 pWin->d.nLines   = 5;
-                pWin->c.fVisible = TRUE;
+                pWin->c.fVisible = TRUE;    // Code
                 pWin->c.nLines   = 5;
-                pWin->h.fVisible = TRUE;
+                pWin->h.fVisible = TRUE;    // History
 
                 // Initialize lists of items
                 deb.Watch.ID = LIST_ID_WATCH;
                 deb.Local.ID = LIST_ID_LOCALS;
+                deb.Stack.ID = LIST_ID_STACK;
 
                 // Adjust all output driver coordinates - we won't print anything since
                 // we are not yet in the debugger (deb.fRunningIce is false)
@@ -268,6 +270,13 @@ int InitPacket(PTINITPACKET pInit)
 
                                         // Hook the task switcher
                                         HookSwitch();
+
+                                        // Hook the kernel printk() output, only if we are not debug build
+#                                       ifdef DBG
+                                        INFO("Not hooking printk() since this is DEBUG build.\n");
+#                                       else
+                                        HookPrintk();
+#                                       endif
 
                                         // Linice is now operational
                                         deb.fOperational = TRUE;

@@ -217,6 +217,12 @@ DWORD GetDWORD(WORD sel, DWORD offset)
     return( 0x100 );
 }
 
+void SetDWORD(WORD sel, DWORD offset, DWORD value)
+{
+//    assert(0);
+}
+
+
 DWORD SetByte(WORD sel, DWORD offset, BYTE value)
 {
     assert(0);

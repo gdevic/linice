@@ -52,8 +52,6 @@
 *                                                                             *
 ******************************************************************************/
 
-//BYTE testbuf[4096];
-
 /******************************************************************************
 *                                                                             *
 *   Local Defines, Variables and Macros                                       *
@@ -238,7 +236,7 @@ void DataDraw(BOOL fForce, DWORD newOffset)
     if( pWin->d.fVisible==TRUE )
     {
         dprint("%c%c%c%c", DP_SAVEXY, DP_SETCURSORXY, 0+1, pWin->d.Top+1);
-        PrintLine(" Data                                               %s", sSize[deb.nDumpSize-1]);
+        PrintLine("Data                                             %s", sSize[deb.nDumpSize-1]);
     }
     else
         if( fForce==FALSE )

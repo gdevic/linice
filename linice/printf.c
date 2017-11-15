@@ -155,6 +155,13 @@ int ivsprintf( char *dest, const char *format, va_list arg )
 
                 c = *fmt++;
 
+                // Two %% in a row print one % character out
+                if(c=='%')
+                {
+                    STR_APPEND('%');
+                    continue;
+                }
+
                 // Sequence of flags
                 //
                 if( c == '-' )              // Left-justify

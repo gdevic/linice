@@ -13,7 +13,7 @@ HST=4096
 MACROS=32
 DRAWSIZE=1024
 
-INIT="lines 25; code on; set lowercase on; i3here on; wc 10;wl;"
+INIT="lines 25; code on; set lowercase on; i3here on;"
 
 F1="h;"
 F2="^wr;"

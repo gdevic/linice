@@ -117,7 +117,8 @@ void dputc(UCHAR c)
 *                                                                             *
 *******************************************************************************
 *
-*   Prints a loosely formatted header line.
+*   Prints a loosely formatted header line. By default, the first character
+*   starts indented.
 *
 *   Where:
 *       format is the standard printf() format string
@@ -129,31 +130,40 @@ void dputc(UCHAR c)
 ******************************************************************************/
 int PrintLine(char *format,...)
 {
-    char printBuf[MAX_STRING+1];
-    char *pBuf = printBuf;
+    char printBuf[MAX_STRING+3];
+    char *pBuf;
     int written;
     va_list arg;
 
-    // Print the line into a string
+    // Clear the print buffer with spaces
+    memset(printBuf, ' ', sizeof(printBuf));
+
+    // First two characters contain the line color codes
+    printBuf[0] = DP_SETCOLINDEX;
+    printBuf[1] = COL_LINE;
+
+    // We start printing at the second byte in the buffer
+    pBuf = &printBuf[2];
+
+    // Print the line into a buffer starting indented
     va_start( arg, format );
-    written = ivsprintf(pBuf, format, arg);
+    written = ivsprintf(pBuf + 4, format, arg);
     va_end(arg);
 
-    // Append enough spaces to fill in a current line width
-    memset(&printBuf[written], ' ', pOut->sizeX - written);
-    printBuf[pOut->sizeX] = '\n';
-    printBuf[pOut->sizeX+1]   = 0;
+    // Let the line expand into the whole buffer that we spaced
+    pBuf[4+written] = ' ';
 
-    // Change spaces into the graphics line
+    // Terminate the buffer string
+    pBuf[pOut->sizeX]   = '\n';
+    pBuf[pOut->sizeX+1] = 0;
+
+    // Change spaces into a graphics line character
     while( *pBuf )
     {
         if( *pBuf==' ' )
             *pBuf = FONT_HLINE;         // Horizontal line extended code
         pBuf++;
     }
-
-    // Set the color that is assigned for a header line
-    dprint("%c%c", DP_SETCOLINDEX, COL_LINE);
 
     // Send the string to a current output device driver
     pOut->sprint(printBuf);

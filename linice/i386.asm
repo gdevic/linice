@@ -53,6 +53,7 @@ global  FlushTLB
 global  MemAccess_START
 global  GetByte
 global  GetDWORD
+global  SetDWORD
 global  SetByte
 global  MemAccess_FAULT
 global  MemAccess_END
@@ -88,7 +89,11 @@ global  Checksum2
 ; External definitions that this module uses
 ;==============================================================================
 
-extern  InterruptHandler
+extern InterruptHandler
+
+extern fStackLevel              ; Contains 0 for the first Linice entry on the stack
+extern StackExtraBuffer         ; Current extra buffer space on the stack
+extern MaxStackExtraBuffer      ; Maximum extra buffer space on the stack
 
 ;==============================================================================
 ;
@@ -218,7 +223,7 @@ IceIntHandlers:
 ;              0       *                           ---- | PM ds                     ---- | PM ds
 ;              0       *                           ---- | PM es                     ---- | PM es
 ;              ---- | VM ss                        ---- | PM ss                     ---- | PM ss
-; frame ->       VM esp                              PM esp                           PM esp (*)
+; frame ->     VM esp                              PM esp                           PM esp (*)
 
         struc   frame
 _esp:           resd    1
@@ -268,7 +273,7 @@ sel_ice_ds:
         mov     es, ax
 
 ; Depending on the mode of execution of the interrupted code, we need to do some entry adjustments
-        sub     esp, 8                          ; Start of the frame
+        sub     esp, 2 * 4                     ; Start of the frame, make room for esp/ss
         mov     ebp, esp
         test    dword [ebp+_eflags], 1 << 17   ; VM mode ?
         jz      not_VM
@@ -298,14 +303,30 @@ not_VM:
         lea     eax, [ebp+_esp_orig]
         mov     dword [ebp+_esp], eax
 entry:
-; Push the address of the register structure that we just set up
-        push    ebp
+; This semaphore is needed to let interrupts that happen during the Linice run
+; simply stack up (down?) onto where we currently are, instead of reserving more extra stack space
+        bts     dword [fStackLevel], 0          ; First level of Linice interrupt handler?
+        jc      skip_set_stack                  ; If it is not (1), we dont need to allocate extra space
+
+        mov     eax, dword [MaxStackExtraBuffer]; Get the constant max value
+        mov     dword [StackExtraBuffer], eax   ; Store it in the current running buffer size
+        sub     esp, eax                        ; And give it that much on the actual stack
+skip_set_stack:
+; Push the address of the register structure that we just set up.
+        push    ebp                             ; This is the parameter PTREGS pRegs
 
 ; Push interrupt number on the stack and call our C handler
-        push    ecx
+        push    ecx                             ; This is the parameter DWORD nInt
         cld                                     ; Set the direction bit
         call    InterruptHandler                ; on return, eax is the chain address (or NULL)
-        add     esp, 8
+        add     esp, 8                          ; Restore esp to what was before the call
+
+        cmp     esp, ebp                        ; Did we gave it any extra buffer?
+        setz    [fStackLevel]                   ; Reset the semaphore if we did (first level)
+        jz      skip_reset_stack
+        add     esp, dword [StackExtraBuffer]   ; Move esp to skip the buffer and position to the pRegs
+        mov     ebp, esp                        ; Make ebp and esp the same at this point
+skip_reset_stack:
 
         mov     dword [ebp+chain_address], eax  ; Store the chain address
         mov     ecx, eax                        ; Keep the value in ecx register as well
@@ -334,9 +355,8 @@ exit_not_VM:
         jnz     exit_ring_3
 exit_ring0:
         ; --- RING 0 ---
-        ; In the ring 0, we can't change esp or ss (yet)
 exit:
-        add     esp, 8                          ; Skip esp/ss
+        add     esp, 2 * 4                      ; Skip esp/ss as we can't modify them here
         pop     eax
         mov     es, ax
         pop     eax
@@ -770,6 +790,49 @@ GetDWORD:
 
 ;==============================================================================
 ;
+;   void SetDWORD( WORD sel, DWORD offset, DWORD dwValue )
+;
+;   Sets a DWORD to a memory location at sel:offset
+;
+;   Where:
+;       [ebp + 8 ]      selector
+;       [ebp + 12 ]     offset
+;       [ebp + 16 ]     value
+;
+;==============================================================================
+SetDWORD:
+        push    ebp
+        mov     ebp, esp
+        push    ebx
+        push    gs
+
+        ; Perform a sanity check of the selector value
+        mov     eax, MEMACCESS_GPF      ; Assume failure with the access right
+        lar     bx, [ebp + 8]           ; Load access rights of a selector
+        jnz     @bad_selector_wd        ; Exit if the selector is invisible or invalid
+
+        mov     eax, MEMACCESS_LIM      ; Assume failure with the segment limit
+        lsl     ebx, [ebp + 8]          ; Load segment limit into ebx register
+        cmp     ebx, [ebp + 12]         ; Compare to what we requested
+        jb      @bad_selector_wd        ; Exit if the limit is exceeded
+
+        mov     ax, [ebp + 8]           ; Get the selector
+        mov     gs, ax                  ; Store it in the GS
+        mov     ebx, [ebp + 12]         ; Get the offset off that selector
+        mov     eax, [ebp + 16]         ; Get the value to write
+
+        ; Access the memory using the GS selector, possibly causing PF or GPF
+        ; since we installed handlers, they will return the correct error code
+
+        mov     [gs:ebx], eax
+@bad_selector_wd:
+        pop     gs
+        pop     ebx
+        pop     ebp
+        ret
+
+;==============================================================================
+;
 ;   int SetByte( WORD sel, DWORD offset, BYTE byte )
 ;
 ;   Writes a byte to a memory location at sel:offset
@@ -1134,17 +1197,7 @@ Inpd:
 ;
 ;==============================================================================
 InterruptPoll:
-        halt
-
-        ; This is for SuSe running under VmWare - makes it less CPU intensive
-        ; since VmWare yields CPU on kernel HALT, not our HALT
-        push    eax
-        mov     ax, word [0C0106E41h]
-        cmp     ax, 0F4FBh              ; FB  sti
-        jnz     @skip                   ; F4  halt
-        call    0C0106E41h
-@skip:
-        pop     eax
+        hlt
         ret
 
 ;==============================================================================

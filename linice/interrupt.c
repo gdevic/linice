@@ -58,24 +58,11 @@
 *                                                                             *
 ******************************************************************************/
 
-extern void MemAccess_START();
-extern void MemAccess_END();
-extern void MemAccess_FAULT();
+// Define how many dwords do we reserve on the stack for instruction "CALL" frame
 
-extern DWORD IceIntHandlers[0x30];
-extern DWORD IceIntHandler80;
-
-extern void DebuggerEnterBreak(void);
-extern void DebuggerEnterDelayedArm(void);
-
-// From apic.c
-
-extern int IrqRedirect(int nIrq);
-extern void GetIrqRedirection(void);
-extern int ReverseMapIrq(int nInt);
-extern void IoApicClamp(int cpu);
-extern void IoApicUnclamp();
-extern void smpSpinOtherCpus(void);
+const DWORD MaxStackExtraBuffer = 4 * (MAX_CALL_ARGS + 3);
+DWORD StackExtraBuffer = 0;             // Current size of the extra buffer
+BOOL fStackLevel = 0;                   // Initial stack nesting level
 
 /******************************************************************************
 *                                                                             *
@@ -111,6 +98,25 @@ extern void IntAck(int nInt);
 
 extern BYTE TaskSwitchHookBuffer[];     // Internal buffer of the switch handler code
 extern DWORD switchto;                  // Address of the kernel's __switch_to()
+
+extern void MemAccess_START();
+extern void MemAccess_END();
+extern void MemAccess_FAULT();
+
+extern DWORD IceIntHandlers[0x30];
+extern DWORD IceIntHandler80;
+
+extern void DebuggerEnterBreak(void);
+extern void DebuggerEnterDelayedArm(void);
+
+// From apic.c
+
+extern int IrqRedirect(int nIrq);
+extern void GetIrqRedirection(void);
+extern int ReverseMapIrq(int nInt);
+extern void IoApicClamp(int cpu);
+extern void IoApicUnclamp();
+extern void smpSpinOtherCpus(void);
 
 /******************************************************************************
 *                                                                             *

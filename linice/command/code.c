@@ -331,7 +331,11 @@ void CodeDraw(BOOL fForce)
     if( pWin->c.fVisible==TRUE )
     {
         dprint("%c%c%c%c", DP_SAVEXY, DP_SETCURSORXY, 0+1, pWin->c.Top+1);
-        PrintLine(" Code");
+
+        if( deb.pSource )
+            PrintLine(deb.pSource->pSourceName);
+        else
+            PrintLine("Code");
     }
     else
         if( fForce==FALSE )

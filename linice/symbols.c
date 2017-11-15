@@ -76,7 +76,6 @@ static TSYMTYPEDEF1 TypeUnsignedInt =
 
 extern TSYMTYPEDEF1 *Type2Typedef(char *pTypeName, int nLen, WORD file_id);
 extern void TypedefCanonical(TSYMTYPEDEF1 *pType1);
-extern void *SymTabFindSection(TSYMTAB *pSymTab, BYTE hType);
 extern BOOL FindModule(TMODULE *pMod, char *pName, int nNameLen);
 extern DWORD fnPtr(DWORD arg);
 extern int GetTokenLen(char *pToken);
@@ -340,7 +339,7 @@ BOOL FindGlobalSymbol(TExItem *item, char *pName, int nNameLen)
             for(i=0; i<pGlobal->nGlobals; i++ )
             {
                 // Compare the symbol name: The global symbol has to terminate with a zero
-                if( !stricmp(pName, pGlobal->list[i].pName) )
+                if( !*(char *)(pGlobal->list[i].pName+nNameLen) && !strnicmp(pName, pGlobal->list[i].pName, nNameLen) )
                 {
                     // Found the matching name of the global variable
                     // Fill in the item structure
@@ -372,6 +371,49 @@ BOOL FindGlobalSymbol(TExItem *item, char *pName, int nNameLen)
                     return( TRUE );
                 }
             }
+        }
+    }
+
+    return( FALSE );
+}
+
+/******************************************************************************
+*                                                                             *
+*   BOOL CompareExportedName(char *pKernelSymName, char *pName, int nNameLen) *
+*                                                                             *
+*******************************************************************************
+*
+*   Kernel exported symbol name may be mangled. This string compare function
+*   takes care of abstraction of such names.
+*
+*   Mangled names have a form: <name>_Rxxxxxxxx
+*   where x is the 8-digit hex number.
+*
+*   Where:
+*       pKernelSymName - pointer to the kernel/module symbol name
+*       pName          - our string to compare
+*       nNameLen       - length of our string
+*
+*   Returns:
+*       TRUE if names match
+*       FALSE if names do not match
+*
+******************************************************************************/
+static BOOL CompareExportedName(char *pKernelSymName, char *pName, int nNameLen)
+{
+    // If the start of kname exactly match to our complete name, do more tests
+    if( !strnicmp(pKernelSymName, pName, nNameLen) )
+    {
+        // If that was the end of the kname, name is not mangled
+        if( pKernelSymName[nNameLen]==0 )
+            return( TRUE );
+
+        // If the kernel name is mangled, detect it and check the cue
+        if( pKernelSymName[nNameLen]=='_' && pKernelSymName[nNameLen+1]=='R' )
+        {
+            // The total name length of the kernel symbol has to be 10 characters more
+            if( strlen(pKernelSymName)==nNameLen+2+8 )
+                return( TRUE );
         }
     }
 
@@ -423,7 +465,7 @@ BOOL FindModuleSymbol(TExItem *item, char *pName, int nNameLen)
 
         for(count=0; count<Mod.nsyms; count++)
         {
-            if( pSym->name[nNameLen]=='\0' && !strnicmp(pSym->name, pSymName, nNameLen) )
+            if( CompareExportedName((char *) pSym->name, pSymName, nNameLen) )
             {
                     // Found the matching symbol name
 
@@ -438,19 +480,16 @@ BOOL FindModuleSymbol(TExItem *item, char *pName, int nNameLen)
         }
 
         // For the 2.6 kernels we also count separate GPL symbols
-        if( ice_get_kernel_version() >= KERNEL_VERSION_2_6 )
+        pSym = Mod.syms_gpl;
+        for(count=0; count<Mod.nsyms_gpl; count++)
         {
-            pSym = Mod.syms_gpl;
-            for(count=0; count<Mod.nsyms_gpl; count++)
+            if( CompareExportedName((char *) pSym->name, pSymName, nNameLen) )
             {
-                if( pSym->name[nNameLen]=='\0' && !strnicmp(pSym->name, pSymName, nNameLen) )
-                {
-                    // Found the matching symbol name, store it and return via a common path
-                    item->Data = pSym->value;
-                    goto FoundValue;
-                }
-                pSym++;
+                // Found the matching symbol name, store it and return via a common path
+                item->Data = pSym->value;
+                goto FoundValue;
             }
+            pSym++;
         }
 
         // Two special cases of a symbol name that are really not exported,
@@ -540,6 +579,7 @@ BOOL FindSymbol(TExItem *item, char *pName, int *pNameLen)
 
             // If everything else fails, look for the kernel export
             // For that, we will need to compose a temporary name
+            // TODO: What if pName is NOT zero-terminated? (that is why we use NameLen parameter!)
             nNameLen = sprintf(buf, "kernel!%s", pName);
 
             if( FindModuleSymbol(item, buf, nNameLen) )
@@ -620,7 +660,18 @@ BOOL cmdExport(char *args, int subClass)
             if( dprinth(nLine++, "    %08X  %s", pSym->value, pSym->name)==FALSE )
                 return( TRUE );
         }
+        pSym++;
+    }
 
+    // For the 2.6 kernels we also need to list separate GPL symbols
+    pSym = Mod.syms_gpl;
+    for(count=0; count<Mod.nsyms_gpl; count++)
+    {
+        if( !strnicmp(pSym->name, pSymName, strlen(pSymName)) )
+        {
+            if( dprinth(nLine++, "GPL %08X  %s", pSym->value, pSym->name)==FALSE )
+                return( TRUE );
+        }
         pSym++;
     }
 
@@ -635,41 +686,74 @@ BOOL cmdExport(char *args, int subClass)
 *
 *   Display global symbols from the current symbol table
 *
+*   Syntax:
+*       SYM             - lists all symbols in the current symbol table
+*       SYM symbol      - displays a specific symbol
+*       SYM symb*       - display all symbols with a partial name match
+*
 ******************************************************************************/
 BOOL cmdSymbol(char *args, int subClass)
 {
     TSYMGLOBAL *pGlobals;
     int nLine = 1;
     UINT i;
+    BOOL fPartial = FALSE;              // Assume print all symbols
+    UINT nPartialLen = 0;               // Keep the argument length
+
+    // Parse the optional argument and set the search state
+    if( *args )
+    {
+        nPartialLen = strlen(args);
+
+        // If the last character was '*', we search for the partial name
+        if( args[nPartialLen-1]=='*' )
+        {
+            // Search the partial name, zap the '*' and set the flag
+            nPartialLen--;              // Correct for the trailing '*'
+            args[nPartialLen] = 0;      // Zap the trailing '*'
+            fPartial = TRUE;            // Do a partial name compare
+        }
+        // The args pointer, pointing to a non-zero byte, signals that
+        // we need to do a name compare (either full or partial)
+    }
 
     if( deb.pSymTabCur )
     {
-        if( *args )
-        {
-            ;
-        }
-        else
-        {
-            // If no arguments, list all symbols:
-            // Symbols are: Globals + static symbols from all files
+        // Symbols are: Globals + static symbols from all files
 
-            pGlobals = (TSYMGLOBAL *) SymTabFindSection(deb.pSymTabCur, HTYPE_GLOBALS);
-            if( pGlobals )
+        pGlobals = (TSYMGLOBAL *) SymTabFindSection(deb.pSymTabCur, HTYPE_GLOBALS);
+        if( pGlobals )
+        {
+            // List the symbols from every segment
+
+            for(i=0; i<pGlobals->nGlobals; i++ )
             {
-                // List the symbols from every segment
-
-                for(i=0; i<pGlobals->nGlobals; i++ )
+                // Filter the output based on the partial name given
+                if( *args )
                 {
-                    if(dprinth(nLine++, " %08X %02d %s %s",
-                        pGlobals->list[i].dwStartAddress,
-                        pGlobals->list[i].bSegment,
-                        pGlobals->list[i].bSegment==0x00? ".text  ":
-                        pGlobals->list[i].bSegment==0x01? ".data  ":
-                        pGlobals->list[i].bSegment==0x02? ".rodata":
-                        pGlobals->list[i].bSegment==0x03? ".bss   ": "COMMON ",
-                        pGlobals->list[i].pName)==FALSE)
-                    return( TRUE );
+                    if( fPartial )
+                    {
+                        // Partial name search - continue loop if the name prefix does not match
+                        if( strnicmp(pGlobals->list[i].pName, args, nPartialLen) )
+                            continue;
+                    }
+                    else
+                    {
+                        // Full name search - continue loop if the names dont match
+                        if( stricmp(pGlobals->list[i].pName, args) )
+                            continue;
+                    }
                 }
+                // Finally, print all the symbols that did not mis-match
+                if(dprinth(nLine++, " %08X %02d %s %s",
+                    pGlobals->list[i].dwStartAddress,
+                    pGlobals->list[i].bSegment,
+                    pGlobals->list[i].bSegment==0x00? ".text  ":
+                    pGlobals->list[i].bSegment==0x01? ".data  ":
+                    pGlobals->list[i].bSegment==0x02? ".rodata":
+                    pGlobals->list[i].bSegment==0x03? ".bss   ": "COMMON ",
+                    pGlobals->list[i].pName)==FALSE)
+                return( TRUE );
             }
         }
     }
@@ -687,7 +771,7 @@ BOOL cmdSymbol(char *args, int subClass)
 *   Change or display the current source file.
 *
 *   Symtax:
-*       FILE *          - lists all symbol files in the current symbol table
+*       FILE *          - lists all files in the current symbol table
 *       FILE file-name  - switches to a given source file
 *       FILE            - displays the name of the current source file
 *
@@ -696,7 +780,6 @@ BOOL cmdFile(char *args, int subClass)
 {
     TSYMHEADER *pHead;                  // Generic section header
     TSYMSOURCE *pSrc;                   // Source file header
-//  WORD fileID;
     int nLine = 1;
 
     if( deb.pSymTabCur )
@@ -770,112 +853,306 @@ BOOL cmdFile(char *args, int subClass)
     return( TRUE );
 }
 
+
 /******************************************************************************
 *                                                                             *
-*   char *SymAddress2Name(WORD wSel, DWORD dwOffset)                          *
+*   char *SymAddress2Global(DWORD dwOffset, UINT *pRange)                     *
 *                                                                             *
 *******************************************************************************
 *
-*   Translates address to a symbol name
+*   Returns the symbol name associated with a current global function of ANY
+*   loaded symbol table.
 *
 *   Where:
-*       wSel is the selector part of the address
-*       dwOffset is the offset part of the address
+*       dwOffset is the linear address to search
+*       pRange is the (optional) pointer to receive the delta
+*
 *   Returns:
 *       NULL if there are no symbols at that address
 *       Address of the symbol name string
 *
 ******************************************************************************/
-char *SymAddress2Name(WORD wSel, DWORD dwOffset)
+static char *SymAddress2Global(DWORD dwOffset, UINT *pRange)
 {
-    void *pmodule;                      // Kernel pmodule pointer
-    struct module_symbol* pSym;         // Pointer to a module symbol structure
-    TMODULE Mod;                        // Current module internal structure
-    int count;                          // Symbol loop counter
+    TSYMGLOBAL *pGlobals;
+    TSYMTAB *pSymTab;                   // Traverse list of symbol tables
+    int i;
 
+    pSymTab = deb.pSymTab;
+
+    // Loop for all loaded symbol tables
+    if( pSymTab )
+    {
+        // Search global functions
+        pGlobals = (TSYMGLOBAL *)SymTabFindSection(pSymTab, HTYPE_GLOBALS);
+
+        for(i=0; i<pGlobals->nGlobals; i++ )
+        {
+            // If we can search the range, return the match within a global function
+            if( pRange )
+            {
+                if( dwOffset >= pGlobals->list[i].dwStartAddress && dwOffset <= pGlobals->list[i].dwEndAddress )
+                {
+                    *pRange = dwOffset - pGlobals->list[i].dwStartAddress;
+                    return( pGlobals->list[i].pName );
+                }
+            }
+            else    // Strict match
+            {
+                if( dwOffset == pGlobals->list[i].dwStartAddress )
+                    return( pGlobals->list[i].pName );
+            }
+        }
+        pSymTab = (TSYMTAB *) pSymTab->next;
+    }
+
+    return( NULL );
+}
+
+/******************************************************************************
+*                                                                             *
+*   char *SymAddress2Function(DWORD dwOffset, UINT *pRange)                   *
+*                                                                             *
+*******************************************************************************
+*
+*   Returns the symbol name associated within any function scope from any
+*   loaded symbol table.
+*
+*   Where:
+*       dwOffset is the linear address to search
+*       pRange is the (optional) pointer to receive the delta
+*
+*   Returns:
+*       NULL if there are no symbols at that address
+*       Address of the symbol name string
+*
+******************************************************************************/
+static char *SymAddress2Function(DWORD dwOffset, UINT *pRange)
+{
+    TSYMFNSCOPE *pFnScope;              // Function scope header pointer
+    TSYMTAB *pSymTab;                   // Traverse list of symbol tables
+
+    pSymTab = deb.pSymTab;
+
+    // Loop for all loaded symbol tables
+    if( pSymTab )
+    {
+        // Search static records
+        pFnScope = (TSYMFNSCOPE *)SymTabFindSection(pSymTab, HTYPE_FUNCTION_SCOPE);
+
+        while( pFnScope )
+        {
+            // If we can search the range, return the match within a function range
+            if( pRange )
+            {
+                if( dwOffset >= pFnScope->dwStartAddress && dwOffset <= pFnScope->dwEndAddress )
+                {
+                    *pRange = dwOffset - pFnScope->dwStartAddress;
+                    return( pFnScope->pName );
+                }
+            }
+            else    // Strict match
+            {
+                if( dwOffset == pFnScope->dwStartAddress )
+                    return( pFnScope->pName );
+            }
+
+            // Search the next function record
+            pFnScope = SymTabFindSectionNext(pSymTab, pFnScope, HTYPE_FUNCTION_SCOPE);
+        }
+        // Search the next symbol table
+        pSymTab = (TSYMTAB *) pSymTab->next;
+    }
+
+    return( NULL );
+}
+
+/******************************************************************************
+*                                                                             *
+*   char *SymAddress2Global(DWORD dwOffset, UINT *pRange)                     *
+*                                                                             *
+*******************************************************************************
+*
+*   Returns the symbol name associated with a current global function of ANY
+*   loaded symbol table.
+*
+*   Where:
+*       dwOffset is the linear address to search
+*       pRange is the (optional) pointer to receive the delta
+*
+*   Returns:
+*       NULL if there are no symbols at that address
+*       Address of the symbol name string
+*
+******************************************************************************/
+static char *SymAddress2Static(DWORD dwOffset, UINT *pRange)
+{
+    TSYMSTATIC *pStatic;                // Pointer to the static symbol header
+    TSYMTAB *pSymTab;                   // Traverse list of symbol tables
+    int i;
+
+    pSymTab = deb.pSymTab;
+
+    // Loop for all loaded symbol tables
+    if( pSymTab )
+    {
+        // Search static records
+        pStatic = (TSYMSTATIC *)SymTabFindSection(pSymTab, HTYPE_STATIC);
+
+        while( pStatic )
+        {
+            for(i=0; i<pStatic->nStatics; i++ )
+            {
+                // With static symbols, we dont have a range value
+                if( dwOffset == pStatic->list[i].dwAddress )
+                {
+                    if( pRange )        // Only strict match
+                        *pRange = 0;
+
+                    return( pStatic->list[i].pName );
+                }
+            }
+            // Search the next static record
+            pStatic = SymTabFindSectionNext(pSymTab, pStatic, HTYPE_STATIC);
+        }
+        // Search the next symbol table
+        pSymTab = (TSYMTAB *) pSymTab->next;
+    }
+
+    return( NULL );
+}
+
+
+/******************************************************************************
+*                                                                             *
+*   char *SymAddress2Kernel(DWORD dwOffset, UINT *pRange)                     *
+*                                                                             *
+*******************************************************************************
+*
+*   Returns the symbol name associated with a kernel export
+*
+*   Where:
+*       dwOffset is the linear address to search
+*       pRange is the (optional) pointer to receive the delta
+*
+*   Returns:
+*       NULL if there are no symbols at that address
+*       Address of the symbol name string
+*
+******************************************************************************/
+static char *SymAddress2Kernel(DWORD dwOffset, UINT *pRange)
+{
     // Storage for the return string
     static char sName[MAX_MODULE_NAME+1+MAX_SYMBOL_LEN+1];
+    void *pmodule;                      // Kernel pmodule pointer
+    TMODULE Mod;                        // Current module internal structure
+    struct module_symbol* pSym;         // Pointer to a module symbol structure
+    UINT count;                         // Symbol loop counter
+    UINT minRange = 0;                  // Default minimum range
+    char *pMinName = NULL;              // Default minimum name
 
-    // Search the current symbol table first, if loaded
-    if( deb.pSymTabCur )
+    if( pRange )
+        minRange = 2048;                // Extend the range if required
+
+    // Get the pointer to the module structure
+    pmodule = ice_get_module(NULL, &Mod);
+
+    while( pmodule )
     {
-        ;
-    }
+        // Search over the list of exported symbols (they are NOT sorted).
+        pSym = Mod.syms;
 
-    // Search kernel symbols and symbols exported by each module (ignore NULL)
-    if( wSel==GetKernelCS() && dwOffset )
-    {
-        // Get the pointer to the module structure (internal)
-        pmodule = ice_get_module(NULL, &Mod);
-
-        while( pmodule )
+        for(count=0; count<Mod.nsyms; count++)
         {
-            // Check for the init_module and cleanup_module special cases
-            if( dwOffset==(DWORD) Mod.init )
+            // If there is a sufficiently close match, store it
+            if( (dwOffset - pSym->value) <= minRange )
             {
-                // Copy the module name and append a bang and init_module name
-                sprintf(sName, "%s!init_module", Mod.name);
-
-                return( sName );
+                minRange = dwOffset - pSym->value;
+                pMinName = (char *) pSym->name;
             }
-
-            if( dwOffset==(DWORD) Mod.cleanup )
-            {
-                // Copy the module name and append a bang and cleanup_module name
-                sprintf(sName, "%s!cleanup_module", Mod.name);
-
-                return( sName );
-            }
-
-            // Get the number of symbols exported by that module
-            pSym = Mod.syms;
-
-            for(count=0; count<Mod.nsyms; count++)
-            {
-                // TODO: Check the validity of these pointers before using them!
-
-                if( pSym->value==dwOffset )
-                {
-                    // Found the matching symbol! Form its name and return. If a
-                    // module name is found, print it, otherwise it is a kernel
-
-                    sprintf(sName, "%s!%s", *Mod.name? Mod.name : "kernel", pSym->name);
-
-                    return( sName );
-                }
-
-                pSym++;
-            }
-
-            // For 2.6 kernels we also need to search the list of GPL symbols
-            if( ice_get_kernel_version() >= KERNEL_VERSION_2_6 )
-            {
-                pSym = Mod.syms_gpl;
-
-                for(count=0; count<Mod.nsyms_gpl; count++)
-                {
-                    // TODO: Check the validity of these pointers before using them!
-
-                    if( pSym->value==dwOffset )
-                    {
-                        // Found the matching symbol! Form its name and return. If a
-                        // module name is found, print it, otherwise it is a kernel
-
-                        sprintf(sName, "%s!%s", *Mod.name? Mod.name : "kernel", pSym->name);
-
-                        return( sName );
-                    }
-
-                    pSym++;
-                }
-            }
-
-            // Get the next module in the linked list
-            pmodule = ice_get_module(pmodule, &Mod);
+            pSym++;
         }
+
+        // For the 2.6 kernels do the same thing for GPL symbols
+        pSym = Mod.syms_gpl;
+
+        for(count=0; count<Mod.nsyms_gpl; count++)
+        {
+            // If there is a sufficiently close match, store it
+            if( (dwOffset - pSym->value) <= minRange )
+            {
+                minRange = dwOffset - pSym->value;
+                pMinName = (char *) pSym->name;
+            }
+            pSym++;
+        }
+
+        // Special cases are init_module() and cleanup_module() symbols
+        if( (dwOffset - (UINT)Mod.init) <= minRange )
+        {
+            minRange = dwOffset - (UINT)Mod.init;
+            pMinName = "init_module";
+        }
+
+        if( (dwOffset - (UINT)Mod.cleanup) <= minRange )
+        {
+            minRange = dwOffset - (UINT)Mod.cleanup;
+            pMinName = "cleanup_module";
+        }
+
+
+        // If we have found a satisfactory minimal range, return it
+        if( pMinName )
+        {
+            sprintf(sName, "%s!%s", Mod.name, pMinName);
+            if( pRange ) *pRange = minRange;
+
+            return( sName );
+        }
+
+        // Get the next module in the linked list
+        pmodule = ice_get_module(pmodule, &Mod);
     }
 
-    return(NULL);
+    return( NULL );
+}
+
+/******************************************************************************
+*                                                                             *
+*   char *SymAddress2Name(DWORD dwOffset, UINT *pRange)                       *
+*                                                                             *
+*******************************************************************************
+*
+*   Returns the symbol name associated with the given linear address.
+*   If the pRange is not NULL, it specifies the address to return the offset
+*   from the closest symbol. If it is NULL, a strict match is used.
+*
+*   Where:
+*       dwOffset is the linear address to search
+*       pRange is the (optional) pointer to receive the delta
+*
+*   Returns:
+*       NULL if there are no symbols at that address
+*       Address of the symbol name string
+*
+******************************************************************************/
+char *SymAddress2Name(DWORD dwOffset, UINT *pRange)
+{
+    char *pName;
+
+    if( (pName = SymAddress2Global(dwOffset, pRange)) )
+        return( pName );
+
+    if( (pName = SymAddress2Function(dwOffset, pRange)) )
+        return( pName );
+
+    if( (pName = SymAddress2Static(dwOffset, pRange)) )
+        return( pName );
+
+    if( (pName = SymAddress2Kernel(dwOffset, pRange)) )
+        return( pName );
+
+    return( NULL );
 }
 
 
@@ -929,47 +1206,6 @@ DWORD SymLinNum2Address(DWORD line)
     return( 0 );
 }
 
-
-/******************************************************************************
-*                                                                             *
-*   char *SymAddress2FunctionName(WORD wSel, DWORD dwOffset)                  *
-*                                                                             *
-*******************************************************************************
-*
-*   Returns the ASCIIZ name of the function at the given address
-*
-*   Where:
-*       wSel is the selector part of the address
-*       dwOffset is the offset part of the address
-*   Returns:
-*       NULL is no function can be found at that address
-*       Function name string
-*
-******************************************************************************/
-char *SymAddress2FunctionName(WORD wSel, DWORD dwOffset)
-{
-    TSYMGLOBAL *pGlobals;
-    int i;
-    char *pName;
-
-    if( deb.pSymTabCur )
-    {
-        // Search global functions
-        pGlobals = (TSYMGLOBAL *)SymTabFindSection(deb.pSymTabCur, HTYPE_GLOBALS);
-
-        for(i=0; i<pGlobals->nGlobals; i++ )
-        {
-            if( pGlobals->list[i].dwStartAddress==dwOffset )
-                return( pGlobals->list[i].pName );
-        }
-    }
-
-    pName = SymAddress2Name(wSel, dwOffset);
-    if( pName )
-        return( pName );
-
-    return( NULL );
-}
 
 /******************************************************************************
 *                                                                             *
@@ -1041,26 +1277,23 @@ char *SymFnScope2Local(TSYMFNSCOPE *pFnScope, DWORD ebpOffset)
 *                                                                             *
 *******************************************************************************
 *
-*   For a given address, returns all symbol information it could find
+*   For a given address, returns all symbol information that can be found
 *
 ******************************************************************************/
 BOOL cmdWhat(char *args, int subClass)
 {
-    TADDRDESC Addr;                     // Address given
+    DWORD dwAddr;                       // Linear address to look up
     char *pSymName;                     // Symbol that was found
+    UINT range;                         // Range variable
 
     if( *args!=0 )
     {
-        // Argument present: assume code selector
-        evalSel = GetKernelCS();
-        if( Expression(&Addr.offset, args, &args)  )
+        if( Expression(&dwAddr, args, &args)  )
         {
-            Addr.sel = evalSel;
-
-            pSymName = SymAddress2Name(Addr.sel, Addr.offset);
+            pSymName = SymAddress2Name(dwAddr, &range);
 
             if( pSymName )
-                dprinth(1, "%s", pSymName);
+                dprinth(1, "%s + %d", pSymName, range);
         }
     }
     else

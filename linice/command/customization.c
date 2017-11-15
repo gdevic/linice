@@ -179,7 +179,7 @@ BOOL GetUserVar(DWORD *pValue, char *sStart, int nLen)
     {
         if( pVars[i].pName )
             if( strlen(pVars[i].pName)==nLen )
-                if( strnicmp(pVars[i].pName, sStart, nLen)==0 )
+                if( !strnicmp(pVars[i].pName, sStart, nLen) )
                     break;
     }
 
@@ -263,7 +263,7 @@ static void VarMacro(char *sOp, char *args, TNAMEVAL *pObject, int nElem)
             {
                 if( pObject[i].pName )
                     if( strlen(pObject[i].pName)==nameLen )
-                        if( strnicmp(pObject[i].pName, args, nameLen)==0 )
+                        if( !strnicmp(pObject[i].pName, args, nameLen) )
                             break;
             }
 
@@ -425,7 +425,7 @@ char *MacroExpand(char *pCmd)
     {
         if( pMacros[i].pName )
             if( strlen(pMacros[i].pName)==nLen )
-                if( strnicmp(pMacros[i].pName, pCmd, nLen)==0 )
+                if( !strnicmp(pMacros[i].pName, pCmd, nLen) )
                     break;
     }
 
@@ -552,10 +552,10 @@ BOOL cmdAltkey(char *args, int subClass)
     else
     {
         // Argument is Ctrl/Alt letter
-        if( strnicmp("ctrl", args, 4)==0 )
+        if( !strnicmp("ctrl", args, 4) )
             Key |= CHAR_CTRL, args += 4;
         else
-        if( strnicmp("alt", args, 3)==0 )
+        if( !strnicmp("alt", args, 3) )
             Key |= CHAR_ALT, args += 3;
 
         // Skip spaces before a key letter
@@ -687,7 +687,7 @@ BOOL cmdSet(char *args, int subClass)
         // Find the variable name
         while( pVar->sVar )
         {
-            if( strnicmp(args, pVar->sVar, pVar->sLen)==0 )
+            if( !strnicmp(args, pVar->sVar, pVar->sLen) )
                 break;
 
             pVar++;

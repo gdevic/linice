@@ -20,22 +20,22 @@ LINKFLAGS = $(LIBS) $(LIB)
 
 #-----------------------------------------------------------------------------
 # Compiler defines:
-#	make debug			- engineering debug build (default)
-#   make nd				- engineering non-debug build
+#   make				- engineering non-debug build (default)
+#	make debug			- engineering debug build
 #-----------------------------------------------------------------------------
 
 #-----------------------------------------------------------------------------
-# Compiler defines: Engineering DEBUG build (Development, default)
+# Compiler defines: Engineering NON-DEBUG build (default)
 #-----------------------------------------------------------------------------
-
-CFLAGS = -Wall -O -I$(H)
-
-#-----------------------------------------------------------------------------
-# Compiler defines: Engineering NON-DEBUG build
-#-----------------------------------------------------------------------------
-ifeq ($(MAKECMDGOALS),nd)
 
 CFLAGS = -O3 -I$(H)
+
+#-----------------------------------------------------------------------------
+# Compiler defines: Engineering DEBUG build (Development)
+#-----------------------------------------------------------------------------
+ifeq ($(MAKECMDGOALS),debug)
+
+CFLAGS = -Wall -O -I$(H)
 
 endif
 #-----------------------------------------------------------------------------

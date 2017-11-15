@@ -115,6 +115,7 @@ extern int   ice_is_pci(void *);
 extern int ice_pci_read_config_dword(void *, int, unsigned int *);
 extern void *ice_vmalloc(unsigned int);
 extern void  ice_vfree(char *);
+extern int   ice_get_printk(void);
 extern void  ice_printk(char *);
 extern int   ice_mod_in_use(void);
 extern void  ice_mod_inc_use_count(void);

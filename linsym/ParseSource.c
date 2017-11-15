@@ -279,7 +279,12 @@ BOOL StoreSourceFiles(BYTE *pBuf)
                             // File
                             VERBOSE2 printf("Source file: %s\n", pStr );
 
-                            fprintf(fSources, "%s%s\n", pSoDir, pStr);
+                            // If the source file comes with a full path, use only that string
+                            // (dont prepend the formal path string)
+                            if( *pStr!='/' )
+                                fprintf(fSources, "%s%s\n", pSoDir, pStr);
+                            else
+                                fprintf(fSources, "%s\n", pStr);
                         }
                     }
                 break;

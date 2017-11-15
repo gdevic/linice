@@ -255,7 +255,6 @@ DWORD HistoryGetTop(void)
     return( (DWORD) p );
 }
 
-
 /******************************************************************************
 *                                                                             *
 *   DWORD PrintCmd(DWORD hView, int nDir)                                     *
@@ -335,11 +334,32 @@ DWORD HistoryDisplay(DWORD hView, int nDir)
 }
 
 
+/******************************************************************************
+*                                                                             *
+*   void HistoryDraw(void)                                                    *
+*                                                                             *
+*******************************************************************************
+*
+*   Draws the history window.
+*
+******************************************************************************/
 void HistoryDraw(void)
 {
+    static char buf[MAX_STRING];        // String to print
+    char *pBuf;                         // Pointer to a buffer
+
+    pBuf = buf;
+    buf[0] = '\0';
+
     dprint("%c%c%c", DP_SETCURSORXY, 0+1, pWin->h.Top+1);
 
-    PrintLine("");
+    // Print the current context name, if we are in the context
+    if( deb.pSymTabCur )
+    {
+        pBuf += sprintf(buf, "Context: %s", deb.pSymTabCur->sTableName);
+    }
+
+    PrintLine(buf);
 
     // Print the last screenful of the command history
     HistoryDisplay(0, 0);

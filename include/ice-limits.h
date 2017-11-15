@@ -157,5 +157,15 @@
 //
 #define MAX_INPUT_QUEUE     32
 
+//////////////////////////////////////////////////////////////////////
+// Maximum number of stack frames that we visit in the STACK window
+//
+#define MAX_STACK_LEVELS    16
+
+//////////////////////////////////////////////////////////////////////
+// Maximum number of arguments to the CALL command
+//
+#define MAX_CALL_ARGS       6
+
 
 #endif //  _ICE_LIMITS_H_

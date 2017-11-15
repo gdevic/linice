@@ -52,6 +52,8 @@
 *                                                                             *
 ******************************************************************************/
 
+extern DWORD StackExtraBuffer;
+
 /******************************************************************************
 *                                                                             *
 *   Local Defines, Variables and Macros                                       *
@@ -59,6 +61,9 @@
 ******************************************************************************/
 
 static char *pSrcEipLine = NULL;        // Cache pointer to source line for repeated src step and trace
+
+#define MAGIC_CALL_SIG      0x55AA00CC  // Signature dword for the CALL frame
+#define MAGIC_CALL_MASK     0xFFFF00FF  // Valid bits in the magic word
 
 /******************************************************************************
 *                                                                             *
@@ -657,3 +662,222 @@ BOOL cmdHalt(char *args, int subClass)
     return( TRUE );
 }
 
+
+/******************************************************************************
+*                                                                             *
+*   void UserStackPush(DWORD value)                                           *
+*                                                                             *
+*******************************************************************************
+*
+*   Pushes a DWORD value onto the user stack. If the current stack is ring-0,
+*   moves our register structure as well.
+*
+******************************************************************************/
+void UserStackPush(DWORD value)
+{
+    TADDRDESC TOS;                      // Top of Stack address
+
+    // If the SS is ring-0, we need to move register structure to make space
+    if( (deb.r->ss & 3)==0 )
+    {
+        // Move the register structure down to free up one DWORD of stack space (overlapping)
+        memmove((void *)(deb.r->esp-4-sizeof(TREGS)), (void *)(deb.r->esp-sizeof(TREGS)), sizeof(TREGS));
+
+        // Adjust the new register structure pointer
+        StackExtraBuffer -= 4;
+
+        deb.r = (TREGS *)((DWORD)deb.r - 4);
+    }
+
+    deb.r->esp -= 4;                    // Decrement the stack pointer
+
+    TOS.sel = deb.r->ss;
+    TOS.offset = deb.r->esp;
+
+    AddrSetDword(&TOS, value);          // Push the value
+}
+
+/******************************************************************************
+*                                                                             *
+*   DWORD UserStackPop(void)                                                  *
+*                                                                             *
+*******************************************************************************
+*
+*   Pops a DWORD from the user stack. If the current stack is ring-0, moves
+*   our register structure as well.
+*
+******************************************************************************/
+DWORD UserStackPop(void)
+{
+    TADDRDESC TOS;                      // Top of Stack address
+    DWORD value;                        // Value that we pop
+
+    TOS.sel = deb.r->ss;
+    TOS.offset = deb.r->esp;
+
+    value = AddrGetDword(&TOS);         // Pop the value
+
+    // If the SS is ring-0, we need to move register structure back
+    if( (deb.r->ss & 3)==0 )
+    {
+        // Move the register structure up to reclaim one DWORD of stack space (overlapping)
+        memmove((void *)(deb.r->esp+4-sizeof(TREGS)), (void *)(deb.r->esp-sizeof(TREGS)), sizeof(TREGS));
+
+        // Adjust the new register structure pointer
+        StackExtraBuffer += 4;
+
+        deb.r = (TREGS *)((DWORD)deb.r + 4);
+    }
+
+    deb.r->esp += 4;                    // Increment the stack pointer
+
+    return( value );
+}
+
+/******************************************************************************
+*                                                                             *
+*   BOOL cmdCall(char *args, int subClass)                                    *
+*                                                                             *
+*******************************************************************************
+*
+*   Executes a function call. This is an added function to Linice only.
+*
+*   Where:
+*       Symtax of the function is:
+*       CALL <address> ( {[arg],[arg]} )
+*
+******************************************************************************/
+BOOL cmdCall(char *args, int subClass)
+{
+    char buf[MAX_STRING], *pBuf = buf;  // Buffer to print final command
+    DWORD Args[MAX_CALL_ARGS];          // Array to hold function arguments
+    DWORD Addr, RetPtr;                 // Function address
+    UINT i, nArg = 0;                   // Index of the argument
+    char *pOpen, *pClose;               // Temp pointer to parenthesis
+
+    // For this function to work, we do need arguments
+    if( *args )
+    {
+        // It is rather peculiar syntax where the opening bracket would be
+        // eaten by our expression evaluator, so we zap it
+        pOpen = strchr(args, '(');
+        pClose = strrchr(args, ')');
+
+        // Also zap the trailing bracket, which has to be specified
+        if( pOpen && pClose )
+        {
+            // Zap the set of brackets, that also means we cannot have any
+            // expression involving the parenthesis to calculate the address part
+            *pOpen = 0;
+            *pClose = 0;
+
+            if( Expression(&Addr, args, &args) )
+            {
+                // Reading the list of arguments now
+                args = pOpen;
+
+                do
+                {
+                    while( *++args==' ' );
+
+                    // If we are done reading, do a call
+                    if( !*args )
+                    {
+                        // Print the final command so the user knows what is being executed
+                        pBuf += sprintf(buf, "CALL %08X ( ", Addr);
+
+                        for(i=0; i<nArg; i++)
+                            pBuf += sprintf(pBuf, "%X%c", Args[i], (i+1)==nArg?' ':',');
+
+                        dprinth(1, "%s)", buf);
+
+                        // Issue the actual call by setting the debugee's stack frame
+                        // and 'returning' to that address
+
+                        // Set up the stack frame to look like this:
+                        //    [  ???  ]       previous ESP
+                        //    Saved EIP
+                        //    MAGIC_CALL_SIG     <--+   contains CC byte (INT3) + number of arguments [15:8]
+                        //    [ args ]              |
+                        //    ret ------------------+
+
+                        UserStackPush(deb.r->eip);
+                        UserStackPush(MAGIC_CALL_SIG | (nArg << 8));
+
+                        RetPtr = deb.r->esp;            // This is where we set the return address to
+
+                        // Build up the stack frame from right to left ("C" convention)
+                        for(i=nArg; i; i--)
+                            UserStackPush(Args[i-1]);
+
+                        // Push the address to return to
+                        UserStackPush(RetPtr);
+
+                        deb.r->eip = Addr;      // Set the new EIP and continue into it
+
+                        return( FALSE );
+                    }
+
+                    if( Expression(&Args[nArg], args, &args) )
+                    {
+                        // We got a function argument, carefully increment the index
+                        if( nArg++ == MAX_CALL_ARGS )
+                            break;
+
+                        // If there is a next character, it should be argument separator
+                        if( *args && *args!=',' )
+                            break;
+                    }
+                    else
+                        break;
+                }
+                while( TRUE );
+            }
+        }
+    }   // Any path to out of this function here is a syntax error
+
+    PostError(ERR_SYNTAX, 0);
+
+    return( TRUE );
+}
+
+/******************************************************************************
+*                                                                             *
+*   void FixupUserCallFrame(void)                                             *
+*                                                                             *
+*******************************************************************************
+*
+*   Called from the interrupt routine to detect the case where we are returning
+*   from the call frame. It fixes it up by popping the parameters that we
+*   pushed and displays the result of a call (EAX register)
+*
+******************************************************************************/
+void FixupUserCallFrame(void)
+{
+    TADDRDESC Addr;
+    UINT i;
+
+    Addr.sel = deb.r->cs;
+    Addr.offset = deb.r->eip - 1;       // After INT3 (CC), EIP points to the _next_ instruction...
+
+    // Get the DWORD from the current CS:EIP and compare it to our magic signature
+    i = AddrGetDword(&Addr);
+
+    if( (i & MAGIC_CALL_MASK)==MAGIC_CALL_SIG )
+    {
+        // We need to clean up the call stack frame that we created in the cmdCall()
+        // Get the number of dwords to pop them ("i" is already fetched)
+        i = (i >> 8) & 0xFF;
+        i++;                            // Add one for the MAGIC_CALL_SIG parameter
+        while( i-- )                    // Pop so many arguments
+            UserStackPop();
+
+        // We do this assignment on 2 separate lines because gcc was optimizing it
+        // into an incorrect access (it did not know deb.r moved). I really dont
+        // want to declare it volatile at this point.
+        i = UserStackPop();             // Get the previous EIP from the user stack
+        deb.r->eip = i;
+
+        dprinth(1, "Return from CALL = %08X", deb.r->eax);
+    }
+}

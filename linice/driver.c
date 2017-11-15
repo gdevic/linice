@@ -113,6 +113,7 @@ extern int UserRemoveSymbolTable(void *pSymtab);
 extern void UnHookSwitch(void);
 extern BOOL KeyboardHook(DWORD handle_kbd_event, DWORD handle_scancode);
 extern void KeyboardUnhook();
+extern void UnhookPrintk(void);
 extern void UnHookDebuger(void);
 extern void UnHookSyscall(void);
 extern void DisarmBreakpoints(void);
@@ -270,6 +271,9 @@ int IceInitModule(void)
 void IceCleanupModule(void)
 {
     INFO("cleanup_module\n");
+
+    // Unhook the debug out printk() hook
+    UnhookPrintk();
 
     // Clear all breakpoints; this will reinstate the original BYTE code at the places of embedded INT3,
     // it will also disable HW breakpoints (DR0...DR3)

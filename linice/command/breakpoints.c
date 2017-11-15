@@ -136,6 +136,17 @@ static char *pBuf;
 
 static DWORD dr[8];                     // Temp stored verification values
 
+
+// BPIO types (stored in the Access field)
+static const char *sBpio[] = { "", "R ", "W ", "RW " };
+
+// BPM sizes (encoded in the type)
+static const char *sBpm[] = { "B ", "W ", "", "D " };
+
+// DR register name from a bitfield
+static const char *sDr[] =  { "", "DR0 ", "DR1 ", "", "DR2 ", "", "", "", "DR3 " };
+
+
 /******************************************************************************
 *                                                                             *
 *   External Functions                                                        *
@@ -340,7 +351,7 @@ BOOL cmdBp(char *args, int subClass)
 
 /******************************************************************************
 *                                                                             *
-*   char *GetBpFormatString(TBP *pBp)                                         *
+*   char *GetBpFormatStringList(TBP *pBp)                                     *
 *                                                                             *
 *******************************************************************************
 *
@@ -348,56 +359,86 @@ BOOL cmdBp(char *args, int subClass)
 *   It uses the temp static buffer.
 *
 ******************************************************************************/
-static char *GetBpFormatString(TBP *pBp)
+static char *GetBpFormatStringList(TBP *pBp)
 {
-    // BPIO types (stored in the Access field)
-    static const char *sBpio[] = { "", "R ", "W ", "RW " };
-
-    // BPM sizes (encoded in the type)
-    static const char *sBpm[] = { "B ", "W ", "", "D " };
-
-    // DR register name from a bitfield
-    static const char *sDr[] =  { "", "DR0 ", "DR1 ", "", "DR2 ", "", "", "", "DR3 " };
-
     // Reset the string buffer pointer
     pBuf = Buf;
 
-    // Check the breakpoint type flag and print accordingly
+    // Check the breakpoint type flag and print accordingly, including the command
     switch( pBp->Type )
     {
         case BP_TYPE_BPX:
-            pBuf += sprintf(pBuf, "BPX %04X:%08X %s%s",
+            pBuf += sprintf(pBuf, "BPX %04X:%08X %s%s %s",
                 pBp->address.sel, pBp->address.offset,
                 sDr[pBp->DrRequest],
-                (pBp->Flags & BP_ONETIME)?"O ":"");
+                (pBp->Flags & BP_ONETIME)?"O ":"",
+                pBp->pCmd);
             break;
 
         case BP_TYPE_BPIO:
-            pBuf += sprintf(pBuf, "BPIO %X %s%s%s",
+            pBuf += sprintf(pBuf, "BPIO %X %s%s%s %s",
                 pBp->address.offset,
                 sBpio[pBp->Access],
                 sDr[pBp->DrRequest],
-                (pBp->Flags & BP_ONETIME)?"O ":"");
+                (pBp->Flags & BP_ONETIME)?"O ":"",
+                pBp->pCmd);
             break;
 
         case BP_TYPE_BPMB:
         case BP_TYPE_BPMW:
         case BP_TYPE_BPMD:
-            pBuf += sprintf(pBuf, "BPM%s %04X:%08X %s%s%s",
+            pBuf += sprintf(pBuf, "BPM%s %04X:%08X %s%s%s %s",
                 sBpm[pBp->Type - BP_TYPE_BPMB],
                 pBp->address.sel, pBp->address.offset,
                 sBpio[pBp->Access],
                 sDr[pBp->DrRequest],
-                (pBp->Flags & BP_ONETIME)?"O ":"");
+                (pBp->Flags & BP_ONETIME)?"O ":"",
+                pBp->pCmd);
             break;
     }
 
-    // In all cases append optional IF and DO statements
-    if( pBp->pIF )
-        pBuf += sprintf(pBuf, "IF %s ", pBp->pIF);
-
+    // Optional 'DO' statement is always separated, so append it now
     if( pBp->pDO )
-        pBuf += sprintf(pBuf, "DO %s", pBp->pDO);
+        pBuf += sprintf(pBuf, " DO %s", pBp->pDO);
+
+    return(Buf);
+}
+
+/******************************************************************************
+*                                                                             *
+*   char *GetBpFormatStringEdit(TBP *pBp)                                     *
+*                                                                             *
+*******************************************************************************
+*
+*   Forms a string with the given breakpoint description for editing. This
+*   format is simpler than the previous one.
+*   It uses the temp static buffer.
+*
+******************************************************************************/
+static char *GetBpFormatStringEdit(TBP *pBp)
+{
+    // Reset the string buffer pointer
+    pBuf = Buf;
+
+    // Print the command based on the the breakpoint type
+    switch( pBp->Type )
+    {
+        case BP_TYPE_BPX:  pBuf += sprintf(pBuf, "BPX %s", pBp->pCmd);
+            break;
+
+        case BP_TYPE_BPIO: pBuf += sprintf(pBuf, "BPIO %s", pBp->pCmd);
+            break;
+
+        case BP_TYPE_BPMB:
+        case BP_TYPE_BPMW:
+        case BP_TYPE_BPMD:
+            pBuf += sprintf(pBuf, "BPM%s %s", sBpm[pBp->Type - BP_TYPE_BPMB], pBp->pCmd);
+            break;
+    }
+
+    // Optional 'DO' statement is always separated, so append it now
+    if( pBp->pDO )
+        pBuf += sprintf(pBuf, " DO %s", pBp->pDO);
 
     return(Buf);
 }
@@ -429,7 +470,7 @@ BOOL cmdBl(char *args, int subClass)
                 DP_SETCOLINDEX, (index==deb.bpIndex)? COL_BOLD : COL_NORMAL,
                 index,
                 (bp[index].Flags & BP_ENABLED)? " ":"*",
-                GetBpFormatString(&bp[index]) )==FALSE)
+                GetBpFormatStringList(&bp[index]) )==FALSE)
                 break;
         }
     }
@@ -493,9 +534,10 @@ BOOL cmdBpet(char *args, int subClass)
                         hint = index;
                     }
 
-                    // Prepare the command line to be edited
+                    // Prepare the string given the original breakpoint command
+                    // This way we can re-evaluate expressions and keep the user syntax
 
-                    pCmdEdit = GetBpFormatString(&bp[index]);
+                    pCmdEdit = GetBpFormatStringEdit(&bp[index]);
 
                     return(TRUE);
                 }
@@ -533,7 +575,7 @@ BOOL BPstat(int index, int n)
     if( n==1 ) nLine = 1;               // Reset the line counter in the first call
 
     if(dprinth(nLine++, "Breakpoint Statistics for #%02X %s", index, (p->Flags & BP_ENABLED)?"" : "(disabled)")
-    && dprinth(nLine++, "   %s", GetBpFormatString(p) )
+    && dprinth(nLine++, "   %s", GetBpFormatStringList(p) )
     && dprinth(nLine++, "   Cond    %s", p->pIF? p->pIF : "No" )
     && dprinth(nLine++, "   Action  %s", p->pDO? p->pDO : "No" )
     && dprinth(nLine++, "Totals")

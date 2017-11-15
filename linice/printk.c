@@ -1,10 +1,10 @@
 /******************************************************************************
 *                                                                             *
-*   Module:     watch.c                                                       *
+*   Module:     printk.c                                                      *
 *                                                                             *
-*   Date:       09/11/2002                                                    *
+*   Date:       01/12/05                                                      *
 *                                                                             *
-*   Copyright (c) 2002-2004 Goran Devic                                       *
+*   Copyright (c) 2000-2005 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -26,25 +26,27 @@
 
     Module Description:
 
-        This module contans code to display and manage watch window and
-        associated operations.
+        This module contains the printk hook and supports the functionality
+        of capturing the kernel printk() into Linice command buffer.
 
 *******************************************************************************
 *                                                                             *
-*   Changes:                                                                  *
+*   Major changes:                                                            *
 *                                                                             *
 *   DATE     DESCRIPTION OF CHANGES                               AUTHOR      *
 * --------   ---------------------------------------------------  ----------- *
-* 09/11/02   Original                                             Goran Devic *
+* 01/12/05   Initial version                                      Goran Devic *
 * --------   ---------------------------------------------------  ----------- *
 *******************************************************************************
 *   Include Files                                                             *
 ******************************************************************************/
 
-#include "module-header.h"              // Versatile module header file
+#include "module-header.h"              // Include types commonly defined for a module
 
 #include "clib.h"                       // Include C library header file
+#include "iceface.h"                    // Include iceface module stub protos
 #include "ice.h"                        // Include main debugger structures
+#include "debug.h"                      // Include our dprintk()
 
 /******************************************************************************
 *                                                                             *
@@ -58,17 +60,8 @@
 *                                                                             *
 ******************************************************************************/
 
-/******************************************************************************
-*                                                                             *
-*   External Functions                                                        *
-*                                                                             *
-******************************************************************************/
-
-extern BOOL Evaluate(TExItem *pItem, char *pExpr, char **ppNext, BOOL fSymbolsValueOf);
-extern void PrettyPrintVariableName(char *pString, char *pName, TSYMTYPEDEF1 *pType1);
-extern void MakeSelectedVisible(TLIST *pList, int nLines);
-extern BOOL ExItemCompare(TExItem *pItem1, TExItem *pItem2);
-
+static BYTE PrintkKernelCodeLine[5];    // Buffer to store original code bytes
+static BYTE *PrintkAddress = NULL;      // Address of the printk() function
 
 /******************************************************************************
 *                                                                             *
@@ -78,121 +71,94 @@ extern BOOL ExItemCompare(TExItem *pItem1, TExItem *pItem2);
 
 /******************************************************************************
 *                                                                             *
-*   BOOL cmdWatch(char *args, int subClass)                                   *
+*   asmlinkage void PrintkHandler(char *format, ...)                          *
 *                                                                             *
 *******************************************************************************
 *
-*   Adds a new expression / variable watch to the list of watches
+*   This function gets called instead of kernel printk() after we are hooked.
 *
 ******************************************************************************/
-BOOL cmdWatch(char *args, int subClass)
+asmlinkage void PrintkHandler(char *format, ...)
 {
-    TLISTITEM *pItem;                   // Item to add to watch list
-    TExItem ExItem;                     // Expression item evaluated
+    static char printBuf[1024];
+    char *p;
+    va_list arg;
 
+    // TODO: It is possible to overflow the buffer by printk()-ing a large string. Fix it.
 
-    // Evaluate a new watch expression and get its expression node result
-    if( Evaluate(&ExItem, args, NULL, TRUE) )
+    // Print the line into our local buffer so we can clean it up and print
+    va_start( arg, format );
+    ivsprintf(printBuf, format, arg);
+    va_end(arg);
+
+    // Since we are using our own print driver which has support for more
+    // output options, we need to clean the incoming string from all
+    // non-ASCII characters to avoid the string messing up the output.
+    for(p=printBuf; *p ; p++ )
     {
-        // Check that the given watch item is not a duplicate
-        if( !ListFindItem(&deb.Watch, &ExItem) )
-        {
-            // Add a new item to the end of the list
-            // New item will also be marked as selected
-            if((pItem = ListAdd(&deb.Watch)))
-            {
-                // Copy the expression node
-                memcpy(&pItem->Item, &ExItem, sizeof(TExItem));
-
-                // We can delete root watch variables
-                pItem->fCanDelete = TRUE;
-
-                // Copy the expression string into the list item
-                strcpy(pItem->Name, args);
-
-                PrettyPrintVariableName(pItem->String, pItem->Name, &pItem->Item.Type);
-
-                // When we are adding a watch expression, make sure it is visible
-                MakeSelectedVisible(&deb.Watch, pWin->w.nLines );
-
-                // Successfully added a watch item, redraw the window
-                WatchDraw(TRUE);
-            }
-            else
-                dprinth(1, "Unable to add a watch.");
-        }
-        else
-            dprinth(1, "Duplicate watch expression!");
+        if( !isprint(*p) )
+            *p = ' ';
     }
 
-    return( TRUE );
-}
-
-
-void WatchDraw(BOOL fForce)
-{
-    ListDraw(&deb.Watch, &pWin->w, fForce);
+    dprinth(1, "%s", printBuf);
 }
 
 /******************************************************************************
 *                                                                             *
-*   void RecalculateWatch()                                                   *
+*   void HookPrintk(void)                                                     *
 *                                                                             *
 *******************************************************************************
 *
-*   Recalculates all watch expressions. This is called after a context change
-*   since the watches may go in and out of context, so here we re-evaluate
-*   each of them and set up new result string. More detailed behavior is
-*   explained in the code.
-*
-*   Watch needs to be redrawn after this change - here we only update internal
-*   lists and buffers.
+*   Hooks the kernel printk() function so we can capture the debug stream.
 *
 ******************************************************************************/
-void RecalculateWatch()
+void HookPrintk(void)
 {
-    TLISTITEM *pItem = NULL;            // Current item
-    TExItem ExItem;                     // Expression item to be evaluated
+    INFO("HookPrintk()\n");
 
-    // Walk the list of root items and check that the expression is still valid
-    while( (pItem = ListGetNext(&deb.Watch, pItem)) )
+    if( !PrintkAddress )
     {
-        // Check the expression
-        if( Evaluate(&ExItem, pItem->Name, NULL, TRUE) )
+        PrintkAddress = (BYTE *) ice_get_printk();
+
+        if( PrintkAddress )
         {
-            // Expression evaluated correctly, but we dont know if it is the same variable
-            // so compare the ExItem data structures
-            if( ExItemCompare(&ExItem, &pItem->Item) )
-            {
-                // Values are identical, no need to do anything here
-                ;
-            }
-            else
-            {
-                // Values are not identical - it is a different variable
+            // Store the original code bytes into our buffer
+            memcpy(PrintkKernelCodeLine, PrintkAddress, sizeof(PrintkKernelCodeLine));
 
-                // Assign the new item data descriptor
-                memcpy(&pItem->Item, &ExItem, sizeof(TExItem));
-
-                // Need to collapse item and reassign a new value
-                ListDel(&deb.Watch, pItem, FALSE);
-
-                PrettyPrintVariableName(pItem->String, pItem->Name, &pItem->Item.Type);
-            }
+            // Form the hook jump into our own function
+            *(BYTE *) (PrintkAddress+0) = 0xE9;      // JMP <rel32>
+            *(DWORD *)(PrintkAddress+1) = (DWORD) PrintkHandler - ((DWORD) PrintkAddress + 5);
         }
         else
         {
-            // Watch item did not evaluate correctly, so the expression is not
-            // valid in this context. Collapse it and mark it invalid
-            ListDel(&deb.Watch, pItem, FALSE);
-
-            // Mark the type invalid
-            pItem->Item.bType = 0;
-
-            memset(&pItem->Item, 0, sizeof(TExItem));
+            INFO("printk() NOT hooked!\n");
         }
     }
-
-    // Clear any logged error during this operation
-    deb.errorCode = NOERROR;
+    else
+    {
+        dprinth(1, "kernel printk() already hooked!");
+    }
 }
+
+/******************************************************************************
+*                                                                             *
+*   void UnhookPrintk(void)                                                   *
+*                                                                             *
+*******************************************************************************
+*
+*   Unhooks the kernel printk() function.
+*
+******************************************************************************/
+void UnhookPrintk(void)
+{
+    INFO("PrintkUnhook()\n");
+
+    if( PrintkAddress )
+    {
+        // Restore the original code bytes from our buffer
+        memcpy(PrintkAddress, PrintkKernelCodeLine, sizeof(PrintkKernelCodeLine));
+
+        PrintkAddress = NULL;
+    }
+}
+

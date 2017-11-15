@@ -106,6 +106,11 @@ void ice_printk(char *p)
     printk("%s", p);
 }
 
+int ice_get_printk(void)
+{
+    return( 0 );
+}
+
 unsigned int ice_get_flags()
 {
     return( 0 );

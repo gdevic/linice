@@ -1,10 +1,10 @@
 /******************************************************************************
 *                                                                             *
-*   Module:     watch.c                                                       *
+*   Module:     stack.c                                                       *
 *                                                                             *
-*   Date:       09/11/2002                                                    *
+*   Date:       01/14/2002                                                    *
 *                                                                             *
-*   Copyright (c) 2002-2004 Goran Devic                                       *
+*   Copyright (c) 2002-2005 Goran Devic                                       *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -26,8 +26,7 @@
 
     Module Description:
 
-        This module contans code to display and manage watch window and
-        associated operations.
+        This module contans code to display stack window and stack data.
 
 *******************************************************************************
 *                                                                             *
@@ -35,7 +34,7 @@
 *                                                                             *
 *   DATE     DESCRIPTION OF CHANGES                               AUTHOR      *
 * --------   ---------------------------------------------------  ----------- *
-* 09/11/02   Original                                             Goran Devic *
+* 01/14/02   Original                                             Goran Devic *
 * --------   ---------------------------------------------------  ----------- *
 *******************************************************************************
 *   Include Files                                                             *
@@ -58,141 +57,161 @@
 *                                                                             *
 ******************************************************************************/
 
+static char buf[MAX_STRING];            // Buffer to store lines to be written out
+
 /******************************************************************************
 *                                                                             *
 *   External Functions                                                        *
 *                                                                             *
 ******************************************************************************/
 
-extern BOOL Evaluate(TExItem *pItem, char *pExpr, char **ppNext, BOOL fSymbolsValueOf);
-extern void PrettyPrintVariableName(char *pString, char *pName, TSYMTYPEDEF1 *pType1);
-extern void MakeSelectedVisible(TLIST *pList, int nLines);
-extern BOOL ExItemCompare(TExItem *pItem1, TExItem *pItem2);
-
-
 /******************************************************************************
 *                                                                             *
-*   Functions                                                                 *
-*                                                                             *
-******************************************************************************/
-
-/******************************************************************************
-*                                                                             *
-*   BOOL cmdWatch(char *args, int subClass)                                   *
+*   void StackDraw(BOOL fForce)                                               *
 *                                                                             *
 *******************************************************************************
 *
-*   Adds a new expression / variable watch to the list of watches
+*   Draws stack frame
 *
 ******************************************************************************/
-BOOL cmdWatch(char *args, int subClass)
+void StackDraw(BOOL fForce)
 {
-    TLISTITEM *pItem;                   // Item to add to watch list
-    TExItem ExItem;                     // Expression item evaluated
+    ListDraw(&deb.Stack, &pWin->s, fForce);
+}
 
+/******************************************************************************
+*                                                                             *
+*   BOOL FillStackList(DWORD dwEBP, DWORD dwEIP, BOOL fLocals)                *
+*                                                                             *
+*******************************************************************************
+*
+*   Rebuilds the stack list based on the given stack frame and code context.
+*
+*   Where:
+*       dwEBP is the pointer to the stack frame
+*       dwEIP is the code context
+*       fLocals if TRUE, will list local symbols as well (NOT IMPLEMENTED YET)
+*   Returns:
+*       TRUE Stack list has been rebuilt
+*
+******************************************************************************/
+BOOL FillStackList(DWORD dwEBP, DWORD dwEIP, BOOL fLocals)
+{
+    TLISTITEM *pItem;                   // List item that we are adding
+    TADDRDESC Addr;                     // Address descriptor to use when fetching values
+    UINT level = 0;                     // Stack frame level count
+    int range;                          // Symbol offset range variable
+    char *pBuf, *pName;                 // Temp pointer to the write out buffer and the name
 
-    // Evaluate a new watch expression and get its expression node result
-    if( Evaluate(&ExItem, args, NULL, TRUE) )
+    Addr.sel = deb.r->ss;
+    Addr.offset = dwEBP;
+
+    // Start at the current frame and dump all frames walking back (up the stack).
+    //   | return address |  EBP + 4
+    //   | saved EBP      |  EBP
+
+    // We walk the number of levels until we hit an invalid pointer
+    while( level++ < MAX_STACK_LEVELS )
     {
-        // Check that the given watch item is not a duplicate
-        if( !ListFindItem(&deb.Watch, &ExItem) )
-        {
-            // Add a new item to the end of the list
-            // New item will also be marked as selected
-            if((pItem = ListAdd(&deb.Watch)))
-            {
-                // Copy the expression node
-                memcpy(&pItem->Item, &ExItem, sizeof(TExItem));
+        // Get the original value of the EBP on the stack and the return address
+        if( !VerifyRange(&Addr, 2 * sizeof(DWORD)) )
+            break;
 
-                // We can delete root watch variables
-                pItem->fCanDelete = TRUE;
+        // Print the current stack frame address of the RET pointer and where it points to
+        pBuf = buf;                     // Reset the write pointer
 
-                // Copy the expression string into the list item
-                strcpy(pItem->Name, args);
+        // Get the previous EBP from the current stack frame
+        dwEBP = AddrGetDword(&Addr);
 
-                PrettyPrintVariableName(pItem->String, pItem->Name, &pItem->Item.Type);
+        // Get the return value from the current stack frame
+        Addr.offset += 4;
+        dwEIP = AddrGetDword(&Addr);
+        Addr.offset -= 4;
 
-                // When we are adding a watch expression, make sure it is visible
-                MakeSelectedVisible(&deb.Watch, pWin->w.nLines );
+        // If the EIP is not valid, stop the traversal because the stack frame
+        // if probably not valid any more
+        if( GlobalReadBYTE((BYTE *)&range, dwEIP)==FALSE )
+            break;
 
-                // Successfully added a watch item, redraw the window
-                WatchDraw(TRUE);
-            }
-            else
-                dprinth(1, "Unable to add a watch.");
-        }
-        else
-            dprinth(1, "Duplicate watch expression!");
+        // Print the TOS context: return address and the function it points to
+        pBuf += sprintf(pBuf, "%08X %08X", Addr.offset, dwEIP);
+
+        // Find the closest symbol to the EIP that we found on the stack
+        pName = SymAddress2Name(dwEIP, &range);
+
+        // Print it if we found any
+        if( pName )
+            pBuf += sprintf(pBuf, "   %s+%X", pName, range);
+
+        // Finally, add the string to the stack list
+        if((pItem = ListAdd(&deb.Stack))==NULL)
+            break;
+
+        sprintf(pItem->String, "%s", buf);
+
+        // Set the frame pointer to the next frame in the chain
+        Addr.offset = dwEBP;
     }
 
     return( TRUE );
 }
 
-
-void WatchDraw(BOOL fForce)
-{
-    ListDraw(&deb.Watch, &pWin->w, fForce);
-}
-
 /******************************************************************************
 *                                                                             *
-*   void RecalculateWatch()                                                   *
+*   BOOL cmdStack(char *args, int subClass)                                   *
 *                                                                             *
 *******************************************************************************
 *
-*   Recalculates all watch expressions. This is called after a context change
-*   since the watches may go in and out of context, so here we re-evaluate
-*   each of them and set up new result string. More detailed behavior is
-*   explained in the code.
-*
-*   Watch needs to be redrawn after this change - here we only update internal
-*   lists and buffers.
+*   Stack command. It will always use DS register and assume SS==DS since that
+*   is the case in Linux in kernel mode as well as user code.
 *
 ******************************************************************************/
-void RecalculateWatch()
+BOOL cmdStack(char *args, int subClass)
 {
-    TLISTITEM *pItem = NULL;            // Current item
-    TExItem ExItem;                     // Expression item to be evaluated
+    DWORD dwEBP, dwEIP;                 // Values that we read from a stack frame
+    BOOL fLocals = FALSE;               // By default, dont display locals
 
-    // Walk the list of root items and check that the expression is still valid
-    while( (pItem = ListGetNext(&deb.Watch, pItem)) )
+    dwEBP = deb.r->ebp;                 // Default EBP is the current one
+    dwEIP = deb.r->eip;                 // And the EIP the same
+
+    if( *args )
     {
-        // Check the expression
-        if( Evaluate(&ExItem, pItem->Name, NULL, TRUE) )
+        // Option -v will cause all locals to be displayed as well
+        if( !strnicmp(args, "-v", 2) )
         {
-            // Expression evaluated correctly, but we dont know if it is the same variable
-            // so compare the ExItem data structures
-            if( ExItemCompare(&ExItem, &pItem->Item) )
+            args += 2;
+            fLocals = TRUE;
+
+            // Skip spaces that may be after this option and before the next one
+            while( *args==' ' ) args++;
+        }
+        // Optional address of a valid stack frame
+        if( *args )
+        {
+            // Evaluate expression for the address portion after which should be nothing
+            if( Expression(&dwEBP, args, &args) && !*args )
             {
-                // Values are identical, no need to do anything here
+                // We have a new starting EBP frame pointer, but since it has changed,
+                // there is no way to know what EIP context we are in to be able to
+                // find the information about locals.
                 ;
             }
             else
             {
-                // Values are not identical - it is a different variable
-
-                // Assign the new item data descriptor
-                memcpy(&pItem->Item, &ExItem, sizeof(TExItem));
-
-                // Need to collapse item and reassign a new value
-                ListDel(&deb.Watch, pItem, FALSE);
-
-                PrettyPrintVariableName(pItem->String, pItem->Name, &pItem->Item.Type);
+                PostError(ERR_SYNTAX, 0);   // Syntax error evaluating
+                return( TRUE );
             }
-        }
-        else
-        {
-            // Watch item did not evaluate correctly, so the expression is not
-            // valid in this context. Collapse it and mark it invalid
-            ListDel(&deb.Watch, pItem, FALSE);
-
-            // Mark the type invalid
-            pItem->Item.bType = 0;
-
-            memset(&pItem->Item, 0, sizeof(TExItem));
         }
     }
 
-    // Clear any logged error during this operation
-    deb.errorCode = NOERROR;
+    // Build the list of stack information
+
+    ListDelAll(&deb.Stack);
+
+    FillStackList(dwEBP, dwEIP, fLocals);
+
+    StackDraw(TRUE);
+
+    return( TRUE );
 }
+

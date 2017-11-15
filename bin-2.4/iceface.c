@@ -504,6 +504,11 @@ void ice_printk(char *p)
     printk(p);
 }
 
+int ice_get_printk(void)
+{
+    return( (int)printk );
+}
+
 void *ice_get_module(void *pm, TMODULE *pMod)
 {
     if( pm==NULL )

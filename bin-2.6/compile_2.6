@@ -1,10 +1,7 @@
 #!/bin/bash
 
 mv linice_kernel.o linice_kernel.o_shipped
-echo ------------------------------------------------------------------------------
-echo Make sure that your /usr/src/linux is a symbolic link to your kernel sources
-echo ------------------------------------------------------------------------------
-make -C /usr/src/linux SUBDIRS=$PWD modules
+make -C /lib/modules/$(uname -r)/build SUBDIRS=$PWD modules
 
 echo ------------------------------------------------------------------------------
 echo Creating linice_`uname -r` and copying kernel-dependent module...

@@ -28,7 +28,7 @@
 
         This module contains code for variable lists, that is, a set
         of expressions or variables. It supports functionality of the
-        locals and watch window.
+        locals, stack and watch windows.
 
         The list items are stored in the linked list structure, where each node
         may have a child item (element) which contains another list:
@@ -147,7 +147,7 @@ BOOL ListFindItem(TLIST *pList, TExItem *pExItem)
 
 /******************************************************************************
 *                                                                             *
-*   TLISTITEM *ListGetNewItem()                                               *
+*   TLISTITEM *ListGetNewItem(void)                                           *
 *                                                                             *
 *******************************************************************************
 *
@@ -158,7 +158,7 @@ BOOL ListFindItem(TLIST *pList, TExItem *pExItem)
 *       NULL - allocation failed
 *
 ******************************************************************************/
-TLISTITEM *ListGetNewItem()
+TLISTITEM *ListGetNewItem(void)
 {
     TLISTITEM *pItem;                   // New item
 
@@ -170,7 +170,7 @@ TLISTITEM *ListGetNewItem()
 
 /******************************************************************************
 *                                                                             *
-*   TLISTITEM *ListAdd(TLIST *pList, TFRAME *pFrame)                          *
+*   TLISTITEM *ListAdd(TLIST *pList)                                          *
 *                                                                             *
 *******************************************************************************
 *
@@ -184,7 +184,7 @@ TLISTITEM *ListGetNewItem()
 *       NULL if the item cannot be added to the list
 *
 ******************************************************************************/
-TLISTITEM *ListAdd(TLIST *pList, TFRAME *pFrame)
+TLISTITEM *ListAdd(TLIST *pList)
 {
     TLISTITEM *pItem;                   // New item
     TLISTITEM *pEnd;                    // Pointer to the end of the list
@@ -399,7 +399,7 @@ static void ListDelRecurse(TLISTITEM *pItem)
 
 /******************************************************************************
 *                                                                             *
-*   void ListDel(TLIST *pList, TLISTITEM *pItem, BOOL fDelRoot)               *
+*   BOOL ListDel(TLIST *pList, TLISTITEM *pItem, BOOL fDelRoot)               *
 *                                                                             *
 *******************************************************************************
 *
@@ -468,6 +468,21 @@ BOOL ListDel(TLIST *pList, TLISTITEM *pItem, BOOL fDelRoot)
 
 /******************************************************************************
 *                                                                             *
+*   void ListDelAll(TLIST *pList)                                             *
+*                                                                             *
+*******************************************************************************
+*
+*   Deletes a complete list.
+*
+******************************************************************************/
+void ListDelAll(TLIST *pList)
+{
+    while( pList->pList )
+        ListDel(pList, pList->pList, TRUE);
+}
+
+/******************************************************************************
+*                                                                             *
 *   TLISTITEM *ListGetNext(TLIST *pList, TLISTITEM *pItem)                    *
 *                                                                             *
 *******************************************************************************
@@ -526,12 +541,20 @@ static void ListPrintRecurse(TLIST *pList, TLISTITEM *pItem, BOOL *fPrintNext, i
                 col = COL_NORMAL;
 
             // Take into account possible shift in X direction
-            // If the list is TYPEDEF, print only element name, not the value
-            if( pList->ID==LIST_ID_TYPE )
-                sprintf(buf, "%s%s;", sIndent + strlen(sIndent) - pItem->nLevel * 2, pItem->String);
-            else
-                sprintf(buf, "%s%s = %s", sIndent + strlen(sIndent) - pItem->nLevel * 2, pItem->String, pItem->Value);
+            // If the list is TYPEDEF or STACK, print only element name, not the value
+            switch( pList->ID )
+            {
+                case LIST_ID_TYPE:
+                    sprintf(buf, "%s%s;", sIndent + strlen(sIndent) - pItem->nLevel * 2, pItem->String);
+                    break;
 
+                case LIST_ID_STACK:
+                    sprintf(buf, "%s%s", sIndent + strlen(sIndent) - pItem->nLevel * 2, pItem->String);
+                    break;
+
+                default:
+                    sprintf(buf, "%s%s = %s", sIndent + strlen(sIndent) - pItem->nLevel * 2, pItem->String, pItem->Value);
+            }
 
             if( pList->nXOffset > strlen(buf) )
                 pLine = "";
@@ -679,11 +702,15 @@ void ListDraw(TLIST *pList, TFRAME *pFrame, BOOL fForce)
         switch( pList->ID )
         {
             case LIST_ID_WATCH:
-                PrintLine(" Watch");
+                PrintLine("Watch");
                 break;
 
             case LIST_ID_LOCALS:
-                PrintLine(" Locals");
+                PrintLine("Locals");
+                break;
+
+            case LIST_ID_STACK:
+                PrintLine("Stack");
                 break;
         }
 
@@ -695,8 +722,8 @@ void ListDraw(TLIST *pList, TFRAME *pFrame, BOOL fForce)
             return;
 
     // Evaluate type structure into effective values, except for the type list
-    // (command TYPES) where we just print the type definition
-    if( pList->ID!=LIST_ID_TYPE )
+    // (command TYPES) where we just print the type definition, and the STACK information
+    if( pList->ID!=LIST_ID_TYPE && pList->ID!=LIST_ID_STACK )
     {
         ListEvaluate(pList);
     }
@@ -718,6 +745,7 @@ void ListDraw(TLIST *pList, TFRAME *pFrame, BOOL fForce)
 *
 *   Alt-L  - manage locals list
 *   Alt-W  - manage watch list
+*   Alt-S  - manage stack list
 *
 ******************************************************************************/
 void FocusInPlace(TLIST *pList, TFRAME *pFrame)

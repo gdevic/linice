@@ -65,9 +65,6 @@
 ******************************************************************************/
 
 extern char *SymFnScope2Local(TSYMFNSCOPE *pFnScope, DWORD ebpOffset);
-extern char *SymAddress2FunctionName(WORD wSel, DWORD dwOffset);
-extern char *SymAddress2Name(WORD wSel, DWORD dwOffset);
-
 extern void CalcMemAccessChecksum2();
 
 /******************************************************************************
@@ -464,7 +461,7 @@ StartInstructionNoMODRM:
                 if( (bBase==5) && (bMod==0) )
                 {
                     dwDword = NEXTDWORD;
-                    if( (pName = SymAddress2Name(0, dwDword))==NULL )
+                    if( (pName = SymAddress2Name(dwDword, NULL))==NULL )
                         nPos += sprintf( pDis->szDisasm+nPos,"[%08X", (unsigned int) dwDword );
                     else
                         nPos += sprintf( pDis->szDisasm+nPos,"[%s", pName );
@@ -509,7 +506,7 @@ StartInstructionNoMODRM:
                 if( pDis->bState & DIS_ADDRESS32 )
                 {
                     dwDword = NEXTDWORD;
-                    if( (pName = SymAddress2Name(0, dwDword))==NULL )
+                    if( (pName = SymAddress2Name(dwDword, NULL))==NULL )
                         nPos += sprintf( pDis->szDisasm+nPos,"[%08X]", (unsigned int) dwDword );
                     else
                         nPos += sprintf( pDis->szDisasm+nPos,"[%s]", pName );
@@ -517,7 +514,7 @@ StartInstructionNoMODRM:
                 else
                 {
                     wWord = NEXTWORD;
-                    if( (pName = SymAddress2Name(0, wWord))==NULL )
+                    if( (pName = SymAddress2Name(wWord, NULL))==NULL )
                         nPos += sprintf( pDis->szDisasm+nPos,"[%04X]", wWord );
                     else
                         nPos += sprintf( pDis->szDisasm+nPos,"[%s]", pName );
@@ -651,7 +648,7 @@ StartInstructionNoMODRM:
             if( pDis->bState & DIS_DATA32 )
             {
                 dwDword = NEXTDWORD;
-                if( (pName = SymAddress2FunctionName(0, Addr.offset + (signed long)dwDword))==NULL )
+                if( (pName = SymAddress2Name(Addr.offset + (signed long)dwDword, NULL))==NULL )
                     nPos += sprintf( pDis->szDisasm+nPos, "%08X", (unsigned int)(Addr.offset + (signed long)dwDword) );
                 else
                     nPos += sprintf( pDis->szDisasm+nPos, "%s", pName );
@@ -661,7 +658,7 @@ StartInstructionNoMODRM:
             else
             {
                 wWord = NEXTWORD;
-                if( (pName = SymAddress2FunctionName(0, (unsigned int)(Addr.offset + (signed short)wWord)))==NULL )
+                if( (pName = SymAddress2Name((unsigned int)(Addr.offset + (signed short)wWord), NULL))==NULL )
                     nPos += sprintf( pDis->szDisasm+nPos, "%08X", (unsigned int)(Addr.offset + (signed short)wWord) );
                 else
                     nPos += sprintf( pDis->szDisasm+nPos, "%s", pName );
@@ -674,7 +671,7 @@ StartInstructionNoMODRM:
             if( pDis->bState & DIS_ADDRESS32 )           // depending on the address size
             {
                 dwDword = NEXTDWORD;
-                if( (pName = SymAddress2Name(0, dwDword))==NULL )
+                if( (pName = SymAddress2Name(dwDword, NULL))==NULL )
                     nPos += sprintf( pDis->szDisasm+nPos,"%s[%08X]", sSegOverride[ bSegOverride ], (unsigned int) dwDword );
                 else
                     nPos += sprintf( pDis->szDisasm+nPos,"%s[%s]", sSegOverride[ bSegOverride ], pName );
@@ -682,7 +679,7 @@ StartInstructionNoMODRM:
             else
             {
                 wWord = NEXTWORD;
-                if( (pName = SymAddress2Name(0, wWord))==NULL )
+                if( (pName = SymAddress2Name(wWord, NULL))==NULL )
                     nPos += sprintf( pDis->szDisasm+nPos,"%s[%04X]", sSegOverride[ bSegOverride ], wWord );
                 else
                     nPos += sprintf( pDis->szDisasm+nPos,"%s[%s]", sSegOverride[ bSegOverride ], pName );
@@ -717,7 +714,7 @@ StartInstructionNoMODRM:
             {
                 dwDword = NEXTDWORD;
                 wWord = NEXTWORD;
-                if( (pName = SymAddress2FunctionName(wWord, dwDword))==NULL )
+                if( (pName = SymAddress2Name(dwDword, NULL))==NULL )
                     nPos += sprintf( pDis->szDisasm+nPos, "%04X:%08X", wWord, (unsigned int) dwDword );
                 else
                     nPos += sprintf( pDis->szDisasm+nPos, "far %s", pName);

@@ -274,6 +274,10 @@ SOURCE="$(LINICE_ROOT)\linice\command\registers.c"
 # End Source File
 # Begin Source File
 
+SOURCE="$(LINICE_ROOT)\linice\command\stack.c"
+# End Source File
+# Begin Source File
+
 SOURCE="$(LINICE_ROOT)\linice\command\sysinfo.c"
 # End Source File
 # Begin Source File
@@ -383,11 +387,15 @@ SOURCE="$(LINICE_ROOT)\linice\memaccess.c"
 # End Source File
 # Begin Source File
 
-SOURCE=..\..\..\linice\messages.c
+SOURCE="$(LINICE_ROOT)\linice\messages.c"
 # End Source File
 # Begin Source File
 
 SOURCE="$(LINICE_ROOT)\linice\printf.c"
+# End Source File
+# Begin Source File
+
+SOURCE="$(LINICE_ROOT)\linice\printk.c"
 # End Source File
 # Begin Source File
 

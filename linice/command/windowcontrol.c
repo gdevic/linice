@@ -215,6 +215,48 @@ BOOL cmdWl(char *args, int subClass)
 
 /******************************************************************************
 *                                                                             *
+*   BOOL cmdWs(char *args, int subClass)                                      *
+*                                                                             *
+*******************************************************************************
+*
+*   WS          - toggle stack window on/off
+*   WS [n]      - sets the stack window size (and opens it)
+*
+******************************************************************************/
+BOOL cmdWs(char *args, int subClass)
+{
+    int value;
+
+    if( *args )
+    {
+        // Argument is present - get the number of lines and activate window
+        value = GetDec(&args);
+
+        // If the number of lines was 0, close window
+        if( value==0 )
+            pWin->s.fVisible = FALSE;
+        else
+        {
+            pWin->s.fVisible = TRUE;
+            pWin->s.nLines = value + 1;
+        }
+    }
+    else
+    {
+        // No arguments - toggle open/close window
+
+        pWin->s.fVisible = !pWin->s.fVisible;
+    }
+
+    // Repaint all windows
+    RecalculateDrawWindows();
+
+    return( TRUE );
+}
+
+
+/******************************************************************************
+*                                                                             *
 *   BOOL cmdWw(char *args, int subClass)                                      *
 *                                                                             *
 *******************************************************************************

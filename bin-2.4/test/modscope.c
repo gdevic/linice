@@ -11,11 +11,28 @@ int func1()
     funct(0, 0);
 }
 
+int f2(char *p)
+{
+	printk("<1>%s\n", p);
+}
+
+int f1(int j, int k)
+{
+    f2("test");
+}
+
+int f0(int i, int j)
+{
+    f1(i, 3);
+}
+
 int init_module(void)
 {
     int local;
     register int local2 = 100;
     register int local3 = 0;
+
+    f0(1,2);
 
     // Global uninitialized
     gu = 'x' + ro[0];

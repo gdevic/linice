@@ -200,8 +200,6 @@ typedef struct
     //  1 - cursor carret blink
     UINT timer[2];
 
-    DWORD dwProtectStart;               // Start linear address to protect
-    DWORD dwProtectEnd;                 // End linear address to protect
     DWORD LiniceChecksum;               // Checksum of the Linice code (or SUM)
 
 } TDEB, *PTDEB;
@@ -228,6 +226,7 @@ typedef struct
 {
     TFRAME r;                           // Register window frame
     TFRAME l;                           // Locals window frame
+    TFRAME s;                           // Stack window frame
     TFRAME w;                           // Watch window frame
     TFRAME d;                           // Data window frame
     TFRAME c;                           // Code window frame
@@ -321,11 +320,9 @@ extern PTOUT pOut;                      // Pointer to a current output device
 *                                                                             *
 ******************************************************************************/
 
-extern void PostError(UINT errorCode, UINT errorParam);
-
-extern WCHAR GetKey( BOOL fBlock );     // Read a key code from the input queue
-extern void PutKey( WCHAR Key );
-
+//----------------------------------------------------------------------------
+// Printing and drawing functions
+//----------------------------------------------------------------------------
 extern int dprint( char *format, ... );
 extern BOOL dprinth( int nLineCount, char *format, ... );
 extern int PrintLine(char *format,...);
@@ -334,18 +331,23 @@ extern void dputc(UCHAR c);
 extern void RegDraw(BOOL fForce);
 extern void LocalsDraw(BOOL fForce);
 extern void WatchDraw(BOOL fForce);
+extern void StackDraw(BOOL fForce);
 extern void DataDraw(BOOL fForce, DWORD newOffset);
 extern void CodeDraw(BOOL fForce);
 extern void RecalculateDrawWindows();
 
-extern BOOL CommandExecute( char *pCmd );
-
+//----------------------------------------------------------------------------
+// Function to deal with command history data
+//----------------------------------------------------------------------------
 extern void HistoryDraw(void);
 extern DWORD HistoryDisplay(DWORD hView, int nDir);
 extern DWORD HistoryGetTop(void);
 extern void HistoryAdd(char *sLine);
 extern void ClearHistory(void);
 
+//----------------------------------------------------------------------------
+// Memory and IO access functions
+//----------------------------------------------------------------------------
 extern BYTE ReadCRTC(int index);
 extern void WriteCRTC(int index, int value);
 extern BYTE ReadSR(int index);
@@ -367,21 +369,31 @@ extern DWORD SelLAR(WORD Sel);
 extern BOOL AddrIsPresent(PTADDRDESC pAddr);
 extern BYTE AddrGetByte(PTADDRDESC pAddr);
 extern DWORD AddrGetDword(PTADDRDESC pAddr);
+extern void  AddrSetDword(PTADDRDESC pAddr, DWORD value);
 extern DWORD AddrSetByte(PTADDRDESC pAddr, BYTE value, BOOL fForce);
 extern BOOL VerifyRange(PTADDRDESC pAddr, DWORD dwSize);
 extern BOOL VerifySelector(WORD Sel);
+extern BOOL GlobalReadBYTE(BYTE *pByte, DWORD dwAddress);
 
-// Command parser helpers:
+//----------------------------------------------------------------------------
+// Command parser helper functions
+//----------------------------------------------------------------------------
 extern BOOL Expression(DWORD *value, char *sExpr, char **psNext );
 extern WORD evalSel;               // Selector result of the expression (optional)
 extern DWORD GetDec(char **psString);
 extern BOOL EOL(char **ppArg);
 
 extern int GetOnOff(char *args);
+extern BOOL CommandExecute( char *pCmd );
 
+//----------------------------------------------------------------------------
+// Symbol table functions
+//----------------------------------------------------------------------------
 extern void *SymTabFindSection(TSYMTAB *pSymTab, BYTE hType);
+extern void *SymTabFindSectionNext(TSYMTAB *pSymTab, void *pCur, BYTE hType);
 extern TSYMSOURCE *SymTabFindSource(TSYMTAB *pSymTab, WORD fileID);
 extern TSYMTYPEDEF *SymTabFindTypedef(TSYMTAB *pSymTab, WORD fileID);
+extern char *SymAddress2Name(DWORD dwOffset, UINT *pRange);
 
 extern DWORD SymLinNum2Address(DWORD line);
 extern TSYMFNLIN *SymAddress2FnLin(WORD wSel, DWORD dwOffset);
@@ -391,8 +403,28 @@ extern TSYMFNSCOPE *SymAddress2FnScope(WORD wSel, DWORD dwOffset);
 
 extern void SetSymbolContext(WORD wSel, DWORD dwOffset);
 
+//----------------------------------------------------------------------------
+// Functions to deal with linked list objects
+//----------------------------------------------------------------------------
+extern void ListDraw(TLIST *pList, TFRAME *pFrame, BOOL fForce);
+extern TLISTITEM *ListAdd(TLIST *pList);
+extern BOOL ListDel(TLIST *pList, TLISTITEM *pItem, BOOL fDelRoot);
+extern void ListDelAll(TLIST *pList);
+extern TLISTITEM *ListGetNewItem(void);
+extern BOOL ListFindItem(TLIST *pList, TExItem *pExItem);
+extern TLISTITEM *ListGetNext(TLIST *pList, TLISTITEM *pItem);
+
+//----------------------------------------------------------------------------
+// Miscellaneous
+//----------------------------------------------------------------------------
+
 extern void ObjectEnd(void);
 extern void ObjectStart(void);
+extern void PostError(UINT errorCode, UINT errorParam);
+
+extern WCHAR GetKey( BOOL fBlock );
+extern void PutKey( WCHAR Key );
+
 
 
 #endif //  _ICE_H_

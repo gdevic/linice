@@ -80,6 +80,7 @@ extern BOOL RepeatSrcStep(void);
 extern void DebPrintErrorString();
 extern void DispatchExtEnter();
 extern void DispatchExtLeave();
+extern void FixupUserCallFrame(void);
 
 
 /******************************************************************************
@@ -112,6 +113,10 @@ void DebuggerEnterBreak(void)
 
     //-----------------------------------------------------------------------
     {
+        // If we hit our internal INT3 from the custom function call, restore the ESP and EIP
+        // to what it was before we issued a call. This supports cmdCall command.
+        FixupUserCallFrame();
+
         deb.bpIndex = -1;                   // Reset the index to signal no breakpoint hit
 
         // Disarm all breakpoints and adjust counters.

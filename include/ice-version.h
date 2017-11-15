@@ -48,7 +48,7 @@
 // using the same root defines.
 
 #define MAJOR_VERSION       2   // (Keep this comment for the Perl script)
-#define MINOR_VERSION       1   // (Keep this comment for the Perl script)
+#define MINOR_VERSION       2   // (Keep this comment for the Perl script)
 
 // Define current Linice version
 //

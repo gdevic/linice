@@ -344,21 +344,18 @@ static void EditInPlace(PTRegField pReg, int xDisp)
 *   (register window will be made visible).
 *   Otherwise, set a register value.
 *
-*   Additional functionality: save and restore a complete register set:
-*   R >                - save CPU registers into a temp buffer
-*   R <                - restore CPU registers from a temp buffer
+*   Argument -d will display registers in the command window.
 *
 ******************************************************************************/
 BOOL cmdReg(char *args, int subClass)
 {
     PTRegEdit pReg;
     DWORD value, prev_value;
-    static TREGS tempCpuRegs;           // Temp CPU registers to save/restore
+    BOOL fRegVisible;                   // Temp store for regs visible flag
 
     if( *args==0 )
     {
-        // No arguments - if the register window is not visible, make it visible
-        // then edit in place
+        // No arguments - if the register window is not visible, make it visible then edit in place
         EditInPlace(&RegField[0], 0);
 
         // If we changed cs:eip, we need to recalculate the whole context
@@ -368,25 +365,16 @@ BOOL cmdReg(char *args, int subClass)
     }
     else
     {
-        // Argument is <register>=<value> or <register>
-        // or save/restore CPU register set
-        if( *args=='>' )
+        // Display registers in the command window
+        if( !strnicmp(args, "-d", 2) )
         {
-            // Save CPU registers
-            memcpy(&tempCpuRegs, deb.r, sizeof(TREGS));
-            dprinth(1, "CPU registers saved.");
-        }
-        else
-        if( *args=='<' )
-        {
-            // Restore CPU registers
-            memcpy(deb.r, &tempCpuRegs, sizeof(TREGS));
-            dprinth(1, "CPU registers restored.");
+            // Fake the register window is not visible, and then redraw it
+            fRegVisible = pWin->r.fVisible;
+            pWin->r.fVisible = FALSE;
 
-            // If we changed cs:eip, we need to recalculate the whole context
-            SetSymbolContext(deb.r->cs, deb.r->eip);
+            RegDraw(TRUE);
 
-            RecalculateDrawWindows();
+            pWin->r.fVisible = fRegVisible;
         }
         else
         {
@@ -395,7 +383,7 @@ BOOL cmdReg(char *args, int subClass)
 
             while( pReg->sRegName != NULL )
             {
-                if( strnicmp(pReg->sRegName, args, pReg->nameLen)==0 )
+                if( !strnicmp(pReg->sRegName, args, pReg->nameLen) )
                     break;
                 pReg++;
             }
@@ -444,8 +432,6 @@ BOOL cmdReg(char *args, int subClass)
                     }
                 }
             }
-            else
-                dprinth(1, "Syntax error");
         }
     }
 

@@ -111,6 +111,7 @@ static char sHistory[MAX_HISTORY][MAX_STRING] = {
 { "\0" }, { "\0" }, { "\0" }, { "\0" }, { "\0" }, { "\0" }, { "\0" }, { "\0" },
 { "\0" }, { "\0" }, { "\0" }, { "\0" }, { "\0" }, { "\0" }, { "\0" }, { "\0" } };
 
+static char sInitialHistoryLine[] = ":ver";
 
 static char *sCmd;                      // Local pointer to a current cmd line
 static int xCur;                        // X coordinate of a cursor
@@ -143,6 +144,11 @@ extern BOOL CheckNV2(void);
 ******************************************************************************/
 void InitEdit()
 {
+    // Initialize the edit history with a "ver" command
+    memcpy(sHistory[iWriteHistory], sInitialHistoryLine, strlen(sInitialHistoryLine));
+
+    // Advance write history index
+    iWriteHistory = NEXT_INDEX(iWriteHistory);
 }
 
 /******************************************************************************
@@ -495,6 +501,18 @@ void EdLin( char *sCmdLine )
 
                     break;
 
+                //======================== LOCALS WINDOW =======================
+#ifdef SIM // We cannot handle ALT key
+                case CHAR_CTRL + 'l':
+#else
+                case CHAR_ALT + 'l':
+#endif // SIM
+                    // Temporary switch to manage locals window
+
+                    FocusInPlace(&deb.Local, &pWin->l);
+
+                    break;
+
                 //======================== WATCH WINDOW ========================
 #ifdef SIM // We cannot handle ALT key
                 case CHAR_CTRL + 'w':
@@ -507,15 +525,15 @@ void EdLin( char *sCmdLine )
 
                     break;
 
-                //======================== LOCALS WINDOW =======================
+                //======================== STACK WINDOW ========================
 #ifdef SIM // We cannot handle ALT key
-                case CHAR_CTRL + 'l':
+                case CHAR_CTRL + 's':
 #else
-                case CHAR_ALT + 'l':
+                case CHAR_ALT + 's':
 #endif // SIM
-                    // Temporary switch to manage locals window
+                    // Temporary switch to manage stack window
 
-                    FocusInPlace(&deb.Local, &pWin->l);
+                    FocusInPlace(&deb.Stack, &pWin->s);
 
                     break;
 
@@ -749,29 +767,24 @@ void EdLin( char *sCmdLine )
 
                 case ENTER:
                     // Enter key accepts the line.  If the line is different from
-                    // any history line, it copies it to the writing history line.
+                    // the strictly previous line, it copies it to the new history line.
                     // If the line is identical, do not copy, but use its prevous
                     // copy.
 
-                    for( i=0; i<MAX_HISTORY; i++ )
+                    // Write into history buffer only non-silent commands
+                    if( !fSilent )
                     {
-                        // Look for the history line that is identical
+                        if( strcmp( sCmd, sHistory[PREV_INDEX(iWriteHistory)] ) )
+                        {
+                            // Line is new, does not match, store it to the history buffer
 
-                        if( !strcmp( sCmd, sHistory[i] ) )
-                            iWriteHistory = i;
+                            memcpy( sHistory[iWriteHistory], sCmd, MAX_CMD );
+
+                            // Advance write history index
+
+                            iWriteHistory = NEXT_INDEX(iWriteHistory);
+                        }
                     }
-
-                    if( i==MAX_HISTORY )
-                    {
-                        // Line is new.  Store it to the history buffer
-
-                        memcpy( sHistory[iWriteHistory], sCmd, MAX_CMD );
-
-                        // Advance write history index
-
-                        iWriteHistory = NEXT_INDEX(iWriteHistory);
-                    }
-
                     break;
 
                 case ' ':
@@ -852,6 +865,26 @@ void EdLin( char *sCmdLine )
         dprinth(1, "%s", sCmd);
 }
 
+
+/******************************************************************************
+*                                                                             *
+*   void EdDumpHistory(void)                                                  *
+*                                                                             *
+*******************************************************************************
+*
+*   Helper function that dumps edit history lines
+*   This function is accessed via "ver ed-dump" command.
+*
+******************************************************************************/
+void EdDumpHistory(void)
+{
+    int i;
+
+    for( i=0; i<MAX_HISTORY && (*sHistory[i] || i==iWriteHistory); i++ )
+    {
+        dprinth(1, "%02d%c%s", i, (i==iWriteHistory)?'>':' ', sHistory[i] );
+    }
+}
 
 /******************************************************************************
 *                                                                             *

@@ -1,24 +1,34 @@
 #!/bin/bash
 
-	ln -s bin-2.4 ../bin
+    ln -s bin-2.4 ../bin
 
     echo "+-----------------------------------------------------+"
     echo "|                      LINICE                         |"
     echo "+-----------------------------------------------------+"
     cd ../linice
     make clean
-    make nd
+    make
 
     echo "+-----------------------------------------------------+"
     echo "|                      LINSYM                         |"
     echo "+-----------------------------------------------------+"
     cd ../linsym
     make clean
-    make nd
+    make
 
     echo "+-----------------------------------------------------+"
     echo "|                      XICE                           |"
     echo "+-----------------------------------------------------+"
     cd ../x
     make clean
-    make nd
+    make
+
+    echo "+----------------------------------------------------------------------------+"
+    echo "| Symbolic link ../bin is created to lead to ../bin-2.4                      |"
+    echo "|                                                                            |"
+    echo "| From now on, you dont need to run this script to compile. Instead, compile |"
+    echo "| each component by running 'make' in their respective directory.            |"
+    echo "|                                                                            |"
+    echo "| Dont forget to run 'make clean' + 'make' in the /bin directory to create   |"
+    echo "| the final Linice module!                                                   |"
+    echo "+----------------------------------------------------------------------------+"

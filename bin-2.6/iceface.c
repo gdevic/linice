@@ -383,6 +383,11 @@ void ice_printk(char *p)
     printk(p);
 }
 
+int ice_get_printk(void)
+{
+    return( (int)printk );
+}
+
 static struct module kernel_fake =
 {
     .state = 0,

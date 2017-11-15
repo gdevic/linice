@@ -53,7 +53,8 @@
 *                                                                             *
 ******************************************************************************/
 
-extern BOOL FillLocalScope(TSYMFNSCOPE *pFnScope, DWORD dwEIP);
+extern BOOL FillStackList(DWORD dwEBP, DWORD dwEIP, BOOL fLocals);
+extern BOOL FillLocalScope(TLIST *List, TSYMFNSCOPE *pFnScope, DWORD dwEIP);
 extern void RecalculateWatch();
 
 
@@ -122,6 +123,10 @@ TSYMFNLIN *SymAddress2FnLin(WORD wSel, DWORD dwOffset)
 *   as a part of the given function line descriptor. The address must exactly
 *   match the requested address.
 *
+*   Avoid switching source files - use only the file that is the primary for
+*   that function. This fixes confusing output in the source mixed mode.
+*   It still has to be evaluated if it is needed or not.
+*
 *   Where:
 *       pLineNumber, if not NULL, will store line number there
 *                    if NULL, ignored
@@ -150,7 +155,8 @@ char *SymFnLin2LineExact(WORD *pLineNumber, TSYMFNLIN *pFnLin, DWORD dwAddress)
             // Traverse the function line array and find the right offset
             for(i=0; i<pFnLin->nLines; i++ )
             {
-                if( pFnLin->list[i].offset==wOffset )
+                // Offsets have to match and the file has to be the primary file for this function
+                if( pFnLin->list[i].offset==wOffset && pFnLin->list[i].file_id==pFnLin->list[0].file_id )
                 {
                     // Get the file ID of the file that contains that source line
                     fileID = pFnLin->list[i].file_id;
@@ -183,6 +189,67 @@ char *SymFnLin2LineExact(WORD *pLineNumber, TSYMFNLIN *pFnLin, DWORD dwAddress)
 
 /******************************************************************************
 *                                                                             *
+*   TSYMFNLIN1 *SymFnLin2LineRecord(TSYMFNLIN *pFnLin, DWORD dwAddress)       *
+*                                                                             *
+*******************************************************************************
+*
+*   Returns the function line record for the given function and the address.
+*   (address must map into that function).
+*
+*   In addition, if there are multiple matching offsets, use the last one.
+*
+*   Where:
+*       pFnLin is the function line descriptor
+*       dwAddress is the address to look up
+*   Returns:
+*       NULL if no line found at that location
+*       Individual function line descriptor (record)
+*
+******************************************************************************/
+TSYMFNLIN1 *SymFnLin2LineRecord(TSYMFNLIN *pFnLin, DWORD dwAddress)
+{
+    int i;
+    WORD wOffset;
+
+    if( pFnLin )
+    {
+        // More checks that the address is right
+        if( dwAddress>=pFnLin->dwStartAddress && dwAddress<=pFnLin->dwEndAddress )
+        {
+            wOffset = (WORD)((dwAddress - pFnLin->dwStartAddress) & 0xFFFF);
+
+            // Traverse the function line array and find the right offset
+            for(i=0; i<pFnLin->nLines-1; i++ )
+            {
+                // We use the fact that the offsets in the function line descriptor
+                // array are always in the ascending order so we dont need to check
+                // for the upper bound. Also, we are poised to find the line since
+                // the offset is already checked to be within a function bounds
+                if( pFnLin->list[i].offset==wOffset )
+                {
+                    // If the next offset is the same, use the next one
+                    while( pFnLin->list[i+1].offset==wOffset )
+                        i++;
+
+                    break;
+                }
+                else
+                if( pFnLin->list[i].offset > wOffset )
+                {
+                    if(i) i--;          // Adjust - we overshoot a line
+                    break;              // (If we were still at 0, stay there)
+                }
+            }
+
+            return( &pFnLin->list[i] );
+        }
+    }
+
+    return( NULL );
+}
+
+/******************************************************************************
+*                                                                             *
 *   char *SymFnLin2Line(WORD *pLineNumber, TSYMFNLIN *pFnLin, DWORD dwAddress)*
 *                                                                             *
 *******************************************************************************
@@ -204,63 +271,38 @@ char *SymFnLin2LineExact(WORD *pLineNumber, TSYMFNLIN *pFnLin, DWORD dwAddress)
 ******************************************************************************/
 char *SymFnLin2Line(WORD *pLineNumber, TSYMFNLIN *pFnLin, DWORD dwAddress)
 {
-    int i;
     WORD fileID;
     WORD nLine;
-    WORD wOffset;
     TSYMSOURCE *pSrc;
+    TSYMFNLIN1 *pFnLin1;
 
-    if( pFnLin )
+    pFnLin1 = SymFnLin2LineRecord(pFnLin, dwAddress);
+
+    if( pFnLin1 )
     {
-        // More checks that the address is right
-        if( dwAddress>=pFnLin->dwStartAddress && dwAddress<=pFnLin->dwEndAddress )
+        // Get the file ID of the file that contains that source line
+        fileID = pFnLin1->file_id;
+
+        // Find that file
+        pSrc = SymTabFindSource(deb.pSymTabCur, fileID);
+        if( pSrc )
         {
-            wOffset = (WORD)((dwAddress - pFnLin->dwStartAddress) & 0xFFFF);
+            nLine = pFnLin1->line;
 
-            // Traverse the function line array and find the right offset
-            for(i=0; i<pFnLin->nLines-1; i++ )
+            // Found it.. Store the optional line number
+            if( pLineNumber!=NULL )
+                *pLineNumber = nLine;
+
+            // Final check that the line number is not too large
+            if( nLine <= pSrc->nLines )
             {
-                // We use the fact that the offsets in the function line descriptor
-                // array are always in the ascending order so we dont need to check
-                // for the upper bound. Also, we are poised to find the line since
-                // the offset is already checked to be within a function bounds
-                if( pFnLin->list[i].offset==wOffset )
-                {
-                    break;
-                }
-                else
-                if( pFnLin->list[i].offset > wOffset )
-                {
-                    if(i) i--;          // Adjust - we overshoot a line
-                    break;              // (If we were still at 0, stay there)
-                }
-            }
-
-            // Get the file ID of the file that contains that source line
-            fileID = pFnLin->list[i].file_id;
-
-            // Find that file
-            pSrc = SymTabFindSource(deb.pSymTabCur, fileID);
-            if( pSrc )
-            {
-                nLine = pFnLin->list[i].line;
-
-                // Found it.. Store the optional line number
-                if( pLineNumber!=NULL )
-                    *pLineNumber = nLine;
-
-                // Final check that the line number is not too large
-                if( nLine <= pSrc->nLines )
-                {
-                    return( pSrc->pLineArray[nLine-1] );
-                }
+                return( pSrc->pLineArray[nLine-1] );
             }
         }
     }
 
     return( NULL );
 }
-
 
 /******************************************************************************
 *                                                                             *
@@ -395,6 +437,7 @@ TSYMFNSCOPE *SymAddress2FnScope(WORD wSel, DWORD dwOffset)
 void SetSymbolContext(WORD wSel, DWORD dwOffset)
 {
     WORD wLine;
+    TSYMFNLIN1 *pFnLin1;                // Current offset within a function
 
     // Reset all context state variables so we start from the clean state
     // and build upon this for whatever context extent we can
@@ -405,6 +448,10 @@ void SetSymbolContext(WORD wSel, DWORD dwOffset)
     deb.pSrcEipLine = NULL;
     deb.codeFileTopLine = 0;
     deb.codeFileXoffset = 0;
+
+    // Delete all the lists that we need to rebuild at every context change
+    ListDelAll(&deb.Local);
+    ListDelAll(&deb.Stack);
 
     // Adjust the code window's machine code top address:
     // We let the cs:eip free flow within the code window that is bound by
@@ -434,6 +481,9 @@ void SetSymbolContext(WORD wSel, DWORD dwOffset)
     if( deb.fTableAutoOn )
         Address2SymbolTable(wSel, dwOffset);
 
+    // Fill the stack list
+    FillStackList(deb.r->ebp, dwOffset, TRUE);
+
     if( deb.pSymTabCur )
     {
         // Set the current function scope based on the CS:EIP
@@ -441,21 +491,29 @@ void SetSymbolContext(WORD wSel, DWORD dwOffset)
 
         if( deb.pFnScope )
         {
-            // Find the primary file ID for that function
-            deb.pSource = SymTabFindSource(deb.pSymTabCur, deb.pFnScope->file_id);
-
             // Set the current function line descriptor based on the current CS:EIP
             deb.pFnLin = SymAddress2FnLin(wSel, dwOffset);
 
             // Set the array of local scope variables (only if the function scope is valid)
-            FillLocalScope(deb.pFnScope, deb.r->eip);
+            FillLocalScope(&deb.Local, deb.pFnScope, deb.r->eip);
 
+            // If we have function scope information for that address...
             if( deb.pFnLin )
             {
                 // See if we need to adjust the top of window line number - if the
                 // current eip line is not within a window; this line does not have to be exact -
                 // any line that covers a block of code within a function will do
                 deb.pSrcEipLine = SymFnLin2Line(&wLine, deb.pFnLin, dwOffset);
+
+                // Find the current file ID
+                pFnLin1 = SymFnLin2LineRecord(deb.pFnLin, dwOffset);
+
+                // Set up the correct source file for that function and offset
+                deb.pSource = SymTabFindSource(deb.pSymTabCur, pFnLin1->file_id);
+
+                // TODO - this is the right way to do it with the source lines
+
+                wLine = pFnLin1->line;
 
                 deb.codeFileEipLine = wLine;    // Store the EIP line number, 1-based
 

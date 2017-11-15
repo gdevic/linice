@@ -19,12 +19,14 @@ Compile kernel specific code:
 Install Linice:
 # ./linsym -i
 
+After this command, Linice should pop up on the VGA screen. Press F5 to let it go.
 You can break in at any time using a hotkey Ctrl+Q.
 
 Uninstall Linice:
 # ./linsym -x
 
 Please read the documentation file Linice.pdf for detailed description of commands and command line options.
+Google the web for the information about all the commands that are compatible with SoftIce.
 
 Hope you find it useful,
 - Goran Devic

@@ -1,4 +1,4 @@
 #!/bin/bash
 echo Start...
-make -C /usr/src/linux-`uname -r` SUBDIRS=$PWD modules
+make -C /lib/modules/`uname -r`/build/include/.. SUBDIRS=$PWD SRCROOT=$PWD/. modules
 echo Finished.

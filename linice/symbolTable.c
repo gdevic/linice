@@ -122,36 +122,36 @@ int UserAddSymbolTable(void *pSymUser)
     DWORD dStrings;                     // Offset to strings (to adjust)
     TMODULE Mod;                        // Module information structure
 
-
-    // Copy the header of the symbol table into the local structur to examine it
+    // Copy only the header of the symbol table into a local structure to examine it
     if( ice_copy_from_user(&SymHeader, pSymUser, sizeof(TSYMTAB))==0 )
     {
-        // Check if we should allocate memory for the symbol table from the allowed pool
-        if( deb.nSymbolBufferAvail >= SymHeader.dwSize )
+        // Make sure we are really loading a symbol table
+        if( !strcmp(SymHeader.sSig, SYMSIG) )
         {
-            // Allocate memory for complete symbol table from the private pool
-            pSymTab = (TSYMTAB *) mallocHeap(deb.hSymbolBufferHeap, SymHeader.dwSize);
-            if( pSymTab )
+            // TODO: Here we also want to check the CRC or something like that for a table being loaded
+            //       Just to make sure it is not corrupted.
+
+            // Compare the symbol table version - major number has to match
+            if( (SymHeader.Version>>8)==(SYMVER>>8) )
             {
-                INFO("Allocated %d bytes at %X for symbol table\n", (int) SymHeader.dwSize, (int) pSymTab);
+                // If we are reloading an existing symbol table, remove it from Linice
 
-                // Copy the complete symbol table from the use space
-                if( ice_copy_from_user(pSymTab, pSymUser, SymHeader.dwSize)==0 )
+                // TODO: Remove all associated breakpoints in this function?
+
+                SymbolTableRemove(SymHeader.sTableName, NULL);
+
+                // Check that we have enough memory to allocate from the dedicated memory pool
+                if( deb.nSymbolBufferAvail >= SymHeader.dwSize )
                 {
-                    // Make sure we are really loading a symbol table
-
-                    // TODO: Here we also want to check the CRC or something like that for a table being loaded
-
-                    if( !strcmp(pSymTab->sSig, SYMSIG) )
+                    // Allocate memory for complete symbol table from the dedicated symbol table pool
+                    pSymTab = (TSYMTAB *) mallocHeap(deb.hSymbolBufferHeap, SymHeader.dwSize);
+                    if( pSymTab )
                     {
-                        // Compare the symbol table version - major number has to match
-                        if( (pSymTab->Version>>8)==(SYMVER>>8) )
-                        {
-                            // Call the remove function that will remove this particular
-                            // symbol table if we are reloading it (at this point new table is not linked in yet)
-                            // TODO: Remove breakpoints in this function?
-                            SymbolTableRemove(pSymTab->sTableName, NULL);
+                        INFO("Allocated %d bytes at %X for symbol table\n", (int) SymHeader.dwSize, (int) pSymTab);
 
+                        // Copy the complete symbol table from the use space
+                        if( ice_copy_from_user(pSymTab, pSymUser, SymHeader.dwSize)==0 )
+                        {
                             dprinth(1, "Loaded symbols for module `%s' size %d (ver %d.%d)",
                                 pSymTab->sTableName, pSymTab->dwSize, pSymTab->Version>>8, pSymTab->Version&0xFF);
 
@@ -174,7 +174,7 @@ int UserAddSymbolTable(void *pSymUser)
                             // If the symbol table being loaded describes a kernel module, we need to
                             // see if that module is already loaded, and if so, relocate its symbols
 
-                            // If a module with that symbol name has already been loaded dont relocate again
+                            // If a module with that symbol name has already been loaded prepare the new table
                             if( FindModule(&Mod, pSymTab->sTableName, strlen(pSymTab->sTableName)) )
                             {
                                 // Module is already loaded - we need to relocate symbol table based on it
@@ -195,33 +195,36 @@ int UserAddSymbolTable(void *pSymUser)
                         }
                         else
                         {
-                            dprinth(1, "Error: Symbol table has incompatible version number!");
+                            ERROR("Error copying symbol table");
+                            retval = -EFAULT;
                         }
+
+                        // Deallocate memory for symbol table
+                        freeHeap(deb.hSymbolBufferHeap, (void *) pSymTab);
                     }
                     else
                     {
-                        dprinth(1, "Invalid symbol table signature!");
+                        // This should not happen since we keep the size in check. It _may_ happen
+                        // if the symbol table memory gets fragmented after repeated use... I doubt
+                        // that would ever happen in the realm of this application.
+                        ERROR("Unable to allocate %d for symbol table!\n", (int) SymHeader.dwSize);
+                        retval = -ENOMEM;
                     }
                 }
                 else
                 {
-                    ERROR("Error copying symbol table");
-                    retval = -EFAULT;
+                    dprinth(1, "Symbol table memory pool too small to load this table!");
+                    retval = -ENOMEM;
                 }
-
-                // Deallocate memory for symbol table
-                freeHeap(deb.hSymbolBufferHeap, (void *) pSymTab);
             }
             else
             {
-                ERROR("Unable to allocate %d for symbol table!\n", (int) SymHeader.dwSize);
-                retval = -ENOMEM;
+                dprinth(1, "Error: Symbol table has incompatible version number!");
             }
         }
         else
         {
-            dprinth(1, "Symbol table memory pool too small to load this table!");
-            retval = -ENOMEM;
+            dprinth(1, "Invalid symbol table signature!");
         }
     }
     else
@@ -284,8 +287,10 @@ int UserRemoveSymbolTable(void *pSymtab)
 *   Low level function to remove a symbol table from the debugger.
 *
 *   Where:
-*       pTable name is the name string. It can be NULL, in which case...
-*       pRemove address of the table to be removed
+*       pTable name is the name string. It can be NULL, in which case the
+*               parameter pRemove is used.
+*       pRemove address of the table to be removed (so this is the alternate
+*               way to remove a symbol table, by specifying its address)
 *
 *   Returns:
 *       TRUE - table found & removed
@@ -555,6 +560,46 @@ void *SymTabFindSection(TSYMTAB *pSymTab, BYTE hType)
 
 /******************************************************************************
 *                                                                             *
+*   void *SymTabFindSectionNext(TSYMTAB *pSymTab, void *pCur, BYTE hType)     *
+*                                                                             *
+*******************************************************************************
+*
+*   Searches for the next named section within the given symbol table, located
+*   after the given address (which should have been obtained by a call to
+*   SymTabFindSection() or this call.
+*
+*   Where:
+*       pSymTab is the address of the symbol table to search
+*       pCur is the start address to search
+*       hType is the section number
+*
+*   Returns:
+*       Pointer to a section header
+*       NULL if the section can not be located
+*
+******************************************************************************/
+void *SymTabFindSectionNext(TSYMTAB *pSymTab, void *pCur, BYTE hType)
+{
+    TSYMHEADER *pHead;                  // Generic section header
+
+    pHead = (TSYMHEADER *)pCur;         // Start at this address
+
+    do
+    {
+        // Advance to the next record
+        pHead = (TSYMHEADER*)((DWORD)pHead + pHead->dwSize);
+
+        if( pHead->hType == hType )
+            return( (void *)pHead );
+
+    }while( pHead->hType != HTYPE__END );
+
+    return(NULL);
+}
+
+
+/******************************************************************************
+*                                                                             *
 *   TSYMSOURCE *SymTabFindSource(TSYMTAB *pSymTab, WORD fileID)               *
 *                                                                             *
 *******************************************************************************
@@ -690,11 +735,11 @@ BOOL SymTabSetupRelocOffset(TSYMTAB *pSymTab, DWORD dwInitModule, DWORD dwInitMo
                 // Find the address within the code segment from which we will read the offset to
                 // our data. Relocation block contains the relative offset from the init_module function
                 // to our dword sample that we need to take.
-dprinth(1, "[%d] fixup=%08X offset=%08X", i, pReloc->list[i].refFixup, pReloc->list[i].refOffset);
+//dprinth(1, "[%d] fixup=%08X offset=%08X", i, pReloc->list[i].refFixup, pReloc->list[i].refOffset);
                 dwSampleOffset = *(DWORD *)(dwInitModuleSample + pReloc->list[i].refFixup);
-dprinth(1, "  %08X %08X = %08X", dwInitModuleSample, dwInitModuleSample + pReloc->list[i].refFixup, dwSampleOffset);
+//dprinth(1, "  %08X %08X = %08X", dwInitModuleSample, dwInitModuleSample + pReloc->list[i].refFixup, dwSampleOffset);
                 pReloc->list[i].reloc = dwSampleOffset - pReloc->list[i].refOffset;
-dprinth(1, "   reloc[%d] = (%08X,%08X)", i, pReloc->list[i].refFixup, pReloc->list[i].refOffset);
+//dprinth(1, "   reloc[%d] = (%08X,%08X)", i, pReloc->list[i].refFixup, pReloc->list[i].refOffset);
             }
         }
     }

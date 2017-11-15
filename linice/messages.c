@@ -60,7 +60,7 @@
 *                                                                             *
 ******************************************************************************/
 
-#define AVERAGE_HIT         50          // Average hit every so many calls...
+#define AVERAGE_HIT        100          // Average hit every so many calls...
 
 // This is the encoding key:
 static BYTE key[13] = { 0xDF, 0x38, 0x82, 0xF5, 0x5A, 0xA9, 0x90, 0x16, 0xB2, 0x27, 0xCC, 0x63, 0x7E };

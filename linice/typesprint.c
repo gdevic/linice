@@ -120,10 +120,6 @@ enum
 extern BOOL GlobalReadDword(DWORD *pDword, DWORD dwAddress);
 extern BOOL GlobalReadBYTE(BYTE *pByte, DWORD dwAddress);
 
-extern TLISTITEM *ListAdd(TLIST *pList, TFRAME *pFrame);
-extern void ListDel(TLIST *pList, TLISTITEM *pItem, BOOL fDelRoot);
-extern void ListDraw(TLIST *pList, TFRAME *pFrame, BOOL fForce);
-extern TLISTITEM *ListGetNewItem();
 extern TSYMTYPEDEF1 *Type2Typedef(char *pTypeName, int nLen, WORD file_id);
 extern void TypedefCanonical(TSYMTYPEDEF1 *pType1);
 extern void scan2dec(char *pBuf, int *p1, int *p2);
@@ -447,7 +443,7 @@ void ExpandPrintSymbol(TExItem *Item, char *pName)
 
     List.ID = LIST_ID_EXPRESSION;
 
-    if((pItem = ListAdd(&List, &pWin->h)))
+    if((pItem = ListAdd(&List)))
     {
         // Copy the expression Item into the root list node and format the root list node
         memcpy(&pItem->Item, Item, sizeof(TExItem));
@@ -736,7 +732,7 @@ BOOL cmdTypes(char *args, int subClass)
 
                     List.ID = LIST_ID_TYPE;
 
-                    if((pItem = ListAdd(&List, &pWin->h)))
+                    if((pItem = ListAdd(&List)))
                     {
                         PrettyPrintVariableName(pItem->String, "TYPE", pType1);
 

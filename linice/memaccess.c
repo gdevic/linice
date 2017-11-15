@@ -89,7 +89,8 @@ BOOL GlobalReadBYTE(BYTE *pByte, DWORD dwAddress);
 // should go through these:
 
 extern DWORD SetByte(WORD sel, DWORD offset, BYTE value);
-extern int   GetByte(WORD sel, DWORD offset);
+extern DWORD GetByte(WORD sel, DWORD offset);
+extern void  SetDWORD(WORD sel, DWORD offset, DWORD value);
 extern DWORD GetDWORD(WORD sel, DWORD offset);
 
 //------------------------------- Protection ---------------------------------
@@ -144,6 +145,14 @@ DWORD AddrGetDword(PTADDRDESC pAddr)
         dwValue = 0xFFFFFFFF;
 
     return( dwValue );
+}
+
+/******************************************************************************
+*   Sets a DWORD to a memory location
+******************************************************************************/
+void AddrSetDword(PTADDRDESC pAddr, DWORD dwValue)
+{
+    SetDWORD(pAddr->sel, CHECK_OEM(CHECK_NOSELF(pAddr->offset)), dwValue);
 }
 
 /******************************************************************************

@@ -18,24 +18,24 @@ H2  = ../bin
 
 #-----------------------------------------------------------------------------
 # Compiler defines:
-#	make debug			- engineering debug build (default)
-#   make nd				- engineering non-debug build
+#   make 				- engineering non-debug build (default)
+#	make debug			- engineering debug build
 #-----------------------------------------------------------------------------
 
 #-----------------------------------------------------------------------------
-# Compiler defines: Engineering DEBUG build (Development, default)
+# Compiler defines: Engineering NON-DEBUG build (default)
 #-----------------------------------------------------------------------------
-
-DEF    = -DMODULE -DLINUX -DDBG
-CFLAGS = -gstabs+ -Wall $(DEF) -O -I$(INC) -I$(H1) -I$(H2)
-
-#-----------------------------------------------------------------------------
-# Compiler defines: Engineering NON-DEBUG build
-#-----------------------------------------------------------------------------
-ifeq ($(MAKECMDGOALS),nd)
 
 DEF = -DMODULE -DLINUX -DND
 CFLAGS = -Wall $(DEF) -O2 -I$(INC) -I$(H1) -I$(H2)
+
+#-----------------------------------------------------------------------------
+# Compiler defines: Engineering DEBUG build (Development)
+#-----------------------------------------------------------------------------
+ifeq ($(MAKECMDGOALS),debug)
+
+DEF    = -DMODULE -DLINUX -DDBG
+CFLAGS = -gstabs+ -Wall $(DEF) -O -I$(INC) -I$(H1) -I$(H2)
 
 endif
 #-----------------------------------------------------------------------------
@@ -88,6 +88,7 @@ clean:
 			typesprint.o	\
 			string.o 		\
 			printf.o 		\
+			printk.o 		\
 			ctype.o			\
 			proc.o			\
 			edlin.o			\
@@ -100,6 +101,7 @@ clean:
 			registers.o		\
 			lists.o			\
 			locals.o		\
+			stack.o			\
 			watch.o			\
 			data.o			\
 			code.o			\
@@ -176,6 +178,9 @@ string.o:		string.c
 printf.o:		printf.c
 	$(CC) $(CFLAGS) -c printf.c
 
+printk.o:		printk.c
+	$(CC) $(CFLAGS) -c printk.c
+
 ctype.o:		ctype.c
 	$(CC) $(CFLAGS) -c ctype.c
 
@@ -220,6 +225,9 @@ lists.o:			command/lists.c
 
 locals.o:	command/locals.c
 	$(CC) $(CFLAGS) -c command/locals.c
+
+stack.o:	command/stack.c
+	$(CC) $(CFLAGS) -c command/stack.c
 
 watch.o:	command/watch.c
 	$(CC) $(CFLAGS) -c command/watch.c

@@ -170,6 +170,11 @@ extern void DumpHeap(BYTE *pHeap);
 extern void ObjectEnd(void);
 extern void ObjectStart(void);
 
+extern void HookPrintk(void);
+extern void UnhookPrintk(void);
+extern void EdDumpHistory(void);
+
+
 /******************************************************************************
 *                                                                             *
 *   Functions                                                                 *
@@ -383,12 +388,15 @@ BOOL cmdIdt(char *args, int subClass)
 *       CPU s       - stores CPU registers into a virtual register slot
 *       CPU r       - restores CPU registers
 *
+*   TODO: Implement argument -i, display the IO APIC registers
+*
 ******************************************************************************/
 BOOL cmdCpu(char *args, int subClass)
 {
     static TREGS CPU;                   // CPU register store
     int nLine = 1;                      // Line counter
 
+    // New options to Linice: Save and Restore CPU registers
     if( *args=='s' )
     {
         memcpy(&CPU, deb.r, sizeof(TREGS));
@@ -404,7 +412,7 @@ BOOL cmdCpu(char *args, int subClass)
 
         deb.fRedraw = TRUE;
 
-        dprinth(1, "CPU registers recalled");
+        dprinth(1, "CPU registers restored");
 
         // If we changed eip, we need to recalculate the whole context
         SetSymbolContext(deb.r->cs, deb.r->eip);
@@ -474,6 +482,7 @@ BOOL cmdModule(char *args, int subClass)
             // If we specified a partial module name, match it here
             if( *args )
             {
+                // If the module name does not match, continue to the next one
                 if( strnicmp(Mod.name, args, strlen(args)) )
                     continue;
             }
@@ -567,21 +576,51 @@ BOOL cmdVer(char *args, int subClass)
     dprinth(1, "Version: %d.%d", LINICEVER >> 8, LINICEVER & 0xFF);
 
 #ifdef DBG
-    // Private debug build has more data to display - use as needed
+    dprinth(1, "DEBUG BUILD");
+#endif
+
+    // Additional system commands can be reached via VER command
+    // These are miscellaneous commands that may or may not find their way into
+    // separate commands. TBD.
     if( *args )
     {
-        dprinth(1, "Symbol check: %d", CheckSymtab(deb.pSymTabCur));
-        dprinth(1, "OS Page Offset: %08X", ice_page_offset());
-        dprinth(1, "Heap:");
-        DumpHeap(deb.hHeap);
-
-        dprinth(1, "deb = %08X", (DWORD) &deb);
-
-        dprinth(1, "ObjectStart/End:  %08X / %08X", (DWORD)ObjectStart, (DWORD)ObjectEnd);
-        dprinth(1, "ProtectStart/End: %08X / %08X", deb.dwProtectStart, deb.dwProtectEnd);
-        dprinth(1, "Linice checksum:  %02X", deb.LiniceChecksum);
+        // -------------------------------------------------------------------
+        // Hook the printk() function even if it is a debug build
+        // -------------------------------------------------------------------
+        if( !strnicmp(args, "printk-hook", 11 ) )
+        {
+            HookPrintk();
+        }
+        else
+        // -------------------------------------------------------------------
+        // Unhook the printk() function
+        // -------------------------------------------------------------------
+        if( !strnicmp(args, "printk-unhook", 13 ) )
+        {
+            UnhookPrintk();
+        }
+        else
+        // -------------------------------------------------------------------
+        // Dump more internal information
+        // -------------------------------------------------------------------
+        if( !strnicmp(args, "stat", 4 ) )
+        {
+            dprinth(1, "deb             = %08X", (DWORD) &deb);
+            dprinth(1, "Symbol check    = %d", CheckSymtab(deb.pSymTabCur));
+            dprinth(1, "OS Page Offset  = %08X", ice_page_offset());
+            dprinth(1, "ObjectStart/End = %08X / %08X", (DWORD)ObjectStart, (DWORD)ObjectEnd);
+            dprinth(1, "Heap:");
+            DumpHeap(deb.hHeap);
+        }
+        else
+        // -------------------------------------------------------------------
+        // Dump the edit history strings
+        // -------------------------------------------------------------------
+        if( !strnicmp(args, "ed-dump", 7 ) )
+        {
+            EdDumpHistory();
+        }
     }
-#endif
 
     return(TRUE);
 }

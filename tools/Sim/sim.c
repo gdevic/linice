@@ -70,6 +70,9 @@ char sTitle[80];                        // Buffer for window title
 
 char sConfig[] = "sim.conf.txt";        // Configuration file
 
+DWORD SimStack[32];                     // Fake simulator stack
+
+
 /******************************************************************************
 *                                                                             *
 *   Local Defines, Variables and Macros                                       *
@@ -202,6 +205,17 @@ void SimInit()
     Regs.eflags = 0x203;
 
     ConfigurationLoad();
+
+    SimStack[7] = 0x62;                 // Init_module()
+    SimStack[6] = 0x0002;               // Arg 2
+    SimStack[5] = 0x0001;               // Arg 1
+    SimStack[4] = 0x00;                 // f1()
+    SimStack[3] = &SimStack[0];
+    SimStack[2] = (DWORD)&sConfig;
+    SimStack[1] = 0x17;                 // f2()
+    SimStack[0] = &SimStack[3];         // <- EBP    
+
+    Regs.ebp = &SimStack[0];
 }
 
 void SimInstall()

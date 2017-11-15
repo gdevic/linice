@@ -91,9 +91,11 @@ extern BOOL cmdI1here       (char *args, int subClass);      // flow.c
 extern BOOL cmdI3here       (char *args, int subClass);      // flow.c
 extern BOOL cmdHboot        (char *args, int subClass);      // flow.c
 extern BOOL cmdHalt         (char *args, int subClass);      // flow.c
+extern BOOL cmdCall         (char *args, int subClass);      // flow.c
 extern BOOL cmdWd           (char *args, int subClass);      // windowcontrol.c
 extern BOOL cmdWc           (char *args, int subClass);      // windowcontrol.c
 extern BOOL cmdWr           (char *args, int subClass);      // windowcontrol.c
+extern BOOL cmdWs           (char *args, int subClass);      // windowcontrol.c
 extern BOOL cmdWl           (char *args, int subClass);      // windowcontrol.c
 extern BOOL cmdWw           (char *args, int subClass);      // windowcontrol.c
 extern BOOL cmdCls          (char *args, int subClass);      // windowcontrol.c
@@ -107,6 +109,7 @@ extern BOOL cmdFile         (char *args, int subClass);      // symbols.c
 extern BOOL cmdWhat         (char *args, int subClass);      // symbols.c
 extern BOOL cmdReg          (char *args, int subClass);      // registers.c
 extern BOOL cmdLocals       (char *args, int subClass);      // locals.c
+extern BOOL cmdStack        (char *args, int subClass);      // stack.c
 extern BOOL cmdWatch        (char *args, int subClass);      // watch.c
 extern BOOL cmdGdt          (char *args, int subClass);      // sysinfo.c
 extern BOOL cmdLdt          (char *args, int subClass);      // sysinfo.c
@@ -171,10 +174,11 @@ TCommand Cmd[] = {
 {    "BPX",      3, 1, cmdBpx,         "BPX address [debug register] [O] [IF expression] [DO bp-action]", "ex: BPX 282FE0",    0 },
 {    "BSTAT",    5, 0, cmdBstat,       "BSTAT [breakpoint #]", "ex: BSTAT 3", 0 },
 {    "C",        1, 0, cmdCompare,     "Compare [-e] address1 L length address2", "ex: C 80000 L 40 EBX",    0 },
+{    "CALL",     4, 0, cmdCall,        "CALL [address]([args[,]])", "ex: CALL funct(eax,0)", 0 },
 {    "CLS",      3, 0, cmdCls,         "CLS clear window", "ex: CLS", 0 },
 {    "CODE",     4, 0, cmdCode,        "CODE [ON | OFF]", "ex: CODE OFF", 0 },
 {    "COLOR",    5, 0, cmdColor,       "COLOR [normal bold reverse help line | - ]", "ex: COLOR 30 3E 1F 1E 34", 0 },
-{    "CPU",      3, 0, cmdCpu,         "CPU [-I]", "ex: CPU", 0 },
+{    "CPU",      3, 0, cmdCpu,         "CPU [s | r]", "ex: CPU", 0 },
 {    "D",        1, 0, cmdDdump,       "D [address [L length]]", "ex: D B0000",   0 },
 //{  "DATA",     4, 0, Unsupported,    "DATA [window-number(0-3)]", "ex: DATA 2", 0 },
 //{  "DEVICE",   6, 0, Unsupported,    "DEVICE [device-name | address]", "ex: DEVICE /dev/hda",   0 },
@@ -245,7 +249,7 @@ TCommand Cmd[] = {
 //{  "SHOW",     4, 0, Unsupported,    "SHOW [B | start] [L length]", "ex: SHOW 100", 0 },
 {    "SRC",      3, 0, cmdSrc,         "SRC Toggle between source, mixed & code", "ex: SRC",  0 },
 //{  "SS",       2, 0, Unsupported,    "SS [line-number] ['search-string']", "ex: SS 40 'if (i==3)'", 0 },
-//{  "STACK",    5, 0, Unsupported,    "STACK [-v | -r][task-name | thread-type | SS:EBP]", "ex: STACK",  0 },
+{    "STACK",    5, 0, cmdStack,       "STACK [-v] [SS:EBP]", "ex: STACK",  0 },
 {    "SYM",      3, 0, cmdSymbol,      "SYM [partial-name* | symbol-name]", "ex: SYM get*",   0 },
 {    "T",        1, 0, cmdTrace,       "Trace [count]", "ex: T",   0 },
 //{  "THREAD",   6, 0, Unsupported,    "THREAD [TCB | ID | task-name]", "ex: THREAD", 0 },
@@ -265,7 +269,7 @@ TCommand Cmd[] = {
 {    "WL",       2, 0, cmdWl,          "WL [locals-window-size]", "ex: WL 8",    0 },
 {    "WHAT",     4, 0, cmdWhat,        "WHAT expression", "ex: WHAT esi",  0 },
 {    "WR",       2, 0, cmdWr,          "WR Toggle register window", "ex: WR", 0 },
-//{  "WS",       2, 0, Unsupported,    "WS [stack-window-size]", "ex: WS 8",    0 },
+{    "WS",       2, 0, cmdWs,          "WS [stack-window-size]", "ex: WS 8",    0 },
 {    "WW",       2, 0, cmdWw,          "WW Toggle watch window", "ex: WW", 0 },
 {    "X",        1, 0, cmdXit,         "X Return to host debugger or program", "ex: X", 0 },
 //{  "XG",       2, 0, Unsupported,    "XG [r] address", "ex: XG eip-10", 0 },
@@ -334,7 +338,7 @@ char *sHelp[] = {
    "MODULE - Display kernel module list",
    "PAGE   - Display page table information",
    "PHYS   - Display all virtual addresses for physical address",
-/* "STACK  - Display call stack", */
+   "STACK  - Display call stack",
 /* "XFRAME - Display active exception frames", */
 /* "THREAD - Display thread information", */
 /* "ADDR   - Display/change address contexts", */
@@ -387,6 +391,7 @@ char *sHelp[] = {
    "M      - Move data",
    "C      - Compare two data blocks",
    "ASCII  - Prints an ASCII character table",
+   "CALL   - Execute a function call",
    " LINE EDITOR KEY USAGE",
    "up     - Recall previous command line",
    "down   - Recall next command line",
@@ -403,7 +408,7 @@ char *sHelp[] = {
    "WD     - Toggle data window",
    "WL     - Toggle locals window",
    "WR     - Toggle register window",
-/* "WS     - Toggle call stack window", */
+   "WS     - Toggle call stack window",
    "WW     - Toggle  watch window",
    "EC     - Enter/exit code window",
    ".      - Locate current instruction",
@@ -545,7 +550,7 @@ BOOL CommandExecute( char *pOrigCmd )
         // back to front to find a match
         for( i=iLast; i>=0; i--)
         {
-            if( strnicmp(pCmd, Cmd[i].sCmd, Cmd[i].nLen)==0
+            if( !strnicmp(pCmd, Cmd[i].sCmd, Cmd[i].nLen)
               && !isalnum(pCmd[Cmd[i].nLen]))
                 break;
         }
@@ -634,7 +639,7 @@ void CommandBuildHelpIndex()
             // If names exactly match, copy the pointer
             if( *(sHelp[j]+pCmd->nLen)==' ' )
             {
-                if( strnicmp(sHelp[j], pCmd->sCmd, pCmd->nLen)==0 )
+                if( !strnicmp(sHelp[j], pCmd->sCmd, pCmd->nLen) )
                 {
                     pCmd->iHelp = j;
                     break;
@@ -670,7 +675,7 @@ BOOL cmdHelp(char *args, int subClass)
         i = 0;
         while( Cmd[i].sCmd )
         {
-            if( strnicmp(args, Cmd[i].sCmd, strlen(args))==0 )
+            if( !strnicmp(args, Cmd[i].sCmd, strlen(args)) )
                 break;
             i++;
         }
@@ -744,11 +749,11 @@ int GetOnOff(char *args)
 
     if( len==0 )
         return( 3 );                    // No token - end of argument
-    if( len==2 && strnicmp(args, "on", 2)==0 )
+    if( len==2 && !strnicmp(args, "on", 2) )
         return( 1 );                    // ON
-    if( len==3 && strnicmp(args, "off", 3)==0 )
+    if( len==3 && !strnicmp(args, "off", 3) )
         return( 2 );                    // OFF
-    if( len==6 && strnicmp(args, "kernel", 6)==0 )
+    if( len==6 && !strnicmp(args, "kernel", 6) )
         return( 4 );                    // KERNEL
 
     PostError(ERR_SYNTAX, 0);

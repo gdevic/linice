@@ -74,9 +74,6 @@ static char *RegisterVariables[8] =
 ******************************************************************************/
 
 extern void ParseLocalSymbol(TExItem *item, TSYMFNSCOPE1 *pLocal);
-extern void ListDraw(TLIST *pList, TFRAME *pFrame, BOOL fForce);
-extern TLISTITEM *ListAdd(TLIST *pList, TFRAME *pFrame);
-extern void ListDel(TLIST *pList, TLISTITEM *pItem, BOOL fDelRoot);
 extern void PrettyPrintVariableName(char *pString, char *pName, TSYMTYPEDEF1 *pType1);
 
 
@@ -218,7 +215,7 @@ static BOOL LocalBuildQueue(TSYMFNSCOPE *pFnScope, DWORD dwEIP)
 ******************************************************************************/
 static void LocalBuildList()
 {
-    TLISTITEM *pItem;               // List item that we are adding
+    TLISTITEM *pItem;                   // List item that we are adding
     int index;                          // Running indicex into queue
 
     index = MAX_LOCALS_QUEUE;           // We will walk the list from back to front
@@ -230,7 +227,7 @@ static void LocalBuildList()
         {
             // Found an item in the queue, add it up to the list of locals
 
-            if((pItem = ListAdd(&deb.Local, &pWin->l)))
+            if((pItem = ListAdd(&deb.Local)))
             {
                 // Get the type descriptor into the new list node
                 ParseLocalSymbol(
@@ -264,13 +261,14 @@ static void LocalBuildList()
 
 /******************************************************************************
 *                                                                             *
-*   BOOL FillLocalScope(TSYMFNSCOPE *pFnScope, DWORD dwEIP)                   *
+*   BOOL FillLocalScope(TLIST *List, TSYMFNSCOPE *pFnScope, DWORD dwEIP)      *
 *                                                                             *
 *******************************************************************************
 *
 *   Rebuilds the list of local variables.
 *
 *   Where:
+*       List is the reference to a list to change
 *       pFnScope is the function scope to search
 *       dwEIP is the address within that function scope
 *   Returns:
@@ -278,16 +276,12 @@ static void LocalBuildList()
 *       FALSE Invalid scope or offset
 *
 ******************************************************************************/
-BOOL FillLocalScope(TSYMFNSCOPE *pFnScope, DWORD dwEIP)
+BOOL FillLocalScope(TLIST *List, TSYMFNSCOPE *pFnScope, DWORD dwEIP)
 {
-    // Clear the current list so we can rebuild it or not have it
-    while( deb.Local.pList )
-        ListDel(&deb.Local, deb.Local.pList, TRUE);
-
     memset(&LocalsQueue, 0, sizeof(LocalsQueue));
 
     // Build the scope only if the function scope is valid
-    if( deb.pFnScope )
+    if( pFnScope )
     {
         if( LocalBuildQueue(pFnScope, dwEIP) )
         {

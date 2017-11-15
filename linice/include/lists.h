@@ -89,8 +89,9 @@ typedef struct
 
 #define LIST_ID_WATCH       0x00        // Watch list
 #define LIST_ID_LOCALS      0x01        // Locals list
-#define LIST_ID_EXPRESSION  0x02        // Expression query
-#define LIST_ID_TYPE        0x03        // Typedef query (no evaluation needed)
+#define LIST_ID_STACK       0x02        // Stack list
+#define LIST_ID_EXPRESSION  0x03        // Expression query
+#define LIST_ID_TYPE        0x04        // Typedef query (no evaluation needed)
 
 /******************************************************************************
 *                                                                             *
@@ -98,6 +99,4 @@ typedef struct
 *                                                                             *
 ******************************************************************************/
 
-
 #endif //  _LISTS_H_
-
