@@ -1,10 +1,10 @@
 /******************************************************************************
 *                                                                             *
-*   Module:     code.c                                                        *
+*   Module:     proc.c                                                        *
 *                                                                             *
-*   Date:       11/16/00                                                      *
+*   Date:       04/14/01                                                      *
 *                                                                             *
-*   Copyright (c) 2000 - 2001 Goran Devic                                     *
+*   Copyright (c) 2001 Goran Devic                                            *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -12,16 +12,15 @@
 
     Module Description:
 
-        This module contains disassembly command
+        Simple read-only /proc virtual file implementation
 
 *******************************************************************************
 *                                                                             *
-*   Changes:                                                                  *
+*   Major changes:                                                            *
 *                                                                             *
 *   DATE     DESCRIPTION OF CHANGES                               AUTHOR      *
 * --------   ---------------------------------------------------  ----------- *
-* 11/16/00   Original                                             Goran Devic *
-* 03/11/01   Second edition                                       Goran Devic *
+* 04/14/01   Initial version                                      Goran Devic *
 * --------   ---------------------------------------------------  ----------- *
 *******************************************************************************
 *   Include Files                                                             *
@@ -31,7 +30,8 @@
 
 #include "clib.h"                       // Include C library header file
 #include "ice.h"                        // Include main debugger structures
-#include "disassembler.h"               // Include disassembler
+
+#include "debug.h"                      // Include our dprintk()
 
 /******************************************************************************
 *                                                                             *
@@ -45,94 +45,40 @@
 *                                                                             *
 ******************************************************************************/
 
-#define CODE_BYTES         8
-
-static char buf[MAX_STRING];
-static char disasm[MAX_STRING];
-
-
-/******************************************************************************
-*                                                                             *
-*   External Functions                                                        *
-*                                                                             *
-******************************************************************************/
-
 /******************************************************************************
 *                                                                             *
 *   Functions                                                                 *
 *                                                                             *
 ******************************************************************************/
 
-static DWORD GetCodeLine(PTADDRDESC pAddr)
+/******************************************************************************
+*                                                                             *
+*   int ProcLinice(char *buf, char **start, off_t offset, int len, int unused)*
+*                                                                             *
+*******************************************************************************
+*
+*   Called when /proc/linice is read.
+*
+*   Where:
+*
+*   Returns:
+*
+******************************************************************************/
+int ProcLinice(char *buf, char **start, off_t offset, int len, int unused)
 {
-    TDISASM dis;
-    int i, pos;
+    int i;
 
-    pos = sprintf(buf, "%04X:%08X ", pAddr->sel, pAddr->offset);
+    len = 0;
 
-    dis.dwFlags  = DIS_DATA32 | DIS_ADDRESS32;
-    dis.wSel = pAddr->sel;
-    dis.dwOffset = pAddr->offset;
-    dis.szDisasm = disasm;
+    // Print the number of interrupts that we trapped
 
-    // Disassemble and store into the line buffer
-    Disassembler( &dis );
+    len += sprintf(buf+len, "Host ints:           Linice ints:\n");
+    len += sprintf(buf+len, " timer: %5d         timer: %5d\n", pIce->nIntsPass[0x20], pIce->nIntsIce[0x20]);
+    len += sprintf(buf+len, " kbd:   %5d         kbd:   %5d\n", pIce->nIntsPass[0x21], pIce->nIntsIce[0x21]);
+    len += sprintf(buf+len, " com2:  %5d         com2:  %5d\n", pIce->nIntsPass[0x22], pIce->nIntsIce[0x22]);
+    len += sprintf(buf+len, " com1:  %5d         com1:  %5d\n", pIce->nIntsPass[0x23], pIce->nIntsIce[0x23]);
+    len += sprintf(buf+len, " ps/2:  %5d         ps/2:  %5d\n", pIce->nIntsPass[0x2C], pIce->nIntsIce[0x2C]);
+    len += sprintf(buf+len, " PF:    %5d         PF:    %5d\n", pIce->nIntsPass[0x0E], pIce->nIntsIce[0x0E]);
 
-    // If CODE was ON, print the code bytes
-    if( deb.fCode )
-    {
-        for( i=0; i<dis.bInstrLen && i<CODE_BYTES; i++ )
-        {
-            pos += sprintf(buf+pos, "%02X", dis.bCodes[i]);
-        }
-
-        // Append spaces, if necessary
-        while( i++ < CODE_BYTES )
-        {
-            pos += sprintf(buf+pos, "  ");
-        }
-    }
-
-    // Make the buffers lowercased if the variable was set so
-    if( deb.fLowercase==TRUE )
-    {
-        strtolower(buf);
-        strtolower(disasm);
-    }
-
-    return( dis.bInstrLen );
+    return( len );
 }
-
-
-static void PrintCodeLines(int lines)
-{
-    int nLen;
-    TADDRDESC Addr;
-
-    Addr = deb.codeAddr;                // Copy the current code address
-
-    while( lines-- > 0 )
-    {
-        nLen = GetCodeLine(&Addr);
-        dprinth(lines, "%s%s\n", buf, disasm);
-
-        // Advance code offset for the next line
-        Addr.offset += nLen;
-    }
-}
-
-void CodeDraw()
-{
-    dprint("-Code---------------------------------------------------------------------------\n");
-
-    PrintCodeLines(pWin->c.nLines - 1);
-}
-
-
-BOOL cmdUnassemble(char *args)
-{
-    PrintCodeLines(8);
-
-    return( TRUE );
-}
-

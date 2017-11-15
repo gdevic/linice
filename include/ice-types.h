@@ -59,5 +59,8 @@ typedef unsigned int   BOOL;
 // top several bits for the state of the key modifiers (control/alt)
 typedef unsigned short int CHAR;
 
+// When we need it, character type is unsigned
+typedef unsigned char UCHAR;
+
 
 #endif //  _ICE_TYPES_H_

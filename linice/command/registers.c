@@ -65,10 +65,10 @@ static const TRegfield regfield[23] = {
 
 void RegDraw(void)
 {
-    dprinth(0, "EAX=%08X   EBX=%08X   ECX=%08X   EDX=%08X   ESI=%08X\n",
+    dprint("EAX=%08X   EBX=%08X   ECX=%08X   EDX=%08X   ESI=%08X\n",
             deb.r->eax, deb.r->ebx, deb.r->ecx, deb.r->edx, deb.r->esi );
 
-    dprinth(1, "EDI=%08X   EBP=%08X   ESP=%08X   EIP=%08X   %c %c %c %c %c %c %c %c\n",
+    dprint("EDI=%08X   EBP=%08X   ESP=%08X   EIP=%08X   %c %c %c %c %c %c %c %c\n",
             deb.r->edi, deb.r->ebp, deb.r->esp, deb.r->eip,
             (deb.r->eflags & OF_MASK)? 'O' : 'o',
             (deb.r->eflags & DF_MASK)? 'D' : 'd',
@@ -79,7 +79,7 @@ void RegDraw(void)
             '?',
             (deb.r->eflags & CF_MASK)? 'C' : 'c' );
 
-    dprinth(2, "CS=%04X   DS=%04X   SS=%04X   ES=%04X   FS=%04X   GS=%04X\n",
+    dprint("CS=%04X   DS=%04X   SS=%04X   ES=%04X   FS=%04X   GS=%04X\n",
             deb.r->cs, deb.r->ds, deb.r->ss, deb.r->es, deb.r->fs, deb.r->gs );
 }
 

@@ -47,11 +47,13 @@
 
 static int iLast;                       // Last command entry index
 
-//typedef BOOL (*TFNCOMMAND)(char **args, int subClass);
+BOOL Unsupported(char *args, int subClass);
 
-BOOL Unsupported(char **args, int subClass);
-
-extern BOOL cmdEvaluate(char **args, int subClass);      // eval.c
+extern BOOL cmdEvaluate(char *args, int subClass);      // eval.c
+extern BOOL cmdCode    (char *args, int subClass);      // customization.c
+extern BOOL cmdSet     (char *args, int subClass);      // customization.c
+extern BOOL cmdLines   (char *args, int subClass);      // customization.c
+extern BOOL cmdXit     (char *args, int subClass);      // flow.c
 
 
 TCommand Cmd[] = {
@@ -79,7 +81,7 @@ TCommand Cmd[] = {
 {    "BSTAT",    5, 0, Unsupported,    "BSTAT [breakpoint #]", "ex: BSTAT 3", 0 },
 {    "C",        1, 0, Unsupported,    "C address1 L length address2", "ex: C 80000 L 40 EBX",    0 },
 {    "CLS",      3, 0, Unsupported,    "CLS clear window", "ex: CLS", 0 },
-{    "CODE",     4, 0, Unsupported,    "CODE [ON | OFF]", "ex: CODE OFF", 0 },
+{    "CODE",     4, 0, cmdCode,        "CODE [ON | OFF]", "ex: CODE OFF", 0 },
 {    "COLOR",    5, 0, Unsupported,    "COLOR normal bold reverse help line", "ex: COLOR 30 3E 1F 1E 34", 0 },
 {    "CPU",      3, 0, Unsupported,    "CPU [-I]", "ex: CPU", 0 },
 {    "D",        1, 0, Unsupported,    "D [address [L length]]", "ex: D B0000",   0 },
@@ -125,7 +127,7 @@ TCommand Cmd[] = {
 {    "IW",       2, 0, Unsupported,    "IW port", "ex: IW DX",    0 },
 {    "ID",       2, 0, Unsupported,    "ID port", "ex: ID DX",    0 },
 {    "LDT",      3, 0, Unsupported,    "LDT [selector | LDT table selector]", "ex: LDT 45",   0 },
-{    "LINES",    5, 0, Unsupported,    "LINES [25 | 43 | 50 | 60]", "ex: LINES 43",   0 },
+{    "LINES",    5, 0, cmdLines,       "LINES [25 | 43 | 50 | 60]", "ex: LINES 43",   0 },
 {    "LOCALS",   6, 0, Unsupported,    "LOCALS", "ex: LOCALS",    0 },
 {    "M",        1, 0, Unsupported,    "M address1 L length address2", "ex: M 4000 L 80 8000",    0 },
 {    "MACRO",    5, 0, Unsupported,    "MACRO [macro-name] | [[*] | [= \"macro-body\"]]", "ex: MACRO Oops = \"i3here off; genint 3;\"",   0 },
@@ -150,7 +152,7 @@ TCommand Cmd[] = {
 {    "RS",       2, 0, Unsupported,    "RS Restore program screen", "ex: RS", 0 },
 {    "S",        1, 0, Unsupported,    "S [-cu] address L length data-string", "ex: S 0 L ffffff 'Help',0D,0A",   0 },
 {    "SERIAL",   6, 0, Unsupported,    "SERIAL [ON|VT100 [com-port] [baud-rate] | OFF]", "ex: SERIAL ON 2 19200", 0 },
-{    "SET",      3, 0, Unsupported,    "SET [setvariable] [ON | OFF] [value]", "ex: SET FAULTS ON",   0 },
+{    "SET",      3, 0, cmdSet,         "SET [setvariable] [ON | OFF] [value]", "ex: SET FAULTS ON",   0 },
 {    "SHOW",     4, 0, Unsupported,    "SHOW [B | start] [L length]", "ex: SHOW 100", 0 },
 {    "SRC",      3, 0, Unsupported,    "SRC Toggle between source, mixed & code", "ex: SRC",  0 },
 {    "SS",       2, 0, Unsupported,    "SS [line-number] ['search-string']", "ex: SS 40 'if (i==3)'", 0 },
@@ -176,7 +178,7 @@ TCommand Cmd[] = {
 {    "WS",       2, 0, Unsupported,    "WS [window-size]", "ex: WS 8",    0 },
 {    "WW",       2, 0, Unsupported,    "WW Toggle watch window", "ex: WW",    0 },
 {    "WX",       2, 0, Unsupported,    "WX [D | F | *]", "WX 8",  0 },
-{    "X",        1, 0, Unsupported,    "X Return to host debugger or program", "ex: X",   0 },
+{    "X",        1, 0, cmdXit,         "X Return to host debugger or program", "ex: X",   0 },
 {    "XFRAME",   6, 0, Unsupported,    "XFRAME [frame address]", "ex: XFRAME EBP",    0 },
 {    "ZAP",      3, 0, Unsupported,    "ZAP Zap embeded INT1 or INT3", "ex: ZAP", 0 },
 {    NULL,       0, 0, NULL,           NULL, 0 }
@@ -385,7 +387,7 @@ char *sHelp[] = {
 
 /******************************************************************************
 *                                                                             *
-*   int CommandExecute( char *pCmd )                                          *
+*   BOOL CommandExecute( char *pCmd )                                         *
 *                                                                             *
 *******************************************************************************
 *
@@ -401,51 +403,73 @@ char *sHelp[] = {
 *       TRUE if suggested staying in the debugger
 *
 ******************************************************************************/
-int CommandExecute( char *pCmd )
+BOOL CommandExecute( char *pCmd )
 {
-    BOOL fContinue;
+    char *pCmdNext, cDelimiter;
+    BOOL fInString, fRet = TRUE;
     int i;
 
-    // Find the first non-space character
-    while( (*pCmd==' ') && (*pCmd!=0) ) pCmd++;
-
-    // If the line is empty, return early
-    if( *pCmd==0 )
-        return( 0 );
-
-    // Got the first character.. Search all known command keywords from
-    // back to front to find a match
-
-    for( i=iLast; i>=0; i--)
+    do
     {
-        if( strnicmp(pCmd, Cmd[i].sCmd, Cmd[i].nLen)==0 )
+        // Find the first non-space, non-delimiter character of the current command
+        while( (*pCmd==' ' || *pCmd==';') && (*pCmd!=0) ) pCmd++;
+
+        // Look for the ";" delimiter, ignore it within a string
+        pCmdNext = pCmd;
+        fInString = FALSE;
+        while( (*pCmdNext!=0 && *pCmdNext!=';') || fInString )
+        {
+            if( *pCmdNext=='"' )
+                fInString = !fInString;
+            pCmdNext++;
+        }
+
+        // If the command is empty, return
+        if( *pCmd==0 )
             break;
+
+        // Got the first character.. Search all known command keywords from
+        // back to front to find a match
+
+        for( i=iLast; i>=0; i--)
+        {
+            if( strnicmp(pCmd, Cmd[i].sCmd, Cmd[i].nLen)==0 )
+                break;
+        }
+
+        if( i>= 0 )
+        {
+            // Separate current string from the next one
+            cDelimiter = *pCmdNext;
+            *pCmdNext = 0;
+
+            // Command found !!!!  Find the first non-space character to
+            // assign it as a pointer to the first argument
+
+            pCmd += Cmd[i].nLen;
+            while( (*pCmd==' ') && (*pCmd!=0) ) pCmd++;
+
+            // Call the command function handler
+
+//            INFO(("COMMAND [%s]: \"%s\"\n", Cmd[i].sCmd, pCmd));
+
+            fRet = (Cmd[i].pfnCommand)( pCmd, Cmd[i].subClass );
+
+            // Restore the delimiter character
+            *pCmdNext = cDelimiter;
+        }
+        else
+        {
+//            INFO(("UNKNOWN COMMAND: \"%s\"\n", pCmd));
+;
+        }
+
+        pCmd = pCmdNext;
     }
+    while( (*pCmd != 0) && fRet );
 
-    if( i>= 0 )
-    {
-        // Command found !!!!  Find the first non-space character to
-        // assign it as a pointer to the first argument
-
-        pCmd += Cmd[i].nLen;
-        while( (*pCmd==' ') && (*pCmd!=0) ) pCmd++;
-
-        // Call the command function handler
-
-        fContinue = (Cmd[i].pfnCommand)( &pCmd, Cmd[i].subClass );
-
-        if( fContinue==FALSE )
-            return( FALSE );
-
-        // If this line keeps several commands separated by ;
-        // call itself recursively to execute them
-
-        if( *pCmd==';' )
-            Execute(pCmd+1);
-    }
-
-    return( TRUE );
-}    
+    return( fRet );
+}
 
 
 /******************************************************************************
@@ -490,19 +514,54 @@ void CommandBuildHelpIndex()
         i++;
         pCmd++;
     }
-}    
+}
 
 
 /******************************************************************************
 *                                                                             *
-*   BOOL Unsupported(char **args, int subClass)                               *
+*   BOOL Unsupported(char *args, int subClass)                                *
 *                                                                             *
 *******************************************************************************
 *
 *   Unsupported command stub
 *
 ******************************************************************************/
-BOOL Unsupported(char **args, int subClass)
+BOOL Unsupported(char *args, int subClass)
 {
+    dprint("Not yet implemented.\n");
+
     return( TRUE );
+}
+
+
+/******************************************************************************
+*                                                                             *
+*   int GetOnOff(char *args)                                                  *
+*                                                                             *
+*******************************************************************************
+*
+*   Parser helper: Returns [ON | OFF] state:
+*       ON = 1
+*       OFF = 2
+*       <none> = 3
+*   For any other token, it prints the syntax error and returns 0.
+*
+******************************************************************************/
+int GetOnOff(char *args)
+{
+    int len;
+
+    while( *args==' ') args++;
+    len = strlen(args);
+
+    if( len==0 )
+        return( 3 );                    // No token - end of argument
+    if( len==2 && strnicmp(args, "on", 2)==0 )
+        return( 1 );                    // ON
+    if( len==3 && strnicmp(args, "off", 3)==0 )
+        return( 2 );                    // OFF
+
+    dprint("Syntax error.\n");
+
+    return( 0 );
 }

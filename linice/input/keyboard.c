@@ -105,8 +105,28 @@ static BOOL fCapsLock = FALSE;
 
 
 /******************************************************************************
-*   Functions
+*                                                                             *
+*   Functions                                                                 *
+*                                                                             *
 ******************************************************************************/
+
+extern void MouseHandler(PTMPACKET pPacket);
+
+
+
+/******************************************************************************
+*
+*   Reads a byte from the AUX port, used for PS/2 mouse.
+*
+******************************************************************************/
+BYTE GetAux()
+{
+    int timeout = 1000;
+
+    while( ((inp(KBD_STATUS) & STATUS_AUXB)==0 )  && timeout) timeout--;
+
+    return( inp(KBD_DATA) );
+}
 
 /******************************************************************************
 *                                                                             *
@@ -129,21 +149,56 @@ void KeyboardHandler(void)
     CHAR AsciiCode, bNext;
     BYTE ScanCode;
     BYTE Code, Pressed;
+    TMPACKET mPacket;
+    BYTE packet[3];
 
     // Check the status of the controller; do nothing for now, but soon
     // we'll have to handle PS/2 mouse here
     Code = inp( KBD_STATUS );
 
     AsciiCode = 0;
-    ScanCode = inp( KBD_DATA );
 
     // If a PS/2 mouse was moved, eat the codes
     if( Code & STATUS_AUXB )
     {
-        // Mouse
+        // PS2 Mouse
+
+        packet[0] = GetAux();
+        packet[1] = GetAux();
+        packet[2] = GetAux();
+
+        // Map the PS2 mouse packets into internal mouse packet structure
+        //
+        //  D7   D6   D5   D4   D3   D2   D1   D0
+        //  YV   XV   YS   XS   1    CB   RB   LB
+        //  < Y displacement                    >
+        //  < X displacement                    >
+
+        mPacket.buttons =
+            ((packet[0] & 1) << 2) |        // LB
+            ((packet[0] & 2) >> 1) |        // RB
+            ((packet[0] & 4) >> 1);         // CB
+
+        if( packet[0] & 0x20 )
+            mPacket.Yd = -(256 - packet[1]);
+        else
+            mPacket.Yd = packet[1];
+
+        if( packet[0] & 0x10 )
+            mPacket.Xd = -(256 - packet[2]);
+        else
+            mPacket.Xd = packet[2];
+
+        // Call the common mouse handler
+
+        MouseHandler(&mPacket);
     }
     else
     {
+        // Read the keyboard scan code
+
+        ScanCode = inp( KBD_DATA );
+
         // On a key press, bit 7 of the scan code is 0.  When a key is being
         // released, bit 7 is 1.
 

@@ -75,7 +75,6 @@ typedef struct                          // Free node structure
 ******************************************************************************/
 
 static BYTE * _Init_Alloc( BYTE *pRamStart, DWORD dwRamSize );
-static int _Alloc_Check( BYTE *pHeap, DWORD dwInitSize );
 
 /******************************************************************************
 *                                                                             *
@@ -87,7 +86,7 @@ static int _Alloc_Check( BYTE *pHeap, DWORD dwInitSize );
 BYTE *ice_malloc(DWORD size)
 {
     return( vmalloc(size) );
-}    
+}
 
 
 /******************************************************************************
@@ -100,7 +99,7 @@ BYTE *ice_malloc(DWORD size)
 void ice_free(BYTE *p)
 {
     vfree(p);
-}    
+}
 
 
 /******************************************************************************
@@ -134,7 +133,7 @@ BYTE * ice_init_heap(size_t size)
     }
 
     return( pHeap );
-}    
+}
 
 
 /******************************************************************************
@@ -152,7 +151,7 @@ BYTE * ice_init_heap(size_t size)
 void ice_free_heap(BYTE *pHeap)
 {
     vfree(pHeap);
-}    
+}
 
 
 /******************************************************************************
@@ -226,6 +225,7 @@ static BYTE * _Init_Alloc( BYTE *pRamStart, DWORD dwRamSize )
 #           -4  - size out of bounds
 #
 ******************************************************************************/
+#if 0
 static int _Alloc_Check( BYTE *pHeap, DWORD dwInitSize )
 {
     Tmalloc *pLast;
@@ -268,7 +268,7 @@ static int _Alloc_Check( BYTE *pHeap, DWORD dwInitSize )
 
     return( nFree );
 }
-
+#endif
 
 /******************************************************************************
 *                                                                             *

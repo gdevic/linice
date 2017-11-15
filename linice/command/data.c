@@ -92,9 +92,10 @@ void GetDataLine(PTADDRDESC pAddr)
         fValid[i] = AddrIsPresent(pAddr);
         if( fValid[i]==TRUE )
             MyData.byte[i] = AddrGetByte(pAddr);
+        pAddr->offset++;
     }
 
-    pos = sprintf(buf, "%04X:%08X ", pAddr->sel, pAddr->offset);
+    pos = sprintf(buf, "%04X:%08X ", pAddr->sel, pAddr->offset - DATA_BYTES);
 
     switch( deb.DumpSize )
     {
@@ -149,6 +150,8 @@ void GetDataLine(PTADDRDESC pAddr)
 
         break;
     }
+
+    pos += sprintf(buf+pos, "\n");
 }
 
 
@@ -162,9 +165,6 @@ void PrintDataLines(int lines)
     {
         GetDataLine(&Addr);
         dprinth(lines, buf);
-
-        // Advance data offset for the next line
-        Addr.offset += DATA_BYTES;
     }
 }
 

@@ -113,23 +113,20 @@ CHAR GetKey( BOOL fBlock )
 
 /******************************************************************************
 *                                                                             *
-*   CHAR PutKey( CHAR Key )                                                   *
+*   void PutKey( CHAR Key )                                                   *
 *                                                                             *
 *******************************************************************************
 *
 *   This function serves input module (keyboard, serial) with the enqueue
-*   input character.
+*   input character functionality.
 *
 *   Where:
 *       Key is the key code to enque
 *
-*   Returns:
-*
 ******************************************************************************/
-CHAR PutKey( CHAR Key )
+void PutKey( CHAR Key )
 {
     int bNext;
-    CHAR c;
 
     // Store a code into the input queue - make it uninterruptible (atomic)
 
@@ -148,7 +145,5 @@ CHAR PutKey( CHAR Key )
     }
 
     STI();
-
-    return( c );
 }
 

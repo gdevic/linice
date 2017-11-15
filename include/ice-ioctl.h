@@ -29,7 +29,11 @@
 #ifndef _ICE_IOCTL_H_
 #define _ICE_IOCTL_H_
 
+#ifdef __KERNEL__
 #include <ioctl.h>                      // Include io control defines
+#else
+#include <sys/ioctl.h>                  // Include io control defines
+#endif // __KERNEL__
 
 #include "ice-types.h"                  // Include exended data types
 #include "ice-limits.h"                 // Include global program limits
@@ -52,7 +56,7 @@ typedef struct
     int nHistorySize;                   // Size of the history buffer
 
     char sInit[MAX_STRING];             // Init string
-    char keyFn [4][12][MAX_STRING];     // Key assignment for F, SF, AF and CF keys
+    char keyFn [4 * 12][MAX_STRING];    // Key assignment for F, SF, AF and CF keys
 
 } TINITPACKET, *PTINITPACKET;
 

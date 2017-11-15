@@ -95,7 +95,7 @@ static char sHistory[MAX_HISTORY][80] = {
 static char *sCmd;                      // Local pointer to a current cmd line
 static int xCur;                        // X coordinate of a cursor
 static int yCur;                        // Y coordinate of the edit line
-static int fInsert = 1;                 // Insert (1) / Overwrite (0) mode
+static BOOL fInsert = TRUE;             // Insert mode?
 static BOOL fCmdBuf = FALSE;            // Did we use cmd buffer
 static DWORD hView;                     // Handle to a history view
 
@@ -143,7 +143,7 @@ static void CursorEnd()
             break;
 
     xCur = i + 1;
-    dprint("%c%c%c:", DP_SETCURSORXY, 1+xCur, 1+yCur);
+    dprint("%c%c%c", DP_SETCURSORXY, 1+xCur, 1+yCur);
 }
 
 
@@ -225,6 +225,7 @@ static void NextHistoryLine()
 *
 *   Where:
 *       sCmdLine - pointer to a buffer in which the new command is copied.
+*       pOut->y is the line editor Y coordinate
 *
 *   Returns:
 *       Command line
@@ -544,7 +545,7 @@ void EdLin( char *sCmdLine )
     // Restore the last screen of the command window
 
     if( fCmdBuf==TRUE )
-        HistoryDisplay(NULL, 0);
+        HistoryDisplay(0, 0);
 
     // Print the final line and scroll it up
 

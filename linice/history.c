@@ -166,7 +166,7 @@ DWORD HistoryGetTop(void)
     DWORD nLines;
 
     // Backtrack so many lines in the history buffer
-    nLines = pWin->h.nLines;
+    nLines = pWin->h.nLines - 1;
 
     p = pHead;
 
@@ -199,32 +199,30 @@ DWORD HistoryDisplay(DWORD hView, int nDir)
     TLine *pView = (TLine *) hView;
     DWORD nLines;
 
-    nLines = pWin->h.nLines;
+    nLines = pWin->h.nLines - 1;
 
     if( nDir==0 )
     {
         // Print the end of the buffer
-        pView = (TLine *) GetCmdViewTop();
+        pView = (TLine *) HistoryGetTop();
     }
     else
     if( nDir < 0 )
     {
         // Backtrack another screenful of buffer lines
-
         while( (pView!=pTail) && nLines-- )
             pView = pView->prev;
     }
     else
     {
         // One screen forward
-
         while( (pView!=pHead) && nLines-- )
             pView = pView->next;
 
-        // This is quite convoluted: if we are anywhere within the last
+        // This is quite confusing: if we are anywhere within the last
         // screenful, reset the view to the top line of it..
 
-        nLines = pWin->h.nLines;
+        nLines = pWin->h.nLines - 1;
         p = pHead;
 
         while( (p!=pTail) && nLines-- )
@@ -238,7 +236,10 @@ DWORD HistoryDisplay(DWORD hView, int nDir)
     if( nDir )
         dputc(DP_SAVEXY);
 
-    dprint("%c%c%c", DP_SETCURSORXY, 1+0, 1+pWin->h.Top);
+    // Position the curson on the first line of the history frame,
+    // excluding the header line
+
+    dprint("%c%c%c", DP_SETCURSORXY, 1+0, 1+pWin->h.Top+1);
 
     p = pView;
     nLines = pWin->h.nLines;
@@ -257,6 +258,8 @@ DWORD HistoryDisplay(DWORD hView, int nDir)
 
 void HistoryDraw(void)
 {
-    HistoryDisplay(NULL, 0);
+    dprint("--------------------------------------------------------------------------------\n");
+
+    HistoryDisplay(0, 0);
 }
 

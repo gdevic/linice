@@ -35,7 +35,7 @@
 #include <fcntl.h>                      // Include file control file
 #include <stdio.h>                      // Include standard io file
 
-#include "ioctl.h"                      // Include shared header file
+#include "ice-ioctl.h"                  // Include shared header file
 
 #define stricmp     strcasecmp          // Weird gnu c call..
 
@@ -89,6 +89,10 @@ void OptInstall()
     TINITPACKET Init;
     int nLine;
 
+    // Remove linice device file (useful when debugging linice)
+    // Anyways, this file should not exist there at this point...
+    system2("rm /dev/ice");
+
     // Load the linice.o device driver module
     status = system2("insmod linice.o ice_debug_level=1");
 
@@ -117,8 +121,8 @@ void OptInstall()
 
         // Set default values
 
-        Init.nHistorySize = 1024;
-        Init.nSymbolSize  = 4096;
+        Init.nHistorySize = 16;         // 16 Kb
+        Init.nSymbolSize  = 128;        // 128 Kb
 
         nLine = 0;
 
@@ -127,11 +131,14 @@ void OptInstall()
         {
             nLine++;
             fgets(sLine, sizeof(sLine), fp);
+
             // Get to the first meaningful character in a line
             for(pStr=sLine; (*pStr!='\n') && (*pStr!='\r') && (*pStr==' '); pStr++);
+
             // Skip comment line and empty lines
             if((*pStr==';')||(*pStr=='\n')||(*pStr=='\r'))
                 continue;
+
             // Get the assignment in the form KEY=VALUE or KEY="value"
             sscanf(pStr, "%[a-zA-Z0-9]s", sKey);
             pStr = strchr(pStr,'=') + 1;
@@ -164,7 +171,7 @@ void OptInstall()
             if(stricmp(sKey, "f10" )==0) GetString(Init.keyFn[ 9], pStr); else
             if(stricmp(sKey, "f11" )==0) GetString(Init.keyFn[10], pStr); else
             if(stricmp(sKey, "f12" )==0) GetString(Init.keyFn[11], pStr); else
-            
+
             if(stricmp(sKey, "sf1" )==0) GetString(Init.keyFn[12], pStr); else
             if(stricmp(sKey, "sf2" )==0) GetString(Init.keyFn[13], pStr); else
             if(stricmp(sKey, "sf3" )==0) GetString(Init.keyFn[14], pStr); else
@@ -190,7 +197,7 @@ void OptInstall()
             if(stricmp(sKey, "af10")==0) GetString(Init.keyFn[33], pStr); else
             if(stricmp(sKey, "af11")==0) GetString(Init.keyFn[34], pStr); else
             if(stricmp(sKey, "af12")==0) GetString(Init.keyFn[35], pStr); else
-            
+
             if(stricmp(sKey, "cf1" )==0) GetString(Init.keyFn[36], pStr); else
             if(stricmp(sKey, "cf2" )==0) GetString(Init.keyFn[37], pStr); else
             if(stricmp(sKey, "cf3" )==0) GetString(Init.keyFn[38], pStr); else
@@ -208,11 +215,13 @@ void OptInstall()
             }
         }
 
+        Init.nSymbolSize *= 1024;       // Make these values kilobytes
+        Init.nHistorySize *= 1024;
 #if 0
         printf("fLowercase=%d\n", Init.fLowercase);
         printf("init=\"%s\"\n", Init.sInit);
-        printf("sym=%d\n", Init.nSymbolSize);
-        printf("hst=%d\n", Init.nHistorySize);
+        printf("sym=%d Kb\n", Init.nSymbolSize);
+        printf("hst=%d Kb\n", Init.nHistorySize);
         for(status=0; status<48; status++)
             printf("F%d=\"%s\"\n", status+1, Init.keyFn[status]);
 #endif

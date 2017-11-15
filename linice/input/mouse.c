@@ -45,23 +45,45 @@
 *                                                                             *
 ******************************************************************************/
 
+static int mouseX=0, mouseY=0;          // Mouse coordinates
+static int sens = 8;                    // Mouse sensitivity
+
 /******************************************************************************
-*   Functions
+*                                                                             *
+*   Functions                                                                 *
+*                                                                             *
 ******************************************************************************/
 
 /******************************************************************************
 *                                                                             *
-*   void MouseHandler(void)                                                   *
+*   void MouseHandler(PTMPACKET pPacket)                                      *
 *                                                                             *
 *******************************************************************************
 *
 *   This handler is used when the debugger has control.
 *
-*   This is a low-level PS/2 mouse handler.
+*   Where:
+*       pPacket is internal mouse packet
 *
 ******************************************************************************/
-void MouseHandler(void)
+void MouseHandler(PTMPACKET pPacket)
 {
-    ;
+    mouseX += pPacket->Xd;
+    mouseY += pPacket->Yd;
+
+    if( mouseX < 0 )
+        mouseX = 0;
+    else
+    if( mouseX > (pOut->sizeX-1) * sens )
+        mouseX = (pOut->sizeX-1) * sens;
+
+    if( mouseY < 0 )
+        mouseY = 0;
+    else
+    if( mouseY > (pOut->sizeY-1) * sens )
+        mouseY = (pOut->sizeY-1) * sens;
+
+    // Call the function to display mouse
+    pOut->mouse(mouseX / sens, mouseY / sens);
 }
 

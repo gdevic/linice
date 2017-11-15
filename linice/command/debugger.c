@@ -44,6 +44,15 @@
 *                                                                             *
 ******************************************************************************/
 
+static char sCmd[MAX_STRING];
+
+
+/******************************************************************************
+*                                                                             *
+*   Functions                                                                 *
+*                                                                             *
+******************************************************************************/
+
 extern void RecalculateDrawWindows();
 extern void EdLin( char *sCmdLine );
 
@@ -58,12 +67,13 @@ extern void EdLin( char *sCmdLine );
 ******************************************************************************/
 void DebuggerEnter(void)
 {
-    char sCmd[MAX_STRING];
     BOOL fContinue = TRUE;
 
     dputc(DP_SAVEBACKGROUND);
 
-    HistoryAdd("LinIce (C) 2000 by Goran Devic");
+    // Set the new CS:EIP for code disasembly
+    deb.codeAddr.sel = deb.r->cs;
+    deb.codeAddr.offset = deb.r->eip;
 
     // Recalculate window locations based on visibility and number of lines
     // and repaint all windows
@@ -73,10 +83,10 @@ void DebuggerEnter(void)
     while( fContinue )
     {
         EdLin( sCmd );
-        
-        fContinue = CommandExecute( sCmd );
+
+        fContinue = CommandExecute( sCmd+1 );   // Skip the prompt
     }
 
-    dputc(DP_RESTOREBACKGROUND);
-}    
+//    dputc(DP_RESTOREBACKGROUND);
+}
 

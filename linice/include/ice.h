@@ -64,6 +64,10 @@ typedef struct
     int layout;                         // Keyboard layout
     char keyFn[4][12][MAX_STRING];      // Key assignments for function keys
 
+    // Statistics variables
+    int nIntsPass[0x40];                // Number of interrupts received
+    int nIntsIce[0x40];                 // While debugger run
+
 } TICE, *PTICE;
 
 extern TICE Ice;                        // Global data structure
@@ -79,9 +83,9 @@ typedef struct tagTRegs
     DWORD   esp;
     DWORD   ss;
     DWORD   es;
-    DWORD   gs;
-    DWORD   fs;
     DWORD   ds;
+    DWORD   fs;
+    DWORD   gs;
     DWORD   edi;
     DWORD   esi;
     DWORD   ebp;
@@ -90,6 +94,7 @@ typedef struct tagTRegs
     DWORD   edx;
     DWORD   ecx;
     DWORD   eax;
+    DWORD   ChainAddress;
     DWORD   ErrorCode;
     DWORD   eip;
     DWORD   cs;
@@ -118,8 +123,16 @@ typedef struct
     int DumpSize;                       // Dx dump value size
     TADDRDESC dataAddr;                 // Data - current display address
 
-    BOOL fCodeOn;                       // Code - is SET CODE ON ?
+    BOOL fCode;                         // Code - is SET CODE ON ?
     TADDRDESC codeAddr;                 // Code - current display address
+
+    BOOL fAltscr;
+    BOOL fFaults;
+    BOOL fI1Here;
+    BOOL fI3Here;
+    BOOL fLowercase;
+    BOOL fPause;
+    BOOL fSymbols;
 
 } TDEB, *PTDEB;
 
@@ -158,7 +171,7 @@ extern PTWINDOWS pWin;
 // DEBUGGER COMMAND STRUCTURE
 /////////////////////////////////////////////////////////////////
 
-typedef BOOL (*TFNCOMMAND)(char **args, int subClass);
+typedef BOOL (*TFNCOMMAND)(char *args, int subClass);
 
 typedef struct
 {
@@ -176,6 +189,19 @@ extern TCommand Cmd[];                  // Command structure array
 extern char *sHelp[];                   // Help lines
 
 /////////////////////////////////////////////////////////////////
+// INTERNAL MOUSE PACKET STRUCTURE
+/////////////////////////////////////////////////////////////////
+// This is the internal mouse packet structure, device independent
+
+typedef struct
+{
+    int Xd;                             // Mouse X displacement
+    int Yd;                             // Mouse Y displacement
+    int buttons;                        // LB | CB | RB
+                                        // 2    1    0
+} TMPACKET, *PTMPACKET;
+
+/////////////////////////////////////////////////////////////////
 // OUTPUT SUBSYSTEM DEFINITION
 /////////////////////////////////////////////////////////////////
 // This structure is instantiated by every output module
@@ -187,6 +213,7 @@ typedef struct
     BYTE startX, startY;                // Display start coordinates
 
     void (*sprint)(char *c);            // Effective print string function
+    void (*mouse)(int, int);            // Function that displays mouse cursor
 
 } TOUT, *PTOUT;
 
@@ -221,13 +248,13 @@ extern CHAR GetKey( BOOL fBlock );      // Read a key code from the input queue
 #define CHAR_ALT                0x0200  // <key> + ALT
 #define CHAR_CTRL               0x0400  // <key> + CTRL
 
-extern CHAR PutKey( CHAR Key );
+extern void PutKey( CHAR Key );
 
 extern int dprint( char *format, ... );
 extern BOOL dprinth( int nLineCount, char *format, ... );
-extern void dputc(char c);
+extern void dputc(UCHAR c);
 
-
+extern BOOL CommandExecute( char *pCmd );
 extern void HistoryDraw(void);
 extern DWORD HistoryDisplay(DWORD hView, int nDir);
 extern DWORD HistoryGetTop(void);

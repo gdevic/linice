@@ -22,6 +22,7 @@ clean:
 			memaccess.o	\
 			eval.o		\
 			init.o		\
+			proc.o		\
 			edlin.o		\
 			debugger.o	\
 			disassembler.o	\
@@ -31,9 +32,12 @@ clean:
 			registers.o	\
 			data.o		\
 			code.o		\
+			customization.o		\
+			flow.o		\
 			history.o	\
 			input.o		\
 			keyboard.o	\
+			mouse.o		\
 			serial_in.o	\
 			output.o	\
 			window.o	\
@@ -54,6 +58,9 @@ memaccess.o:	memaccess.c
 
 init.o:		init.c
 	$(CC) $(CFLAGS) -c init.c
+
+proc.o:		proc.c
+	$(CC) $(CFLAGS) -c proc.c
 
 i386.o:		i386.asm
 	$(AS) -f elf i386.asm -o i386.o
@@ -88,17 +95,23 @@ data.o:		command/data.c
 code.o:		command/code.c
 	$(CC) $(CFLAGS) -c command/code.c
 
+customization.o:		command/customization.c
+	$(CC) $(CFLAGS) -c command/customization.c
+
+flow.o:		command/flow.c
+	$(CC) $(CFLAGS) -c command/flow.c
+
 input.o:	input/input.c
 	$(CC) $(CFLAGS) -c input/input.c
 
 keyboard.o:	input/keyboard.c
 	$(CC) $(CFLAGS) -c input/keyboard.c
 
-serial_in.o:	input/serial.c
-	$(CC) $(CFLAGS) -c input/serial.c -o serial_in.o
-
 mouse.o:	input/mouse.c
 	$(CC) $(CFLAGS) -c input/mouse.c
+
+serial_in.o:	input/serial.c
+	$(CC) $(CFLAGS) -c input/serial.c -o serial_in.o
 
 output.o:	output/output.c
 	$(CC) $(CFLAGS) -c output/output.c

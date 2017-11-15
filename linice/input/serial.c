@@ -62,6 +62,19 @@
 ******************************************************************************/
 void SerialHandler(int port)
 {
-    ;
+    // If mouse has a control over the serial port, send it there
+
+    // Queue mouse packets from the serial port:
+    //
+    //  D7   D6   D5   D4   D3   D2   D1   D0
+    //  X    1    LB   RB   Y7   Y6   X7   X6
+    //  X    0    X5   X4   X3   X2   X1   X0
+    //  X    0    Y5   Y4   Y3   Y2   Y1   Y0
+    //
+
+
+    // Otherwise, it is a remote terminal
+
+    // Or just a junk
 }
 

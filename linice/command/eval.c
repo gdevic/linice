@@ -60,6 +60,8 @@
 #include "module-header.h"              // Versatile module header file
 
 #include "clib.h"                       // Include C library header file
+#include "ice.h"                        // Include main debugger structures
+#include "debug.h"                      // Include our dprintk()
 
 /******************************************************************************
 *                                                                             *
@@ -545,22 +547,27 @@ int Evaluate( char *sExpr, char **psNext )
 
 /******************************************************************************
 *                                                                             *
-*   BOOL cmdEvaluate(char **args, int subClass)                               *
+*   BOOL cmdEvaluate(char *args, int subClass)                                *
 *                                                                             *
 *******************************************************************************
 *
 *   Debuger command to evaluate an expression
 *
 ******************************************************************************/
-BOOL cmdEvaluate(char **args, int subClass)
+BOOL cmdEvaluate(char *args, int subClass)
 {
     int value;
 
     nEvalDefaultBase = 16;
 
-    value = Evaluate( *args, args );
+    value = Evaluate( args, &args );
 
-    dprint(" Decimal=%d  Hex=%08X\n", value, value);
+//    dprinth(0, " Decimal=%d  Hex=%08X\n", value, value);
+    INFO((" Decimal=%d  Hex=%08X\n", value, value));
+
+    // Check for error in evaluation
+//    if( *args != 0 )
+
 
     return( TRUE );
-}    
+}

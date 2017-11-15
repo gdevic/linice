@@ -24,6 +24,9 @@ global  ReadCRTC
 global  WriteCRTC
 global  inp
 global  GetByte
+global  strtolower
+
+global testint3
 
 ;==============================================================================
 ; External definitions that this module uses
@@ -51,12 +54,15 @@ TempESP:        dd      0
 ;
 ;==============================================================================
 
+MAGIC_ERROR     equ     0CAFEBABEh
+
 ; Define interrupt handler stubs taking care to abstract error code on the stack
 
 %macro int_handler 2
 %if %2 == 0
-        push    dword 0         ; Fake error code if parameter 2 is zero (no EC)
+        push    dword MAGIC_ERROR ; Fake error code if parameter 2 is zero (no EC)
 %endif
+        sub     esp, 4          ; Space for the chain_address
         pushad                  ; Save all general registers
         mov     ecx, %1         ; Get the interrupt number; parameter 1
         jmp     IntCommon       ; Jump to the common handler
@@ -122,7 +128,7 @@ Intr2F:      int_handler 02Fh, 0
 
 ; SYSCALL ineterrupt
 
-Intr80:      int_handler 0x80, 0
+Intr80:      int_handler 080h, 0
 
 ; Table containing the addresses of our interrupt handlers
 
@@ -143,158 +149,170 @@ IceIntHandlers:
 
 ; On the ring-0 stack:
 ;
-;      (I) Running V86 code:             (II) Running PM code RING3:      (III) Running PM code RING0:
-;     ___________________________        ______________________________   ______________________________
-;     esp from tss * -|-
-; 54             ---- | VM gs
-; 50             ---- | VM fs
-; 4C             ---- | VM ds
-; 48             ---- | VM es             esp from tss * -|-              esp is from interrupted kernel (*)
-; 44             ---- | VM ss                        ---- | PM ss
-; 40             VM esp                              PM esp
-; 3C             VM eflags                           PM eflags                        PM eflags
-; 38             ---- | VM cs                        ---- | PM cs                     ---- | PM cs
-; 34             VM eip                              PM eip                           PM eip
-; 30             error_code or 0                     error_code or 0                  error_code or 0
-;     <pushed by us>   .   .   .   .   .   .   .   .   .   .   .   .    .   .   .   .   .   .   .   .
-; 2C             eax                                 eax                              eax
-; 28  p          ecx                                 ecx                              ecx
-; 24  u          edx                                 edx                              edx
-; 20  s          ebx                                 ebx                              ebx
-; 1C  h          ---                                 ---                              ---
-; 18  a          ebp                                 ebp                              ebp
-; 14  d          esi                                 esi                              esi
-; 10   _______   edi                                 edi                              edi
-; 0C             0       *                           ---- | PM ds                     ---- | PM ds
-; 08             0       *                           ---- | PM fs                     ---- | PM fs
-; 04             0       *                           ---- | PM gs                     ---- | PM gs
-; ebp->          0       *                           ---- | PM es                     ---- | PM es
-;     <copied by us>   .   .   .   .   .   .   .   .   .   .   .   .    .   .   .   .   .   .   .   .
-;                ---- | VM ss                        ---- | PM ss                     ---- | PM ss
-;                VM esp                              PM esp                           PM esp (*)
-;
-;
+;    (I) Running V86 code:             (II) Running PM code RING3:      (III) Running PM code RING0:
+;   ___________________________        ______________________________   ______________________________
+;   esp from tss * -|-
+;              ---- | VM gs
+;              ---- | VM fs
+;              ---- | VM ds
+;              ---- | VM es             esp from tss * -|-              esp is from interrupted kernel (*)
+;              ---- | VM ss                        ---- | PM ss
+;              VM esp                              PM esp
+;              VM eflags                           PM eflags                        PM eflags
+;              ---- | VM cs                        ---- | PM cs                     ---- | PM cs
+;    ________  VM eip  __________________________  PM eip  _______________________  PM eip
+;              error_code or 0                     error_code or 0                  error_code or 0
+;              chain_address                       chain_address                    chain_address
+;              eax                                 eax                              eax
+;   p          ecx                                 ecx                              ecx
+;   u          edx                                 edx                              edx
+;   s          ebx                                 ebx                              ebx
+;   h          ---                                 ---                              ---
+;   a          ebp                                 ebp                              ebp
+;   d          esi                                 esi                              esi
+;    ________  edi  _____________________________  edi  __________________________  edi
+;              0       *                           ---- | PM gs                     ---- | PM gs
+;              0       *                           ---- | PM fs                     ---- | PM fs
+;              0       *                           ---- | PM ds                     ---- | PM ds
+;              0       *                           ---- | PM es                     ---- | PM es
+;              ---- | VM ss                        ---- | PM ss                     ---- | PM ss
+; frame ->       VM esp                              PM esp                           PM esp (*)
+
+        struc   frame
+_esp:           resd    1
+_ss:            resd    1
+_es:            resd    1
+_ds:            resd    1
+_fs:            resd    1
+_gs:            resd    1
+_genreg:        resd    8
+chain_address:  resd    1
+error_code:     resd    1
+_eip:           resd    1
+_cs:            resd    1
+_eflags:        resd    1
+_esp_orig:      resd    1
+_ss_orig:       resd    1
+_es_orig:       resd    1
+_ds_orig:       resd    1
+_fs_orig:       resd    1
+_gs_orig:       resd    1
+        endstruc
+
 IntCommon:
         xor     eax, eax        ; Push the rest of segment/selector registers
-        mov     ax, ds
+        mov     ax, gs
         push    eax
         mov     ax, fs
         push    eax
-        mov     ax, gs
+        mov     ax, ds
         push    eax
         mov     ax, es
         push    eax
 
         mov     ax, SEL_ICE_DS  ; Load all selectors with kernel data selector
-        mov     ds, ax
-        mov     ax, SEL_ICE_DS
-        mov     fs, ax
-        mov     ax, SEL_ICE_DS
         mov     gs, ax
-        mov     ax, SEL_ICE_DS
+        mov     fs, ax
+        mov     ds, ax
         mov     es, ax
 
 ; Depending on the mode of execution of the interrupted code, we need to do some entry adjustments
+        sub     esp, 8                          ; Start of the frame
         mov     ebp, esp
-        bt      dword [ebp+03Ch], 17            ; VM mode ?
-        jnc     not_VM
+        test    dword [ebp+_eflags], 1 << 17   ; VM mode ?
+        jz      not_VM
 
-        mov     eax, [ebp+04Ch]                 ; VM ds
-        mov     [ebp+00Ch], eax
-        mov     eax, [ebp+050h]                 ; VM fs
-        mov     [ebp+008h], eax
-        mov     eax, [ebp+054h]                 ; VM gs
-        mov     [ebp+004h], eax
-        mov     eax, [ebp+048h]                 ; VM es
-        mov     [ebp+000h], eax
-        push    dword [ebp+044h]                ; VM ss
-        push    dword [ebp+040h]                ; VM esp
+        ; --- VM86 ---
+        mov     eax, [ebp+_gs_orig]
+        mov     [ebp+_gs], eax
+        mov     eax, [ebp+_fs_orig]
+        mov     [ebp+_fs], eax
+        mov     eax, [ebp+_ds_orig]
+        mov     [ebp+_ds], eax
+        mov     eax, [ebp+_es_orig]
+        mov     [ebp+_es], eax
+ring_3: ; --- VM86 + RING 3 ---
+        mov     eax, [ebp+_ss_orig]
+        mov     [ebp+_ss], eax
+        mov     eax, [ebp+_esp_orig]
+        mov     [ebp+_esp], eax
         jmp     entry
 not_VM:
-        bt      dword [ebp+038h], 0             ; Ring 3 code ?
-        jnc     ring0
-        push    dword [ebp+044h]                ; PM3 ss
-        push    dword [ebp+040h]                ; PM3 esp
-        jmp     entry
-ring0:
+        test    dword [ebp+_cs], 1              ; Code selector is ring 3 ?
+        jnz     ring_3
+
+        ; --- RING 0 ---
         mov     ax, ss
-        push    eax                             ; PM0 ss
-        lea     eax, [ebp+040h]
-        push    eax                             ; PM0 esp
+        mov     dword [ebp+_ss], eax
+        lea     eax, [ebp+_esp_orig]
+        mov     dword [ebp+_esp], eax
 entry:
 ; Push the address of the register structure that we just set up
-        mov     eax, esp
-        push    eax
+        push    ebp
 
 ; Push interrupt number on the stack and call our C handler
-
         push    ecx
         cld                                     ; Set the direction bit
-        call    InterruptHandler
+        call    InterruptHandler                ; on return, eax is the chain address (or NULL)
         add     esp, 8
 
-; Depending on the mode of execution of the interrupted code, we need to do some exit adjustments
-        mov     ebp, esp
-        bt      dword [ebp+03Ch], 17            ; VM mode ?
-        jnc     exit_not_VM
+        mov     dword [ebp+chain_address], eax  ; Store the chain address
+        mov     ecx, eax                        ; Keep the value in ecx register as well
 
-        mov     eax, [ebp+00Ch]
-        mov     [ebp+04Ch], eax                 ; VM ds
-        mov     eax, [ebp+008h]
-        mov     [ebp+050h], eax                 ; VM fs
-        mov     eax, [ebp+004h]
-        mov     [ebp+054h], eax                 ; VM gs
-        mov     eax, [ebp+000h]
-        mov     [ebp+048h], eax                 ; VM es
-        pop     dword [ebp+040h]                ; VM esp
-        pop     dword [ebp+044h]                ; VM ss
+; Depending on the mode of execution of the interrupted code, we need to do some exit adjustments
+        test    dword [ebp+_eflags], 1 << 17    ; VM mode ?
+        jz      exit_not_VM
+
+        ; --- VM86 ---
+        mov     eax, [ebp+_es]
+        mov     [ebp+_es_orig], eax
+        mov     eax, [ebp+_ds]
+        mov     [ebp+_ds_orig], eax
+        mov     eax, [ebp+_fs]
+        mov     [ebp+_fs_orig], eax
+        mov     eax, [ebp+_gs]
+        mov     [ebp+_gs_orig], eax
+exit_ring_3:
+        mov     eax, [ebp+_ss]
+        mov     [ebp+_ss_orig], eax
+        mov     eax, [ebp+_esp]
+        mov     [ebp+_esp_orig], eax
         jmp     exit
 exit_not_VM:
-        bt      dword [ebp+038h], 0             ; Ring 3 code ?
-        jnc     exit_ring0
-        pop     dword [ebp+040h]                ; PM3 esp
-        pop     dword [ebp+044h]                ; PM3 ss
-        jmp     exit
+        test    dword [ebp+_cs], 1              ; Code is ring 3 ?
+        jnz     exit_ring_3
 exit_ring0:
-        ; In the ring 0, we are allowed to change esp only, not the ss. So if the esp has been
-        ; changed, we need to use some trickery to end up where we want to be..
-        ; We use the fact that in the kernel mode DS==SS==known value
-        pop     dword [TempESP]                 ; PM0 esp
-        add     esp, 4                          ; skip ss
-
-        pop     ebx             ; Restore segment/selector registers
-        mov     es, bx
-        pop     ebx
-        mov     gs, bx
-        pop     ebx
-        mov     fs, bx
-        pop     ebx
-        mov     ds, bx          ; DS should really be equal to SS
-
-        popad                   ; Restore all general purpose registers
-        add     esp, 4          ; Skip over the error code
-        pop     dword [TempEIP] ; Pick up the return eip
-        add     esp, 4          ; Skip over the PM0 cs (we should be in the same cs, anyways)
-        popfd                   ; Pop eflags
-        mov     esp, [TempESP]  ; Reload new esp
-        jmp     dword [TempEIP] ; And jump to where we came from
-
+        ; --- RING 0 ---
+        ; In the ring 0, we can't change esp or ss (yet)
 exit:
-; Return execution to the interrupted program
+        add     esp, 8                          ; Skip esp/ss
+        pop     eax
+        mov     es, ax
+        pop     eax
+        mov     ds, ax
+        pop     eax
+        mov     fs, ax
+        pop     eax
+        mov     gs, ax
 
-        pop     ebx             ; Restore segment/selector registers
-        mov     es, bx
-        pop     ebx
-        mov     gs, bx
-        pop     ebx
-        mov     fs, bx
-        pop     ebx
-        mov     ds, bx
-
+; Depending on the chain address and the error code, we need to return the right way
+        or      ecx, ecx
+        jz      no_chain_return
+chain_return:
+        mov     eax, [ebp+error_code]
+        cmp     eax, MAGIC_ERROR
+        je      chain_no_ec
         popad                   ; Restore all general purpose registers
-        add     esp, 4          ; Skip over the error code value
-        iretd                   ; Return to the interrupted task
+        ret                     ; Return to the chain address and keep the error code
 
+chain_no_ec:
+        popad                   ; Restore all general purpose registers
+        ret     4               ; Return to the chain address and pop the error code
+
+no_chain_return:
+        popad                   ; Restore all general purpose registers
+        add     esp, 8          ; Skip the chain_address and the error code value
+        iretd                   ; Return to the interrupted task
 
 ;==============================================================================
 ;
@@ -400,8 +418,9 @@ inp:
 ;==============================================================================
 GetByte:
         push    ebp
-        push    gs
         mov     ebp, esp
+        push    ebx
+        push    gs
 
         mov     ax, [ebp + 8]           ; Get the selector
         mov     gs, ax                  ; Store it in the GS
@@ -413,12 +432,13 @@ GetByte:
         ; in EAX register in that case
 
         xor     eax, eax
-        mov     al, [ds:ebx]
+        mov     al, [gs:ebx]
         nop
         nop
         nop
 
         pop     gs
+        pop     ebx
         pop     ebp
         ret
 
@@ -448,6 +468,39 @@ memset_w:
         cld
         rep     stosw
 
+        pop     ebp
+        ret
+
+
+;==============================================================================
+;
+;   strtolower(char *str)
+;
+;   Where:
+;       [ebp+8]         string
+;
+;==============================================================================
+strtolower:
+        push    ebp
+        mov     ebp, esp
+        push    ebx
+
+        mov     ebx, [ebp+8]
+@loop:
+        mov     al, [ebx]
+        or      al, al
+        jz      @exit
+        cmp     al, 'A'
+        jl      @next
+        cmp     al, 'Z'
+        jg      @next
+        add     al, 'a'-'A'
+        mov     [ebx], al
+@next:
+        inc     ebx
+        jmp     @loop
+@exit:
+        pop     ebx
         pop     ebp
         ret
 
@@ -492,3 +545,13 @@ GetSysreg:
         pop     ebp
         ret
 
+
+testint3:
+        mov     eax, 1
+        mov     ebx, 2
+        mov     ecx, 3
+        mov     edx, 4
+        mov     esi, 5
+        mov     edi, 6
+        mov     ebp, 7
+        int     3

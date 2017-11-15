@@ -35,6 +35,7 @@
 #include <asm/uaccess.h>                // User space memory access functions
 #include <linux/fs.h>                   // Include file operations file
 #include <asm/unistd.h>                 // Include system call numbers
+#include <linux/proc_fs.h>              // Include proc filesystem support
 
 #include "ice-ioctl.h"                  // Include our own IOCTL numbers
 #include "clib.h"                       // Include C library header file
@@ -57,6 +58,8 @@ TDEB deb;                               // Live debugee state structure
 TWINDOWS Win;                           // Output windowing structure
 PTWINDOWS pWin;                         // And a pointer to it
 
+PTOUT pOut;                             // Pointer to a current Out class
+
 //=============================================================================
 MODULE_AUTHOR("Goran Devic");
 MODULE_DESCRIPTION("Linux kernel debugger");
@@ -73,6 +76,8 @@ char *linice = "";                      // default value
 MODULE_PARM(ice_debug_level, "i");      // ice_debug_level=<integer>
 int ice_debug_level = 1;                // default value
 
+//=============================================================================
+// DEV DEVICE NODE ACCESS
 //=============================================================================
 
 static int major_device_number;
@@ -95,6 +100,24 @@ struct file_operations ice_fops = {
     DriverClose,        /* close   */
 };
 
+//=============================================================================
+// PROC VIRTUAL FILE
+//=============================================================================
+
+extern int ProcLinice(char *buf, char **start, off_t offset, int len, int unused);
+
+struct proc_dir_entry linice_proc_entry =
+{
+    0,                                  // low_ino: the inode--dynamic
+    6, "linice",                        // Name len and name string
+    S_IFREG | S_IRUGO,                  // mode
+    1, 0, 0,                            // nlinks, owner, group
+    0,                                  // size - unused
+    NULL,                               // operations - unused
+    &ProcLinice,                        // Read function
+};
+
+
 /******************************************************************************
 *                                                                             *
 *   Local Defines, Variables and Macros                                       *
@@ -109,10 +132,11 @@ static PFNMKNOD sys_mknod;
 static PFNUNLINK sys_unlink;
 
 extern int InitPacket(PTINITPACKET pInit);
-                                 
+
 extern void ice_free(BYTE *p);
 extern void ice_free_heap(BYTE *pHeap);
 
+extern void UnHookDebuger(void);
 
 /******************************************************************************
 *                                                                             *
@@ -158,9 +182,12 @@ int init_module(void)
 
             set_fs(oldFS);
 
+            // Module loaded ok
             if(val >= 0)
             {
-                // Module loaded ok
+                // Register /proc/linice virtual file
+                proc_register(&proc_root, &linice_proc_entry);
+
 
                 INFO(("LinIce successfully loaded.\n"));
 
@@ -202,6 +229,9 @@ void cleanup_module(void)
 
     INFO(("cleanup_module\n"));
 
+    // Unregister /proc virtual file
+    proc_unregister(&proc_root, linice_proc_entry.low_ino);
+
     // Delete a devce node in the /dev/ directory
     if(sys_unlink != 0)
     {
@@ -213,9 +243,12 @@ void cleanup_module(void)
         set_fs(oldFS);
     }
 
+    // Restore original Linux IDT table
+    UnHookDebuger();
+
     // Unregister driver
     unregister_chrdev(major_device_number, "ice");
-    
+
     // Free memory structures
     if( pIce->pHistoryBuffer != NULL )
         ice_free(pIce->pHistoryBuffer);

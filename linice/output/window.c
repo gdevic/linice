@@ -57,10 +57,10 @@ static void AdjustTopBottom(PTFRAME pFrame)
 {
     if( pFrame->fVisible )
     {
-        pFrame->Top = avail;
+        pFrame->Top = total;
         pFrame->Bottom = pFrame->Top + pFrame->nLines - 1;
-        avail += pFrame->nLines;
-        total -= pFrame->nLines;
+        total += pFrame->nLines;
+        avail -= pFrame->nLines;
     }
 }
 
@@ -88,7 +88,8 @@ static void AdjustToFit(int excess)
 *******************************************************************************
 *
 *   Calculates if the current window size assignment is valid for the current
-*   window height.
+*   window height. It ignores the size of the history frame as this one can
+*   be adjusted based on the findings of this function.
 *
 *   Returns:
 *       >=0 if all windows can fit on the screen
@@ -97,12 +98,11 @@ static void AdjustToFit(int excess)
 ******************************************************************************/
 int WindowIsSizeValid()
 {
-    int less = pOut->sizeY;
+    int less = pOut->sizeY - 3;         // Add 3 lines for history and help
 
     if( pWin->r.fVisible )  less -= pWin->r.nLines;
     if( pWin->d.fVisible )  less -= pWin->d.nLines;
     if( pWin->c.fVisible )  less -= pWin->c.nLines;
-    if( pWin->h.fVisible )  less -= pWin->h.nLines;
 
     return( less );
 }
@@ -122,8 +122,8 @@ void RecalculateDrawWindows()
 {
     int excess;
 
-    avail = 0;
-    total = pOut->sizeY;
+    avail = pOut->sizeY;
+    total = 0;
 
     if( (excess = WindowIsSizeValid()) < 0 )
         AdjustToFit( -excess );
@@ -132,12 +132,16 @@ void RecalculateDrawWindows()
     AdjustTopBottom(&pWin->d);
     AdjustTopBottom(&pWin->c);
 
-    // The last one is the history window, and we will let this one slide
-    pWin->h.nLines = total - 1;
+    // The last one is the history window, and we will let it fill in the rest
+    pWin->h.nLines = avail - 1;         // Save one extra for the help line
     AdjustTopBottom(&pWin->h);
 
     // Draw the screen
     dputc(DP_CLS);
+
+    // Set the new history frame scroll region
+    // Add one to the top Y to skip the header line
+    dprint("%c%c%c", DP_SETSCROLLREGIONYY, pWin->h.Top+1+1, pWin->h.Bottom+1);
 
     if( pWin->r.fVisible )  (pWin->r.draw)();
     if( pWin->d.fVisible )  (pWin->d.draw)();

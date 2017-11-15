@@ -31,7 +31,6 @@
 
 #include "clib.h"                       // Include C library header file
 #include "ice.h"                        // Include main debugger structures
-#include "intel.h"
 #include "ibm-pc.h"
 #include "debug.h"                      // Include our dprintk()
 #include "intel.h"                      // Include processor specific stuff
@@ -73,6 +72,7 @@ extern void KeyboardHandler(void);
 extern void SerialHandler(int port);
 extern void MouseHandler(void);
 
+extern void DebuggerEnter(void);
 
 /******************************************************************************
 *                                                                             *
@@ -113,15 +113,15 @@ static void HookIdt(PTIDT_Gate pGate, int nIntNumber)
 ******************************************************************************/
 void InterruptInit(void)
 {
-    GET_IDT(&deb.idt);
+    GET_IDT(deb.idt);
 
-    // Copy original Linux IDT to our copy of it
+    // Copy original Linux IDT to our local buffer
 
-    memcpy(LinuxIdt, deb.idt.base, deb.idt.limit+1);
+    memcpy(LinuxIdt, (void *)deb.idt.base, deb.idt.limit+1);
 
     // Copy the same IDT into our private IDT and initialize its descriptor
 
-    memcpy(IceIdt, deb.idt.base, deb.idt.limit+1);
+    memcpy(IceIdt, (void *)deb.idt.base, deb.idt.limit+1);
     IceIdtDescriptor.base = (DWORD) IceIdt;
     IceIdtDescriptor.limit = deb.idt.limit;
 
@@ -160,7 +160,7 @@ void InterruptInit(void)
 ******************************************************************************/
 void HookDebuger(void)
 {
-    PTIDT_Gate pIdt = deb.idt.base;
+    PTIDT_Gate pIdt = (PTIDT_Gate) deb.idt.base;
 
     // We hook selcted CPU interrupts and traps. This makes debugger active.
 
@@ -169,7 +169,7 @@ void HookDebuger(void)
     HookIdt(&pIdt[0x08], 0x8);          // Double-fault
     HookIdt(&pIdt[0x0D], 0xD);          // GP fault
     HookIdt(&pIdt[0x0E], 0xE);          // Page fault
-    HookIdt(&pIdt[0x80], 0x80);         // System call interrupt
+//    HookIdt(&pIdt[0x80], 0x80);         // System call interrupt
 }
 
 
@@ -186,7 +186,7 @@ void UnHookDebuger(void)
 {
     // Copy back the original Linux IDT
 
-    memcpy(deb.idt.base, LinuxIdt, deb.idt.limit+1);
+    memcpy((void *)deb.idt.base, LinuxIdt, deb.idt.limit+1);
 }
 
 
@@ -202,15 +202,23 @@ void UnHookDebuger(void)
 ******************************************************************************/
 void Panic(void)
 {
+    DWORD *p = (DWORD *)deb.r;
+    int i;
+
     pOut->x = 0;
     pOut->y = 0;
-    dprint("ICE-PANIC: Int: %d\n", deb.nInterrupt);
-    dprint("EAX=%08X EBX=%08X ECX=%08X EDX=%08X ESI=%08X EDI=%08X\n",
+    dprint("ICE-PANIC: Int: %d\r\n", deb.nInterrupt);
+    dprint("EAX=%08X EBX=%08X ECX=%08X EDX=%08X ESI=%08X EDI=%08X\r\n",
             deb.r->eax, deb.r->ebx, deb.r->ecx, deb.r->edx, deb.r->esi, deb.r->edi);
-    dprint("CS:EIP=%04X:%08X  SS:ESP=%04X:%08X\n",
-            deb.r->cs, deb.r->eip, deb.r->ss, deb.r->esp);
-    dprint("ES=%04X FS=%04X GS=%04X EBP=%08X\n",
-            deb.r->es, deb.r->fs, deb.r->gs, deb.r->ebp);
+    dprint("CS:EIP=%04X:%08X  SS:ESP=%04X:%08X EBP=%08X\r\n",
+            deb.r->cs, deb.r->eip, deb.r->ss, deb.r->esp, deb.r->ebp);
+    dprint("DS=%04X ES=%04X FS=%04X GS=%04X\r\n",
+            deb.r->ds, deb.r->es, deb.r->fs, deb.r->gs );
+
+    for( i=0; i<13+8; i++)
+    {
+        dprint("%08X  \n", *p++);
+    }
 
     cli();
     while( TRUE );
@@ -231,24 +239,22 @@ void Panic(void)
 *       pRegs is the register structure on the stack
 *
 *   Returns:
-*       NULL
+*       NULL to return to the original interrupted application/kernel
+*       ADDRESS to chain the interrupt to that specified handler address
 *
 ******************************************************************************/
 DWORD InterruptHandler( DWORD nInt, PTREGS pRegs )
 {
-    // Store the address of the registers into the debugee state structure
-    // and the current interrupt number
-
-    deb.r = pRegs;
-    deb.nInterrupt = nInt;
+    DWORD chain = NULL;
 
     // Depending on the execution context, branch
 
-    if( pIce->fRunningIce == TRUE )
+    if(pIce->fRunningIce == TRUE)
     {
         //---------------------------------------------
         //  Exception occurred during the LinIce run
         //---------------------------------------------
+        pIce->nIntsIce[nInt & 0x3F]++;
 
         // Handle some limited number of interrupts, puke on the rest
 
@@ -283,6 +289,8 @@ DWORD InterruptHandler( DWORD nInt, PTREGS pRegs )
                 }
             // .. from the PF we continue to the default panic handler...
             default:
+                    deb.r = pRegs;
+                    deb.nInterrupt = nInt;
                     Panic();
         }
         // Acknowledge interrupt controller
@@ -297,48 +305,63 @@ DWORD InterruptHandler( DWORD nInt, PTREGS pRegs )
         //---------------------------------------------
         //  Exception occurred during the debugee run
         //---------------------------------------------
+        pIce->nIntsPass[nInt & 0x3F]++;
+
+        // Store the address of the registers into the debugee state structure
+        // and the current interrupt number
+
+        deb.r = pRegs;
+        deb.nInterrupt = nInt;
+
+#if 0       // Pass-through
+        chain = GET_IDT_BASE( &LinuxIdt[nInt] );
+        return( chain );
+#endif
 
         pIce->fRunningIce = TRUE;
 
-        // Get the current GDT table
+        switch( nInt )
+        {
+            case 0x0E:                  // Page Fault
+                    chain = GET_IDT_BASE( &LinuxIdt[0x0E] );
+                break;
 
-        GET_GDT(&deb.gdt);
+            default:
+                // Get the current GDT table
 
-        // Restore original Linux IDT table since we may want to examine it
-        // using the debugger
+                GET_GDT(deb.gdt);
 
-        UnHookDebuger();
+                // Restore original Linux IDT table since we may want to examine it
+                // using the debugger
 
-        // Switch to our private IDT that is already hooked
+                UnHookDebuger();
 
-        SET_IDT(&IceIdtDescriptor);
+                // Switch to our private IDT that is already hooked
 
-        // Be sure to enable interrupts so we can operate
+                SET_IDT(IceIdtDescriptor);
 
-        sti();
+                // Be sure to enable interrupts so we can operate
 
-        ////////////////////////////// TA-DAAAA !!!
-                EnterDebugger();
-        //////////////////////////////
+                sti();
 
-        // Disable interrupts so we can mess with IDT
+                DebuggerEnter();
 
-        cli();
+                // Disable interrupts so we can mess with IDT
 
-        // Load debugee IDT
+                cli();
 
-        SET_IDT(&deb.idt);
+                // Load debugee IDT
 
-        // Hook again the debugee IDT
+                SET_IDT(deb.idt);
 
-        HookDebuger();
+                // Hook again the debugee IDT
+
+                HookDebuger();
+        }
 
         pIce->fRunningIce = FALSE;
     }
 
-    // Return into the debugee where we left off or where the register structure
-    // points to...
-
-    return( 0 );
+    return( chain );
 }
 

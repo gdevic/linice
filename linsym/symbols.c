@@ -36,7 +36,7 @@
 #include <fcntl.h>                      // Include file control file
 #include <stdio.h>                      // Include standard io file
 
-#include "ioctl.h"                      // Include shared header file
+#include "ice-ioctl.h"                  // Include shared header file
 
 #define stricmp     strcasecmp          // Weird gnu c call..
 

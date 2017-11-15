@@ -61,6 +61,24 @@
 #define KBD_CONTROL         0x64
 #define KBD_STATUS          0x64
 #define STATUS_AUXB         0x20
+#define KBD_AUXD            0x02
+
+//-----------------------------------------------------------------------------
+// Serial 8250/16450/16550
+//-----------------------------------------------------------------------------
+
+#define COM1_PORT           0x3F8
+#define COM2_PORT           0x2F8
+#define COM3_PORT           0x3E8
+#define COM4_PORT           0x2E8
+
+#define SER_DATA            0           //
+#define SER_INTE            1           //
+#define SER_INTID           2           //
+#define SER_DF              3           // Data format register
+#define SER_MODEM           4           // Modem control register
+#define SER_LINE            5           // Line status register
+#define SER_MODEMSTATUS     6           // Modem status register
 
 //-----------------------------------------------------------------------------
 // Real Time Clock command port

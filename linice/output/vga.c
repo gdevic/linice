@@ -97,6 +97,7 @@ static TVga vga;
 ******************************************************************************/
 
 void VgaSprint(char *s);
+void VgaMouse(int x, int y);
 
 /******************************************************************************
 *                                                                             *
@@ -118,7 +119,10 @@ void VgaInit(void)
     outVga.sizeX = 80;
     outVga.sizeY = 25;
     outVga.sprint = VgaSprint;
+    outVga.mouse = VgaMouse;
 
+    vga.scrollTop = 0;
+    vga.scrollBottom = MAX_SIZEY - 1;
     vga.pText = (BYTE *) LINUX_VGA_TEXT;
 }
 
@@ -156,7 +160,7 @@ static void SaveBackground(void)
     WriteCRTC(0x0B, 7);                 // Cursor End Register
     WriteCRTC(0x0C, 0);                 // Start Address High
     WriteCRTC(0x0D, 0);                 // Start Address Low
-    WriteCRTC(0x18, 0x3FF);             // Line Compare Register
+    WriteCRTC(0x18, 0xFF);              // Line Compare Register
 }
 
 
@@ -204,7 +208,29 @@ static void ShowCursorPos(void)
 
     // Set the cursor on the VGA screen
 
-    wOffset = outVga.y * 40 * 2 + outVga.x * 2;
+    wOffset = outVga.y * 80 + outVga.x;
+
+    WriteCRTC(0x0E, wOffset >> 8);
+    WriteCRTC(0x0F, wOffset & 0xFF);
+}
+
+
+/******************************************************************************
+*                                                                             *
+*   static void VgaMouse(int x, int y)                                        *
+*                                                                             *
+*******************************************************************************
+*
+*   Mouse display function
+*
+******************************************************************************/
+static void VgaMouse(int x, int y)
+{
+    WORD wOffset;
+
+    // Set the mouse cursor on the VGA screen
+
+    wOffset = y * 80 + x;
 
     WriteCRTC(0x0E, wOffset >> 8);
     WriteCRTC(0x0F, wOffset & 0xFF);
@@ -230,7 +256,7 @@ static void ScrollUp()
                 outVga.sizeX * 2 * (vga.scrollBottom - vga.scrollTop));
 
         // Clear the last line
-        memset(vga.pText + (vga.scrollBottom * outVga.sizeY) * 2,
+        memset(vga.pText + (vga.scrollBottom * outVga.sizeX) * 2,
                0,
                outVga.sizeX * 2 );
     }
@@ -312,6 +338,16 @@ void VgaSprint(char *s)
 
             case DP_SETWRITEATTR:
                     s++;            // NOT IMPLEMENTED YET
+                break;
+
+            case '\r':
+                    // Erase all characters to the right of the cursor pos and move cursor to left
+                    while( outVga.x < outVga.sizeX )
+                    {
+                        *(WORD *)(vga.pText + (outVga.x +  outVga.y * outVga.sizeX) * 2) = 0x0720;
+                        outVga.x++;
+                    }
+                    outVga.x = 0;
                 break;
 
             case '\n':

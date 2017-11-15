@@ -146,6 +146,8 @@ typedef struct
 #define INT_TYPE_INT32      0xE         // 32 bit interrupt gate
 #define INT_TYPE_TRAP32     0xF         // 32 bit trap gate
 
+#define GET_IDT_BASE(pIDT_Gate)   ((pIDT_Gate)->offsetLow + ((pIDT_Gate)->offsetHigh << 16))
+
 //-----------------------------------------------------------------------------
 // GDT Gates (Code, Data, Task gates, Call gates, LDT descriptors)
 
@@ -167,7 +169,7 @@ typedef struct
 
 } TGDT_Gate, *PTGDT_Gate;
 
-#define GET_GDT_BASE(pGDT_Gate)           ( (pGDT_Gate)->baseLow + ((pGDT_Gate)->baseMid << 16) + ((pGDT_Gate)->baseHigh << 24) )
+#define GET_GDT_BASE(pGDT_Gate)   ( (pGDT_Gate)->baseLow + ((pGDT_Gate)->baseMid << 16) + ((pGDT_Gate)->baseHigh << 24) )
 
 #define GET_GDT_LIMIT(pGDT_Gate)  ( (pGDT_Gate)->limitLow + ((pGDT_Gate)->limitHigh << 16) )
 

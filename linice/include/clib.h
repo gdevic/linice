@@ -120,6 +120,6 @@
 extern BYTE *ice_init_heap( size_t size );
 extern void * _kMalloc( BYTE *pHeap, DWORD size );
 extern void _kFree( BYTE *pHeap, void *mPtr );
-
+extern void strtolower(char *str);
 
 #endif //  _CLIB_H_

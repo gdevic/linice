@@ -28,6 +28,8 @@
 
 #include "module-header.h"              // Versatile module header file
 
+#include <asm/uaccess.h>                // User space memory access functions
+
 #include "clib.h"                       // Include C library header file
 #include "ice.h"                        // Include main debugger structures
 
@@ -75,6 +77,7 @@ TDEFAULTFKEY defaultFKEY[] = {
 };
 
 
+extern PTOUT pOut;                      // Pointer to a current Out class
 extern TOUT outVga;
 
 /******************************************************************************
@@ -93,7 +96,7 @@ extern void CommandBuildHelpIndex();
 extern void VgaInit();
 extern void VgaSprint(char *s);
 extern void InterruptInit();
-extern void HookDebugger();
+extern void HookDebuger();
 
 extern void RegDraw();
 extern void DataDraw();
@@ -155,18 +158,27 @@ int InitPacket(PTINITPACKET pInit)
                 pWin->h.draw = HistoryDraw;
 
                 // Set default values for initial windows:
-                // Visible: registers, data and code windows
+                // Visible: registers, data and code windows and, of course, history
 
-                pWin->r.fVisible = TRUE;
+//                pWin->r.fVisible = TRUE;
                 pWin->r.nLines   = 3;
-                pWin->d.fVisible = TRUE;
+//                pWin->d.fVisible = TRUE;
                 pWin->d.nLines   = 5;
-                pWin->c.fVisible = TRUE;
+//                pWin->c.fVisible = TRUE;
                 pWin->c.nLines   = 5;
+                pWin->h.fVisible = TRUE;
 
-                // From now on, we can print !!!
+                // Initialize default data pointer
+                deb.dataAddr.sel = __KERNEL_DS;
+                deb.dataAddr.offset = 0;
+                deb.DumpSize = 1;           // Dump bytes
 
-                dprint("Allocated %d Kb for history buffer\n", pInit->nHistorySize / 1024);
+                // Initialize default code pointer
+                deb.codeAddr.sel = __KERNEL_CS;
+                deb.codeAddr.offset = 0;
+                deb.fCode = FALSE;
+
+                HistoryAdd("LinIce (C) 2000-2001 by Goran Devic");
 
                 // Initialize interrupt handling subsystem
 
@@ -179,7 +191,6 @@ int InitPacket(PTINITPACKET pInit)
                     if( (pIce->hSymbolBuffer = ice_init_heap(pInit->nSymbolSize)) != NULL )
                     {
                         INFO(("Allocated %d Kb for symbol pool\n", pInit->nSymbolSize / 1024));
-                        dprint("Allocated %d Kb for symbol pool\n", pInit->nSymbolSize / 1024);
 
                         // Set the default keyboard layout to English
 
@@ -203,9 +214,11 @@ int InitPacket(PTINITPACKET pInit)
                         // Now we can hook our master IDT so all the faults will route to
                         // debugger.  This effectively makes it active.
 
-                        HookDebugger();
+                        HookDebuger();
 
                         // Interpret init command string and execute it
+
+                        INFO(("INIT: ""%s""\n", pInit->sInit));
 
                         if( CommandExecute(pInit->sInit)==TRUE )
                         {
@@ -213,7 +226,6 @@ int InitPacket(PTINITPACKET pInit)
 
                             INT3();
                         }
-
                         retval = 0;
                     }
                     else

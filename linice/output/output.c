@@ -48,6 +48,8 @@
 *                                                                             *
 ******************************************************************************/
 
+static char printBuf[256];
+
 /******************************************************************************
 *                                                                             *
 *   Functions                                                                 *
@@ -56,7 +58,7 @@
 
 /******************************************************************************
 *                                                                             *
-*   void dputc(char c)                                                        *
+*   void dputc(UCHAR c)                                                       *
 *                                                                             *
 *******************************************************************************
 *
@@ -64,12 +66,12 @@
 *   to an output device.
 *
 ******************************************************************************/
-void dputc(char c)
+void dputc(UCHAR c)
 {
     // This works fine with little-endian...
-    WORD printBuf = c;
+    WORD printBuf = (WORD) c;
 
-    pOut->sprint((char *) printBuf);
+    pOut->sprint((char *) &printBuf);
 }
 
 
@@ -91,7 +93,7 @@ void dputc(char c)
 ******************************************************************************/
 int dprint( char *format, ... )
 {
-    char printBuf[256], *pBuf = printBuf;
+    char *pBuf = printBuf;
     int written;
     va_list arg;
 
@@ -99,13 +101,6 @@ int dprint( char *format, ... )
     va_start( arg, format );
     written = vsprintf(pBuf, format, arg);
     va_end(arg);
-
-    // If we need to strore the line into the history buffer, do it first
-    if( pBuf[0]=='@' )
-    {
-        pBuf++;
-        HistoryAdd(pBuf);
-    }
 
     // Send the string to a current output device driver
     pOut->sprint(pBuf);
@@ -136,20 +131,21 @@ int dprint( char *format, ... )
 BOOL dprinth( int nLineCount, char *format, ... )
 {
     CHAR Key;
-    char printBuf[256], *pBuf = printBuf;
+    char *pBuf = printBuf;
+    int written;
     va_list arg;
 
     // Print the line into a string
     va_start( arg, format );
-    vsprintf(pBuf, format, arg);
+    written = vsprintf(pBuf, format, arg);
     va_end(arg);
 
     // If we are printing in the history buffer, store it there as well
     if( pOut->y > pWin->h.Top )
     {
-        HistoryAdd(pBuf);
+//        HistoryAdd(pBuf);
         pOut->sprint(pBuf);
-
+#if 0
         // If we are printing to a history buffer, and the line count is reached,
         // print the help line and wait for a keypress
         if( (nLineCount % pWin->h.nLines)==0 )
@@ -159,10 +155,11 @@ BOOL dprinth( int nLineCount, char *format, ... )
             if( Key==ESC )
                 return( FALSE );
         }
+#endif
     }
     else
     {
-        // We are printing to a window
+        // We are printing within a window
         pOut->sprint(pBuf);
     }
 
