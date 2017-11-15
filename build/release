@@ -1,0 +1,66 @@
+#!/bin/bash
+
+#-----------------------------------------------------------------------------
+# Prepare for the relase.. Do some housekeeping that is specific to my setup
+#-----------------------------------------------------------------------------
+
+cd ..
+
+chmod -R 755 *
+
+cd bin-2.4
+dos2unix *
+cd ext
+dos2unix *
+cd ..
+cd test
+dos2unix *
+cd ..
+cd ..
+
+cd bin-2.6
+dos2unix *
+cd test
+dos2unix *
+cd ..
+cd ..
+
+cd build
+dos2unix *
+cd ..
+
+cd docs
+dos2unix CONTRIBUTORS
+dos2unix COPYING
+dos2unix README
+cd ..
+
+cd include
+dos2unix *
+cd ..
+
+cd linice
+dos2unix *
+cd command
+dos2unix *
+cd ..
+cd include
+dos2unix *
+cd ..
+cd input
+dos2unix *
+cd ..
+cd output
+dos2unix *
+cd ..
+cd ..
+
+cd linsym
+dos2unix *
+cd ..
+
+cd x
+dos2unix *
+cd ..
+
+chmod -R 755 *

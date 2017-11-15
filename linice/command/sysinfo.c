@@ -147,6 +147,14 @@ static TBITS bitsModule[] = {
 { 0 }
 };
 
+// Define state of a module for 2.6 kernel
+enum module_state
+{
+        MODULE_STATE_LIVE,
+        MODULE_STATE_COMING,
+        MODULE_STATE_GOING,
+};
+
 
 // Buffer space for the bits string
 static char bits[40];
@@ -474,11 +482,22 @@ BOOL cmdModule(char *args, int subClass)
             if( bits[0]==0 )
                 strcat(bits, "UNINIT");
 
+            if( ice_get_kernel_version() >= KERNEL_VERSION_2_6 )
+            {
+                // Kernel 2.6 modules have 3 states:
+                switch(Mod.flags)
+                {
+                    case MODULE_STATE_LIVE:   strcpy(bits, "LIVE ");   break;
+                    case MODULE_STATE_COMING: strcpy(bits, "COMING "); break;
+                    case MODULE_STATE_GOING:  strcpy(bits, "GOING ");  break;
+                }
+            }
+
             if(!dprinth(nLine++, "%08X %-16s  %-6d %-4d %-3d %08X %08X   %d   %2X  %s",
                     (DWORD) pmodule,
                     Mod.name,
                     Mod.size,
-                    Mod.nsyms,
+                    Mod.nsyms + Mod.nsyms_gpl,
                     Mod.ndeps,
                     (DWORD) Mod.init,
                     (DWORD) Mod.cleanup,
@@ -487,7 +506,6 @@ BOOL cmdModule(char *args, int subClass)
                     bits ))
                 break;
         }
-        // Get the next module in the linked list while looping
         while( (pmodule = ice_get_module(pmodule, &Mod)) );
     }
 

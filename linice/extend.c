@@ -48,7 +48,7 @@
 #include "stdarg.h"                     // Include variable argument header
 #include "disassembler.h"               // Include disassembler
 
-#include "../ext/LiniceExt.h"           // Include extension include file
+#include "LiniceExt.h"                  // Include extension include file
 
 /******************************************************************************
 *                                                                             *

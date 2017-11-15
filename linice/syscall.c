@@ -294,10 +294,20 @@ void HookSyscall(void)
         sys_table[__NR_execve] = (unsigned long) SyscallExecve;
 
         sys_init_module = (PFNINITMODULE) sys_table[__NR_init_module];
-        sys_table[__NR_init_module] = (unsigned long) SyscallInitModule;
+
+        // TODO: Peter K. - skip hooking this function for now (2.6 kernels)
+        if( ice_get_kernel_version() < KERNEL_VERSION_2_6 )
+        {
+            sys_table[__NR_init_module] = (unsigned long) SyscallInitModule;
+        }
 
         sys_delete_module = (PFNDELETEMODULE) sys_table[__NR_delete_module];
-        sys_table[__NR_delete_module] = (unsigned long) SyscallDeleteModule;
+
+        // TODO: Peter K. - skip hooking this function for now (2.6 kernels)
+        if( ice_get_kernel_version() < KERNEL_VERSION_2_6 )
+        {
+            sys_table[__NR_delete_module] = (unsigned long) SyscallDeleteModule;
+        }
     }
 }
 

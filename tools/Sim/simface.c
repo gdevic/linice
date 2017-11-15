@@ -79,6 +79,10 @@ DWORD kbd = 0;
 DWORD scan = 0;
 DWORD *pmodule = NULL;
 DWORD switchto = FakeCodeBuffer;
+DWORD *start_sym = NULL;                // default value
+DWORD *stop_sym = NULL;                 // default value
+DWORD *start_sym_gpl = NULL;            // default value
+DWORD *stop_sym_gpl = NULL;             // default value
 int ice_debug_level = 0;
 
 // We dont support reading of the PCI space from within the Sim, so it is OK
@@ -335,6 +339,11 @@ void ice_mod_dec_use_count(void)
 {
 }
 
+// We assume that we are running 2.6
+unsigned int ice_get_kernel_version(void)
+{
+    return( KERNEL_VERSION_2_6 );
+}
 
 void outp(int port, int value)
 {

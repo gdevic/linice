@@ -406,7 +406,6 @@ BOOL FindModuleSymbol(TExItem *item, char *pName, int nNameLen)
     struct module_symbol* pSym;         // Pointer to a module symbol structure
     TMODULE Mod;                        // Current module internal structure
 
-
     // Find the symbol name portion of the input name
     if( (pSymName = memchr(pName, '!', nNameLen)) )
     {
@@ -419,25 +418,39 @@ BOOL FindModuleSymbol(TExItem *item, char *pName, int nNameLen)
         nNameLen -= pSymName-pName;     // Adjust the name length to the symbol len
 
         // We got the right pointer to a module, find the symbol
+
         pSym = Mod.syms;
 
         for(count=0; count<Mod.nsyms; count++)
         {
             if( pSym->name[nNameLen]=='\0' && !strnicmp(pSym->name, pSymName, nNameLen) )
             {
-                // Found the matching symbol name
+                    // Found the matching symbol name
 
                 item->Data  = pSym->value;
-        FoundValue:
+            FoundValue:
                 item->bType = EXTYPE_LITERAL;
                 item->pData = (BYTE*) &item->Data;
-
                 memcpy(&item->Type, &TypeUnsignedInt, sizeof(TSYMTYPEDEF1));
-
                 return( TRUE );
             }
-
             pSym++;
+        }
+
+        // For the 2.6 kernels we also count separate GPL symbols
+        if( ice_get_kernel_version() >= KERNEL_VERSION_2_6 )
+        {
+            pSym = Mod.syms_gpl;
+            for(count=0; count<Mod.nsyms_gpl; count++)
+            {
+                if( pSym->name[nNameLen]=='\0' && !strnicmp(pSym->name, pSymName, nNameLen) )
+                {
+                    // Found the matching symbol name, store it and return via a common path
+                    item->Data = pSym->value;
+                    goto FoundValue;
+                }
+                pSym++;
+            }
         }
 
         // Two special cases of a symbol name that are really not exported,
@@ -832,6 +845,29 @@ char *SymAddress2Name(WORD wSel, DWORD dwOffset)
                 }
 
                 pSym++;
+            }
+
+            // For 2.6 kernels we also need to search the list of GPL symbols
+            if( ice_get_kernel_version() >= KERNEL_VERSION_2_6 )
+            {
+                pSym = Mod.syms_gpl;
+
+                for(count=0; count<Mod.nsyms_gpl; count++)
+                {
+                    // TODO: Check the validity of these pointers before using them!
+
+                    if( pSym->value==dwOffset )
+                    {
+                        // Found the matching symbol! Form its name and return. If a
+                        // module name is found, print it, otherwise it is a kernel
+
+                        sprintf(sName, "%s!%s", *Mod.name? Mod.name : "kernel", pSym->name);
+
+                        return( sName );
+                    }
+
+                    pSym++;
+                }
             }
 
             // Get the next module in the linked list

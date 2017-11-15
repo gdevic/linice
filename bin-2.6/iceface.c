@@ -123,6 +123,18 @@ DWORD sys = 0;                          // default value
 MODULE_PARM(switchto, "i");             // switchto=<integer>
 DWORD switchto = 0;                     // default value
 
+MODULE_PARM(start_sym, "i");            // Kernel 2.6 symbols - start location
+DWORD *start_sym = NULL;                // default value
+
+MODULE_PARM(stop_sym, "i");             // Kernel 2.6 symbols - end location
+DWORD *stop_sym = NULL;                 // default value
+
+MODULE_PARM(start_sym_gpl, "i");        // Kernel 2.6 GPL symbols - start location
+DWORD *start_sym_gpl = NULL;            // default value
+
+MODULE_PARM(stop_sym_gpl, "i");         // Kernel 2.6 GPL symbols - end location
+DWORD *stop_sym_gpl = NULL;             // default value
+
 MODULE_PARM(ice_debug_level, "i");      // ice_debug_level=<integer>
 int ice_debug_level = 1;                // default value
 
@@ -365,46 +377,100 @@ void  ice_vfree(char *p)
 
 extern int IceInitModule(void);
 
-int init_module_2_6(void)
-{
-    return( IceInitModule() );
-}
 
 void ice_printk(char *p)
 {
     printk(p);
 }
 
+static struct module kernel_fake =
+{
+    .state = 0,
+    .name = "kernel",
+    .core_size = 0,
+    .init = 0,
+    .syms = 0,
+    .num_syms = 0,
+    .gpl_syms = 0,
+    .num_gpl_syms = 0,
+
+};
+
+int init_module_2_6(void)
+{
+    kernel_fake.syms = (struct kernel_symbol*)start_sym;
+    kernel_fake.num_syms = (stop_sym - start_sym)/sizeof(struct kernel_symbol);
+    kernel_fake.gpl_syms = (struct kernel_symbol*)start_sym_gpl;
+    kernel_fake.num_gpl_syms = (stop_sym_gpl - start_sym_gpl)/sizeof(struct kernel_symbol);
+
+    return( IceInitModule() );
+}
+
+struct module_use
+{
+    struct list_head list;
+    struct module *module_which_uses;
+};
+
 void *ice_get_module(void *pm, TMODULE *pMod)
 {
-#if 0 // 2.6
+    struct module_use *use;
     if( pm==NULL )
-        pm = (void *) *pmodule;
+    pm = list_entry(((struct list_head*)pmodule)->next, struct module, list);
+    else if (pm == &kernel_fake)
+    {
+    return NULL;
+    }
     else
     {
-        pm = ((struct module *)pm)->next;
+        pm = list_entry(((struct module *)pm)->list.next, struct module, list);
+    }
+
+    if (pm == list_entry(((struct list_head*)pmodule), struct module, list))
+    {
+        pm = &kernel_fake;
+        pMod->pmodule = pm;
+        pMod->name  = ((struct module *)pm)->name;
+        pMod->flags = 0;
+        pMod->size  = 0;                        // _etext - _stext;
+        pMod->init  = 0;                        // start_kernel;
+        pMod->nsyms = ((struct module *)pm)->num_syms;
+        pMod->syms  = (struct module_symbol *)((struct module *)pm)->syms;
+        pMod->nsyms_gpl = ((struct module *)pm)->num_gpl_syms;
+        pMod->syms_gpl  = (struct module_symbol *)((struct module *)pm)->gpl_syms;
+        pMod->use_count = 1;
+        pMod->cleanup =   0;
+        pMod->ndeps   = 0;
+
+        return pm;
     }
 
     if( pm )
     {
         pMod->pmodule = pm;
-        pMod->name = ((struct module *)pm)->name;
-        pMod->flags = ((struct module *)pm)->flags;
-        pMod->size = ((struct module *)pm)->size;
-        pMod->nsyms = ((struct module *)pm)->nsyms;
-        pMod->syms = ((struct module *)pm)->syms;
-        pMod->ndeps = ((struct module *)pm)->ndeps;
-        pMod->init = ((struct module *)pm)->init;
-        pMod->cleanup = ((struct module *)pm)->cleanup;
-        pMod->use_count = GET_USE_COUNT((struct module *)pm);
+        pMod->name  = ((struct module *)pm)->name;
+        pMod->flags = ((struct module *)pm)->state;
+        pMod->size  = ((struct module *)pm)->core_size;
+        pMod->nsyms = ((struct module *)pm)->num_syms;
+        pMod->syms  = (struct module_symbol *)((struct module *)pm)->syms;
+        pMod->nsyms_gpl = ((struct module *)pm)->num_gpl_syms;
+        pMod->syms_gpl  = (struct module_symbol *)((struct module *)pm)->gpl_syms;
+        pMod->init  = ((struct module *)pm)->init;
 
-        if( !pMod->name || *pMod->name=='\0' )
-            pMod->name = "kernel";
+#ifdef CONFIG_MODULE_UNLOAD
+        pMod->use_count = module_refcount(pm);
+        pMod->cleanup =((struct module *)pm)->exit;
+        pMod->ndeps = 0;
+        list_for_each_entry(use, &((struct module *)pm)->modules_which_use_me, list)
+        pMod->ndeps++;
+#else
+        pMod->use_count = 0;
+        pMod->cleanup = 0;
+        pMod->ndeps = 0;
+#endif
     }
 
     return( pm );
-#endif
-    return( NULL );
 }
 
 void *ice_get_module_init(void *pm)
@@ -464,6 +530,11 @@ void ice_mod_dec_use_count(void)
 {
 }
 
+// We assume that we are running 2.6
+unsigned int ice_get_kernel_version(void)
+{
+    return( KERNEL_VERSION_2_6 );
+}
 
 module_init(init_module_2_6);
 module_exit(cleanup_module_2_6);

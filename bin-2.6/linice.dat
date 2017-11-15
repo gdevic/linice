@@ -1,0 +1,43 @@
+PENTIUM=ON
+NMI=ON
+ECHOKEYS=OFF
+NOLEDS=OFF
+NOPAGE=OFF
+SIWVIDRANGE=ON
+THREADP=ON
+LOWERCASE=ON
+
+SYM=10000
+;SYM=1024
+HST=4096
+MACROS=32
+DRAWSIZE=1024
+
+INIT="lines 25; code on; set lowercase on; i3here on; wc 10;wl;"
+
+F1="h;"
+F2="^wr;"
+F3="^src;"
+F4="^rs;"
+F5="^x;"
+F6="^ec;"
+F7="^here;"
+F8="^t;"
+F9="^bpx;"
+F10="^p;"
+F11="^G @SS:ESP;"
+F12="^p ret;"
+SF3="^format;"
+AF1="^wr;"
+AF2="^wd;"
+AF3="^wc;"
+AF4="^ww;"
+AF5="CLS;"
+AF11="^dd dataaddr->0;"
+AF12="^dd dataaddr->4;"
+CF1="altscr off; lines 60; wc 32; wd 8;"
+CF2="^wr;^wd;^wc;"
+
+; Set the optional keyboard layout (default is 'us')
+;layout=uk
+

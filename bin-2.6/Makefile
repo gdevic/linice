@@ -14,12 +14,11 @@
 # Select the optional IO APIC and SMP machine build
 #-----------------------------------------------------------------------------
 #TARGET = -DSMP -DIO_APIC
-TARGET =
 
 #-----------------------------------------------------------------------------
-# Set the include path of kernel headers that this module will be supporting
+# Set the include path of common Linice include header files
 #-----------------------------------------------------------------------------
-INC = /lib/modules/`uname -r`/build/include
+INCEXT = -I$(PWD)/../include
 
 #-----------------------------------------------------------------------------
 # Set the compiler flags
@@ -37,7 +36,14 @@ CFLAGS = -gstabs+ -Wall -O -DDBG
 # End of the user configuration section
 #=============================================================================
 
+# Compose the final configuration flags
+
+EXTRA_CFLAGS += $(TARGET) $(INCEXT) $(CFLAGS) $(PCIHDR)
 
 obj-m := linice.o
 
-linice-objs := linice_kernel.o iceface.o
+linice-objs := linice_kernel.o_shipped iceface.o
+
+clean:
+	rm -f *.o .*.o.cmd .*.ko.cmd *.mod.c
+	rm -rf .tmp_versions

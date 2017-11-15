@@ -72,6 +72,10 @@ extern DWORD scan;
 extern DWORD *pmodule;
 extern DWORD sys;
 extern DWORD switchto;
+extern DWORD start_sym;
+extern DWORD stop_sym;
+extern DWORD start_sym_gpl;
+extern DWORD stop_sym_gpl;
 extern int ice_debug_level;
 
 
@@ -138,18 +142,27 @@ int IceInitModule(void)
     int val;
 
     INFO("init_module\n");
-    INFO("  kbd      %08X\n", kbd);
-    INFO("  scan     %08X\n", scan);
-    INFO("  pmodule  %08X\n", pmodule);
-    INFO("  sys      %08X\n", sys);
-    INFO("  switchto %08X\n", switchto);
+    INFO("  kbd           %08X\n", kbd);
+    INFO("  scan          %08X\n", scan);
+    INFO("  pmodule       %08X\n", pmodule);
+    INFO("  sys           %08X\n", sys);
+    INFO("  switchto      %08X\n", switchto);
+    INFO("  start_sym     %08X\n", start_sym);
+    INFO("  stop_sym      %08X\n", stop_sym);
+    INFO("  start_sym_gpl %08X\n", start_sym_gpl);
+    INFO("  stop_sym_gpl  %08X\n", stop_sym_gpl);
 
     // If we are loaded via simple command line 'insmod' dont do anything
-    if( kbd==0 || scan==0 || pmodule==NULL || sys==0 || switchto==0 )
+    if( kbd==0 || scan==0 || pmodule==NULL || sys==0 || switchto==0 || !start_sym || !stop_sym )
     {
         ice_printk("ERROR: Use 'linsym -i' to install Linice debugger.\n");
         return( -EFAULT );
     }
+
+    // Make sure all the addresses are valid
+    // We did not check these as they are not present in 2.4 kernels
+    if( !start_sym_gpl ) start_sym_gpl = start_sym;
+    if( !stop_sym_gpl )  stop_sym_gpl  = stop_sym;
 
     // Clean up structures
     memset(&deb, 0, sizeof(TDEB));
@@ -182,6 +195,10 @@ int IceInitModule(void)
 
             if(sys_mknod && sys_unlink)
             {
+                // This function should fail unless there is a device there (which should NOT be)
+                // This saves us from having to delete it manually (Peter K.)
+		        ice_rmnod(sys_unlink, "/dev/"DEVICE_NAME);
+
                 val = ice_mknod(sys_mknod, "/dev/"DEVICE_NAME, major_device_number);
 
                 // Dev node created successfully

@@ -94,6 +94,12 @@ DWORD sys_call_table = 0;
 // Need to follow the task switch
 DWORD switch_to = 0;
 
+// New symbols for 2.6 kernel
+DWORD start_symtab = 0;
+DWORD stop_symtab = 0;
+DWORD start_symtab_gpl = 0;
+DWORD stop_symtab_gpl = 0;
+
 
 extern int system2(char *command);
 
@@ -210,7 +216,8 @@ static BOOL GetSymbolExports(void)
     char code;
     char sSymbol[128];
 
-    handle_kbd_event = handle_scancode = module_list = sys_call_table = switch_to = 0;
+    handle_kbd_event = handle_scancode = module_list = sys_call_table =
+    switch_to = start_symtab = stop_symtab = start_symtab_gpl = stop_symtab_gpl = 0;
 
     // If the system map file has not been opened, return failure
     if( fpSystemMap )
@@ -227,12 +234,20 @@ static BOOL GetSymbolExports(void)
         // Look for the addresses of some functions in the system map file until
         // we either reach the end of the System.map file or we have them all read
 
-        while( !feof(fpSystemMap) && (!handle_kbd_event || !handle_scancode || !module_list || !sys_call_table || !switch_to) )
+        while( !feof(fpSystemMap) && (!handle_kbd_event || !handle_scancode || !module_list ||
+        !sys_call_table || !switch_to || !start_symtab || !stop_symtab ||
+               !start_symtab_gpl || !stop_symtab_gpl ) )
         {
             items = fscanf(fpSystemMap, "%X %c %s\n", &address, &code, sSymbol);
             if( items==3 && strcmp("handle_kbd_event", sSymbol)==0 )
             {
                 VERBOSE2 printf("   handle_kbd_event = %08X\n", address);
+                handle_kbd_event = address;
+            }
+            else
+            if( items==3 && strcmp("kbd_event", sSymbol)==0 )           // Test: 2.6 kernels
+            {
+                VERBOSE2 printf("   kbd_event = %08X\n", address);
                 handle_kbd_event = address;
             }
             else
@@ -242,9 +257,21 @@ static BOOL GetSymbolExports(void)
                 handle_scancode = address;
             }
             else
+            if( items==3 && strcmp("kbd_keycode", sSymbol)==0 )         // Test: 2.6 kernels
+            {
+                VERBOSE2 printf("   kbd_keycode = %08X\n", address);
+                handle_scancode = address;
+            }
+            else
             if( items==3 && strcmp("module_list", sSymbol)==0 )
             {
                 VERBOSE2 printf("   module_list = %08X\n", address);
+                module_list = address;
+            }
+            else
+            if( items==3 && strcmp("modules", sSymbol)==0 )             // Test: 2.6 kernels
+            {
+                VERBOSE2 printf("   modules = %08X\n", address);
                 module_list = address;
             }
             else
@@ -258,6 +285,30 @@ static BOOL GetSymbolExports(void)
             {
                 VERBOSE2 printf("   switch_to = %08X\n", address);
                 switch_to = address;
+            }
+            else
+            if( items==3 && strcmp("__start___ksymtab", sSymbol)==0 )       // 2.6 kernels
+            {
+                VERBOSE2 printf("   __start___ksymtab = %08X\n", address);
+                start_symtab = address;
+            }
+            else
+            if( items==3 && strcmp("__stop___ksymtab", sSymbol)==0 )        // 2.6 kernels
+            {
+                VERBOSE2 printf("   __stop___ksymtab = %08X\n", address);
+                stop_symtab = address;
+            }
+            else
+            if( items==3 && strcmp("__start___ksymtab_gpl", sSymbol)==0 )   // 2.6 kernels
+            {
+                VERBOSE2 printf("   __start___ksymtab_gpl = %08X\n", address);
+                start_symtab_gpl = address;
+            }
+            else
+            if( items==3 && strcmp("__stop___ksymtab_gpl", sSymbol)==0 )    // 2.6 kernels
+            {
+                VERBOSE2 printf("   __stop___ksymtab_gpl = %08X\n", address);
+                stop_symtab_gpl = address;
             }
         }
 
@@ -544,12 +595,16 @@ BOOL OptInstall(char *pSystemMap)
         //  -x   do not export externs
         //  -f   force load even if kernel version does not match
 
-        sprintf(sLine, "insmod -f linice_`uname -r`/linice.o ice_debug_level=1 kbd=%d scan=%d pmodule=%d sys=%d switchto=%d",
+        sprintf(sLine, "insmod -f linice_`uname -r`/linice.o ice_debug_level=1 kbd=%d scan=%d pmodule=%d sys=%d switchto=%d start_sym=%d stop_sym=%d start_sym_gpl=%d stop_sym_gpl=%d",
             handle_kbd_event,
             handle_scancode,
             module_list,
             sys_call_table,
-            switch_to);
+            switch_to,
+            start_symtab,
+            stop_symtab,
+            start_symtab_gpl,
+            stop_symtab_gpl);
 
         VERBOSE2 printf("%s\n", sLine);
 

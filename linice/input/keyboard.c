@@ -101,7 +101,7 @@ static BOOL fCapsLock = FALSE;
 
 // Keyboard hook variables
 
-typedef void (*TLinuxHandleScancode)(unsigned char, unsigned int);
+typedef void (*TLinuxHandleScancode)(unsigned int, int, int, struct pt_regs *);
 static TLinuxHandleScancode LinuxHandleScancode;
 static DWORD *pKbdHook = NULL;              // Original kbd hook address
 static DWORD KbdHook;                       // Original kbd hook value
@@ -322,8 +322,10 @@ void KeyboardHandler(void)
 *
 *   Hook function for the standard Linux handle_scancode() which it chains.
 *
+*   Note: The last 2 parameters are added for kernels 2.6.9 and above.
+*
 ******************************************************************************/
-void LiniceHandleScancode(BYTE scancode, BOOL fPressed)
+void LiniceHandleScancode(unsigned int scancode, int fPressed, int hw_raw, struct pt_regs *regs)
 {
     static WCHAR Key = 0;
     BYTE code = scancode & 0x7F;
@@ -349,9 +351,9 @@ void LiniceHandleScancode(BYTE scancode, BOOL fPressed)
 
         // Depress control or alt key
         if( Key & CHAR_CTRL )
-            (LinuxHandleScancode)(SC_CONTROL, !fPressed);
+            (LinuxHandleScancode)(SC_CONTROL, !fPressed, hw_raw, regs);
         else
-            (LinuxHandleScancode)(SC_ALT, !fPressed);
+            (LinuxHandleScancode)(SC_ALT, !fPressed, hw_raw, regs);
 
         Key &= ~(CHAR_CTRL | CHAR_ALT);
 
@@ -367,7 +369,7 @@ void LiniceHandleScancode(BYTE scancode, BOOL fPressed)
     else
     {
         // Chain the call to the original handle_scancode
-        (LinuxHandleScancode)(scancode, fPressed);
+        (LinuxHandleScancode)(scancode, fPressed, hw_raw, regs);
     }
 }
 

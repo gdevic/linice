@@ -1,0 +1,12 @@
+Special thanks to people who contributed in various ways; some by submitting
+code patches and solutions, some by participating in great exchange of ideas:
+
+Port to kernels 2.6:
+
+ * Daniel Reznick
+ * Peter K.
+ * Carlos Manuel Duclos Vergara
+
+Rewrote ASM files from NASM syntax to GCC syntax (not used yet):
+
+ * Oleg Khudyakov

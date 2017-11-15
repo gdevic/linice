@@ -22,6 +22,11 @@ TARGET =
 INC = /lib/modules/`uname -r`/build/include
 
 #-----------------------------------------------------------------------------
+# Set the include path of common Linice include header files
+#-----------------------------------------------------------------------------
+INCEXT = ../include
+
+#-----------------------------------------------------------------------------
 # Set the compiler flags
 #-----------------------------------------------------------------------------
 CFLAGS = -gstabs+ -Wall -O -DDBG
@@ -37,7 +42,7 @@ CFLAGS = -gstabs+ -Wall -O -DDBG
 # End of the user configuration section
 #=============================================================================
 
-DEF = $(TARGET) -I$(INC) -D__KERNEL__ -D_LOOSE_KERNEL_NAMES -DMODULE -DLINUX -D_$(PCIHDR)
+DEF = $(TARGET) -I$(INC) -I$(INCEXT) -D__KERNEL__ -D_LOOSE_KERNEL_NAMES -DMODULE -DLINUX -D_$(PCIHDR)
 
 CC = gcc
 

@@ -49,10 +49,12 @@
 *                                                                             *
 ******************************************************************************/
 
-extern DWORD kbd;                              // default value
-extern DWORD scan;                             // default value
-extern DWORD *pmodule;                         // default value
-extern int ice_debug_level;                    // default value
+extern DWORD kbd;
+extern DWORD scan;
+extern DWORD *pmodule;
+extern DWORD start_sym;
+extern DWORD stop_sym;
+extern int ice_debug_level;
 
 /******************************************************************************
 *                                                                             *
@@ -92,7 +94,7 @@ int system2(char *pString)
 
         // Request to load a module
         // Get the line parameters and assign them
-        // "insmod -x -f linice_`uname -r`/linice.o ice_debug_level=1 kbd=%d scan=%d pmodule=%d"
+        // "insmod -x -f linice_`uname -r`/linice.o ice_debug_level=1 kbd=%d scan=%d pmodule=%d start_sym=%d stop_sym=%d "
 
         p = strstr(pString, "ice_debug_level=");
         sscanf(p+16, "%d", &ice_debug_level);
@@ -102,6 +104,12 @@ int system2(char *pString)
 
         p = strstr(pString, "pmodule=");
         sscanf(p+8, "%d", &pmodule);
+
+        p = strstr(pString, "start_sym=");
+        sscanf(p+10, "%d", &start_sym);
+
+        p = strstr(pString, "stop_sym=");
+        sscanf(p+9, "%d", &stop_sym);
 
         // Assign the fake keyboard hook pattern
         kbd = (DWORD)pattern;

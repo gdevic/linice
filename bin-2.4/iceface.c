@@ -43,6 +43,8 @@
 #define __SMP__
 #endif
 
+// TODO: This needs cleanup: how many older versions do we care to support?
+
 //#define EXPORT_SYMTAB
 //#include <linux/config.h>
 //#if defined(CONFIG_MODVERSIONS) &&!defined(MODVERSIONS)
@@ -200,6 +202,18 @@ DWORD sys = 0;                          // default value
 
 MODULE_PARM(switchto, "i");             // switchto=<integer>
 DWORD switchto = 0;                     // default value
+
+MODULE_PARM(start_sym, "i");            // Kernel 2.6 symbols - start location
+DWORD *start_sym = NULL;                // default value
+
+MODULE_PARM(stop_sym, "i");             // Kernel 2.6 symbols - end location
+DWORD *stop_sym = NULL;                 // default value
+
+MODULE_PARM(start_sym_gpl, "i");        // Kernel 2.6 GPL symbols - start location
+DWORD *start_sym_gpl = NULL;            // default value
+
+MODULE_PARM(stop_sym_gpl, "i");         // Kernel 2.6 GPL symbols - end location
+DWORD *stop_sym_gpl = NULL;             // default value
 
 MODULE_PARM(ice_debug_level, "i");      // ice_debug_level=<integer>
 int ice_debug_level = 1;                // default value
@@ -507,6 +521,8 @@ void *ice_get_module(void *pm, TMODULE *pMod)
         pMod->size = ((struct module *)pm)->size;
         pMod->nsyms = ((struct module *)pm)->nsyms;
         pMod->syms = ((struct module *)pm)->syms;
+        pMod->nsyms_gpl = 0;
+        pMod->syms_gpl  = 0;
         pMod->ndeps = ((struct module *)pm)->ndeps;
         pMod->init = ((struct module *)pm)->init;
         pMod->cleanup = ((struct module *)pm)->cleanup;
@@ -578,4 +594,10 @@ void ice_mod_inc_use_count(void)
 void ice_mod_dec_use_count(void)
 {
     MOD_DEC_USE_COUNT;
+}
+
+// We assume that we are running 2.4
+unsigned int ice_get_kernel_version(void)
+{
+    return( KERNEL_VERSION_2_4 );
 }

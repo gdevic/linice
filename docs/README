@@ -1,12 +1,16 @@
                         Linice Kernel Level Debugger
 
-Quick Start for 2.4 kernel:
+Quick Start:
 
 You need to have kernel sources installed, or at least compile kernel headers for the kernel version for which you are linking Linice.
 
-Compile all components:
+Compile all components, depending on the kernel version:
 # cd build
-# ./make_bin
+# ./make_bin-2.4
+	or
+# ./make_bin-2.6
+
+This command will also create a correct sym link named 'bin'
 
 Compile kernel specific code:
 # cd ../bin

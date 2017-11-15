@@ -36,6 +36,8 @@
 // PRIVATE STRUCTURES
 /////////////////////////////////////////////////////////////////
 
+// *_gpl are part of the 2.6 support
+
 typedef struct
 {
     void *pmodule;
@@ -44,10 +46,12 @@ typedef struct
     unsigned long flags;
     unsigned long size;
     unsigned nsyms;
+    unsigned nsyms_gpl;
     unsigned ndeps;
     int (*init)(void);
     void (*cleanup)(void);
     struct module_symbol *syms;
+    struct module_symbol *syms_gpl;
     int use_count;
 
 } TMODULE;
@@ -115,5 +119,10 @@ extern void  ice_printk(char *);
 extern int   ice_mod_in_use(void);
 extern void  ice_mod_inc_use_count(void);
 extern void  ice_mod_dec_use_count(void);
+
+// Support for some things that we do differently between kernel versions:
+extern unsigned int ice_get_kernel_version(void);
+#define KERNEL_VERSION_2_6      0x020600
+#define KERNEL_VERSION_2_4      0x020400
 
 #endif // _ICEFACE_H_

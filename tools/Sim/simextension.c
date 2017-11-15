@@ -50,7 +50,7 @@ typedef int            pid_t;           // Process ID type
 #include "iceface.h"                    // Include interface defines
 
 
-#include "../ext/LiniceExt.h"           // Include the extension header file
+#include "LiniceExt.h"                  // Include the extension header file
 
 /******************************************************************************
 *                                                                             *
