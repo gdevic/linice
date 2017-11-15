@@ -36,6 +36,7 @@
 #ifndef _LOADER_H_
 #define _LOADER_H_
 
+#ifndef _CPP
 /******************************************************************************
 *                                                                             *
 *   Global Defines, Variables and Macros                                      *
@@ -56,10 +57,13 @@ extern char *pLoad;                     // Need to specify loading module
 extern char *pArgs;                     // Default no arguments
 extern char *pSym;                      // Default symbol table to load/unload
 extern char *pLogfile;                  // Default logfile name
+unsigned int opt;                       // Various command line options
+
+#endif // _CPP
 
 #define OPT_TRANSLATE       0x00000001  // nTranslate -> level of translation
 #define OPT_SOURCE          0x00000002  // pSource -> dirs to search for source
-#define OPT_PROMPT          0x00000004  // Do not prompt for the missing source
+#define OPT_PROMPT          0x00000004  // Prompt for missing source
 #define OPT_OUTPUT          0x00000008  // pOutput -> output file
 #define OPT_LOAD            0x00000010  // pLoad -> module to load
 #define OPT_LOAD_BREAK      0x00000020  // break upon load
@@ -73,7 +77,6 @@ extern char *pLogfile;                  // Default logfile name
 #define OPT_LOGFILE_APPEND  0x00002000  // Append method on logfile
 #define OPT_VER             0x00004000  // Version command
 #define OPT_HELP            0x00008000  // Help command
-extern unsigned int opt;
 
 
 #endif //  _LOADER_H_

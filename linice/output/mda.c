@@ -1,4 +1,4 @@
-/*****************************************************************************
+/******************************************************************************
 *                                                                             *
 *   Module:     mda.c                                                         *
 *                                                                             *
@@ -48,7 +48,7 @@
 
 #include <asm/page.h>                   // We need page offset
 
-#include "font.h"       // TODO - merge 8x8 fonts
+#include "font.h"                       // Include font declarations
 
 /******************************************************************************
 *                                                                             *
@@ -162,7 +162,7 @@ extern void CacheTextCls();
 
 static void MdaSprint(char *s);
 static void MdaMouse(int x, int y);
-static BOOL MdaResize(int x, int y);
+static BOOL MdaResize(int x, int y, int nFont);
 static void MdaCarret(BOOL fOn);
 
 static void HercSprint(char *s);
@@ -293,14 +293,14 @@ void MdaInit(void)
 
 /******************************************************************************
 *                                                                             *
-*   static BOOL MdaResize(int x, int y)                                       *
+*   static BOOL MdaResize(int x, int y, int nFont)                            *
 *                                                                             *
 *******************************************************************************
 *
 *   Resize MDA text display
 *
 ******************************************************************************/
-static BOOL MdaResize(int x, int y)
+static BOOL MdaResize(int x, int y, int nFont)
 {
     // Only 25 or 43 lines are supported, also only 80 WIDTH
 
@@ -520,6 +520,12 @@ static void MdaSprint(char *s)
                     outMda.x = outMda.sizeX - strlen(s);
                 break;
 
+            case DP_ESCAPE:
+                    // Escape character prints the next code as raw ascii
+                    c = *s++;
+                    
+                    // This case continues into the default...!
+
             default:
                     // All printable characters
                     *(WORD *)(mda.pText + (outMda.x +  outMda.y * outMda.sizeX) * 2)
@@ -552,7 +558,7 @@ static void HercPrintCharacter(DWORD x, DWORD y, BYTE c, int col)
     BYTE *pStart;
 
     dest = mda.pText + y * 90 * 2 + x;
-    src = (BYTE *) &font8x8[c];
+    src = &Font[0].Bitmap[c * 8];           // Always use font 0 for Hercules!
     pStart = dest;
 
     switch( col )
@@ -800,6 +806,12 @@ static void HercSprint(char *s)
                     // Right align the rest of the text
                     outMda.x = outMda.sizeX - strlen(s);
                 break;
+
+            case DP_ESCAPE:
+                    // Escape character prints the next code as raw ascii
+                    c = *s++;
+                    
+                    // This case continues into the default...!
 
             default:
                     // All printable characters

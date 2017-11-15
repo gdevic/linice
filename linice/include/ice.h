@@ -184,6 +184,7 @@ typedef struct
     BYTE fOvertype;                     // Cursor shape is overtype? (or insert)
     DWORD FrameX;                       // X-Window frame origin X coordinate
     DWORD FrameY;                       // X-Window frame origin X coordinate
+    DWORD nFont;                        // Font number for hi-res display
 
     BOOL fTrace;                        // Trace command in progress
     BOOL fDelayedTrace;                 // Delayed trace request
@@ -278,7 +279,7 @@ typedef struct
     void (*sprint)(char *c);            // Effective print string function
     void (*mouse)(int, int);            // Function that displays mouse cursor
     void (*carret)(BOOL fOn);           // Cursor (carret) callback
-    BOOL (*resize)(int, int);           // Resize window command
+    BOOL (*resize)(int, int, int);      // Resize window command
 
 } TOUT, *PTOUT;
 
@@ -303,7 +304,8 @@ extern PTOUT pOut;                      // Pointer to a current output device
 #define DP_ENABLE_OUTPUT        0x11    // Enable output driver
 #define DP_DISABLE_OUTPUT       0x12    // Disable output driver
 #define DP_RIGHTALIGN           0x13    // Right align the rest of the line
-#define DP_AVAIL                0x14    // First available code
+#define DP_ESCAPE               0x14    // Escape character, print next ascii code
+#define DP_AVAIL                0x15    // First available code
 
 
 /******************************************************************************

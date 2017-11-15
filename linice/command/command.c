@@ -58,6 +58,7 @@ static int iLast;                       // Last command entry index
 BOOL Unsupported(char *args, int subClass);
 
 extern BOOL cmdEvaluate(char *args, int subClass);      // eval.c
+extern BOOL cmdAscii   (char *args, int subClass);      // eval.c
 extern BOOL cmdAltkey  (char *args, int subClass);      // customization.c
 extern BOOL cmdCode    (char *args, int subClass);      // customization.c
 extern BOOL cmdSet     (char *args, int subClass);      // customization.c
@@ -132,6 +133,7 @@ TCommand Cmd[] = {
 {    "ADDR",     4, 0, Unsupported,    "ADDR [context-handle | task | *]", "ex: ADDR 80FD602C",   0 },
 {    "ALTKEY",   6, 0, cmdAltkey,      "ALTKEY [ALT letter | CTRL letter]", "ex: ALTKEY ALT D",   0 },
 {    "ALTSCR",   6, 3, cmdDisplay,     "ALTSCR [MONO | VGA | XWIN | OFF]", "ex: ALTSCR MONO",    0 },
+{    "ASCII",    5, 0, cmdAscii,       "ASCII", "ex: ASCII", 0 },
 {    "BC",       2, 0, cmdBp,          "BC list | *", "ex: BC *", 0 },
 {    "BD",       2, 1, cmdBp,          "BD list | *", "ex: BD 1,3,4", 0 },
 {    "BE",       2, 2, cmdBp,          "BE list | *", "ex: BE 1,3,4", 0 },
@@ -363,6 +365,7 @@ char *sHelp[] = {
    "F      - Fill memory with data",
    "M      - Move data",
    "C      - Compare two data blocks",
+   "ASCII  - Prints an ASCII character table",
    " LINE EDITOR KEY USAGE",
    "up     - Recall previous command line",
    "down   - Recall next command line",

@@ -65,18 +65,26 @@ typedef struct
     char *sVar;                         // Variable name
     int  sLen;                          // Length of the name
     BOOL *pVal;                         // Address of the value variable
+    BYTE type;                          // Type of the variable: VAR_*
+    BYTE test;                          // Test condition number for the new value
 } TSETVAR, *PTSETVAR;
 
+#define VAR_BOOL        0               // Boolean variable (on/off)
+#define VAR_DWORD       1               // Dword variable
+
 static TSETVAR SetVar[] = {
-{ "altscr",   6, &deb.fAltscr },
-{ "code" ,    4, &deb.fCode },
-{ "faults",   6, &deb.fFaults },
-{ "i1here",   6, &deb.fI1Here },
-{ "i3here",   6, &deb.fI3Here },
-{ "lowercase",9, &deb.fLowercase },
-{ "pause",    5, &deb.fPause },
-{ "symbols",  7, &deb.fSymbols },
-{ "flash",    5, &deb.fFlash },
+{ "altscr",   6, &deb.fAltscr,    VAR_BOOL , 0 },
+{ "code" ,    4, &deb.fCode,      VAR_BOOL , 0 },
+{ "faults",   6, &deb.fFaults,    VAR_BOOL , 0 },
+{ "i1here",   6, &deb.fI1Here,    VAR_BOOL , 0 },
+{ "i3here",   6, &deb.fI3Here,    VAR_BOOL , 0 },
+{ "lowercase",9, &deb.fLowercase, VAR_BOOL , 0 },
+{ "pause",    5, &deb.fPause,     VAR_BOOL , 0 },
+{ "symbols",  7, &deb.fSymbols,   VAR_BOOL , 0 },
+{ "flash",    5, &deb.fFlash,     VAR_BOOL , 0 },
+{ "font",     4, &deb.nFont,      VAR_DWORD, 1 },   // Test condition 1 - font size
+{ "framex",   6, &deb.FrameX,     VAR_DWORD, 2 },   // Test condition 2 - frame X coordinate
+{ "framey",   6, &deb.FrameY,     VAR_DWORD, 3 },   // Test condition 3 - frame Y coordinate
 { NULL, }
 };
 
@@ -626,22 +634,32 @@ BOOL cmdCode(char *args, int subClass)
 *                                                                             *
 *******************************************************************************
 *
-*   Multiple SET variable handling:
-*       SET ALTSCR [ON | OFF]
-*       SET CODE   [ON | OFF]
-*       SET FAULTS [ON | OFF]
-*       SET I1HERE [ON | OFF]
-*       SET I3HERE [ON | OFF]
-*       SET LOWERCASE [ON | OFF]
-*       SET PAUSE  [ON | OFF]
-*       SET SYMBOLS [ON | OFF]
-*       SET FLASH [ON | OFF]
+*   SET internal variable list or set a new value
 *
 ******************************************************************************/
+BOOL DisplayVariable(PTSETVAR pVar, int *pnLine)
+{
+    switch( pVar->type )
+    {
+        case VAR_BOOL:
+            if(dprinth(*pnLine++, "%s is %s", pVar->sVar, *pVar->pVal? "on":"off")==FALSE)
+                return( TRUE );
+            break;
+
+        case VAR_DWORD:
+            if(dprinth(*pnLine++, "%s is %d", pVar->sVar, *pVar->pVal)==FALSE)
+                return( TRUE );
+            break;
+    }
+
+    return( FALSE );
+}
+
 BOOL cmdSet(char *args, int subClass)
 {
     int nLine = 1;
-    PTSETVAR pVar;
+    PTSETVAR pVar;                      // Pointer to current variable
+    DWORD value;                        // New value
 
     pVar = SetVar;
 
@@ -650,14 +668,14 @@ BOOL cmdSet(char *args, int subClass)
         // Simple SET command without parameters - list all variables
         while( pVar->sVar )
         {
-            if(dprinth(nLine++, "%s is %s", pVar->sVar, *pVar->pVal? "on":"off")==FALSE)
-                break;
+            if( DisplayVariable(pVar, &nLine) )
+                return( TRUE );
             pVar++;
         }
     }
     else
     {
-        // Set <VARIABLE> [ON | OFF]
+        // Set a variable
         // Find the variable name
         while( pVar->sVar )
         {
@@ -675,24 +693,77 @@ BOOL cmdSet(char *args, int subClass)
         else
         {
             // Advance the argument pointer pass the var name and into the
-            // possible argument [ON | OFF]
+            // possible argument of variable type
             args += pVar->sLen;
+            while( *args==' ' ) args++;
 
-            switch( GetOnOff(args) )
+            if( *args )
             {
-                case 1:         // On
-                    *pVar->pVal = TRUE;
-                    RecalculateDrawWindows();
-                break;
+                // Set new value depending on the variable type
+                switch( pVar->type )
+                {
+                    case VAR_BOOL:
 
-                case 2:         // Off
-                    *pVar->pVal = FALSE;
-                    RecalculateDrawWindows();
-                break;
+                        switch( GetOnOff(args) )
+                        {
+                            case 1:         // On
+                                *pVar->pVal = TRUE;
+                                RecalculateDrawWindows();
+                            break;
+            
+                            case 2:         // Off
+                                *pVar->pVal = FALSE;
+                                RecalculateDrawWindows();
+                            break;
+                        }
+                    break;
 
-                case 3:         // Display the state of the variable
-                    dprinth(1, "%s is %s", pVar->sVar, *pVar->pVal? "on":"off");
-                break;
+                    case VAR_DWORD:
+                            value = Evaluate(args, NULL);
+
+                            // Run the appropriate test condition on the new variable value
+                            switch( pVar->test )
+                            {
+                                case 1:     // FONT size
+                                    if( value>=0 && value <MAX_FONTS )
+                                    {
+                                        // We have specified a new font size
+
+                                        // It is the responsibility of the output device to actually
+                                        // set new sizes in its variables after verifying them...
+                                        if( (pOut->resize)(pOut->sizeX, pOut->sizeY, value)==TRUE )
+                                        {
+                                            // New font value was accepted in the resize(), just repaint windows
+                                            RecalculateDrawWindows();
+                                        }
+                                    }
+                                    else
+                                        dprinth(nLine++, "FONT index has to be between 0 and %d", MAX_FONTS-1);
+                                    break;
+
+                                // TODO: Since setting the frame coordinates could be done at any time,
+                                //       without calling the code to check it, one can intentionally crash
+                                //       the DGA output by moving the window out while on some other output
+                                //       device...
+//                                case 2:     // FRAMEX initial coordinate
+//                                    break;
+
+//                                case 3:     // FRAMEY initial coordinate
+//                                    break;
+
+                                // By default, accept a value with no test
+                                default:
+                                    *pVar->pVal = value;
+                                    break;
+                            }
+                        break;
+                }
+            }
+            else
+            {
+                // If there were no arguments, display that variable value
+                
+                DisplayVariable(pVar, &nLine);
             }
         }
     }
@@ -753,7 +824,7 @@ BOOL cmdResize(char *args, int subClass)
 
                         // It is the responsibility of the output device to actually
                         // set new sizes in its variables after verifying them...
-                        if( (pOut->resize)(x, y)==TRUE )
+                        if( (pOut->resize)(x, y, deb.nFont)==TRUE )
                         {
                             // If the resize returned true, repaint windows
                             RecalculateDrawWindows();

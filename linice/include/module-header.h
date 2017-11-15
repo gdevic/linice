@@ -89,21 +89,7 @@
 #  endif
 #endif
 
-
 //-----------------------------------------------------------------------------
-// Are we SMP?  Linux 2.2.x has this in the autoconf file, but prior versions
-// need it hand coded.
-
-#ifdef __SMP__
-#undef __SMP__
-#endif
-
-#if defined(CONFIG_SMP) && !defined(SUPPORT_SMP)
-#  error "SMP detected. Please uncomment SMP=1 in the Makefile."
-#elif defined(KERNEL_2_1) && defined(SUPPORT_SMP)
-#  define __SMP__ 1
-#  define SMP_GLOBAL_VMLOCK
-#endif
 
 #if defined(CONFIG_MODVERSIONS) && defined(KERNEL_2_1)
 #define MODVERSIONS

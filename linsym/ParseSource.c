@@ -36,6 +36,8 @@
 
 #include "Common.h"                     // Include platform specific set
 
+#include "loader.h"                     // Include global protos
+
 
 extern int dfs;
 
@@ -54,6 +56,10 @@ extern int dfs;
 *       ptr - file path name string
 *       file_id - file_id to assign to this file
 *
+*   Returns:
+*       TRUE - file is parsed and stored, could also be file is completely skipped
+*       FALSE - Critical memory allocation error, no point to continue with any more files
+*
 ******************************************************************************/
 BOOL ParseSource1(int fd, int fs, char *ptr, WORD file_id)
 {
@@ -62,10 +68,9 @@ BOOL ParseSource1(int fd, int fs, char *ptr, WORD file_id)
     DWORD dwSize;                       // Final size of the above structure
     FILE *fp = NULL;                    // Source file descriptor
     char pTmp[FILENAME_MAX];            // Temporary buffer
-    BOOL fRet = FALSE;                  // Assume we failed
 	char *pName;						// Temp file name pointer
 
-#define MAX_LINE_LEN    1024            // Max allowable line in a source code
+#define MAX_LINE_LEN    1024            // Max allowable line length in a source code
 
     char sLine[MAX_LINE_LEN];           // Single source line
 
@@ -84,9 +89,16 @@ BOOL ParseSource1(int fd, int fs, char *ptr, WORD file_id)
         fp = fopen(pTmp, "rt");
         if( fp==NULL )
         {
-            printf("File %s not found. Enter the file path/name or just press ENTER to skip it:\n", pTmp);
-            fgets(pTmp, FILENAME_MAX, stdin);
-            if( pTmp[0]=='\n' )
+            // File can not be opened. By default, we skip it, but command line option can change that
+            if( opt & OPT_PROMPT )
+            {
+                // Force prompt for the missing file
+                printf("File %s not found. Enter the file path/name or just press ENTER to skip it:\n", pTmp);
+                fgets(pTmp, FILENAME_MAX, stdin);
+                if( pTmp[0]=='\n' )
+                    return( TRUE );
+            }
+            else
                 return( TRUE );
         }
     }
@@ -104,11 +116,13 @@ BOOL ParseSource1(int fd, int fs, char *ptr, WORD file_id)
     }
 
     if( nLines==0 )
-        return( FALSE );
+        return( TRUE );
 
     // Allocate the buffer for a header structure + line array
     dwSize = sizeof(TSYMSOURCE) + sizeof(DWORD)*(nLines-1);
     pHeader = (TSYMSOURCE *) malloc(dwSize);
+    if( pHeader==NULL )
+        return( FALSE );
 
     pHeader->hType       = HTYPE_SOURCE;
     pHeader->dwSize      = dwSize;
@@ -160,7 +174,7 @@ BOOL ParseSource1(int fd, int fs, char *ptr, WORD file_id)
     // Close the source file descriptor
     fclose(fp);
 
-    return( fRet );
+    return( TRUE );
 }
 
 

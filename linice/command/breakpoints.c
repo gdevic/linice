@@ -1120,12 +1120,29 @@ void *DisarmBreakpoints(void)
     else
         pBp = NULL;
 
+    // Disarm the non-sticky breakpoint, if enabled, and disable it
+    if( nsbp.Flags & BP_ENABLED )
+    {
+        if( AddrGetByte(&nsbp.address)==0xCC )  // Was it INT3?
+        {
+            AddrSetByte(&nsbp.address, nsbp.origValue);
+
+            // If the current cs:eip-1 matches the non-sticky bp address, do not reset the nbsp.Flags
+            // to signal later that we indeed hit one INT3
+            if( deb.r->cs!=nsbp.address.sel || deb.r->eip-1!=nsbp.address.offset )
+                nsbp.Flags = 0;                         // Disable non-sticky breakpoint
+        }
+    }
+
     // If the DR6=0 (no hardware breakpoint hit or a trap fault) and cs:eip-1 was a 
     // breakpoint, decrement eip
-    if( pBp && (deb.sysReg.dr6 & (DR6_BS_BIT|DR6_BT_BIT|0xF))==0 )
+    if( (pBp || nsbp.Flags) && (deb.sysReg.dr6 & (DR6_BS_BIT|DR6_BT_BIT|0xF))==0 )
     {
         deb.r->eip -= 1;
     }
+
+    // Disable non-sticky breakpoint
+    nsbp.Flags = 0;
 
     // Clear the DR6 register since CPU never does it
     deb.sysReg.dr6 = 0;
@@ -1136,21 +1153,6 @@ void *DisarmBreakpoints(void)
     deb.sysReg.dr7 = 0;
 
     SetSysreg(&deb.sysReg);             // Write out DR7
-
-    // Disarm the non-sticky breakpoint, if enabled, and disable it
-    if( nsbp.Flags & BP_ENABLED )
-    {
-        if( AddrGetByte(&nsbp.address)==0xCC )  // Was it INT3?
-        {
-            AddrSetByte(&nsbp.address, nsbp.origValue);
-
-            // If the current cs:eip-1 matches the bpx address, reset the index from the default
-//            if( deb.r->cs==nsbp.address.sel && deb.r->eip-1==nsbp.address.offset )
-//                eBPX = MAX_BREAKPOINTS;
-        }
-
-        nsbp.Flags = 0;                         // Disable non-sticky breakpoint
-    }
 
     return( (void *)pBp );
 }

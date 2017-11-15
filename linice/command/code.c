@@ -81,7 +81,7 @@ extern int BreakpointQueryFileLine(WORD file_id, WORD line);
 
 /******************************************************************************
 *                                                                             *
-*   BYTE GetCodeLine(PTADDRDESC pAddr, BOOL fDecodeExtra)                     *
+*   BYTE GetCodeLine(PTADDRDESC pAddr, BOOL fDecodeExtra, BOOL fTarget)       *
 *                                                                             *
 *******************************************************************************
 *
@@ -90,14 +90,15 @@ extern int BreakpointQueryFileLine(WORD file_id, WORD line);
 *   Where:
 *       pAddr is the address of the requested code
 *       fDecodeExtra if we are able to print some extra info (jump/no jump...)
+*       fTarget if the current address is a jump target
 *
 *   Returns:
-*       size in bytes of the addressed instruction len
+*       size in bytes of the addressed instruction opcode
 *
 *       sCodeLine contains the disassembly of the pAddr-addressed instruction
 *
 ******************************************************************************/
-static BYTE GetCodeLine(PTADDRDESC pAddr, BOOL fDecodeExtra)
+static BYTE GetCodeLine(PTADDRDESC pAddr, BOOL fDecodeExtra, BOOL fTarget)
 {
     TDISASM dis;
     int i, pos;
@@ -119,7 +120,11 @@ static BYTE GetCodeLine(PTADDRDESC pAddr, BOOL fDecodeExtra)
 
     bLen = dis.bInstrLen;
 
-    pos = sprintf(sCodeLine, "%04X:%08X  ", pAddr->sel, pAddr->offset);
+    // If a current instruction is a jump target, print "==>" instead of a selector value
+    if( fTarget )
+        pos = sprintf(sCodeLine, " ==> %08X  ",             pAddr->offset);
+    else
+        pos = sprintf(sCodeLine, "%04X:%08X  ", pAddr->sel, pAddr->offset);
 
     // If CODE was ON, print the code bytes
     if( deb.fCode )
@@ -149,10 +154,8 @@ static BYTE GetCodeLine(PTADDRDESC pAddr, BOOL fDecodeExtra)
     // If we are allowed to print some extra information, do it here:
     if( fDecodeExtra )
     {
-        eCondJump = -1;
-
         // If the instruction is a conditional jump, decipher if we will jump or not
-        if( (dis.bFlags & SCAN_MASK)==SCAN_COND_JUMP )
+        if( (dis.bFlags & SCAN_MASK) == SCAN_COND_JUMP )
         {
             // There are 3 blocks of instructions with SCAN_COND_JUMP:
             //  1) Opcodes 0x70 - 0x7F                       |
@@ -167,6 +170,8 @@ static BYTE GetCodeLine(PTADDRDESC pAddr, BOOL fDecodeExtra)
             else
             if( dis.bCodes[0]>=0xE0 && dis.bCodes[0]<=0xE3 )
                 eCondJump = dis.bCodes[0]-0xE0 + 16;
+            else
+                eCondJump = -1;         // We have a bug??
 
             fJump = FALSE;              // Assume we will not jump
             eflags = deb.r->eflags;
@@ -193,7 +198,7 @@ static BYTE GetCodeLine(PTADDRDESC pAddr, BOOL fDecodeExtra)
                 case 0x0B: /* jnp  */ if( (eflags&PF_MASK)==0 ) fJump = TRUE;  break;
                 case 0x0C: /* jl   */ if( SF_VALUE(eflags) != OF_VALUE(eflags) ) fJump = TRUE;  break;
                 case 0x0D: /* jnl  */ if( SF_VALUE(eflags) == OF_VALUE(eflags) ) fJump = TRUE;  break;
-                case 0x0E: /* jle  */ if(  eflags&ZF_MASK     && (SF_VALUE(eflags) != OF_VALUE(eflags)) ) fJump = TRUE;  break;
+                case 0x0E: /* jle  */ if(  eflags&ZF_MASK     || (SF_VALUE(eflags) != OF_VALUE(eflags)) ) fJump = TRUE;  break;
                 case 0x0F: /* jnle */ if( (eflags&ZF_MASK)==0 && (SF_VALUE(eflags) == OF_VALUE(eflags)) ) fJump = TRUE;  break;
 
                 case 0x10: /* lpne */ if( (eflags&ZF_MASK)==0 && (ecx!=1) ) fJump = TRUE;  break;
@@ -203,7 +208,19 @@ static BYTE GetCodeLine(PTADDRDESC pAddr, BOOL fDecodeExtra)
             }
 
             // Finally, append the resulting string
-            sprintf(buf, "\r%c%s", DP_RIGHTALIGN, fJump==TRUE? " (jump)" : " (no jump)");
+            if( fJump==FALSE )
+                sprintf(buf, "\r%c(no jump)", DP_RIGHTALIGN);
+            else
+                sprintf(buf, "\r%c(jump %c)", DP_RIGHTALIGN, dis.dwTargetAddress < pAddr->offset? 24 : 25 ); // UP : DOWN
+
+            strcat(sCodeLine, buf);
+        }
+        else
+        // If the instruction is a simple jump, just print out the direction of jump
+        if( (dis.bFlags & SCAN_MASK) == SCAN_JUMP )
+        {
+            sprintf(buf, "\r%c(jump %c)", DP_RIGHTALIGN, dis.dwTargetAddress < pAddr->offset? 24 : 25 ); // UP : DOWN
+
             strcat(sCodeLine, buf);
         }
     }
@@ -266,6 +283,8 @@ char *GetSourceLine(WORD *pwLine, PTADDRDESC pAddr)
 ******************************************************************************/
 void CodeDraw(BOOL fForce)
 {
+    TDISASM dis;                        // Disassembler interface structure
+    BOOL fTarget;                       // Current address is a jump target
     int maxLines;
     int nLen, nLine=1;
     char col;
@@ -292,7 +311,7 @@ void CodeDraw(BOOL fForce)
 
     // Depending on the source mode, we display source file or basically
     // a machine code with optional mixed source lines
-    if( eMode==1 && deb.pFnScope && deb.pFnLin )
+    if( eMode==1 && deb.pFnScope && deb.pFnLin && deb.pSource )
     {
         // SOURCE CODE LINES
         //================================================================
@@ -343,13 +362,31 @@ void CodeDraw(BOOL fForce)
         // MACHINE CODE DISASSEMBLY or MIXED SOURCE LINES AND DISASSEMBLY
         //================================================================
 
+        // First run a quick scan over the current instruction in order to pick
+        // up jump or conditional jump destination address, so we can print "==>" mark
+
+        dis.bState   = DIS_DATA32 | DIS_ADDRESS32;
+        dis.wSel     = deb.r->cs;
+        dis.dwOffset = deb.r->eip;
+        DisassemblerLen(&dis);
+        dis.bFlags &= SCAN_MASK;        // Isolate only jump flags
+
+        // Now we keep possible jump destination address in dis.dwTargetAddress, and
+        // the jump state flag in dis.bFlags
+
         while( nLine <= maxLines )
         {
+            // Determine if the current instruction line is a target to a jump or conditional jump
+            if( dis.dwTargetAddress==Addr.offset && (dis.bFlags==SCAN_COND_JUMP || dis.bFlags==SCAN_JUMP) )
+                fTarget = TRUE;
+            else
+                fTarget = FALSE;
+
             // If the address is the current CS:EIP, invert the line color;
             // In the same token, send the argument to signal the current cs:eip
             if( Addr.sel==deb.r->cs && Addr.offset==deb.r->eip )
                 col = COL_REVERSE,
-                nLen = GetCodeLine(&Addr, TRUE);
+                nLen = GetCodeLine(&Addr, TRUE, fTarget);
             else
             {
                 // If a current address contains a breakpoint, highlight it
@@ -358,7 +395,7 @@ void CodeDraw(BOOL fForce)
                 else
                     col = COL_NORMAL;
                 
-                nLen = GetCodeLine(&Addr, FALSE);
+                nLen = GetCodeLine(&Addr, FALSE, fTarget);
             }
             
             pLine = sCodeLine;              // Print the default disassembly

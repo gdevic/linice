@@ -1,84 +1,3 @@
-#if 0
-static char *evalError[] = {
-"No effective address",
-"System data was not present",
-"%s is not a structure member",
-"Expecting structure member name",
-"Macro cannot be used here",
-"Symbol has not been instantiated",
-"Assignment operators are not supported",
-"To many parameters for function",
-"To few parameters for function",
-"Typecast (%s) requires opening '('",
-"Function (%s) requires opening '('",
-"prefix/postfix ++ and -- are not supported",
-"Symbol not defined (%s)",
-"Invalid symbol name (%s)",
-"Invalid subtraction: Selectors are not the same type",
-"Expecting value, not address",
-"Operation cannot be performed on two addresses",
-"No code at line number",
-"Invalid Address",
-"Invalid Indirection",
-"Unexpected Unary operator ('%s')",
-"Expecting Unary operator (not '%s')",
-
-"Charcter value too large: '%s'",
-"Character constant is too long: '%s'",
-"Unterminated character constant: %s",
-"Invalid character constant: '%s'",
-"Unknown escape sequence: '%s'",
-"Unable to evaluate expression",
-"Unbalanced parentheses in expression",
-"Expression to complex!",
-"Unexpected end of expression",
-"Attempting to divide by zero is totally uncool...",
-"Value is too large: (%s)",
-"Expecting operator (not '%s')",
-"Expecting #,symbol, or register (not '%s')",
-"Invalid Expression",
-"Expression?? What expression?"
-};
-
-#endif
-#if 0
-#%02x:%08x
-UPID
-UTID
-UPDB
-UTCB
-VMMTID
-CONTEXT
-K32XOR
-EVALUE
-EADDR
-BPIndex
-BPMiss
-BPTotal
-BPCount
-BPLog
-CodeAddr
-DataAddr
-VMFL
-NTFL
-IOPL
-NOTYPE
-WSTR
-FLAT
-LONG
-SWORD
-DWORD
-HIBYTE
-HIWORD
-BYTE
-WORD
-TRUE
-NULL
-FALSE
-<eval error>
-
-#endif
-
 /******************************************************************************
 *                                                                             *
 *   Module:     Eval.c                                                        *
@@ -927,3 +846,45 @@ BOOL cmdEvaluate(char *args, int subClass)
     return( TRUE );
 }
 
+
+/******************************************************************************
+*                                                                             *
+*   BOOL cmdAscii(char *args, int subClass)                                   *
+*                                                                             *
+*******************************************************************************
+*
+*   Utility function that dumps the ASCII character table.
+*
+******************************************************************************/
+BOOL cmdAscii(char *args, int subClass)
+{
+    int nLine = 1;                      // Standard line counter
+    int nibble;                         // ASCII index
+
+    if(dprinth(nLine++, "         0 1 2 3 4 5 6 7  8 9 A B C D E F")==FALSE) return( TRUE );
+
+    for(nibble=0; nibble<256; nibble+=16)
+    {
+        if(dprinth(nLine++, " %3d %02X  %c%c %c%c %c%c %c%c %c%c %c%c %c%c %c%c  %c%c %c%c %c%c %c%c %c%c %c%c %c%c %c%c",
+                nibble,
+                nibble,
+                DP_ESCAPE, (nibble==0)? ' ' : nibble+0,
+                DP_ESCAPE, nibble+1,
+                DP_ESCAPE, nibble+2,
+                DP_ESCAPE, nibble+3,
+                DP_ESCAPE, nibble+4,
+                DP_ESCAPE, nibble+5,
+                DP_ESCAPE, nibble+6,
+                DP_ESCAPE, nibble+7,
+                DP_ESCAPE, nibble+8,
+                DP_ESCAPE, nibble+9,
+                DP_ESCAPE, nibble+10,
+                DP_ESCAPE, nibble+11,
+                DP_ESCAPE, nibble+12,
+                DP_ESCAPE, nibble+13,
+                DP_ESCAPE, nibble+14,
+                DP_ESCAPE, nibble+15 )==FALSE) break;
+    }
+
+    return( TRUE );
+}

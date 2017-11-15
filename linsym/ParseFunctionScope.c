@@ -64,6 +64,7 @@ BOOL ParseFunctionScope(int fd, int fs, BYTE *pBuf)
     WORD file_id = 0;                   // Current file ID number
     long fileOffset = 0;                // Temp file offset position
     WORD nTokens = 0;                   // Number of tokens in a function
+    BOOL fInFunction = FALSE;           // Are we inside a function scope?
 
     Elf32_Ehdr *pElfHeader;             // ELF header
 
@@ -147,6 +148,8 @@ BOOL ParseFunctionScope(int fd, int fs, BYTE *pBuf)
 
                         write(fd, &Header, sizeof(TSYMFNSCOPE)-sizeof(TSYMFNSCOPE1));
                         lseek(fd, 0, SEEK_END);
+
+                        fInFunction = FALSE;
                     }
                     else
                     {
@@ -164,6 +167,7 @@ BOOL ParseFunctionScope(int fd, int fs, BYTE *pBuf)
 
                         Header.file_id        = file_id;
                         Header.dwStartAddress = pStab->n_value;
+
                         Header.dwEndAddress   = 0;      // To be written later
                         Header.nTokens        = 0;      // To be written later
 
@@ -186,6 +190,8 @@ BOOL ParseFunctionScope(int fd, int fs, BYTE *pBuf)
 
                         // Write the header first time
                         write(fd, &Header, sizeof(TSYMFNSCOPE)-sizeof(TSYMFNSCOPE1));
+
+                        fInFunction = TRUE;
                     }
                 break;
 
@@ -279,19 +285,24 @@ BOOL ParseFunctionScope(int fd, int fs, BYTE *pBuf)
 
                 // Local static symbol in the BSS segment
                 case N_LCSYM:
-                    printf("LCSYM  ");
-                    printf("line: %d BSS %08lX  %s\n", pStab->n_desc, pStab->n_value, pStr);
+                    // If we are not within a function scope, it is a local variable
+                    // TODO: Local scope variables
+                    if(fInFunction)
+                    {
+                        printf("LCSYM  ");
+                        printf("line: %d BSS %08lX  %s\n", pStab->n_desc, pStab->n_value, pStr);
 
-                    // Write out one token record
-                    list.TokType = TOKTYPE_LCSYM;
-                    list.p1      = pStab->n_value;
-                    list.p2      = dfs;
-                    write(fs, pStr, strlen(pStr)+1);
-                    dfs += strlen(pStr)+1;
+                        // Write out one token record
+                        list.TokType = TOKTYPE_LCSYM;
+                        list.p1      = pStab->n_value;
+                        list.p2      = dfs;
+                        write(fs, pStr, strlen(pStr)+1);
+                        dfs += strlen(pStr)+1;
 
-                    write(fd, &list, sizeof(TSYMFNSCOPE1));
+                        write(fd, &list, sizeof(TSYMFNSCOPE1));
 
-                    nTokens++;
+                        nTokens++;
+                    }
                 break;
 
                 // Left-bracket: open a new scope

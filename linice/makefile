@@ -57,6 +57,7 @@ clean:
 			mouse.o		\
 			serial.o	\
 			output.o	\
+			font.o      \
 			window.o	\
 			vga.o		\
 			mda.o		\
@@ -174,6 +175,9 @@ serial.o:	serial.c
 
 output.o:	output/output.c
 	$(CC) $(CFLAGS) -c output/output.c
+
+font.o:		output/font.c
+	$(CC) $(CFLAGS) -c output/font.c
 
 window.o:	output/window.c
 	$(CC) $(CFLAGS) -c output/window.c

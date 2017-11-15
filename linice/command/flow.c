@@ -416,7 +416,7 @@ BOOL cmdStep(char *args, int subClass)
             // Call and INT instructions we skip
 
             // Set a non-sticky breakpoint at the next instruction
-            BpAddr.sel = deb.r->cs;
+            BpAddr.sel    = deb.r->cs;
             BpAddr.offset = deb.r->eip + Dis.bInstrLen;
             SetNonStickyBreakpoint(BpAddr);
         }

@@ -122,7 +122,7 @@ char *pArgs = NULL;                     // Default no arguments
 char *pSym = NULL;                      // Default symbol table to load/unload
 char *pLogfile = "linice.log";          // Default logfile name
 char *pSystemMap = "/boot/System.map";  // Default System.map file
-unsigned int opt;
+unsigned int opt;                       // Various option flags
 
 /******************************************************************************
 *                                                                             *
@@ -356,7 +356,7 @@ int main(int argn, char *argp[])
         else
         if( !strcmp(argp[i], "--prompt") || !strcmp(argp[i], "-p") )
         {
-            // --prompt  says do not prompt for the missing source
+            // --prompt  says to prompt for the missing source (default is no prompt)
             opt |= OPT_PROMPT;
         }
         else

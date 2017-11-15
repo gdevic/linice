@@ -48,7 +48,7 @@
 
 #include "debug.h"                      // Include our dprintk()
 
-#include "font.h"                       // Include one-time font definition
+#include "font.h"                       // Include font declarations
 
 /******************************************************************************
 *                                                                             *
@@ -98,25 +98,6 @@ static const DWORD vga_back[16][3] = {
 { 0x80, 0x80, 0x80 },                   // Color 7  GREY
 };
 
-typedef struct
-{
-    BYTE *Bitmap;                       // Address of the font bitmap
-    int ysize;                          // Font height in pixels
-} TFont;
-
-#define MAX_FONTS           2           // Number of graphics fonts available
-
-static TFont Font[MAX_FONTS] = {
-{
-    (BYTE *)&font8x8,                   // 8x8 font
-    8                                   // 8 pixels high
-},
-{
-    (BYTE *)&font8x16,                  // 8x16 font
-    16                                  // 16 pixels high
-}
-};
-
 //---------------------------------------------------
 // Helper variables for display output
 //---------------------------------------------------
@@ -158,7 +139,7 @@ static void DgaCls16();
 
 static void DgaCarret(BOOL fOn);
 static void DgaMouse(int x, int y);
-static BOOL DgaResize(int x, int y);
+static BOOL DgaResize(int x, int y, int nFont);
 
 extern void CacheTextScrollUp(DWORD top, DWORD bottom);
 extern void CacheTextCls();
@@ -203,8 +184,8 @@ int XInitPacket(TXINITPACKET *pXInit)
         pIce->nXDrawSize = MAX_XWIN_BUFFER;
     }
 
-    // Make sure the size is enough for the starting buffer 80x25 and default first font
-    dwSize = (80+2) * 8 * pXInit->bpp * (25+2) * Font[0].ysize;
+    // Make sure the size is enough for the starting buffer 80x25 and the selected font
+    dwSize = (80+2) * 8 * pXInit->bpp * (25+2) * Font[deb.nFont].ysize;
 
     if( pIce->nXDrawSize < dwSize )
     {
@@ -259,13 +240,16 @@ int XInitPacket(TXINITPACKET *pXInit)
             dga.scrollTop = 0;
             dga.scrollBottom = outDga.sizeY - 1;
             dga.col = COL_NORMAL;
-            dga.pFont = &Font[0];               // Default first font
+            dga.pFont = &Font[deb.nFont];
             dga.fEnabled = FALSE;
         
             dga.stride = pXInit->stride;
             dga.xres   = pXInit->xres;
             dga.yres   = pXInit->yres;
             dga.bpp    = pXInit->bpp;
+
+            deb.FrameX = 0;                     // Start the window at the top-left corner
+            deb.FrameY = 0;
 
             // Calculate frame offset based on the existing origin variables
             dga.dwFrameOffset = deb.FrameY * dga.stride + deb.FrameX * dga.bpp;
@@ -473,10 +457,10 @@ static void DgaPrintCharacter(DWORD x, DWORD y, BYTE c, int col)
 {
     DWORD address;
 
-    // Do not print character if it is out-of screen or would go there
-    if( x < (dga.xres - 8) / 8 )
+    // Only print characters that completely fit within the screen bounds
+    if( x <= (dga.xres - 8) / 8 )
     {
-        if( y < (dga.yres - dga.pFont->ysize) / dga.pFont->ysize )
+        if( y <= (dga.yres - dga.pFont->ysize) / dga.pFont->ysize )
         {
             // Calculate the address in the frame buffer to print a character
             address = (DWORD) pIce->pXFrameBuffer + dga.dwFrameOffset +
@@ -610,21 +594,47 @@ static void DgaMouse(int x, int y)
 
 /******************************************************************************
 *                                                                             *
-*   static BOOL DgaResize(int x, int y)                                       *
+*   static BOOL DgaResize(int x, int y, int nFont)                            *
 *                                                                             *
 *******************************************************************************
 *
-*   Resize DGA display
+*   Resize DGA display due to few commands:
+*       LINES (resize X coordinate)
+*       WIDTH (resize Y coordinate)
+*       SET FONT (resize Y coordinate/special)
+*
+*   Returns:
+*       TRUE - Accept new parameters
+*       FALSE - Reject new parameters
 *
 ******************************************************************************/
-static BOOL DgaResize(int x, int y)
+static BOOL DgaResize(int x, int y, int nFont)
 {
     DWORD dwSize;                       // Backing store buffer requirement
+    int fontY;                          // Current or new font Y size
+
+    // Load the font Y size. If the command was not to set different font, we
+    // expect the caller to pass us the current font number.
+    fontY = Font[nFont].ysize;
+
+    // Check that the number of lines or width do not exceed current display size
+
+    if( x > (dga.xres/8)-2 )
+    {
+        dprinth(1, "Maximum WIDTH at this screen resolution is %d", (dga.xres/8)-2 );
+        return( FALSE );
+    }
+
+    if( y > (dga.yres/fontY)-2 )
+    {
+        dprinth(1, "Maximum LINES at this resolution and font is %d", (dga.yres/fontY)-2);
+        return( FALSE );
+    }
 
     // Depending on the amount of backing store buffer memory allocated,
     // we may want to decrease this request to what would fit
 
-    dwSize = (x+2) * 8 * dga.bpp * (y+2) * dga.pFont->ysize;
+    dwSize = (x+2) * 8 * dga.bpp * (y+2) * fontY;
 
     if( dwSize > pIce->nXDrawSize )
     {
@@ -633,44 +643,52 @@ static BOOL DgaResize(int x, int y)
 
         dprinth(1, "That size would need %d of backing store buffer out of %d allocated.", dwSize, pIce->nXDrawSize);
 
-        // We know we are changing only one variable at a time (either command LINES or WIDTH)
+        // We know we are changing only one variable at a time (lines, width or font)
         if( x != outDga.sizeX )
         {
             // Changing X size (command WIDTH)
-            x = pIce->nXDrawSize / (8 * dga.bpp * (outDga.sizeY+2) * dga.pFont->ysize);
+            x = pIce->nXDrawSize / (8 * dga.bpp * (outDga.sizeY+2) * fontY);
             x -= 2;                     // Account for 2 border edges
 
-            dwSize = (x+2) * 8 * dga.bpp * (y+2) * dga.pFont->ysize;
+            dwSize = (x+2) * 8 * dga.bpp * (y+2) * fontY;
 
-            dprinth(1, "Using WIDTH of %d with %d bytes of backing store buffer needed.", x, dwSize);
+            dprinth(1, "Using WIDTH of %d instead.", x);
         }
-        else
+
+        if( y != outDga.sizeY )
         {
             // Changing Y size (command LINES)
-            y = pIce->nXDrawSize / ((outDga.sizeX+2) * 8 * dga.bpp * dga.pFont->ysize);
+            y = pIce->nXDrawSize / ((outDga.sizeX+2) * 8 * dga.bpp * fontY);
             y -= 2;                     // Account for 2 border edges
 
-            dwSize = (x+2) * 8 * dga.bpp * (y+2) * dga.pFont->ysize;
+            dwSize = (x+2) * 8 * dga.bpp * (y+2) * fontY;
 
-            dprinth(1, "Using LINES of %d with %d bytes of backing store buffer needed.", y, dwSize);
+            dprinth(1, "Using LINES of %d instead.", y);
+        }
+
+        if( nFont != deb.nFont )
+        {
+            // Window using a new font size would not fit into the backing store - simply return.
+            return( FALSE );
         }
     }
 
     dputc(DP_RESTOREBACKGROUND);
 
     // After resizing, we may want to readjust the starting frame X and Y coordinates
+    if( deb.FrameX + (x+2) * 8 >= dga.xres )
+        deb.FrameX = dga.xres - (x+2) * 8;
 
-    if( deb.FrameX + (x+2) * dga.bpp >= dga.xres )
-        deb.FrameX = dga.xres - (x+2) * dga.bpp;
-
-    if( deb.FrameY + (y+2) * dga.pFont->ysize >= dga.yres )
-        deb.FrameY = dga.yres - (y+2) * dga.pFont->ysize;
+    if( deb.FrameY + (y+2) * fontY >= dga.yres )
+        deb.FrameY = dga.yres - (y+2) * fontY;
 
     dga.dwFrameOffset = deb.FrameY * dga.stride + deb.FrameX * dga.bpp;
 
     // Size is now ok, it will fit. Readjust the variables and exit.
     outDga.sizeX = x;
     outDga.sizeY = y;
+    deb.nFont = nFont;                  // Set unchanged or new font index
+    dga.pFont = &Font[nFont];           // And the pointer to a new font
 
     dputc(DP_SAVEBACKGROUND);
 
@@ -880,6 +898,12 @@ static void DgaSprint(char *s)
                         outDga.x = outDga.sizeX - strlen(s);
                     break;
 
+                case DP_ESCAPE:
+                        // Escape character prints the next code as raw ascii
+                        c = *s++;
+                        
+                        // This case continues into the default...!
+
                 default:
                         // Output a character on the screen
                         DgaPrintCharacter(outDga.x+1, outDga.y+1, c, dga.col);
@@ -969,8 +993,8 @@ void XWinControl(CHAR Key)
 
         // Moving window to the right, down or centering may have pushed it
         // over the right or bottom edge, and that could be fatal. Readjust if necessary.
-        if( deb.FrameX + (outDga.sizeX+2) * dga.bpp >= dga.xres )
-            deb.FrameX = dga.xres - (outDga.sizeX+2) * dga.bpp;
+        if( deb.FrameX + (outDga.sizeX+2) * 8 >= dga.xres )
+            deb.FrameX = dga.xres - (outDga.sizeX+2) * 8;
     
         if( deb.FrameY + (outDga.sizeY+2) * dga.pFont->ysize >= dga.yres )
             deb.FrameY = dga.yres - (outDga.sizeY+2) * dga.pFont->ysize;

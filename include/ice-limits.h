@@ -57,13 +57,13 @@
 //
 #define SYMSIG              "SYM"
 
-// Define current symbol file version - 0.7
+// Define current symbol file version - 0.8
 //
-#define SYMVER              (0 << 8 | 7)
+#define SYMVER              (0 << 8 | 8)
 
-// Define current Linice version - 0.7
+// Define current Linice version - 0.8
 //
-#define LINICEVER           (0 << 8 | 7)
+#define LINICEVER           (0 << 8 | 8)
 
 //////////////////////////////////////////////////////////////////////
 // Define the maxlimum length (including terminating zero) of:
@@ -113,6 +113,14 @@
 // Define the maximum XWindows backstore buffer allowed (in bytes)
 //
 #define MAX_XWIN_BUFFER     1024 * 1024 * 32
+
+//////////////////////////////////////////////////////////////////////
+// Number of graphics fonts available:
+//  8x8
+//  8x14
+//  8x16
+//
+#define MAX_FONTS           3
 
 //////////////////////////////////////////////////////////////////////
 // Define if the serial out connection will use polling method or

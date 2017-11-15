@@ -70,7 +70,6 @@ typedef struct
     BYTE bAccess;               // Instruction access codes
     BYTE bFlags;                // Instruction flags
 
-    // The following are filled in only by the instruction scanner (byte-len)
     DWORD dwTargetAddress;      // Target instruction decoded address value
     DWORD dwTargetData;         // Target instruction decoded data value
 

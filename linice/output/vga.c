@@ -109,7 +109,7 @@ static TVga vga;
 void VgaSprint(char *s);
 static void VgaCarret(BOOL fOn);
 static void VgaMouse(int x, int y);
-static BOOL VgaResize(int x, int y);
+static BOOL VgaResize(int x, int y, int nFont);
 
 /******************************************************************************
 *                                                                             *
@@ -268,14 +268,14 @@ static void VgaMouse(int x, int y)
 
 /******************************************************************************
 *                                                                             *
-*   static BOOL VgaResize(int x, int y)                                       *
+*   static BOOL VgaResize(int x, int y, int nFont)                            *
 *                                                                             *
 *******************************************************************************
 *
 *   Resize VGA text display
 *
 ******************************************************************************/
-static BOOL VgaResize(int x, int y)
+static BOOL VgaResize(int x, int y, int nFont)
 {
     // Limit sizes to 80 in width and 25-60 in the number of lines
     if( x == 80 )
@@ -450,6 +450,12 @@ void VgaSprint(char *s)
                         // Right align the rest of the text
                         outVga.x = outVga.sizeX - strlen(s);
                     break;
+
+                case DP_ESCAPE:
+                        // Escape character prints the next code as raw ascii
+                        c = *s++;
+                        
+                        // This case continues into the default...!
 
                 default:
                         // All printable characters

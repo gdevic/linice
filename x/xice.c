@@ -118,13 +118,14 @@ int GetShiftAdj(int mask, int *pWidth)
 *
 *   Where:
 *       sDisplay is the string name of the display to query (or NULL for default)
+*       fQuery if TRUE, will display some additional information
 *
 *   Returns:
 *       Address of the IOCTL packet that is ready to be sent
 *       NULL if error
 *
 ******************************************************************************/
-TXINITPACKET *CollectDisplayInfo(char *sDisplay)
+TXINITPACKET *CollectDisplayInfo(char *sDisplay, BOOL fQuery)
 {
     static TXINITPACKET Init;           // Init packet sent to the debugger
 
@@ -174,12 +175,13 @@ TXINITPACKET *CollectDisplayInfo(char *sDisplay)
                         if( pVisual )
                         {
                             // Display information that we gathered so far about the screen
-                            fprintf(stderr, "Root window: %d x %d x %d\n", display_width, display_height, depth );
-                            fprintf(stderr, "             address  %08X\n", mywin.ptr);
+                            printf("Root window:\n");
+                            printf("   dimensions %d x %d x %d\n", display_width, display_height, depth );
+                            printf("   address    %08X\n", mywin.ptr);
 
                             // TODO: I dont understand - bank size and mem size appear to be swapped... ?
-                            fprintf(stderr, "             memsize  %08X (%d Kb)\n", mywin.banksize, mywin.banksize/1024);
-                            fprintf(stderr, "             banksize %08X (%d Kb)\n", mywin.memsize, mywin.memsize/1024);
+                            printf("   memsize    %08X (%d Kb)\n", mywin.banksize, mywin.banksize/1024);
+                            printf("   banksize   %08X (%d Kb)\n", mywin.memsize, mywin.memsize/1024);
 
                             switch( depth )
                             {
@@ -221,6 +223,37 @@ TXINITPACKET *CollectDisplayInfo(char *sDisplay)
                             Init.redMask   = pVisual->red_mask;
                             Init.greenMask = pVisual->green_mask;
                             Init.blueMask  = pVisual->blue_mask;
+
+                            // Some extra output if we issued a query command parameter
+                            if( fQuery )
+                            {
+                                printf("Query display:\n");
+                                printf("   Init.pFrameBuf  = %08X\n", Init.pFrameBuf);
+                                printf("   Init.dwDrawSize = %08X\n", Init.dwDrawSize);
+                                printf("   Init.xres       = %08X\n", Init.xres);
+                                printf("   Init.yres       = %08X\n", Init.yres);
+                                printf("   Init.bpp        = %08X\n", Init.bpp);
+                                printf("   Init.stride     = %08X\n", Init.stride);
+                                printf("   Init.redShift   = %08X\n", Init.redShift);
+                                printf("   Init.greenShift = %08X\n", Init.greenShift);
+                                printf("   Init.blueShift  = %08X\n", Init.blueShift);
+                                printf("   Init.redMask    = %08X\n", Init.redMask);
+                                printf("   Init.greenMask  = %08X\n", Init.greenMask);
+                                printf("   Init.blueMask   = %08X\n", Init.blueMask);
+                            }
+
+                            // Use a simple heuristic to prognose if we would be able to use this display:
+                            // We assume that shift counts should be different and that
+                            // RGB-color masks should not overlap
+                            //
+                            if( ((Init.redShift==Init.greenShift) && (Init.redShift==Init.blueShift))
+                            ||  (Init.redMask & Init.greenMask & Init.blueMask) )
+                            {
+                                printf("It appears that your current X Window display device is not suitable to\n");
+                                printf("be used by a Linice driver. It is either memory banked or indexed, not true\n");
+                                printf("RGB-component, linearly mapped.\n");
+                                printf("Try different graphics mode, resolution or card/driver.\n");
+                            }
 
                             // Return the address of the init packet
                             return( &Init );
@@ -354,7 +387,7 @@ int main(int argc, char **argp)
         }
     }
 
-    pInit = CollectDisplayInfo(sDisplay);
+    pInit = CollectDisplayInfo(sDisplay, opt & OPT_QUERY );
 
     if( opt & OPT_QUERY )               // Only query display?
     {
@@ -385,7 +418,7 @@ int main(int argc, char **argp)
                 // little bit to give chance display to readjust and repaint
                 sleep(1);
 
-                fprintf(stderr, "Information sent to linice..\n");
+                printf("Information sent to linice..\n");
             }
             else
                 fprintf(stderr, "Linice refused XInitPacket (status=%d)\n", status);

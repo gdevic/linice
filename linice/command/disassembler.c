@@ -194,6 +194,9 @@ BYTE Disassembler( PTDISASM pDis )
     sPtr = NULL;                        // Points to no message by default
     bMod = bReg = bRm = 0;              // Initialize these to avoid warning message
 
+    pDis->dwTargetAddress = 0;          // Reset target address and data values
+    pDis->dwTargetData    = 0;
+
     do
     {
         bOpcode = NEXTBYTE;     // Get the first opcode byte from the target address
@@ -614,6 +617,7 @@ StartInstructionNoMODRM:
         case _Jb :                                         // immediate byte, relative offset
             bByte = NEXTBYTE;
             nPos += sprintf( pDis->szDisasm+nPos, "short %08X", (unsigned int)(Addr.offset + (signed char)bByte) );
+            pDis->dwTargetAddress = (unsigned int)(Addr.offset + (signed char)bByte);
             break;
 
         case _Jv :                                         // immediate word or dword, relative offset
@@ -624,6 +628,8 @@ StartInstructionNoMODRM:
                     nPos += sprintf( pDis->szDisasm+nPos, "%08X", (unsigned int)(Addr.offset + (signed long)dwDword) );
                 else
                     nPos += sprintf( pDis->szDisasm+nPos, "%s", pName );
+
+                pDis->dwTargetAddress = (unsigned int)(Addr.offset + (signed long)dwDword);
             }
             else
             {
@@ -632,6 +638,8 @@ StartInstructionNoMODRM:
                     nPos += sprintf( pDis->szDisasm+nPos, "%08X", (unsigned int)(Addr.offset + (signed short)wWord) );
                 else
                     nPos += sprintf( pDis->szDisasm+nPos, "%s", pName );
+
+                pDis->dwTargetAddress = (unsigned int)(Addr.offset + (signed short)wWord);
             }
             break;
 
@@ -715,7 +723,7 @@ StartInstructionNoMODRM:
             break;
 
         case _ST:                                          // Coprocessor ST
-            nPos += sprintf( pDis->szDisasm+nPos,"%s", sST[9] );
+            nPos += sprintf( pDis->szDisasm+nPos,"%s", sST[8] );
             break;
 
         case _ST0:                                         // Coprocessor ST(0) - ST(7)

@@ -230,6 +230,10 @@ void OptInstall(char *pSystemMap)
     {
         printf("Linice module loaded.\n");
 
+        // Zero out the init packet
+        memset(&Init, 0, sizeof(TINITPACKET));
+        Init.nSize = sizeof(TINITPACKET);
+
         // Look for the config file and feed it to the module
         fp = fopen("linice.dat", "r");
         if( fp==NULL )
@@ -238,17 +242,40 @@ void OptInstall(char *pSystemMap)
             fp = fopen("/etc/linice.dat", "r");
             if( fp==NULL )
             {
-                // Failed to open the config file
-                printf("Failed to open linice.dat file!\n");
-                return;
+                // Failed to open the config file - load default settings
+                printf("Failed to open linice.dat file - loading default settings.\n");
+
+                // Set some default values.. Some other we still would like to have
+                // set up even if we found init file
+
+                strcpy(Init.keyFn[ 0], "h;");               // F1
+                strcpy(Init.keyFn[ 1], "^wr;");             // F2
+                strcpy(Init.keyFn[ 2], "^src;");            // F3
+                strcpy(Init.keyFn[ 3], "^rs;");             // F4
+                strcpy(Init.keyFn[ 4], "^x;");              // F5
+                strcpy(Init.keyFn[ 5], "^ec;");             // F6
+                strcpy(Init.keyFn[ 6], "^here;");           // F7
+                strcpy(Init.keyFn[ 7], "^t;");              // F8
+                strcpy(Init.keyFn[ 8], "^bpx;");            // F9
+                strcpy(Init.keyFn[ 9], "^p;");              // F10
+                strcpy(Init.keyFn[10], "^G @SS:ESP;");      // F11
+                strcpy(Init.keyFn[11], "^p ret;");          // F12
+                strcpy(Init.keyFn[12], "^format;");         // SF1
+                strcpy(Init.keyFn[24], "^wr;");             // AF1
+                strcpy(Init.keyFn[25], "^wd;");             // AF2
+                strcpy(Init.keyFn[26], "^wc;");             // AF3
+                strcpy(Init.keyFn[27], "^ww;");             // AF4
+                strcpy(Init.keyFn[28], "CLS;");             // AF5
+                strcpy(Init.keyFn[34], "^dd dataaddr->0;"); // AF11
+                strcpy(Init.keyFn[35], "^dd dataaddr->4;"); // AF12
+                strcpy(Init.keyFn[36], "altscr off; lines 60; wc 32; wd 8;"); // CF1
+                strcpy(Init.keyFn[37], "^wr;^wd;^wc;");                       // CF2
+
+                Init.fLowercase   = 1;          // Use lowercase disassembly
             }
         }
 
-        // Zero out the init packet
-        memset(&Init, 0, sizeof(TINITPACKET));
-        Init.nSize = sizeof(TINITPACKET);
-
-        // Set default values
+        // Set default values - these we do in any case before parsing the linice.dat file
 
         Init.nHistorySize = 16;         // 16 Kb
         Init.nSymbolSize  = 128;        // 128 Kb
@@ -258,7 +285,7 @@ void OptInstall(char *pSystemMap)
         nLine = 0;
 
         // Read config file line by line and build the config packet
-        while( !feof(fp) )
+        while( fp && !feof(fp) )
         {
             nLine++;
             fgets(sLine, sizeof(sLine), fp);
@@ -355,6 +382,10 @@ void OptInstall(char *pSystemMap)
             }
         }
 
+        // Close the linice.dat file
+        if( fp )
+            fclose(fp);
+
         // Modify function key assignments to substitute the trailing semicolon
         // with the newline character
         for( i=0; i<48; i++)
@@ -366,9 +397,6 @@ void OptInstall(char *pSystemMap)
                     *pStr = '\n';
             }
         }
-
-        // Close the file
-        fclose(fp);
 
         Init.nSymbolSize *= 1024;       // Make these values kilobytes
         Init.nDrawSize *= 1024;

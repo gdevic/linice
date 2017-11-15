@@ -194,8 +194,7 @@ BYTE DisassemblerLen( PTDISASM pDis )
     sPtr = NULL;                        // Points to no message by default
     bMod = bReg = bRm = 0;              // Initialize these to avoid warning message
 
-    // The following are filled in only by this instruction scanner
-    pDis->dwTargetAddress = 0;
+    pDis->dwTargetAddress = 0;          // Reset target address and data values
     pDis->dwTargetData    = 0;
 
     do

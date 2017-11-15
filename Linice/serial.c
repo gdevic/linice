@@ -222,7 +222,8 @@ void SerialPrintStat()
 *
 *   This handler is used when the debugger has control.
 *
-*   This is a low-level serial port handler.
+*   This is a low-level serial port handler. The event could be a serial
+*   input character from the remote terminal or a serial mouse.
 *
 *   Where:
 *       IRQ is 0 for COM1, COM3 or 1 for COM2, COM4
@@ -254,6 +255,7 @@ void SerialHandler(int IRQ)
         {
             case 0x00:      // change of RS232 line
                 break;
+
             case 0x01:      // Output buffer empty
                 // See if we have another byte to send
                 if( Serial.head != Serial.tail )
@@ -268,10 +270,21 @@ void SerialHandler(int IRQ)
                     Serial.sent++;
                 }
                 break;
+
             case 0x02:      // Data received in input buffer
                     data = inp(Serial.port);
-                    VT100Input(data);
+
+                    // We dont support mouse yet, so assume it is a serial
+                    // remote terminal sending us a character which we will
+                    // accept only if serial terminal is enabled (and active)
+
+                    if( pOut == &outVT100 )
+                    {
+                        VT100Input(data);
+                    }
+
                 break;
+
             case 0x03:      // Error or break
                     // Read status to clear pending interrupt
                     status = inp(Serial.port + 5);

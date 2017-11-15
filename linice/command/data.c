@@ -118,6 +118,8 @@ static char *sSize[4] = { "byte", "word", "", "dword" };
 *                                                                             *
 ******************************************************************************/
 
+// TODO: Now we have DP_ESCAPE, so we could dump raw ascii characters in the DD output...
+
 static int PrintAscii(int pos)
 {
     int i;

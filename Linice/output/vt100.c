@@ -107,7 +107,7 @@ extern void SerialOut(BYTE data);
 extern void SerialOutString(char *str);
 extern void SerialMouse(int x, int y);
 
-static BOOL SerialResize(int x, int y);
+static BOOL SerialResize(int x, int y, int nFont);
 static void SerialSprint(char *s);
 
 
@@ -151,14 +151,14 @@ int InitVT100(void)
 
 /******************************************************************************
 *                                                                             *
-*   static BOOL SerialResize(int x, int y)                                    *
+*   static BOOL SerialResize(int x, int y, int nFont)                         *
 *                                                                             *
 *******************************************************************************
 *
 *   Resize on a serial terminal is not supported
 *
 ******************************************************************************/
-static BOOL SerialResize(int x, int y)
+static BOOL SerialResize(int x, int y, int nFont)
 {
     dprinth(1, "Serial terminal has fixed size.");
 
@@ -302,6 +302,14 @@ static void SerialSprint(char *s)
                     // Right align the rest of the text - this is ignored in serial out;
                     // Instead, we print a space and continue into a default statement
                     c = ' ';
+
+            case DP_ESCAPE:
+                    // Escape character prints the next code as raw ascii
+                    // We ignore all codes less than the space
+                    if( c==DP_ESCAPE )
+                    {
+                        c = *s++;
+                    }
 
             default:
                     // All printable characters with few exceptions:

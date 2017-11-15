@@ -141,7 +141,7 @@ int ParseSectionsPass1(BYTE *pBuf)
             SecStrtab = SecCurr;
 
         // Dump the section header setting
-#if 1
+#if 0
         printf("Section Header %02X\n", i);
         printf("Elf32_Word sh_name      = %04X      %s\n", SecCurr->sh_name, pBuf + SecName->sh_offset + SecCurr->sh_name );
         printf("Elf32_Word sh_type      = %04X      %s\n", SecCurr->sh_type, SecCurr->sh_type < 12? SecType[SecCurr->sh_type] : "sys" );
@@ -192,7 +192,7 @@ int ParseSectionsPass1(BYTE *pBuf)
                 case SHN_COMMON : pSecName = "COMMON";    break;
                 default:          pSecName = pBuf + SecName->sh_offset + Sec[pSym->st_shndx].sh_name;
             }
-
+#if 0
             printf("\n");
             printf("st_name  = %04X  %s\n", pSym->st_name, pStr+pSym->st_name);
             printf("st_value = %08X\n", pSym->st_value );
@@ -200,7 +200,7 @@ int ParseSectionsPass1(BYTE *pBuf)
             printf("st_info  = %02X\n", pSym->st_info );
             printf("st_other = %02X\n", pSym->st_other );
             printf("st_shndx = %04X  %s\n", pSym->st_shndx, pSecName);
-
+#endif
             // Save a global symbol with all its attributes so we can select from it later
             // on when we need globals.
             // We should not have empty symbol string name, so special case a null-strings
@@ -837,7 +837,7 @@ BOOL ElfToSym(BYTE *pElf, char *pSymName, char *pTableName)
                 ParseTypedefs(fd, fs, pElf);
 
                 // Lastly, store all symbols that should be hashed
-//                WriteHashTable(fd, fGlobals, nGlobals);
+   //                WriteHashTable(fd, fGlobals, nGlobals);
 
                 // Relocation information, written only for object files (kernel modules)
                 ParseReloc(fd, fs, pElf);
@@ -852,7 +852,7 @@ BOOL ElfToSym(BYTE *pElf, char *pSymName, char *pTableName)
                 if( pBuf!=NULL )
                 {
                     // Store the offset to the strings (current top of the fd file)
-//                    SymTab.dStrings = filelength(fd);
+   //                    SymTab.dStrings = filelength(fd);
                     SymTab.dStrings = lseek(fd, 0, SEEK_CUR);
 
                     read(fs, pBuf, dfs);
