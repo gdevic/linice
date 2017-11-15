@@ -50,6 +50,8 @@ BEGIN
         MENUITEM "Uninstall",                   IDM_UNINSTALL
         MENUITEM "Load Symbol File",            IDM_LOAD_SYMBOL_FILE
         MENUITEM "Unload Symbol File",          IDM_UNLOAD_SYMBOL_FILE
+        MENUITEM "Init DOT command",            IDM_EXTINIT
+        MENUITEM "Cleanup DOT command",         IDM_EXTCLEANUP
     END
     POPUP "Events"
     BEGIN

@@ -1,8 +1,7 @@
 #!/usr/bin/perl
 
-	# This script removes unneeded information from the linice_kernel.o file,
-	# and it renames all the symbol names that are not needed (to final link)
-	# into a meaningless form L<number> in order to hide their meaning.
+	# This script removes unneeded information from the linice_kernel.o file
+	# and renames symbols that are not needed (for the final link).
 	#
 	# The command line parameter is the location of the linice_kernel.o file
 	$linice = pop;
@@ -10,7 +9,7 @@
 	# Define the list of symbols that are excluded from purge: They are needed to
 	# properly link with the iceface.c
 
-	@excluded = qw( DriverOpen IceCleanupModule IceInitModule DriverClose DriverIOCTL );
+	@excluded = qw( DriverOpen IceCleanupModule IceInitModule DriverClose DriverIOCTL LiniceRegisterExtension LiniceUnregisterExtension );
 
 	# Strip the object code from all unnecessary symbols
 	system("objcopy --strip-unneeded --discard-all $linice");

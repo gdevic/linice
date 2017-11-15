@@ -8,13 +8,19 @@
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
-*   This source code and produced executable is copyrighted by Goran Devic.   *
-*   This source, portions or complete, and its derivatives can not be given,  *
-*   copied, or distributed by any means without explicit written permission   *
-*   of the copyright owner. All other rights, including intellectual          *
-*   property rights, are implicitly reserved. There is no guarantee of any    *
-*   kind that this software would perform, and nobody is liable for the       *
-*   consequences of running it. Use at your own risk.                         *
+*   This program is free software; you can redistribute it and/or modify      *
+*   it under the terms of the GNU General Public License as published by      *
+*   the Free Software Foundation; either version 2 of the License, or         *
+*   (at your option) any later version.                                       *
+*                                                                             *
+*   This program is distributed in the hope that it will be useful,           *
+*   but WITHOUT ANY WARRANTY; without even the implied warranty of            *
+*   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             *
+*   GNU General Public License for more details.                              *
+*                                                                             *
+*   You should have received a copy of the GNU General Public License         *
+*   along with this program; if not, write to the Free Software               *
+*   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA   *
 *                                                                             *
 *******************************************************************************
 
@@ -86,6 +92,7 @@ BOOL ParseFunctionLines(int fd, int fs, BYTE *pBuf)
     char *pStr;                         // Pointer to a stab string
     char *pSoDir = "";                  // Source code directory
     char *pSo = "";                     // Current source file
+    BOOL fFun = FALSE;                  // Are we inside a function block?
     int i;
 
     VERBOSE2 printf("=============================================================================\n");
@@ -154,6 +161,9 @@ BOOL ParseFunctionLines(int fd, int fs, BYTE *pBuf)
                         // Function end
                         VERBOSE2 printf("END--------- +%lX\n\n", pStab->n_value);
 
+                        // We are out of a function block
+                        fFun = FALSE;
+
                         // At this point we know the total size of the header
                         // as well as the function ending address. Fill in the
                         // missing information and rewrite the header
@@ -168,12 +178,15 @@ BOOL ParseFunctionLines(int fd, int fs, BYTE *pBuf)
                     }
                     else
                     {
+                        // We are inside a function block
+                        fFun = TRUE;
+
                         // We will write a header but later, on an function end,
                         // rewind and rewite it with the complete information
                         // This we do so we can simply keep adding file lines as
                         // TSYMFNLIN1 array...
                         Header.h.hType        = HTYPE_FUNCTION_LINES;
-                        Header.h.dwSize       = 0;      // To be written later
+                        Header.h.dwSize       = sizeof(TSYMFNLIN)-sizeof(TSYMFNLIN1);
                         Header.dwStartAddress = pStab->n_value;
                         Header.dwEndAddress   = 0;      // To be written later
                         Header.nLines         = 0;      // To be written later
@@ -203,14 +216,17 @@ BOOL ParseFunctionLines(int fd, int fs, BYTE *pBuf)
                 case N_SLINE:
                     VERBOSE2 printf("SLINE  line: %2d -> +%lX  file_id: %d\n", pStab->n_desc, pStab->n_value, file_id);
 
-                    // Write out one line record
-                    list.file_id = file_id;
-                    list.line    = pStab->n_desc;
-                    list.offset  = (WORD) pStab->n_value;
+                    // Write out one line record only if we are inside a function block
+                    if( fFun )
+                    {
+                        list.file_id = file_id;
+                        list.line    = pStab->n_desc;
+                        list.offset  = (WORD) pStab->n_value;
 
-                    write(fd, &list, sizeof(TSYMFNLIN1));
+                        write(fd, &list, sizeof(TSYMFNLIN1));
 
-                    nLines++;
+                        nLines++;
+                    }
                 break;
 
                 case N_SO:

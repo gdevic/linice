@@ -8,13 +8,19 @@
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
-*   This source code and produced executable is copyrighted by Goran Devic.   *
-*   This source, portions or complete, and its derivatives can not be given,  *
-*   copied, or distributed by any means without explicit written permission   *
-*   of the copyright owner. All other rights, including intellectual          *
-*   property rights, are implicitly reserved. There is no guarantee of any    *
-*   kind that this software would perform, and nobody is liable for the       *
-*   consequences of running it. Use at your own risk.                         *
+*   This program is free software; you can redistribute it and/or modify      *
+*   it under the terms of the GNU General Public License as published by      *
+*   the Free Software Foundation; either version 2 of the License, or         *
+*   (at your option) any later version.                                       *
+*                                                                             *
+*   This program is distributed in the hope that it will be useful,           *
+*   but WITHOUT ANY WARRANTY; without even the implied warranty of            *
+*   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             *
+*   GNU General Public License for more details.                              *
+*                                                                             *
+*   You should have received a copy of the GNU General Public License         *
+*   along with this program; if not, write to the Free Software               *
+*   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA   *
 *                                                                             *
 *******************************************************************************
 
@@ -29,8 +35,7 @@
 
     The other problem that this hook solves is the kernel actually wipes out
     CPU debug registers on a task switch. This would prevent us to use them
-    even for the kernel modules. Since our hook is running after that happens,
-    we are able to restore the state of DR registers.
+    even for the kernel modules.
 
                                   -   -   -
 
@@ -38,10 +43,48 @@
     - there is a function in linux:process.c
     void __switch_to(struct task_struct *prev_p, struct task_struct *next_p)
 
-    that does the switching of a register state. We know the first few bytes
-    of that code, so we insert a call to our stub that makes our handler's
-    return address pushed on the stack, so the __switch_to() will return
-    to it on a way out.
+    that does the switching of a register state. We know the address of that
+    function (kernel 2.4 only), so we copy a single CPU instruction from that
+    address into our internal buffer, zapping it with a single INT3 (0xCC)
+    (This is followed by a required number of NOPs to cover the "missing"
+    instruction.)
+
+    When a task switch happens (100 times per second), INT3 calls our
+    standard interrupt handler, where we detect this special address and
+    modify the return EIP to our handler only, then simply return from the
+    "heavy" INT3 handler.
+
+    On a return, our code in a buffer gets control, and pushes our real
+    task switch function onto the stack, proceeds to executing the original
+    CPU instruction and continues into the kernel code.
+
+    When the kernel is done with its own task switching, our function gets
+    called (since we inserted its address to the stack), and within it, we
+    reprogram CPU debug registers that are modified by the kernel task
+    switch code.
+
+                                  -   -   -
+
+    These are some samples from the start of the switch_to() code for
+    various kernels:
+
+
+        RED HAT 9.0
+
+        The code that we expect at the beginning of the __switch_to() is:
+
+        55               push ebp                +0
+        BD xx xx xx xx   mov  ebp, <xxx>         +1
+        57               push edi                +6
+        ...
+
+        SuSE 9.0
+
+        The code that we expect at the beginning of the __switch_to() is:
+
+        83 EC 18         sub esp, 18             +0
+        89 5C 24 0C      mov [esp+C], ebx        +3
+        ...
 
 
 *******************************************************************************
@@ -62,6 +105,7 @@
 #include "iceface.h"                    // Include iceface module stub protos
 #include "ice.h"                        // Include main debugger structures
 #include "debug.h"                      // Include our dprintk()
+#include "disassembler.h"               // Include disassembler
 
 
 /******************************************************************************
@@ -71,7 +115,6 @@
 ******************************************************************************/
 
 extern void SetDebugReg(TSysreg * pSys);
-extern void InsertTaskSwitchHandler();
 
 /******************************************************************************
 *                                                                             *
@@ -80,6 +123,7 @@ extern void InsertTaskSwitchHandler();
 ******************************************************************************/
 
 extern DWORD switchto;                  // Address of the kernel's __switch_to()
+extern BYTE TaskSwitchHookBufferKernelCodeLine[];
 
 /******************************************************************************
 *                                                                             *
@@ -87,8 +131,9 @@ extern DWORD switchto;                  // Address of the kernel's __switch_to()
 *                                                                             *
 ******************************************************************************/
 
-DWORD TaskSwitchOrigRet;                // Temp variable for the asm code
-BYTE switch_to_header[6] = { 0, };      // Code bytes from the start of __switch_to()
+DWORD TaskSwitchNewRet = 0;             // Updated continuation address
+static BYTE bLen;                       // Temp instruction len
+
 
 /******************************************************************************
 *                                                                             *
@@ -114,40 +159,6 @@ void SwitchHandler(void)
 
 /******************************************************************************
 *                                                                             *
-*   BOOL TestHookSwitch(void)
-*                                                                             *
-*******************************************************************************
-*
-*   Tests the code bytes for the task switch hook function.
-*
-*   Returns:
-*       TRUE - Expected code bytes there
-*       FALSE - Unexpected code bytes - we should not load!
-*
-******************************************************************************/
-BOOL TestHookSwitch(void)
-{
-#ifdef SIM
-    return( TRUE );
-#endif // SIM
-
-    // The code that we expect at the beginning of the __switch_to() is:
-    //
-    // 55               push ebp                +0
-    // BD xx xx xx xx   mov  ebp, <xxx>         +1
-    // 57               push edi                +6
-    // ...
-    // Make sure the function is correct by comparing the code bytes
-
-    if( switchto && *(BYTE *)(switchto+0)==0x55 && *(BYTE *)(switchto+1)==0xBD && *(BYTE *)(switchto+6)==0x57 )
-    {
-        return( TRUE );
-    }
-    return( FALSE );    // The address of the "switchto" was incorrect, we cannot hook!
-}
-
-/******************************************************************************
-*                                                                             *
 *   void HookSwitch(void)                                                     *
 *                                                                             *
 *******************************************************************************
@@ -157,22 +168,27 @@ BOOL TestHookSwitch(void)
 ******************************************************************************/
 void HookSwitch(void)
 {
-    // Arm the __switch_to() to jump into our stub function.
+    INFO("HookSwitch()\n");
 
-    // Store away the original 5 bytes from those locations
+    // Disassemble the starting location to find the length of the CPU instruction
+    bLen = GetInstructionLen(GetKernelCS(), switchto);
 
-    switch_to_header[0] = *(BYTE *)(switchto+0);
-    switch_to_header[1] = *(BYTE *)(switchto+1);
-    switch_to_header[2] = *(BYTE *)(switchto+2);
-    switch_to_header[3] = *(BYTE *)(switchto+3);
-    switch_to_header[4] = *(BYTE *)(switchto+4);
-    switch_to_header[5] = *(BYTE *)(switchto+5);
+    INFO("Patch %d bytes (%02X %02X...) at %08X\n", bLen, *(BYTE *)(switchto+0), *(BYTE *)(switchto+1), (DWORD) switchto);
 
-    // Hook a call to our stub function
+    // Copy the instruction into our buffer to form the complete handler code
+    memcpy((BYTE *) &TaskSwitchHookBufferKernelCodeLine, (BYTE *) switchto, bLen);
 
-    *(BYTE *)(switchto+0) = 0x90;       // 90   NOP
-    *(BYTE *)(switchto+1) = 0xE8;       // E8   CALL <relative>
-    *(DWORD*)(switchto+2) = (DWORD)InsertTaskSwitchHandler - (switchto+1) - 5;
+    // TODO: kernel 2.6 can be pre-empted. Wrap this with a semaphore
+
+    // Zap the original instruction with the 0xCC (INT3) followed by NOP's
+    memset((BYTE *) switchto, 0x90, bLen);
+    *(BYTE *)switchto = 0xCC;           // Store one-byte INT3 at the start of it
+
+    // Store the new return address from within the original code
+    TaskSwitchNewRet = switchto + bLen;
+
+    INFO("TaskSwitchNewRet = %08X\n", TaskSwitchNewRet);
+    INFO("TaskSwitchHookBufferKernelCodeLine = %08X\n", &TaskSwitchHookBufferKernelCodeLine);
 }
 
 /******************************************************************************
@@ -188,13 +204,9 @@ void UnHookSwitch(void)
 {
     INFO("UnHookSwitch()\n");
 
-    if( switch_to_header[0] )
-    {
-        *(BYTE *)(switchto+0) = switch_to_header[0];
-        *(BYTE *)(switchto+1) = switch_to_header[1];
-        *(BYTE *)(switchto+2) = switch_to_header[2];
-        *(BYTE *)(switchto+3) = switch_to_header[3];
-        *(BYTE *)(switchto+4) = switch_to_header[4];
-        *(BYTE *)(switchto+5) = switch_to_header[5];
-    }
+    // Copy the original code bytes from our buffer into the kernel
+    // Only copy if the code line was not "NOP" (0x90) for the safety
+
+    if( TaskSwitchHookBufferKernelCodeLine[0]!=0x90 )
+        memcpy((BYTE *) switchto, (BYTE *) &TaskSwitchHookBufferKernelCodeLine, bLen);
 }

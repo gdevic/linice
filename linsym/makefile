@@ -17,7 +17,6 @@ H   = ../include
 
 #-----------------------------------------------------------------------------
 # Compiler defines:
-#	make retail			- retail build
 #	make debug			- engineering debug build (default)
 #   make nd				- engineering non-debug build
 #-----------------------------------------------------------------------------
@@ -37,14 +36,6 @@ CFLAGS = -Wall -O3 -I$(INC) -I$(H)
 
 endif
 #-----------------------------------------------------------------------------
-# Compiler defines: RETAIL build
-#-----------------------------------------------------------------------------
-ifeq ($(MAKECMDGOALS),retail)
-
-CFLAGS = -Wall -O3 -I$(INC) -I$(H)
-
-endif
-#-----------------------------------------------------------------------------
 # Compiler that is used.
 #-----------------------------------------------------------------------------
 
@@ -57,8 +48,6 @@ CC = gcc
 debug:	../bin/linsym
 
 nd:		../bin/linsym
-
-retail:	../bin/linsym
 	@strip ../bin/linsym
 
 all:	../bin/linsym

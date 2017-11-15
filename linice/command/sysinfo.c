@@ -8,13 +8,19 @@
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
-*   This source code and produced executable is copyrighted by Goran Devic.   *
-*   This source, portions or complete, and its derivatives can not be given,  *
-*   copied, or distributed by any means without explicit written permission   *
-*   of the copyright owner. All other rights, including intellectual          *
-*   property rights, are implicitly reserved. There is no guarantee of any    *
-*   kind that this software would perform, and nobody is liable for the       *
-*   consequences of running it. Use at your own risk.                         *
+*   This program is free software; you can redistribute it and/or modify      *
+*   it under the terms of the GNU General Public License as published by      *
+*   the Free Software Foundation; either version 2 of the License, or         *
+*   (at your option) any later version.                                       *
+*                                                                             *
+*   This program is distributed in the hope that it will be useful,           *
+*   but WITHOUT ANY WARRANTY; without even the implied warranty of            *
+*   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             *
+*   GNU General Public License for more details.                              *
+*                                                                             *
+*   You should have received a copy of the GNU General Public License         *
+*   along with this program; if not, write to the Free Software               *
+*   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA   *
 *                                                                             *
 *******************************************************************************
 
@@ -457,31 +463,6 @@ BOOL cmdModule(char *args, int subClass)
 
         do
         {
-            // Protection: Here we store the starting and ending address of the
-            // OEM module that we want to protect
-#ifdef NO_OEM
-            if(
-#if 0
-                Mod.name[0] && toupper(Mod.name[0])=='N' &&
-                Mod.name[1] && toupper(Mod.name[1])=='V' &&
-                Mod.name[2] && toupper(Mod.name[2])=='I' &&
-                Mod.name[3] && toupper(Mod.name[3])=='D' &&
-                Mod.name[4] && toupper(Mod.name[4])=='I' &&
-                Mod.name[5] && toupper(Mod.name[5])=='A'
-#else
-                Mod.name[0] && toupper(Mod.name[0])=='S' &&
-                Mod.name[1] && toupper(Mod.name[1])=='M' &&
-                Mod.name[2] && toupper(Mod.name[2])=='B' &&
-                Mod.name[3] && toupper(Mod.name[3])=='F' &&
-                Mod.name[4] && toupper(Mod.name[4])=='S'
-#endif
-                )
-            {
-                deb.dwProtectStart = (DWORD) pmodule;
-                deb.dwProtectEnd   = deb.dwProtectStart + Mod.size;
-            }
-#endif // NO_OEM
-
             // If we specified a partial module name, match it here
             if( *args )
             {
@@ -511,63 +492,6 @@ BOOL cmdModule(char *args, int subClass)
     }
 
     return( TRUE );
-}
-
-
-/******************************************************************************
-*                                                                             *
-*   void OEMProtect(void)                                                     *
-*                                                                             *
-*******************************************************************************
-*
-*   Set up the protection range on the OEM module name.
-*
-******************************************************************************/
-void OEMProtect(void)
-{
-    TMODULE Mod;                        // Current module internal structure
-    void *pmodule;                      // Kernel pmodule pointer
-
-    // Get the pointer to the module structure (internal) and loop
-    pmodule = ice_get_module(NULL, &Mod);
-
-    // Zap the protected region if the module has been unloaded
-    deb.dwProtectStart = deb.dwProtectEnd = 0;
-
-    if( pmodule )
-    {
-        do
-        {
-            // Protection: Here we store the starting and ending address of the
-            // OEM module that we want to protect
-#ifdef NO_OEM
-            if(
-#if 0
-                Mod.name[0] && toupper(Mod.name[0])=='N' &&
-                Mod.name[1] && toupper(Mod.name[1])=='V' &&
-                Mod.name[2] && toupper(Mod.name[2])=='I' &&
-                Mod.name[3] && toupper(Mod.name[3])=='D' &&
-                Mod.name[4] && toupper(Mod.name[4])=='I' &&
-                Mod.name[5] && toupper(Mod.name[5])=='A'
-#else
-                Mod.name[0] && toupper(Mod.name[0])=='S' &&
-                Mod.name[1] && toupper(Mod.name[1])=='M' &&
-                Mod.name[2] && toupper(Mod.name[2])=='B' &&
-                Mod.name[3] && toupper(Mod.name[3])=='F' &&
-                Mod.name[4] && toupper(Mod.name[4])=='S'
-#endif
-                )
-            {
-                deb.dwProtectStart = (DWORD) pmodule;
-                deb.dwProtectEnd   = deb.dwProtectStart + Mod.size;
-
-                return;
-            }
-#endif // NO_OEM
-        }
-        // Get the next module in the linked list while looping
-        while( (pmodule = ice_get_module(pmodule, &Mod)) );
-    }
 }
 
 

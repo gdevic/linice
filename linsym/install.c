@@ -8,13 +8,19 @@
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
-*   This source code and produced executable is copyrighted by Goran Devic.   *
-*   This source, portions or complete, and its derivatives can not be given,  *
-*   copied, or distributed by any means without explicit written permission   *
-*   of the copyright owner. All other rights, including intellectual          *
-*   property rights, are implicitly reserved. There is no guarantee of any    *
-*   kind that this software would perform, and nobody is liable for the       *
-*   consequences of running it. Use at your own risk.                         *
+*   This program is free software; you can redistribute it and/or modify      *
+*   it under the terms of the GNU General Public License as published by      *
+*   the Free Software Foundation; either version 2 of the License, or         *
+*   (at your option) any later version.                                       *
+*                                                                             *
+*   This program is distributed in the hope that it will be useful,           *
+*   but WITHOUT ANY WARRANTY; without even the implied warranty of            *
+*   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             *
+*   GNU General Public License for more details.                              *
+*                                                                             *
+*   You should have received a copy of the GNU General Public License         *
+*   along with this program; if not, write to the Free Software               *
+*   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA   *
 *                                                                             *
 *******************************************************************************
 
@@ -267,7 +273,7 @@ static BOOL GetSymbolExports(void)
 
 /******************************************************************************
 *                                                                             *
-*   void OpInstall()                                                          *
+*   BOOL OptInstall(char *pSystemMap)                                         *
 *                                                                             *
 *******************************************************************************
 *
@@ -276,7 +282,7 @@ static BOOL GetSymbolExports(void)
 *   cannot obtain as a kernel module and needs for proper operation.
 *
 *   Where:
-*       pSystemMap is the default path/name of the System.map file
+*       pSystemMap is the user-add path/name of the System.map file
 *
 *   Returns:
 *       TRUE - module loaded and initialized
@@ -309,10 +315,6 @@ BOOL OptInstall(char *pSystemMap)
         return( TRUE );
     }
 
-    // Remove linice device file (useful when debugging)
-    // Anyways, this dev file should not exist there at this point...
-    system2("rm /dev/ice");
-
     // When looking for the System.map file, user command line argument
     // has precedence over linice.dat file specification and lastly, default
 
@@ -323,7 +325,7 @@ BOOL OptInstall(char *pSystemMap)
     {
         if( OpenSystemMap(pSystemMap)==FALSE )
         {
-            fprintf(stderr, "Unable to open specified map file: %s\n\n", pSystemMap);
+            fprintf(stderr, "Unable to open specified map file: %s\n", pSystemMap);
 
             return( FALSE );
         }
@@ -501,6 +503,7 @@ BOOL OptInstall(char *pSystemMap)
         if(stricmp(sKey, "cf12")==0) GetString(Init.keyFn[47], pStr); else
 
         // Try to open the system map file...
+        // TODO: This is not documented
         if(stricmp(sKey, "System.map")==0) OpenSystemMap(pStr); else
         {
             VERBOSE2 printf("Line %d skipped: %s\n", nLine, sLine);
@@ -541,7 +544,7 @@ BOOL OptInstall(char *pSystemMap)
         //  -x   do not export externs
         //  -f   force load even if kernel version does not match
 
-        sprintf(sLine, "insmod -x -f linice_`uname -r`/linice.o ice_debug_level=1 kbd=%d scan=%d pmodule=%d sys=%d switchto=%d",
+        sprintf(sLine, "insmod -f linice_`uname -r`/linice.o ice_debug_level=1 kbd=%d scan=%d pmodule=%d sys=%d switchto=%d",
             handle_kbd_event,
             handle_scancode,
             module_list,
@@ -566,7 +569,7 @@ BOOL OptInstall(char *pSystemMap)
 
                 close(hIce);
 
-                VERBOSE1 printf("Linice installed.\n");
+                printf("Linice installed.\n");
 
                 // Return success
                 return( TRUE );
@@ -579,16 +582,14 @@ BOOL OptInstall(char *pSystemMap)
             system2("rmmod linice");
         }
 
-        fprintf(stderr, "Error loading linice module!\n");
+        fprintf(stderr, "Error (%d) loading linice module!\n", status);
     }
     else
     {
         // We did not find System.map - this file needs to be used since we
         // really can't hook without it..
-        fprintf(stderr, "\n");
         fprintf(stderr, "Failed to open System.map file!\n");
-        fprintf(stderr, "Please use option -i:<System.map> to specify its path and name,\n");
-        fprintf(stderr, "or add a line SYSTEM.MAP=<path/name> to linice.dat configuration file.\n");
+        fprintf(stderr, "Please use option --map <System.map> to specify its path and name.\n");
         fprintf(stderr, "\n");
     }
 
@@ -616,34 +617,44 @@ void OptUninstall()
     hIce = open("/dev/"DEVICE_NAME, O_RDONLY);
     if( hIce>=0 )
     {
+        // Send the EXIT message to the Linice, so it can release its hooks
         status = ioctl(hIce, ICE_IOCTL_EXIT, 0);
         close(hIce);
 
-        // Unload the linice.o device driver module
-        status = system2("rmmod linice");
+        // If there are still any extension modules loaded, we cannot unload
+        // since the modules are linked to us and wont let us unload cleanly.
 
-        // rmmod must return 0 when uninstalling a module correctly
-        if( status != 0 )
+        // Value of 1 for status is the special signal from Linice driver
+        if( status != 1 )
         {
-            // If we cannot unload linice because it crashed, use the
-            // last resort and try to force unload it
+            // Unload the linice.o device driver module
+            status = system2("rmmod linice");
 
-            hIce = open("/dev/"DEVICE_NAME, O_RDONLY);
-            if( hIce>=0 )
+            // rmmod must return 0 when uninstalling a module correctly
+            if( status != 0 )
             {
-                VERBOSE1 printf("Forcing unload...\n");
+                // If we cannot unload linice because it crashed, use the
+                // last resort and try to force unload it
 
-                status = ioctl(hIce, ICE_IOCTL_EXIT_FORCE, 0);
-                close(hIce);
+                hIce = open("/dev/"DEVICE_NAME, O_RDONLY);
+                if( hIce>=0 )
+                {
+                    VERBOSE1 printf("Forcing unload...\n");
 
-                // Theoretically, by now our bad module count is reset back to 0...
+                    status = ioctl(hIce, ICE_IOCTL_EXIT_FORCE, 0);
+                    close(hIce);
 
-                // Unload the linice.o device driver module
-                status = system2("rmmod linice");
+                    // Theoretically, by now our bad module count is reset back to 0...
+
+                    // Unload the linice.o device driver module
+                    status = system2("rmmod linice");
+                }
             }
-        }
 
-        VERBOSE1 printf("Linice uninstalled.\n");
+            printf("Linice uninstalled.\n");
+        }
+        else
+            fprintf(stderr, "One or more Linice extension modules are still loaded. Unload them first!\n");
     }
     else
         fprintf(stderr, "Cannot communicate with the Linice module! Is Linice installed?\n");

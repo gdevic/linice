@@ -8,13 +8,19 @@
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
-*   This source code and produced executable is copyrighted by Goran Devic.   *
-*   This source, portions or complete, and its derivatives can not be given,  *
-*   copied, or distributed by any means without explicit written permission   *
-*   of the copyright owner. All other rights, including intellectual          *
-*   property rights, are implicitly reserved. There is no guarantee of any    *
-*   kind that this software would perform, and nobody is liable for the       *
-*   consequences of running it. Use at your own risk.                         *
+*   This program is free software; you can redistribute it and/or modify      *
+*   it under the terms of the GNU General Public License as published by      *
+*   the Free Software Foundation; either version 2 of the License, or         *
+*   (at your option) any later version.                                       *
+*                                                                             *
+*   This program is distributed in the hope that it will be useful,           *
+*   but WITHOUT ANY WARRANTY; without even the implied warranty of            *
+*   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             *
+*   GNU General Public License for more details.                              *
+*                                                                             *
+*   You should have received a copy of the GNU General Public License         *
+*   along with this program; if not, write to the Free Software               *
+*   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA   *
 *                                                                             *
 *******************************************************************************
 
@@ -130,6 +136,8 @@ extern BOOL cmdCompare      (char *args, int subClass);      // blockops.c
 extern BOOL cmdMove         (char *args, int subClass);      // blockops.c
 extern BOOL cmdHelp         (char *args, int subClass);      // command.c
 extern BOOL cmdFkey         (char *args, int subClass);      // edlin.c
+extern BOOL cmdExtList      (char *args, int subClass);      // extend.c
+
 
 //    +--Command name
 //    |          +--Number of characters in the command name
@@ -140,6 +148,7 @@ extern BOOL cmdFkey         (char *args, int subClass);      // edlin.c
 
 TCommand Cmd[] = {
 {    ".",        1, 0, cmdDot,         "Locate current instruction", "ex: .",  0 },
+{    ".?",       2, 0, cmdExtList,     "List extended debugger commands", "ex: .?",   0 },
 {    "?",        1, 0, cmdEvaluate,    "? expression", "ex: ? ax << 1",   0 },
 //{  "A",        1, 0, Unsupported,    "Assemble [Address]", "ex: A CS:1236",    0 },
 //{  "ADDR",     4, 0, Unsupported,    "ADDR [context-handle | task | *]", "ex: ADDR 80FD602C",   0 },
@@ -437,6 +446,7 @@ char *sHelp[] = {
 ******************************************************************************/
 
 extern char *MacroExpand(char *pCmd);
+extern int DispatchExtCommand(char *pCommand);
 
 /******************************************************************************
 *                                                                             *
@@ -568,8 +578,17 @@ BOOL CommandExecute( char *pOrigCmd )
             }
             else
             {
-                PostError(ERR_COMMAND, 0);
-                return( TRUE );
+                // The last thing we search the extended commands (DOT-commands)
+                // Only if the first character is a DOT, though
+                if( *pCmd=='.' )
+                {
+                    return( DispatchExtCommand(pCmd+1) );
+                }
+                else
+                {
+                    PostError(ERR_COMMAND, 0);
+                    return( TRUE );
+                }
             }
         }
 

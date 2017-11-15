@@ -8,13 +8,19 @@
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
-*   This source code and produced executable is copyrighted by Goran Devic.   *
-*   This source, portions or complete, and its derivatives can not be given,  *
-*   copied, or distributed by any means without explicit written permission   *
-*   of the copyright owner. All other rights, including intellectual          *
-*   property rights, are implicitly reserved. There is no guarantee of any    *
-*   kind that this software would perform, and nobody is liable for the       *
-*   consequences of running it. Use at your own risk.                         *
+*   This program is free software; you can redistribute it and/or modify      *
+*   it under the terms of the GNU General Public License as published by      *
+*   the Free Software Foundation; either version 2 of the License, or         *
+*   (at your option) any later version.                                       *
+*                                                                             *
+*   This program is distributed in the hope that it will be useful,           *
+*   but WITHOUT ANY WARRANTY; without even the implied warranty of            *
+*   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             *
+*   GNU General Public License for more details.                              *
+*                                                                             *
+*   You should have received a copy of the GNU General Public License         *
+*   along with this program; if not, write to the Free Software               *
+*   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA   *
 *                                                                             *
 *******************************************************************************
 
@@ -84,6 +90,13 @@ static char *basic[] = {
     "COMPLEX DOUBLE",
     "COMPLEX LONG DOUBLE",
     "VOID",
+};
+
+static char *SymTableTypes[] = {
+    "Undefined",
+    "Kernel",
+    "Module",
+    "Application",
 };
 
 /******************************************************************************
@@ -254,8 +267,7 @@ static BOOL ChkTypedefs(TSYMHEADER *pHead, DWORD pStr)
 
     if( pType->nRel==0 || pType->pRel==0 )
     {
-        printf("nRel or pRel is zero!\n");
-        return( FALSE );
+        printf("WARNING: nRel or pRel is zero!\n");
     }
 
     for(nRel=0; nRel<pType->nRel; nRel++)
@@ -318,8 +330,9 @@ static BOOL CheckSymStructure(char *pBuf, DWORD nLen)
     TSYMTAB *pSym;                      // Symbol file header
     TSYMHEADER *pHead;                  // Generic section header
     DWORD pStr;                         // Strings section
-    int nSection = 0;
-    BOOL fTest = 0;                     // Return value from the test
+    int nSection = 0;                   // Counting section number
+    BOOL fTest = FALSE;                 // Return value from the test
+    DWORD Size;                         // Total size parsed so far
 
     // Assign pointers and check the main header
     pSym = (TSYMTAB *) pBuf;
@@ -327,17 +340,32 @@ static BOOL CheckSymStructure(char *pBuf, DWORD nLen)
     printf("Signature     = %s\n", pSym->sSig);
 	printf("Table Name    = %s\n", pSym->sTableName);
 	printf("Version       = %d.%d\n", pSym->Version>>8, pSym->Version&0xFF);
+    printf("Table Type    = %d %s\n", pSym->SymTableType, SymTableTypes[pSym->SymTableType]);
     printf("dwSize        = %d d\n", pSym->dwSize);
     printf("dStrings      = %04X\n", pSym->dStrings);
+
+    if( pSym->SymTableType>SYMTABLETYPE_APP )
+    {
+        printf("ERROR: Invalid symbol table type\n");
+
+        return( FALSE );
+    }
+
+    if( pSym->SymTableType==SYMTABLETYPE_UNDEF )
+        printf("WARNING: Undefined symbol table type!\n");
+
+    // Calculate the initial minimal size
+    Size = sizeof(TSYMTAB) - sizeof(TSYMHEADER);
 
     if( pSym->dwSize==nLen )
     {
         pStr = pSym->dStrings + (DWORD) pBuf;
         pHead = pSym->header;
 
-        while( pHead->hType != HTYPE__END )
+        while( Size < pSym->dStrings )
         {
-            printf("Section %d: dwSize: %d d\n", nSection, pHead->dwSize);
+            printf("Section=%d, offset=%d/%d, dwSize=%d d\n", nSection, Size, pSym->dStrings, pHead->dwSize);
+
             switch( pHead->hType )
             {
                 case HTYPE_GLOBALS:
@@ -375,6 +403,7 @@ static BOOL CheckSymStructure(char *pBuf, DWORD nLen)
                 case HTYPE__END:
                     printf("HTYPE__END\n");
                     printf("  dwSize=%d d\n", pHead->dwSize);
+                    fTest = TRUE;       // This is a valid section
                     break;
 
                 default:
@@ -387,13 +416,20 @@ static BOOL CheckSymStructure(char *pBuf, DWORD nLen)
 
             // Advance to the next header
             nSection++;
+            Size += pHead->dwSize;
+
             pHead = (TSYMHEADER*)((DWORD)pHead + pHead->dwSize);
             if( (DWORD)pHead<(DWORD)pSym || (DWORD)pHead>(DWORD)pStr )
             {
                 printf("ERROR: Header traverses into the weeds..\n");
-                break;
+
+                return( FALSE );
             }
         }
+
+        printf("Check complete.\n");
+
+        return( TRUE );
     }
     else
         printf("ERROR: dwSize (%d) does not match file len (%d)\n", pSym->dwSize, nLen);
@@ -426,7 +462,7 @@ int OptCheck(char *pName)
     int status;
     char *pBuf;
 
-    printf("Symbol file to check: %s\n", pName);
+    printf("Checking: %s\n", pName);
 
     fd = open(pName, O_RDONLY | O_BINARY);
     if( fd>0 )
@@ -452,7 +488,7 @@ int OptCheck(char *pName)
             printf("Error allocating memory\n");
     }
     else
-        printf("Error opening symbol file %s\n", pName);
+        printf("Error opening %s\n", pName);
 
 	return 0;
 }

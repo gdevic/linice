@@ -383,6 +383,14 @@ LONG WindowProc( HWND hWnd, unsigned Msg, UINT wParam, LONG lParam )
                 CreateSimINT(3);
             break;
 
+        case IDM_EXTINIT:
+                ext_init_module();
+            break;
+
+        case IDM_EXTCLEANUP:
+                ext_cleanup_module();
+            break;
+
         case IDM_SETCPUREGS:
                 DialogBox(SimInst, (LPCTSTR)IDD_SETCPUREGS, hWnd, (DLGPROC)SetCPURegsWnd);
             break;
@@ -593,9 +601,9 @@ int printk(char *format, ...)
     char *p;                            // Generic pointer
     int i;                              // Standard printf return value
     static char printbuf[256];          // We print into this buffer
-#if 1
+
     va_start( arg, format );
-    i = vsprintf( printbuf, format, &arg );
+    i = vsprintf( printbuf, format, arg );
     va_end( arg );
 
     // Remove 0xA and 0xD codes from the message
@@ -607,7 +615,7 @@ int printk(char *format, ...)
     // Make sure that the last line is visible
 
     SendMessage(hList, LB_SETTOPINDEX, SendMessage(hList, LB_GETCOUNT, 0, 0)-1, 0);
-#endif
+
     return i;
 }
 

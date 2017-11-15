@@ -8,13 +8,19 @@
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
-*   This source code and produced executable is copyrighted by Goran Devic.   *
-*   This source, portions or complete, and its derivatives can not be given,  *
-*   copied, or distributed by any means without explicit written permission   *
-*   of the copyright owner. All other rights, including intellectual          *
-*   property rights, are implicitly reserved. There is no guarantee of any    *
-*   kind that this software would perform, and nobody is liable for the       *
-*   consequences of running it. Use at your own risk.                         *
+*   This program is free software; you can redistribute it and/or modify      *
+*   it under the terms of the GNU General Public License as published by      *
+*   the Free Software Foundation; either version 2 of the License, or         *
+*   (at your option) any later version.                                       *
+*                                                                             *
+*   This program is distributed in the hope that it will be useful,           *
+*   but WITHOUT ANY WARRANTY; without even the implied warranty of            *
+*   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             *
+*   GNU General Public License for more details.                              *
+*                                                                             *
+*   You should have received a copy of the GNU General Public License         *
+*   along with this program; if not, write to the Free Software               *
+*   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA   *
 *                                                                             *
 *******************************************************************************
 
@@ -67,35 +73,8 @@ typedef struct
 
 static TSTAMP Stamp;
 
-//------------------------------- Protection ---------------------------------
-// NOSELF is defined when the Linice should try to protect against user
-// accessing any memory region that belongs to the Linice module.
-
-#ifdef NOSELF
-
-#define CHECK_NOSELF(p)                                                     \
-    (((DWORD)(p)>=(DWORD)ObjectStart) && ((DWORD)(p)<(DWORD)ObjectEnd)) ?   \
-    ((DWORD)(p) ^ 0x20) + ((DWORD)(p) & 3)  :  (p)
-
-#else  // NOSELF
-
 #define CHECK_NOSELF(p)             (p)
-
-#endif // NOSELF
-
-// NO_OEM is defined to protect memory access to a specific object module
-
-#ifdef NO_OEM
-
-#define CHECK_OEM(p)                                                                      \
-    (((DWORD)(p)>=(DWORD)deb.dwProtectStart) && ((DWORD)(p)<(DWORD)deb.dwProtectEnd)) ?   \
-    ((DWORD)(p) ^ 0x20) + ((DWORD)(p) & 7)  :  (p)
-
-#else  // NO_OEM
-
 #define CHECK_OEM(p)                (p)
-
-#endif // NO_OEM
 
 /******************************************************************************
 *                                                                             *
@@ -125,7 +104,7 @@ extern DWORD GetDWORD(WORD sel, DWORD offset);
 //  since the separate checksum is calculated within the code range of
 //  the first and last in that block. It is stored here:
 
-BYTE memAccessChecksum;
+BYTE memAccessChecksum = 0;
 extern BYTE memAccessChecksum2;
 
 /******************************************************************************
@@ -135,7 +114,7 @@ BOOL AddrIsPresent(PTADDRDESC pAddr)
 {
     deb.memaccess = GetByte(pAddr->sel, pAddr->offset);
 
-    return( (deb.memaccess <= 0xFF)? TRUE : FALSE );
+    return( (deb.memaccess & ~0xFF)? FALSE : TRUE );
 }
 
 /******************************************************************************

@@ -8,13 +8,19 @@
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
-*   This source code and produced executable is copyrighted by Goran Devic.   *
-*   This source, portions or complete, and its derivatives can not be given,  *
-*   copied, or distributed by any means without explicit written permission   *
-*   of the copyright owner. All other rights, including intellectual          *
-*   property rights, are implicitly reserved. There is no guarantee of any    *
-*   kind that this software would perform, and nobody is liable for the       *
-*   consequences of running it. Use at your own risk.                         *
+*   This program is free software; you can redistribute it and/or modify      *
+*   it under the terms of the GNU General Public License as published by      *
+*   the Free Software Foundation; either version 2 of the License, or         *
+*   (at your option) any later version.                                       *
+*                                                                             *
+*   This program is distributed in the hope that it will be useful,           *
+*   but WITHOUT ANY WARRANTY; without even the implied warranty of            *
+*   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             *
+*   GNU General Public License for more details.                              *
+*                                                                             *
+*   You should have received a copy of the GNU General Public License         *
+*   along with this program; if not, write to the Free Software               *
+*   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA   *
 *                                                                             *
 *******************************************************************************
 
@@ -23,9 +29,6 @@
         Code for custom messages. It includes the automatically generated
         file "messages.h" that contains the encrypted custom messages which
         are periodically displayed on the linice history line.
-
-        The existence of this functionality is defined at the compile time
-        see: "MESSAGES"
 
 *******************************************************************************
 *                                                                             *
@@ -43,10 +46,7 @@
 
 #include "clib.h"                       // Include C library header file
 #include "ice.h"                        // Include main debugger structures
-
-#ifdef MESSAGES
 #include "messages.h"                   // Include custom messages
-#endif // MESSAGES
 
 /******************************************************************************
 *                                                                             *
@@ -63,10 +63,8 @@
 #define AVERAGE_HIT         50          // Average hit every so many calls...
 
 // This is the encoding key:
-#ifdef MESSAGES
 static BYTE key[13] = { 0xDF, 0x38, 0x82, 0xF5, 0x5A, 0xA9, 0x90, 0x16, 0xB2, 0x27, 0xCC, 0x63, 0x7E };
 // The same key exist in the tools/messages/messages.cpp project file
-#endif // MESSAGES
 
 /******************************************************************************
 *                                                                             *
@@ -87,8 +85,6 @@ extern DWORD GetRdtsc(BYTE *buffer8);
 ******************************************************************************/
 void DisplayMessage(void)
 {
-    // We do this only if the define MESSAGES is present in our build
-#ifdef MESSAGES
     UINT nMessage, nPostpone;
     static BYTE rdtsc[8];               // Buffer to keep rdtsc value
     DWORD seed;                         // Current rnd seed
@@ -154,6 +150,5 @@ WriteSignature:
             goto WriteSignature;
         }
     }
-#endif // MESSAGES
 }
 

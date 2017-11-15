@@ -8,13 +8,19 @@
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
-*   This source code and produced executable is copyrighted by Goran Devic.   *
-*   This source, portions or complete, and its derivatives can not be given,  *
-*   copied, or distributed by any means without explicit written permission   *
-*   of the copyright owner. All other rights, including intellectual          *
-*   property rights, are implicitly reserved. There is no guarantee of any    *
-*   kind that this software would perform, and nobody is liable for the       *
-*   consequences of running it. Use at your own risk.                         *
+*   This program is free software; you can redistribute it and/or modify      *
+*   it under the terms of the GNU General Public License as published by      *
+*   the Free Software Foundation; either version 2 of the License, or         *
+*   (at your option) any later version.                                       *
+*                                                                             *
+*   This program is distributed in the hope that it will be useful,           *
+*   but WITHOUT ANY WARRANTY; without even the implied warranty of            *
+*   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             *
+*   GNU General Public License for more details.                              *
+*                                                                             *
+*   You should have received a copy of the GNU General Public License         *
+*   along with this program; if not, write to the Free Software               *
+*   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA   *
 *                                                                             *
 *******************************************************************************
 
@@ -22,6 +28,9 @@
 
         This module implements input/output functionality for serial port
 		(COM1/COM2/COM3/COM4)
+
+        Special case is a Toshiba serial port at the IO port of 1E0. It is
+        enumerated as COM5.
 
 *******************************************************************************
 *                                                                             *
@@ -58,8 +67,8 @@ extern TOUT outVT100;
 
 #define MAX_SERIAL_BUFFER      4000     // Output serial queue len
 
-static int port[4] = { 0x3F8, 0x2F8, 0x3E8, 0x2E8 };
-static int irq[4]  = { 4, 3, 4, 3 };
+static int port[MAX_SERIAL] = { 0x3F8, 0x2F8, 0x3E8, 0x2E8, 0x1E0 };
+static int irq[MAX_SERIAL]  = { 4, 3, 4, 3, 4 };
 
 typedef struct                          // Define serial connection structure
 {
@@ -102,7 +111,7 @@ extern void VT100Input(BYTE data);
 *   Initializes serial interface.
 *
 *   Where:
-*       com is the com port to use: 1,2,3,4
+*       com is the com port to use: [1..MAX_SERIAL]
 *       baud is the baud rate
 *
 *   If com==0, default (or previously set) port and rate will be used.

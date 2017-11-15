@@ -1,0 +1,4 @@
+#!/bin/bash
+echo Start...
+make -C /usr/src/linux-`uname -r` SUBDIRS=$PWD modules
+echo Finished.

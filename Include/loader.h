@@ -8,13 +8,19 @@
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
-*   This source code and produced executable is copyrighted by Goran Devic.   *
-*   This source, portions or complete, and its derivatives can not be given,  *
-*   copied, or distributed by any means without explicit written permission   *
-*   of the copyright owner. All other rights, including intellectual          *
-*   property rights, are implicitly reserved. There is no guarantee of any    *
-*   kind that this software would perform, and nobody is liable for the       *
-*   consequences of running it. Use at your own risk.                         *
+*   This program is free software; you can redistribute it and/or modify      *
+*   it under the terms of the GNU General Public License as published by      *
+*   the Free Software Foundation; either version 2 of the License, or         *
+*   (at your option) any later version.                                       *
+*                                                                             *
+*   This program is distributed in the hope that it will be useful,           *
+*   but WITHOUT ANY WARRANTY; without even the implied warranty of            *
+*   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             *
+*   GNU General Public License for more details.                              *
+*                                                                             *
+*   You should have received a copy of the GNU General Public License         *
+*   along with this program; if not, write to the Free Software               *
+*   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA   *
 *                                                                             *
 *******************************************************************************
 
@@ -42,19 +48,9 @@
 *                                                                             *
 ******************************************************************************/
 
-#define TRAN_PUBLICS        1
-#define TRAN_TYPEINFO       2
-#define TRAN_SYMBOLS        3
-#define TRAN_SOURCE         4
-#define TRAN_PACKAGE        5
-
-
-extern int nTranslate;                  // Default translation is all
 extern char *pTranslate;                // File to translate
 extern char *pOutput;                   // Default output file is "input_file".sym
-extern char *pSource;                   // Source search path is current directory
-extern char *pLoad;                     // Need to specify loading module
-extern char *pArgs;                     // Default no arguments
+extern char *pPathSubst;                // Source path substitution
 extern char *pSym;                      // Default symbol table to load/unload
 extern char *pLogfile;                  // Default logfile name
 extern unsigned int opt;                // Various command line options
@@ -62,13 +58,9 @@ extern int nVerbose;                    // Verbose level
 
 
 #define OPT_TRANSLATE       0x00000001  // nTranslate -> level of translation
-#define OPT_SOURCE          0x00000002  // pSource -> dirs to search for source
-#define OPT_PROMPT          0x00000004  // Prompt for missing source
+#define OPT_PATH            0x00000002  // pPathSubst -> source path substitution
 #define OPT_OUTPUT          0x00000008  // pOutput -> output file
 #define OPT_LOAD            0x00000010  // pLoad -> module to load
-#define OPT_LOAD_BREAK      0x00000020  // break upon load
-#define OPT_LOAD_NOBREAK    0x00000040  // no break on load
-#define OPT_ARGS            0x00000080  // pArgs -> program arguments
 #define OPT_SYM             0x00000100  // pSym -> loads symbol(s) into debugger
 #define OPT_UNLOAD          0x00000200  // pSym -> unloads symbol table(s)
 #define OPT_INSTALL         0x00000400  // Install debugger
@@ -79,10 +71,10 @@ extern int nVerbose;                    // Verbose level
 #define OPT_VERBOSE         0x00008000  // Option verbose, make output informative
 #define OPT_CHECK           0x00010000  // Symbol test command
 
-#define VERBOSE0            // 0 simply means no output is desired
-#define VERBOSE1            (opt & OPT_VERBOSE) && (nVerbose>=1) &&
-#define VERBOSE2            (opt & OPT_VERBOSE) && (nVerbose>=2) &&
-#define VERBOSE3            (opt & OPT_VERBOSE) && (nVerbose>=3) &&
+#define VERBOSE0            // 0 (default) simply means no extra output is desired
+#define VERBOSE1            if(nVerbose==3 || nVerbose==2 || nVerbose==1)
+#define VERBOSE2            if(nVerbose==3 || nVerbose==2)
+#define VERBOSE3            if(nVerbose==3)
 
 #endif //  _LOADER_H_
 

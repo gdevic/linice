@@ -8,13 +8,19 @@
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
-*   This source code and produced executable is copyrighted by Goran Devic.   *
-*   This source, portions or complete, and its derivatives can not be given,  *
-*   copied, or distributed by any means without explicit written permission   *
-*   of the copyright owner. All other rights, including intellectual          *
-*   property rights, are implicitly reserved. There is no guarantee of any    *
-*   kind that this software would perform, and nobody is liable for the       *
-*   consequences of running it. Use at your own risk.                         *
+*   This program is free software; you can redistribute it and/or modify      *
+*   it under the terms of the GNU General Public License as published by      *
+*   the Free Software Foundation; either version 2 of the License, or         *
+*   (at your option) any later version.                                       *
+*                                                                             *
+*   This program is distributed in the hope that it will be useful,           *
+*   but WITHOUT ANY WARRANTY; without even the implied warranty of            *
+*   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             *
+*   GNU General Public License for more details.                              *
+*                                                                             *
+*   You should have received a copy of the GNU General Public License         *
+*   along with this program; if not, write to the Free Software               *
+*   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA   *
 *                                                                             *
 *******************************************************************************
 
@@ -586,7 +592,7 @@ ProcessType:
 
                             // We got a new main source file... Start filling up the header
                             Header.h.hType   = HTYPE_TYPEDEF;
-                            Header.h.dwSize  = 0;           // To be written later
+                            Header.h.dwSize  = sizeof(TSYMTYPEDEF)-sizeof(TSYMTYPEDEF1);
                             Header.file_id   = file_id;
                             Header.nRel      = 0;           // To be written later
                             Header.pRel      = NULL;        // To be written later
@@ -663,7 +669,7 @@ ProcessType:
 
                     VERBOSE2 printf("EXCL local=%d %s => ", nLocalInclude, pStr);
 
-                    for(j=1; j<=nExType; j++ )
+                    for(j=1; j<=(int)nExType; j++ )
                     {
                         if( !strcmp(pStr, ExType[j].pFile) )
                         {
@@ -678,7 +684,7 @@ ProcessType:
                     }
 
                     // Right now we will flag this as critical error to make sure things behave the way we expect
-                    if( j>nExType )
+                    if( j>(int)nExType )
                     {
                         fprintf(stderr, "ELF/STABS Error: EXCL refers to nonexisting BINCL\n");
                         return( FALSE );

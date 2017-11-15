@@ -8,13 +8,19 @@
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
-*   This source code and produced executable is copyrighted by Goran Devic.   *
-*   This source, portions or complete, and its derivatives can not be given,  *
-*   copied, or distributed by any means without explicit written permission   *
-*   of the copyright owner. All other rights, including intellectual          *
-*   property rights, are implicitly reserved. There is no guarantee of any    *
-*   kind that this software would perform, and nobody is liable for the       *
-*   consequences of running it. Use at your own risk.                         *
+*   This program is free software; you can redistribute it and/or modify      *
+*   it under the terms of the GNU General Public License as published by      *
+*   the Free Software Foundation; either version 2 of the License, or         *
+*   (at your option) any later version.                                       *
+*                                                                             *
+*   This program is distributed in the hope that it will be useful,           *
+*   but WITHOUT ANY WARRANTY; without even the implied warranty of            *
+*   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             *
+*   GNU General Public License for more details.                              *
+*                                                                             *
+*   You should have received a copy of the GNU General Public License         *
+*   along with this program; if not, write to the Free Software               *
+*   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA   *
 *                                                                             *
 *******************************************************************************
 
@@ -49,7 +55,13 @@
 // 				        LINICE SYMBOL STRUCTURES
 //============================================================================
 
-// Define header types
+// Define symbol table types (SymTableType)
+#define SYMTABLETYPE_UNDEF      0x00    // Undefined symbol type
+#define SYMTABLETYPE_KERNEL     0x01    // Linux kernel itself
+#define SYMTABLETYPE_MODULE     0x02    // Kernel loadable module
+#define SYMTABLETYPE_APP        0x03    // User-level application with "main"
+
+// Define section header types (hType)
 #define HTYPE_GLOBALS           0x01    // Global symbols
 #define HTYPE_SOURCE            0x02    // Parsed source file
 #define HTYPE_FUNCTION_LINES    0x03    // Defines a function line numbers
@@ -73,6 +85,7 @@ typedef struct _SYMTAB
     char sSig[4];                       // File signature "SYM"
     char sTableName[MAX_MODULE_NAME];   // Name of this symbol table (app/module)
     WORD Version;                       // Symbol file version number
+    BYTE SymTableType;                  // Type of the symbol file
     DWORD dwSize;                       // Total file size
     DWORD dStrings;                     // Offset to the strings section
 

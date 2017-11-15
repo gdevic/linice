@@ -8,14 +8,20 @@
 ;                                                                             |
 ;   Author:     Goran Devic                                                   |
 ;                                                                             |
-;   This source code and produced executable is copyrighted by Goran Devic.   |
-;   This source, portions or complete, and its derivatives can not be given,  |
-;   copied, or distributed by any means without explicit written permission   |
-;   of the copyright owner. All other rights, including intellectual          |
-;   property rights, are implicitly reserved. There is no guarantee of any    |
-;   kind that this software would perform, and nobody is liable for the       |
-;   consequences of running it. Use at your own risk.                         |
-;                                                                             |
+;   This program is free software; you can redistribute it and/or modify      ;
+;   it under the terms of the GNU General Public License as published by      ;
+;   the Free Software Foundation; either version 2 of the License, or         ;
+;   (at your option) any later version.                                       ;
+;                                                                             ;
+;   This program is distributed in the hope that it will be useful,           ;
+;   but WITHOUT ANY WARRANTY; without even the implied warranty of            ;
+;   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             ;
+;   GNU General Public License for more details.                              ;
+;                                                                             ;
+;   You should have received a copy of the GNU General Public License         ;
+;   along with this program; if not, write to the Free Software               ;
+;   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA   ;
+;                                                                             ;
 ;==============================================================================
 ;
 ;   Module description:
@@ -29,6 +35,8 @@
 ;==============================================================================
 
 global  IceIntHandlers
+
+global  SyscallExecve
 
 global  ReadCRTC
 global  WriteCRTC
@@ -76,21 +84,11 @@ global  sel_ice_ds              ; This needs to be initialized at module load ti
 global  Checksum1               ; Protection - two checksum functions
 global  Checksum2
 
-global  CheckNV
-global  CheckNV2
-
 ;==============================================================================
 ; External definitions that this module uses
 ;==============================================================================
 
 extern  InterruptHandler
-
-;==============================================================================
-; Data
-;==============================================================================
-
-TempEIP:        dd      0
-TempESP:        dd      0
 
 ;==============================================================================
 ;
@@ -263,8 +261,9 @@ IntCommon:
 sel_ice_ds:
         dw      0               ; Load all selectors with kernel data selector
 
-        mov     gs, ax
-        mov     fs, ax
+; We can not reload fs and gs with the default data selector. If we try, we randomly fault (under SuSE).
+;       mov     gs, ax          ; Leave FS and GS as-is
+;       mov     fs, ax
         mov     ds, ax
         mov     es, ax
 
@@ -343,9 +342,9 @@ exit:
         pop     eax
         mov     ds, ax
         pop     eax
-        mov     fs, ax
-        pop     eax
-        mov     gs, ax
+;       mov     fs, ax                          ; We should not reload FS and GS
+        pop     eax                             ; They should be left with their default values
+;       mov     gs, ax                          ; If we reload them, we fault under SuSE (?)
 
 ; Depending on the chain address and the error code, we need to return the right way
         or      ecx, ecx
@@ -395,53 +394,6 @@ GetCRTCAddr:
         jz      @mono
         mov     dx, CRTC_INDEX_COLOR
 @mono:  pop     ax
-        ret
-
-;==============================================================================
-;
-;   BOOL CheckNV2(void)
-;
-;   Checks if the NVIDIA graphics controller is installed as the primary
-;   graphics controller on this system.
-;
-;   Returns:
-;       eax - BOOL - TRUE - Yes
-;       eax - 0 - No NV controller detected
-;
-;==============================================================================
-CheckNV2:
-        push    dx
-        call    GetCRTCAddr             ; Get the CRTC base
-        in      al, (dx)                ; Get the current index
-        push    ax                      ; Store the index
-
-        mov     al, 1Fh                 ; 1F - Extended CR lock
-        out     (dx), al                ; Index register 1F
-        in      ax, (dx)                ; Get the current state in AH
-        push    ax                      ; Store the current state
-
-        mov     ah, 99h                 ; Any value should lock
-        out     (dx), ax                ; Lock the extended registers
-        in      ax, (dx)                ; Read it back
-        or      ah, ah                  ; Should be 0
-        jnz     @NotNV2                 ; If not, it's not NV chip
-
-        pop     ax                      ; Restore previous state
-        or      ah, ah                  ; Was it locked?
-        jz      @YesNV2                 ; We are done if it was
-        mov     ah, 57h                 ; Unlock code
-        out     (dx), al                ; Unlock the extended registers
-@YesNV2:
-        pop     ax                      ; Restore the index register
-        out     (dx), al                ; Into the CRTC index
-        pop     dx
-        ret                             ; Return non-zero in AX
-@NotNV2:
-        pop     ax                      ; Restore previous state
-        xor     eax, eax                ; Not an NVIDIA chip
-        pop     ax                      ; Restore the index register
-        out     (dx), al                ; Into the CRTC index
-        pop     dx
         ret
 
 ;==============================================================================
@@ -1262,37 +1214,6 @@ SpinlockTest:
 
 ;==============================================================================
 ;
-;   Hook the task switcher: insert our handler address so the switcher will return to it
-;
-;   Look the file task.c for the detailed description on how the task switcher hook is operated.
-;
-;==============================================================================
-extern  switch_to_header                ; BYTE[6] - containing previous code bytes from __switch_to()
-extern  TaskSwitchOrigRet               ; Original return address, kept in the "C" file so it is in the BSS segment
-extern  SwitchHandler                   ; Our inserted task switcher handler
-
-global  InsertTaskSwitchHandler
-
-AsmTaskSwitchHandler:
-        pushad                          ; Save all registers
-        pushf
-        call    SwitchHandler           ; Run our task switch function next
-        popf
-        popad
-        ret
-
-InsertTaskSwitchHandler:
-        pop     dword [ds:TaskSwitchOrigRet]    ; Stash the address of our return
-        push    dword AsmTaskSwitchHandler      ; Insert our handler
-
-        push    ebp                             ; This code was being zapped by us, so recreate it
-        mov     ebp, [switch_to_header+2]       ; The value EBP is loaded with
-
-        jmp     [TaskSwitchOrigRet]             ; Continue into the __switch_to...
-
-
-;==============================================================================
-;
 ;   DWORD Checksum2( DWORD start, DWORD end )
 ;
 ;   Calculates the sum of the code region. This function is intentionally
@@ -1326,34 +1247,21 @@ Checksum2:
 
 ;==============================================================================
 ;
-;   BOOL CheckNV(void)
+;   Handler for the execve system call hook.
 ;
-;   Checks if the NVIDIA graphics controller is installed as the primary
-;   graphics controller on this system.
+;   We do it this way since we need to preserve the registers on the stack
+;   within the original call and our hook.
 ;
-;   Returns:
-;       eax - BOOL - TRUE - Yes
-;       eax - 0 - No NV controller detected
+;   Look in process.h:
+;       asmlinkage int sys_execve(struct pt_regs regs)
 ;
 ;==============================================================================
-CheckNV:
-        push    dx
-        call    GetCRTCAddr             ; Get the 3B4/3D4 base CRTC address
-        mov     ax, 0571Fh              ; 1F - Extended CR lock: 57 - unlock for RW
-        out     (dx), ax                ; Unlock for RW
-        in      ax, (dx)                ; Read it back
-        cmp     ah, 03                  ; 3 is a valid readback
-        jnz     @NotNV                  ; Not an NVIDIA chip if there was no 3
-        mov     ax, 0751Fh              ; Unlock for R
-        out     (dx), ax
-        in      ax, (dx)                ; Rad it back
-        cmp     ah, 01                  ; 1 is a valid readback
-        jnz     @NotNV                  ; Not an NVIDIA chip if there was no 1
-        out     (dx), ax                ; Lock the chip
-        pop     dx
-        ret                             ; Return non-zero in AX
-@NotNV:
-        xor     eax, eax                ; Not an NVIDIA chip
-        pop     dx
-        ret
+extern sys_execve
+extern SyscallExecveHook
+
+; Calling our handler _before_ the original execve
+
+SyscallExecve:
+        call    SyscallExecveHook
+        jmp     [sys_execve]
 

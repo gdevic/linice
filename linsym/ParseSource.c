@@ -8,13 +8,19 @@
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
-*   This source code and produced executable is copyrighted by Goran Devic.   *
-*   This source, portions or complete, and its derivatives can not be given,  *
-*   copied, or distributed by any means without explicit written permission   *
-*   of the copyright owner. All other rights, including intellectual          *
-*   property rights, are implicitly reserved. There is no guarantee of any    *
-*   kind that this software would perform, and nobody is liable for the       *
-*   consequences of running it. Use at your own risk.                         *
+*   This program is free software; you can redistribute it and/or modify      *
+*   it under the terms of the GNU General Public License as published by      *
+*   the Free Software Foundation; either version 2 of the License, or         *
+*   (at your option) any later version.                                       *
+*                                                                             *
+*   This program is distributed in the hope that it will be useful,           *
+*   but WITHOUT ANY WARRANTY; without even the implied warranty of            *
+*   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             *
+*   GNU General Public License for more details.                              *
+*                                                                             *
+*   You should have received a copy of the GNU General Public License         *
+*   along with this program; if not, write to the Free Software               *
+*   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA   *
 *                                                                             *
 *******************************************************************************
 
@@ -54,7 +60,7 @@ static int nSO = 0;                     // Total number of source files
 static int nSources = 0;                // Pruned number of source files
 static char *pSources = NULL;           // Memory buffer to store file names
 
-extern BOOL OpenSourceFile(FILE **fp, char *pPath);
+extern BOOL OpenUserSourceFile(FILE **fp, char *pPath);
 
 /******************************************************************************
 *                                                                             *
@@ -286,7 +292,8 @@ BOOL StoreSourceFiles(BYTE *pBuf)
                     // prefix the last defined file path to complete the directory
                     if( *pStr!='/' && *pStr!='\\' )
                     {
-                        fprintf(fSources, "%s", pSoDir);
+                        if( pSoDir )
+                            fprintf(fSources, "%s", pSoDir);
                     }
                     fprintf(fSources, "%s\n", pStr);
                 break;
@@ -358,36 +365,11 @@ static BOOL WriteSourceFile(int fd, int fs, char *ptr, WORD file_id)
         if( strchr(pTmp, 0x0D) )
             *strchr(pTmp, 0x0D) = 0;
 
-        if( OpenSourceFile(&fp, pTmp)==FALSE )
+        if( OpenUserSourceFile(&fp, pTmp)==FALSE )
         {
-            // File was not found on the path
+            printf("Unable to open source file %s -- skipping...\n", pTmp);
 
-            // File can not be opened. By default, we skip it, but command line option can change that
-            // TODO: This is broken. Do we care to implement the PROMPT option??
-            if( opt & OPT_PROMPT )
-            {
-                // Force prompt for the missing file
-                printf("File %s not found. Enter the file path/name or just press ENTER to skip it:\n", pTmp);
-                fgets(pTmp, FILENAME_MAX, stdin);
-                if( pTmp[0]=='\n' )
-                    return( TRUE );
-            }
-            else
-            {
-                printf("Unable to open source file %s -- skipping...\n", pTmp);
-
-                return( TRUE );
-            }
-        }
-        else
-        {
-            // File was found on the path, fp can tell us if it was open or excluded
-            if( fp==NULL )
-            {
-                VERBOSE1 printf("File excluded: %s\n", pTmp);
-
-                return( TRUE );
-            }
+            return( TRUE );
         }
     }
 
@@ -592,3 +574,4 @@ WORD GetFileId(char *pSoDir, char *pSo)
 
     return( 0 );
 }
+

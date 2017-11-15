@@ -8,13 +8,19 @@
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
-*   This source code and produced executable is copyrighted by Goran Devic.   *
-*   This source, portions or complete, and its derivatives can not be given,  *
-*   copied, or distributed by any means without explicit written permission   *
-*   of the copyright owner. All other rights, including intellectual          *
-*   property rights, are implicitly reserved. There is no guarantee of any    *
-*   kind that this software would perform, and nobody is liable for the       *
-*   consequences of running it. Use at your own risk.                         *
+*   This program is free software; you can redistribute it and/or modify      *
+*   it under the terms of the GNU General Public License as published by      *
+*   the Free Software Foundation; either version 2 of the License, or         *
+*   (at your option) any later version.                                       *
+*                                                                             *
+*   This program is distributed in the hope that it will be useful,           *
+*   but WITHOUT ANY WARRANTY; without even the implied warranty of            *
+*   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             *
+*   GNU General Public License for more details.                              *
+*                                                                             *
+*   You should have received a copy of the GNU General Public License         *
+*   along with this program; if not, write to the Free Software               *
+*   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA   *
 *                                                                             *
 *******************************************************************************
 
@@ -44,12 +50,14 @@ extern PSTR dfs;
 
 
 // Define internal array structre that holds global symbols for a lookup
+#define MAX_SECTION_LEN     32          // Size of the section name string
+
 typedef struct
 {
     DWORD dwAddress;                    // Start address of a symbol
     DWORD dwEndAddress;                 // End address of a symbol
     DWORD dwAttribute;                  // Attributes of a symbol
-    char SectionName[16];               // Section name string
+    char SectionName[MAX_SECTION_LEN];  // Section name string
     char Name[MAX_SYMBOL_LEN+1];        // Symbol canonical name
 
     char *pDef;                         // Pointer to symbol definition
@@ -62,12 +70,13 @@ static int nGlobals = 0;                // Number of global symbols
 // The array to keep the names of the symbols (variables) from the COMMON sections
 // nCommons is global since we use it as a top entry when doing the symbol
 // relocation since each COMMON variable has its own relocation record on top of
-// the standard segments 0-3
+// the standard predefined (hardcoded) segments.
 
-#define MAX_COMMONS     256             // This is the hard-coded since we use BYTE to index it
+#define MAX_STANDARD_SEG    9           // Number of standard segments
+#define MAX_COMMONS         256         // This is the hard-coded since we use BYTE to index it
 
 static char sCommon[MAX_COMMONS][MAX_STRING];
-int nCommons = 4;                       // First available slot - skip standard sections
+int nCommons = MAX_STANDARD_SEG + 1;    // First available slot - skip standard sections
 
 
 extern WORD GetFileId(char *pSoDir, char *pSo);
@@ -171,7 +180,8 @@ BOOL StoreGlobalSyms(BYTE *pBuf)
                 case SHN_COMMON : pSecName = "COMMON";    break;
                 default:          pSecName = pBuf + SecName->sh_offset + Sec[pSym->st_shndx].sh_name;
             }
-#if 1
+
+            if( (nVerbose>=2) )
             {
                 printf("st_name  = %04X  %s\n", pSym->st_name, pStr+pSym->st_name);
                 printf("st_value = %08X\n", pSym->st_value );
@@ -181,7 +191,7 @@ BOOL StoreGlobalSyms(BYTE *pBuf)
                 printf("st_shndx = %04X  %s\n", pSym->st_shndx, pSecName);
                 printf("\n");
             }
-#endif
+
             // Save a global symbol with all its attributes so we can select from it later when we need globals.
             // We should not have empty symbol string name, so special case a null-strings.
             nameLen = strlen(pStr+pSym->st_name);
@@ -190,6 +200,10 @@ BOOL StoreGlobalSyms(BYTE *pBuf)
             // them later: Example: buf.0
             if( nameLen>2 && *(pStr+pSym->st_name+nameLen-2)=='.' && isdigit(*(pStr+pSym->st_name+nameLen-1)) )
                 nameLen -= 2;
+
+            // Do the same for the symbols with 2-digit extension number
+            if( nameLen>3 && *(pStr+pSym->st_name+nameLen-3)=='.' && isdigit(*(pStr+pSym->st_name+nameLen-1)) && isdigit(*(pStr+pSym->st_name+nameLen-2)))
+                nameLen -= 3;
 
             // Since we store global variables, but the value field contains only the variable required alignment
             // instead of its relative address within its segment, we zap that value to 0 so we can use the same
@@ -615,6 +629,7 @@ BOOL ParseGlobals(int fd, int fs, BYTE *pBuf)
 *******************************************************************************
 *
 *   Looks for a global symbol with the specified name.
+*   "Absolute" entries are ignored since they are not symbols.
 *
 *   Where:
 *       p is the address of the variable to receive address
@@ -645,7 +660,7 @@ BOOL GlobalsName2Address(DWORD *p, char *pName)
 
         for(i=0; i<nGlobals; i++)
         {
-            if( !strcmp(pGlob->Name, sSymbol) )
+            if( !strcmp(pGlob->Name, sSymbol) && strcmp(pGlob->SectionName, "ABSOLUTE") )
             {
                 // Found it! Store the address into the caller's variable and return
                 *p = pGlob->dwAddress;
@@ -666,6 +681,7 @@ BOOL GlobalsName2Address(DWORD *p, char *pName)
 *******************************************************************************
 *
 *   Returns the section name of a global symbol.
+*   "Absolute" entries are ignored since they are not symbols.
 *
 *   Where:
 *       pName is the symbol name
@@ -695,7 +711,7 @@ char *GlobalsName2Section(char *pName)
 
         for(i=0; i<nGlobals; i++)
         {
-            if( !strcmp(pGlob->Name, sSymbol) )
+            if( !strcmp(pGlob->Name, sSymbol) && strcmp(pGlob->SectionName, "ABSOLUTE") )
             {
                 // Found it! Return the section name
                 return( pGlob->SectionName );
@@ -723,7 +739,7 @@ BYTE QueryCommonsName(char *pName)
 {
     int i;
 
-    for(i=4; i<nCommons; i++)
+    for(i=MAX_STANDARD_SEG; i<nCommons; i++)
     {
         if( !strcmp(sCommon[i], pName) )
             return( (BYTE) i );
@@ -742,13 +758,13 @@ BYTE QueryCommonsName(char *pName)
 *   sCommon array for the variables of the COMMON type.
 *
 *   Where:
-*       pSection is the section name, example: .data
+*       pSection is the section name. Example: .data
 *       pName is the symbol name
 *
 *   Returns:
-*       0-3 - standard sections
-*       4 - MAX_COMMONS - Symbol in the COMMON section
-*       -1  for section not found
+*       0-MAX_STANDARD_SEG             - Standard sections
+*       MAX_STANDARD_SEG - MAX_COMMONS - Symbol in the COMMON section
+*       -1                             - Section not found
 *
 ******************************************************************************/
 int GetGlobalsSection(char *pSection, char *pName)
@@ -756,10 +772,23 @@ int GetGlobalsSection(char *pSection, char *pName)
     int i;
 
     // Assign the right section number for predefined sections
+    //
+    // For now, .text is always 0. The linice uses this to handle symbols in the
+    // expression evaluator (code will not be dereferenced). This could be done
+    // better and parse sections and their flags, but this works for most of the
+    // cases.
+    //
     if( !strcmp(pSection, ".text") )  return( 0 );
     if( !strcmp(pSection, ".data") )  return( 1 );
     if( !strcmp(pSection, ".rodata")) return( 2 );
     if( !strcmp(pSection, ".bss") )   return( 3 );
+
+    // Extended section names. These are introduced to cover kernel 2.4 symbols
+    if( !strcmp(pSection, ".text.init") )              return( 4 );
+    if( !strcmp(pSection, ".data.init") )              return( 5 );
+    if( !strcmp(pSection, ".setup.init") )             return( 6 );
+    if( !strcmp(pSection, ".initcall.init") )          return( 7 );
+    if( !strcmp(pSection, ".data.cacheline_aligned") ) return( 8 );
 
     // TODO: Let's sneak .modinfo section along with the COMMONS and see how it goes...
 
@@ -783,7 +812,7 @@ int GetGlobalsSection(char *pSection, char *pName)
         }
         else
         {
-            fprintf(stderr, "Too many symbols in the COMMON section. The limit is %d.\n", MAX_COMMONS-4);
+            fprintf(stderr, "Too many symbols in the COMMON section. The limit is %d.\n", MAX_COMMONS-MAX_STANDARD_SEG);
         }
     }
 
@@ -806,8 +835,8 @@ int GetGlobalsSection(char *pSection, char *pName)
 *       pName is the symbol name
 *
 *   Returns:
-*       0-3 - standard sections
-*       4 - MAX_COMMONS - Symbol in the COMMON section
+*       0-MAX_STANDARD_SEG             - Standard sections
+*       MAX_STANDARD_SEG - MAX_COMMONS - Symbol in the COMMON section
 *
 ******************************************************************************/
 BYTE GlobalsName2SectionNumber(char *pName)
@@ -819,7 +848,6 @@ BYTE GlobalsName2SectionNumber(char *pName)
     pSection = GlobalsName2Section(pName);
 
     // The section should be found. If now, we want to know about that case!
-    // TODO: XSNOW causes this to be NULL and it core dumps. See bug 2008.
     if(pSection)
     {
         nSection = GetGlobalsSection(pSection, pName);
@@ -834,7 +862,7 @@ BYTE GlobalsName2SectionNumber(char *pName)
     }
     else
     {
-        fprintf(stderr, "Invalid section in GlobalsName2Section() for %s\n", pName);
+        fprintf(stderr, "Internal bug! - %s\n", pName);
         nSection = 1;           // What to do? Return a fake .data section
     }
 

@@ -20,7 +20,6 @@ LINKFLAGS = $(LIBS) $(LIB)
 
 #-----------------------------------------------------------------------------
 # Compiler defines:
-#	make retail			- retail build
 #	make debug			- engineering debug build (default)
 #   make nd				- engineering non-debug build
 #-----------------------------------------------------------------------------
@@ -40,14 +39,6 @@ CFLAGS = -O3 -I$(H)
 
 endif
 #-----------------------------------------------------------------------------
-# Compiler defines: RETAIL build
-#-----------------------------------------------------------------------------
-ifeq ($(MAKECMDGOALS),retail)
-
-CFLAGS = -O3 -I$(H)
-
-endif
-#-----------------------------------------------------------------------------
 # Compiler that is used.
 #-----------------------------------------------------------------------------
 
@@ -60,9 +51,6 @@ CC = gcc
 debug:	../bin/xice
 
 nd:		../bin/xice
-
-retail:	../bin/xice
-	@strip ../bin/xice
 
 all:	../bin/xice
 

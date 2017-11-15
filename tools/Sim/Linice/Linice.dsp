@@ -41,7 +41,7 @@ RSC=rc.exe
 # PROP Intermediate_Dir "Release"
 # PROP Target_Dir ""
 # ADD BASE CPP /nologo /W3 /GX /O2 /D "WIN32" /D "NDEBUG" /D "_MBCS" /D "_LIB" /YX /FD /c
-# ADD CPP /nologo /Zp1 /MT /W3 /GX /X /I "$(LINICE_ROOT)\include" /I "$(LINICE_ROOT)\linice\include" /I "$(LINICE_ROOT)\bin" /D "NDEBUG" /D "WIN32" /D "_MBCS" /D "_LIB" /D "MODULE" /D "SIM" /FD /c
+# ADD CPP /nologo /Zp1 /MT /W3 /GX /X /I "$(LINICE_ROOT)\linice\include" /I "$(LINICE_ROOT)\include" /I "$(LINICE_ROOT)\bin-2.4" /D "NDEBUG" /D "WIN32" /D "_MBCS" /D "_LIB" /D "MODULE" /D "SIM" /FD /c
 # SUBTRACT CPP /Ot /Oa /Ow /Og /Oi /Os /YX
 # ADD BASE RSC /l 0x409 /d "NDEBUG"
 # ADD RSC /l 0x409 /d "NDEBUG"
@@ -65,7 +65,7 @@ LIB32=link.exe -lib
 # PROP Intermediate_Dir "Debug"
 # PROP Target_Dir ""
 # ADD BASE CPP /nologo /W3 /Gm /GX /ZI /Od /D "WIN32" /D "_DEBUG" /D "_MBCS" /D "_LIB" /YX /FD /GZ /c
-# ADD CPP /nologo /Zp1 /MTd /W3 /Gm /GX /ZI /Od /X /I "$(LINICE_ROOT)\include" /I "$(LINICE_ROOT)\linice\include" /I "$(LINICE_ROOT)\bin" /D "DBG" /D "_LIB" /D "MODULE" /D "_DEBUG" /D "WIN32" /D "_MBCS" /D "SIM" /D "MESSAGES" /FD /GZ /c
+# ADD CPP /nologo /Zp1 /MTd /W3 /Gm /GX /ZI /Od /X /I "$(LINICE_ROOT)\linice\include" /I "$(LINICE_ROOT)\include" /I "$(LINICE_ROOT)\bin-2.4" /D "DBG" /D "_LIB" /D "MODULE" /D "_DEBUG" /D "WIN32" /D "_MBCS" /D "SIM" /FD /GZ /c
 # SUBTRACT CPP /YX
 # ADD BASE RSC /l 0x409 /d "_DEBUG"
 # ADD RSC /l 0x409 /d "_DEBUG"
@@ -356,6 +356,10 @@ SOURCE="$(LINICE_ROOT)\linice\driver.c"
 # Begin Source File
 
 SOURCE="$(LINICE_ROOT)\linice\errors.c"
+# End Source File
+# Begin Source File
+
+SOURCE="$(LINICE_ROOT)\linice\extend.c"
 # End Source File
 # Begin Source File
 

@@ -8,13 +8,19 @@
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
-*   This source code and produced executable is copyrighted by Goran Devic.   *
-*   This source, portions or complete, and its derivatives can not be given,  *
-*   copied, or distributed by any means without explicit written permission   *
-*   of the copyright owner. All other rights, including intellectual          *
-*   property rights, are implicitly reserved. There is no guarantee of any    *
-*   kind that this software would perform, and nobody is liable for the       *
-*   consequences of running it. Use at your own risk.                         *
+*   This program is free software; you can redistribute it and/or modify      *
+*   it under the terms of the GNU General Public License as published by      *
+*   the Free Software Foundation; either version 2 of the License, or         *
+*   (at your option) any later version.                                       *
+*                                                                             *
+*   This program is distributed in the hope that it will be useful,           *
+*   but WITHOUT ANY WARRANTY; without even the implied warranty of            *
+*   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             *
+*   GNU General Public License for more details.                              *
+*                                                                             *
+*   You should have received a copy of the GNU General Public License         *
+*   along with this program; if not, write to the Free Software               *
+*   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA   *
 *                                                                             *
 *******************************************************************************
 
@@ -100,6 +106,7 @@ typedef struct
     BOOL fI3Here;                       // Break on INT3
     BOOL fI3Kernel;                     // Break on INT3 only in kernel code
     BOOL fLowercase;                    // Display lowercase
+    BOOL fSyscall;                      // Display system calls from within the hook
     BOOL fSymbols;                      // Disassembler shows symbol names instead of numbers
     BOOL fFlash;                        // Restore screen during P and T commands
     BOOL fPause;                        // Pause after a screenful of scrolling info
@@ -193,8 +200,6 @@ typedef struct
     //  1 - cursor carret blink
     UINT timer[2];
 
-    // Protection of memory access: One region can be made protected from Linice access
-    // The start and end of this memory region is stored in here
     DWORD dwProtectStart;               // Start linear address to protect
     DWORD dwProtectEnd;                 // End linear address to protect
     DWORD LiniceChecksum;               // Checksum of the Linice code (or SUM)

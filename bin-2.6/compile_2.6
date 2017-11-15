@@ -1,0 +1,18 @@
+#!/bin/bash
+
+cp linice_kernel.o linice_kernel.o.temp
+touch linice_kernel.c
+
+make -C /usr/src/linux-`uname -r` SUBDIRS=$PWD modules
+
+mv linice_kernel.o.temp linice_kernel.o
+
+make -C /usr/src/linux-`uname -r` SUBDIRS=$PWD modules
+
+echo ------------------------------------------------------------------------------
+echo Creating linice_`uname -r` and copying kernel-dependent module...
+mkdir -p linice_`uname -r`
+cp -f linice.ko linice_`uname -r`/linice.o
+rm -f linice.ko
+echo ------------------------------------------------------------------------------
+echo Done. You may now run \"linsym -i\" to install the linice module.

@@ -8,13 +8,19 @@
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
-*   This source code and produced executable is copyrighted by Goran Devic.   *
-*   This source, portions or complete, and its derivatives can not be given,  *
-*   copied, or distributed by any means without explicit written permission   *
-*   of the copyright owner. All other rights, including intellectual          *
-*   property rights, are implicitly reserved. There is no guarantee of any    *
-*   kind that this software would perform, and nobody is liable for the       *
-*   consequences of running it. Use at your own risk.                         *
+*   This program is free software; you can redistribute it and/or modify      *
+*   it under the terms of the GNU General Public License as published by      *
+*   the Free Software Foundation; either version 2 of the License, or         *
+*   (at your option) any later version.                                       *
+*                                                                             *
+*   This program is distributed in the hope that it will be useful,           *
+*   but WITHOUT ANY WARRANTY; without even the implied warranty of            *
+*   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             *
+*   GNU General Public License for more details.                              *
+*                                                                             *
+*   You should have received a copy of the GNU General Public License         *
+*   along with this program; if not, write to the Free Software               *
+*   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA   *
 *                                                                             *
 *******************************************************************************
 
@@ -49,11 +55,11 @@
 ******************************************************************************/
 
 extern void ArmDebugReg(int nDr, TADDRDESC Addr);
-extern TSYMTAB *SymTabFind(char *name);
+extern TSYMTAB *SymTabFind(char *name, BYTE SymTableType);
 extern BOOL SymTabSetupRelocOffset(TSYMTAB *pSymTab, DWORD dwInitModule, DWORD dwInitModuleSample);
 extern void SymTabRelocate(TSYMTAB *pSymTab, int factor);
 extern BOOL FindModule(TMODULE *pMod, char *pName, int nNameLen);
-extern BOOL FindSymbol(TExItem *item, char *pName, int *pNameLen);
+extern BOOL FindGlobalSymbol(TExItem *item, char *pName, int nNameLen);
 
 /******************************************************************************
 *                                                                             *
@@ -62,6 +68,7 @@ extern BOOL FindSymbol(TExItem *item, char *pName, int *pNameLen);
 ******************************************************************************/
 
 extern unsigned long *sys_table;
+
 
 /******************************************************************************
 *                                                                             *
@@ -74,6 +81,12 @@ static PFNEXIT sys_exit = NULL;
 
 typedef asmlinkage int (*PFNFORK)(struct pt_regs regs);
 static PFNFORK sys_fork = NULL;
+
+typedef asmlinkage int (*PFNEXECVE)(struct pt_regs regs);
+PFNEXECVE sys_execve = NULL;    // Not static since it is used by i386.asm
+
+extern PFNEXECVE SyscallExecve();
+
 
 typedef asmlinkage int (*PFNINITMODULE)(const char *name, void *image);
 static PFNINITMODULE sys_init_module = NULL;
@@ -90,7 +103,8 @@ static PFNDELETEMODULE sys_delete_module = NULL;
 
 asmlinkage int SyscallExit(int status)
 {
-    dprinth(1, "SYSCALL: %s: exit(%d)", ice_get_current_comm(), status);
+    if( deb.fSyscall )
+        dprinth(1, "SYSCALL: %s: exit(%d)", ice_get_current_comm(), status);
 
     return( sys_exit(status) );
 }
@@ -102,21 +116,30 @@ asmlinkage int SyscallFork(struct pt_regs regs)
 
     retval = sys_fork(regs);
 
-    dprinth(1, "SYSCALL: fork(%s) = %d", ice_get_current_comm(), retval);
+    if( deb.fSyscall )
+        dprinth(1, "SYSCALL: fork(%s) = %d", ice_get_current_comm(), retval);
 
     return( retval );
 }
 
 
+void SyscallExecveHook(DWORD OrigRet, struct pt_regs regs)
+{
+    if( deb.fSyscall )
+        dprinth(1, "SYSCALL: execve(%s)", regs.ebx);
+}
+
+
 asmlinkage int SyscallInitModule(const char *name, void *image)
 {
-    TSYMTAB *pSymTab;
+    TSYMTAB *pSymTab;                   // Pointer to internal symbol table
     int retval;
-    TADDRDESC Addr;
+    TADDRDESC Addr;                     // Address descriptor
     DWORD dwInitModule, dwSampleBase;   // Relocation helper variables
     TMODULE Mod;                        // Module information structure
 
-    dprinth(1, "SYSCALL: init_module(`%s', %08X)", name, image);
+    if( deb.fSyscall )
+        dprinth(1, "SYSCALL: init_module(`%s', %08X)", name, image);
 
     // Find a kernel module descriptor that has been created after a previous system call
     // create_module. That should be found - else this call will fail anyways...
@@ -125,7 +148,7 @@ asmlinkage int SyscallInitModule(const char *name, void *image)
     {
         // Try to find if we have a symbol table loaded for this module, so we can relocate it
         // Find the symbol table with the name of this module
-        pSymTab = SymTabFind((char *)name);
+        pSymTab = SymTabFind((char *)name, SYMTABLETYPE_MODULE);
         if( pSymTab )
         {
             // image       is the user memory image to load
@@ -179,7 +202,7 @@ asmlinkage int SyscallInitModule(const char *name, void *image)
         // Module load failed - Need to relocate back its symbol table, if present
 
         // We search for the module again since it might have been deleted in the meantime
-        pSymTab = SymTabFind((char *)name);
+        pSymTab = SymTabFind((char *)name, SYMTABLETYPE_MODULE);
         if( pSymTab )
         {
             SymTabRelocate(pSymTab, -1);
@@ -197,7 +220,8 @@ asmlinkage int SyscallDeleteModule(const char *name)
     TSYMTAB *pSymTab;
     int retval = -1;                    // By default assume error
 
-    dprinth(1, "SYSCALL: delete_module(`%s')", name);
+    if( deb.fSyscall )
+        dprinth(1, "SYSCALL: delete_module(`%s')", name);
 
     // We will not break on cleanup_module since we break on init_module, so
     // a breakpoint can be placed at that time if this function needs to be debugged.
@@ -228,7 +252,7 @@ asmlinkage int SyscallDeleteModule(const char *name)
             // if we had a symbol table mapped to it so we can revert the relocation
 
             // Find the symbol table with the name of this module
-            pSymTab = SymTabFind((char *)name);
+            pSymTab = SymTabFind((char *)name, SYMTABLETYPE_MODULE);
             if( pSymTab )
             {
                 // Relocate symbol table back by the reloc offset
@@ -256,19 +280,25 @@ asmlinkage int SyscallDeleteModule(const char *name)
 ******************************************************************************/
 void HookSyscall(void)
 {
-    INFO("HookSyscall() at %08X\n", (DWORD)sys_table[0]);
+    INFO("HookSyscall() table at %08X\n", (DWORD)sys_table);
 
-    sys_exit = (PFNEXIT) sys_table[__NR_exit];
-    sys_table[__NR_exit] = (unsigned long) SyscallExit;
+    if( sys_table )
+    {
+        sys_exit = (PFNEXIT) sys_table[__NR_exit];
+        sys_table[__NR_exit] = (unsigned long) SyscallExit;
 
-    sys_fork = (PFNFORK) sys_table[__NR_fork];
-    sys_table[__NR_fork] = (unsigned long) SyscallFork;
+        sys_fork = (PFNFORK) sys_table[__NR_fork];
+        sys_table[__NR_fork] = (unsigned long) SyscallFork;
 
-    sys_init_module = (PFNINITMODULE) sys_table[__NR_init_module];
-    sys_table[__NR_init_module] = (unsigned long) SyscallInitModule;
+        sys_execve = (PFNEXECVE) sys_table[__NR_execve];
+        sys_table[__NR_execve] = (unsigned long) SyscallExecve;
 
-    sys_delete_module = (PFNDELETEMODULE) sys_table[__NR_delete_module];
-    sys_table[__NR_delete_module] = (unsigned long) SyscallDeleteModule;
+        sys_init_module = (PFNINITMODULE) sys_table[__NR_init_module];
+        sys_table[__NR_init_module] = (unsigned long) SyscallInitModule;
+
+        sys_delete_module = (PFNDELETEMODULE) sys_table[__NR_delete_module];
+        sys_table[__NR_delete_module] = (unsigned long) SyscallDeleteModule;
+    }
 }
 
 /******************************************************************************
@@ -290,6 +320,9 @@ void UnHookSyscall(void)
     if( sys_fork )
         sys_table[__NR_fork] = (unsigned long) sys_fork;
 
+    if( sys_execve )
+        sys_table[__NR_execve] = (unsigned long) sys_execve;
+
     if( sys_init_module )
         sys_table[__NR_init_module] = (unsigned long) sys_init_module;
 
@@ -298,6 +331,7 @@ void UnHookSyscall(void)
 
     sys_exit = NULL;
     sys_fork = NULL;
+    sys_execve = NULL;
     sys_init_module = NULL;
     sys_delete_module = NULL;
 }

@@ -8,13 +8,19 @@
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
-*   This source code and produced executable is copyrighted by Goran Devic.   *
-*   This source, portions or complete, and its derivatives can not be given,  *
-*   copied, or distributed by any means without explicit written permission   *
-*   of the copyright owner. All other rights, including intellectual          *
-*   property rights, are implicitly reserved. There is no guarantee of any    *
-*   kind that this software would perform, and nobody is liable for the       *
-*   consequences of running it. Use at your own risk.                         *
+*   This program is free software; you can redistribute it and/or modify      *
+*   it under the terms of the GNU General Public License as published by      *
+*   the Free Software Foundation; either version 2 of the License, or         *
+*   (at your option) any later version.                                       *
+*                                                                             *
+*   This program is distributed in the hope that it will be useful,           *
+*   but WITHOUT ANY WARRANTY; without even the implied warranty of            *
+*   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             *
+*   GNU General Public License for more details.                              *
+*                                                                             *
+*   You should have received a copy of the GNU General Public License         *
+*   along with this program; if not, write to the Free Software               *
+*   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA   *
 *                                                                             *
 *******************************************************************************
 
@@ -22,11 +28,11 @@
 
         Commands that deal with page tables.
 
-    A physical page allocated to process VM will have at least two virtual mappings: 
-    one in kernel memory at PAGE_OFFSET+physical_page_address, and one at some 
-    address less than PAGE_OFFSET in process VM. Such pages may also have additional 
-    mappings: for example, multiple processes executing the same program share the 
-    program's executable code by mapping the same physical pages in their respective 
+    A physical page allocated to process VM will have at least two virtual mappings:
+    one in kernel memory at PAGE_OFFSET+physical_page_address, and one at some
+    address less than PAGE_OFFSET in process VM. Such pages may also have additional
+    mappings: for example, multiple processes executing the same program share the
+    program's executable code by mapping the same physical pages in their respective
     page tables.
 
     HIGHMEM pages don't have a permanent virtual kernel address, so they are exception.
@@ -123,7 +129,7 @@ static DWORD mapPhysicalPage(DWORD physAddress)
     // Get the page directory virtual address
     p = (DWORD *) (ice_page_offset() + deb.sysReg.cr3);
     pPD = (TPage *) p;                  // Two ways of looking at the value
-    
+
     // Store away the original values from the first two entries
     selfMapping[0] = p[0];
     selfMapping[1] = p[1];
@@ -133,7 +139,7 @@ static DWORD mapPhysicalPage(DWORD physAddress)
     // Map itself into the linear address 0
     pPD[0].Index = deb.sysReg.cr3 >> 12;
     pPD[0].fPresent = TRUE;
-    
+
     // Map our page into the linear address of 4 K
     pPD[1].Index = physAddress >> 12;
     pPD[1].fPresent = TRUE;
@@ -161,7 +167,7 @@ static void unmapPhysicalPage(void)
 
     // Get the page directory virtual address
     pPD = (DWORD *) (ice_page_offset() + deb.sysReg.cr3);
-    
+
     // Restore the original values from the first two entries
     pPD[0] = selfMapping[0];
     pPD[1] = selfMapping[1];

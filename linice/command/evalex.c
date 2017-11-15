@@ -8,13 +8,19 @@
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
-*   This source code and produced executable is copyrighted by Goran Devic.   *
-*   This source, portions or complete, and its derivatives can not be given,  *
-*   copied, or distributed by any means without explicit written permission   *
-*   of the copyright owner. All other rights, including intellectual          *
-*   property rights, are implicitly reserved. There is no guarantee of any    *
-*   kind that this software would perform, and nobody is liable for the       *
-*   consequences of running it. Use at your own risk.                         *
+*   This program is free software; you can redistribute it and/or modify      *
+*   it under the terms of the GNU General Public License as published by      *
+*   the Free Software Foundation; either version 2 of the License, or         *
+*   (at your option) any later version.                                       *
+*                                                                             *
+*   This program is distributed in the hope that it will be useful,           *
+*   but WITHOUT ANY WARRANTY; without even the implied warranty of            *
+*   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             *
+*   GNU General Public License for more details.                              *
+*                                                                             *
+*   You should have received a copy of the GNU General Public License         *
+*   along with this program; if not, write to the Free Software               *
+*   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA   *
 *                                                                             *
 *******************************************************************************
 
@@ -352,6 +358,7 @@ static BOOL fDecimal;                   // Prefer decimal number
 *                                                                             *
 ******************************************************************************/
 
+extern BOOL QueryExtToken(DWORD *pResult, char **pToken, int len);
 extern BOOL EvalBreakpointAddress(TADDRDESC *pAddr, int index);
 extern char *Type2Element(TSYMTYPEDEF1 *pType, char *pName, int nLen);
 extern void TypedefCanonical(TSYMTYPEDEF1 *pType1);
@@ -972,7 +979,7 @@ static BOOL GetValue( TExItem *item, char **sExpr, int nTokenLen )
     }
     else
     //----------------------------------------------------------------------------------
-    // If everything else fails, it's gotta be a hex number
+    // Check for the hex value
     //----------------------------------------------------------------------------------
     if( CheckHex(pToken, nTokenLen) )
     {
@@ -983,8 +990,17 @@ static BOOL GetValue( TExItem *item, char **sExpr, int nTokenLen )
     }
     else
     {
-        // Token is nothing that we can recognize at this point
-        return( FALSE );
+        // If everything else fails, check if it is a token handled by DOT-extension
+        if( QueryExtToken(&item->Data, &pToken, nTokenLen)==TRUE )
+        {
+            item->bType = EXTYPE_LITERAL;   // This was a literal type
+            item->pData = (BYTE *)&item->Data;
+        }
+        else
+        {
+            // Token is nothing that we can recognize at this point
+            return( FALSE );
+        }
     }
 
     fDecimal = FALSE;
@@ -1687,6 +1703,7 @@ BOOL Expression(DWORD *pValue, char *pExpr, char **ppNext)
         // Address contains the offset in *pData
 
         // Assign the value from the item pointer
+        // TODO: Is this dangerous?
         *pValue = *(DWORD *)Item.pData;
 
         return( TRUE );

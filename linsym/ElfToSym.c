@@ -8,13 +8,19 @@
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
-*   This source code and produced executable is copyrighted by Goran Devic.   *
-*   This source, portions or complete, and its derivatives can not be given,  *
-*   copied, or distributed by any means without explicit written permission   *
-*   of the copyright owner. All other rights, including intellectual          *
-*   property rights, are implicitly reserved. There is no guarantee of any    *
-*   kind that this software would perform, and nobody is liable for the       *
-*   consequences of running it. Use at your own risk.                         *
+*   This program is free software; you can redistribute it and/or modify      *
+*   it under the terms of the GNU General Public License as published by      *
+*   the Free Software Foundation; either version 2 of the License, or         *
+*   (at your option) any later version.                                       *
+*                                                                             *
+*   This program is distributed in the hope that it will be useful,           *
+*   but WITHOUT ANY WARRANTY; without even the implied warranty of            *
+*   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             *
+*   GNU General Public License for more details.                              *
+*                                                                             *
+*   You should have received a copy of the GNU General Public License         *
+*   along with this program; if not, write to the Free Software               *
+*   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA   *
 *                                                                             *
 *******************************************************************************
 
@@ -63,6 +69,7 @@
 
 PSTR dfs;                               // Global pointer to strings (to append)
 
+extern char *GlobalsName2Section(char *pName);
 extern BOOL ParseDump(BYTE *pElf);
 extern BOOL DumpElfHeader(Elf32_Ehdr *pElf);
 extern BOOL StoreGlobalSyms(BYTE *pElf);
@@ -212,6 +219,7 @@ static void PushString(int fd, char *pStr)
 ******************************************************************************/
 BOOL ElfToSym(BYTE *pElf, char *pSymName, char *pTableName)
 {
+    Elf32_Ehdr *pElfHeader;             // Pointer to the ELF header
     int fd;                             // Output symbol file descriptor
     int i;
     TSYMTAB SymTab;                     // Symbol table main header structure
@@ -246,14 +254,32 @@ BOOL ElfToSym(BYTE *pElf, char *pSymName, char *pTableName)
                 // referring to them using a file_id
                 if( StoreSourceFiles(pElf) )
                 {
+                    // Find the type of the file: kernel, module or an user app.
+                    // Kernel and app have the type set to executable.
+                    // App has the global symbol "main"
+                    pElfHeader = (Elf32_Ehdr *) pElf;
+
+                    if( pElfHeader->e_type==ET_EXEC )
+                    {
+                        // Look for the symbol "main" with the globals
+                        if( GlobalsName2Section("main")==NULL )
+                            SymTab.SymTableType = SYMTABLETYPE_KERNEL;
+                        else
+                            SymTab.SymTableType = SYMTABLETYPE_APP;
+                    }
+                    else                // ET_REL
+                    {
+                        // Relocatable EFL file is the kernel loadable module only
+                        SymTab.SymTableType = SYMTABLETYPE_MODULE;
+
+                        // For kernel modules, strip the trailing ".o", so the name will
+                        // match internal kernel module name
+                        if( strlen(pTableName)>2 && !strcmp(pTableName+strlen(pTableName)-2, ".o") )
+                            *(char *)(pTableName+strlen(pTableName)-2) = 0;
+                    }
+
                     // Set the symbol file header signature
                     strcpy(SymTab.sSig, SYMSIG);
-
-                    // If the name of the inout file ends with ".o", assume it is a kernel
-                    // module object file, and strip that extension so the name will match
-                    // to a kernel module name
-                    if( strlen(pTableName)>2 && !strcmp(pTableName+strlen(pTableName)-2, ".o") )
-                        *(char *)(pTableName+strlen(pTableName)-2) = 0;
 
                     // Set the internal symbol file name
                     // Zero terminate it in the case it's too long

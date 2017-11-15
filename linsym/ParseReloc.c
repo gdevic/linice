@@ -8,13 +8,19 @@
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
-*   This source code and produced executable is copyrighted by Goran Devic.   *
-*   This source, portions or complete, and its derivatives can not be given,  *
-*   copied, or distributed by any means without explicit written permission   *
-*   of the copyright owner. All other rights, including intellectual          *
-*   property rights, are implicitly reserved. There is no guarantee of any    *
-*   kind that this software would perform, and nobody is liable for the       *
-*   consequences of running it. Use at your own risk.                         *
+*   This program is free software; you can redistribute it and/or modify      *
+*   it under the terms of the GNU General Public License as published by      *
+*   the Free Software Foundation; either version 2 of the License, or         *
+*   (at your option) any later version.                                       *
+*                                                                             *
+*   This program is distributed in the hope that it will be useful,           *
+*   but WITHOUT ANY WARRANTY; without even the implied warranty of            *
+*   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             *
+*   GNU General Public License for more details.                              *
+*                                                                             *
+*   You should have received a copy of the GNU General Public License         *
+*   along with this program; if not, write to the Free Software               *
+*   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA   *
 *                                                                             *
 *******************************************************************************
 
@@ -185,7 +191,7 @@ BOOL ParseReloc(int fd, int fs, BYTE *pBuf)
                     switch( ELF32_R_TYPE(pRel->r_info) )
                     {
                         case R_386_NONE:
-                            printf("R_386_NONE %08X info=%05X\n", pRel->r_offset, pRel->r_info);
+                            VERBOSE2 printf("R_386_NONE %08X info=%05X\n", pRel->r_offset, pRel->r_info);
                             break;
 
                         case R_386_32:
@@ -195,7 +201,7 @@ BOOL ParseReloc(int fd, int fs, BYTE *pBuf)
                             // Index of a global symbol (1-based) that the reloc entry applies
                             nGlobalIndex = ELF32_R_SYM(pRel->r_info) - 1;
 
-                            printf("R_386_32   .text=%08X info=%05X\n", pRel->r_offset, pRel->r_info);
+                            VERBOSE2 printf("R_386_32   .text=%08X info=%05X\n", pRel->r_offset, pRel->r_info);
 
                             if( !fdata && (pName=GlobalsSection2Address(&dwAddress, nGlobalIndex, ".data"))!=NULL )
                             {
@@ -259,7 +265,7 @@ BOOL ParseReloc(int fd, int fs, BYTE *pBuf)
                             // Index of a global symbol (1-based) that the reloc entry applies
                             nGlobalIndex = ELF32_R_SYM(pRel->r_info) - 1;
 
-                            printf("R_386_PC32 .text=%08X info=%05X\n", pRel->r_offset, pRel->r_info);
+                            VERBOSE2 printf("R_386_PC32 .text=%08X info=%05X\n", pRel->r_offset, pRel->r_info);
 #if 0
 // We dont seem to need the record of this particular type, since in all the tests so far all the
 // relocation could be completed using only the above R_386_32
@@ -305,39 +311,39 @@ BOOL ParseReloc(int fd, int fs, BYTE *pBuf)
                         break;
 
                         case R_386_GOT32:
-                            printf("R_386_GOT32 %08X info=%05X\n", pRel->r_offset, pRel->r_info);
+                            VERBOSE2 printf("R_386_GOT32 %08X info=%05X\n", pRel->r_offset, pRel->r_info);
                         break;
 
                         case R_386_PLT32:
-                            printf("R_386_PLT32 %08X info=%05X\n", pRel->r_offset, pRel->r_info);
+                            VERBOSE2 printf("R_386_PLT32 %08X info=%05X\n", pRel->r_offset, pRel->r_info);
                         break;
 
                         case R_386_COPY:
-                            printf("R_386_COPY %08X info=%05X\n", pRel->r_offset, pRel->r_info);
+                            VERBOSE2 printf("R_386_COPY %08X info=%05X\n", pRel->r_offset, pRel->r_info);
                         break;
 
                         case R_386_GLOB_DAT:
-                            printf("R_386_GLOB_DAT %08X info=%05X\n", pRel->r_offset, pRel->r_info);
+                            VERBOSE2 printf("R_386_GLOB_DAT %08X info=%05X\n", pRel->r_offset, pRel->r_info);
                         break;
 
                         case R_386_JMP_SLOT:
-                            printf("R_386_JMP_SLOT %08X info=%05X\n", pRel->r_offset, pRel->r_info);
+                            VERBOSE2 printf("R_386_JMP_SLOT %08X info=%05X\n", pRel->r_offset, pRel->r_info);
                         break;
 
                         case R_386_RELATIVE:
-                            printf("R_386_RELATIVE %08X info=%05X\n", pRel->r_offset, pRel->r_info);
+                            VERBOSE2 printf("R_386_RELATIVE %08X info=%05X\n", pRel->r_offset, pRel->r_info);
                         break;
 
                         case R_386_GOTOFF:
-                            printf("R_386_GOTOFF %08X info=%05X\n", pRel->r_offset, pRel->r_info);
+                            VERBOSE2 printf("R_386_GOTOFF %08X info=%05X\n", pRel->r_offset, pRel->r_info);
                         break;
 
                         case R_386_GOTPC:
-                            printf("R_386_GOTPC %08X info=%05X\n", pRel->r_offset, pRel->r_info);
+                            VERBOSE2 printf("R_386_GOTPC %08X info=%05X\n", pRel->r_offset, pRel->r_info);
                         break;
 
                         default:
-                            printf("INVALID RELOC TYPE %08X info=%05X\n", pRel->r_offset, pRel->r_info);
+                            VERBOSE2 printf("INVALID RELOC TYPE %08X info=%05X\n", pRel->r_offset, pRel->r_info);
                     }
 
                     pRel++;

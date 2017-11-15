@@ -8,13 +8,19 @@
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
-*   This source code and produced executable is copyrighted by Goran Devic.   *
-*   This source, portions or complete, and its derivatives can not be given,  *
-*   copied, or distributed by any means without explicit written permission   *
-*   of the copyright owner. All other rights, including intellectual          *
-*   property rights, are implicitly reserved. There is no guarantee of any    *
-*   kind that this software would perform, and nobody is liable for the       *
-*   consequences of running it. Use at your own risk.                         *
+*   This program is free software; you can redistribute it and/or modify      *
+*   it under the terms of the GNU General Public License as published by      *
+*   the Free Software Foundation; either version 2 of the License, or         *
+*   (at your option) any later version.                                       *
+*                                                                             *
+*   This program is distributed in the hope that it will be useful,           *
+*   but WITHOUT ANY WARRANTY; without even the implied warranty of            *
+*   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             *
+*   GNU General Public License for more details.                              *
+*                                                                             *
+*   You should have received a copy of the GNU General Public License         *
+*   along with this program; if not, write to the Free Software               *
+*   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA   *
 *                                                                             *
 *******************************************************************************
 
@@ -56,7 +62,8 @@
 *                                                                             *
 ******************************************************************************/
 
-BYTE cacheText[MAX_OUTPUT_SIZEY][MAX_OUTPUT_SIZEX];           // Cache output buffer
+// Cache output buffer
+BYTE cacheText[MAX_OUTPUT_SIZEY][MAX_OUTPUT_SIZEX] = {{0}};
 
 /******************************************************************************
 *                                                                             *
@@ -129,7 +136,7 @@ int PrintLine(char *format,...)
 
     // Print the line into a string
     va_start( arg, format );
-    written = vsprintf(pBuf, format, arg);
+    written = ivsprintf(pBuf, format, arg);
     va_end(arg);
 
     // Append enough spaces to fill in a current line width
@@ -179,7 +186,7 @@ int dprint( char *format, ... )
 
     // Print the line into a string
     va_start( arg, format );
-    written = vsprintf(printBuf, format, arg);
+    written = ivsprintf(printBuf, format, arg);
     va_end(arg);
 
     // Send the string to a current output device driver
@@ -219,7 +226,7 @@ BOOL dprinth( int nLineCount, char *format, ... )
 
     // Print the line into a string
     va_start( arg, format );
-    written = vsprintf(pBuf, format, arg);
+    written = ivsprintf(pBuf, format, arg);
     va_end(arg);
 
     // If we are printing to the history buffer, store it there as well

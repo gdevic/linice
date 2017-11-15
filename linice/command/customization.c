@@ -8,13 +8,19 @@
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
-*   This source code and produced executable is copyrighted by Goran Devic.   *
-*   This source, portions or complete, and its derivatives can not be given,  *
-*   copied, or distributed by any means without explicit written permission   *
-*   of the copyright owner. All other rights, including intellectual          *
-*   property rights, are implicitly reserved. There is no guarantee of any    *
-*   kind that this software would perform, and nobody is liable for the       *
-*   consequences of running it. Use at your own risk.                         *
+*   This program is free software; you can redistribute it and/or modify      *
+*   it under the terms of the GNU General Public License as published by      *
+*   the Free Software Foundation; either version 2 of the License, or         *
+*   (at your option) any later version.                                       *
+*                                                                             *
+*   This program is distributed in the hope that it will be useful,           *
+*   but WITHOUT ANY WARRANTY; without even the implied warranty of            *
+*   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             *
+*   GNU General Public License for more details.                              *
+*                                                                             *
+*   You should have received a copy of the GNU General Public License         *
+*   along with this program; if not, write to the Free Software               *
+*   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA   *
 *                                                                             *
 *******************************************************************************
 
@@ -87,6 +93,7 @@ static TSETVAR SetVar[] = {
 { "framey",   6, &deb.FrameY,       VAR_DWORD, 3 },   // Test condition 3 - frame Y coordinate
 { "autoon",   6, &deb.fTableAutoOn, VAR_BOOL , 0 },   // TABLE AUTOON | AUTOOFF
 { "pfprotect",9, &deb.fPfProtect,   VAR_BOOL , 0 },   // Internal: PF Protect
+{ "syscall",  7, &deb.fSyscall,     VAR_BOOL , 0 },   // Display system calls from with our hook
 { NULL, }
 };
 
@@ -940,11 +947,14 @@ BOOL cmdColor(char *args, int subClass)
 *                                                                             *
 *******************************************************************************
 *
-*   Sets serial communication parameters.
+*   Sets serial communication parameters. Special serial port with the IO
+*   address of 1E0 is supported by specifying the serial port number of 5.
+*   This port is used on some Toshiba notebooks.
 *
-
-SERIAL [ON|VT100 [com-port] [baud-rate] | OFF]", "ex: SERIAL ON 2 19200",
-
+*   Syntax:
+*
+*   SERIAL [ON|VT100 [com-port] [baud-rate] | OFF]", "ex: SERIAL ON 2 19200"
+*
 ******************************************************************************/
 BOOL cmdSerial(char *args, int subClass)
 {
@@ -980,7 +990,7 @@ BOOL cmdSerial(char *args, int subClass)
             {
                 if( Expression(&baud, args, &args) )
                 {
-                    if( com>=1 && com<=4 )
+                    if( com>=1 && com<=MAX_SERIAL )
                     {
                         if( baud==0x2400 || baud==0x9600 || baud==0x19200 || baud==0x38400 || baud==0x57600 || baud==0x115200 )
                         {
@@ -990,7 +1000,7 @@ BOOL cmdSerial(char *args, int subClass)
                             dprinth(1, "Invalid baud rate (2400, 9600, 19200, 38400, 57600, 115200)");
                     }
                     else
-                        dprinth(1, "Serial port must be 1, 2, 3 or 4");
+                        dprinth(1, "Serial port must be 1, 2, 3 or 4 (or 5 for a special 1E0)");
                 }
 
                 PostError(ERR_SYNTAX, 0);

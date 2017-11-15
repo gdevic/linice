@@ -8,13 +8,19 @@
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
-*   This source code and produced executable is copyrighted by Goran Devic.   *
-*   This source, portions or complete, and its derivatives can not be given,  *
-*   copied, or distributed by any means without explicit written permission   *
-*   of the copyright owner. All other rights, including intellectual          *
-*   property rights, are implicitly reserved. There is no guarantee of any    *
-*   kind that this software would perform, and nobody is liable for the       *
-*   consequences of running it. Use at your own risk.                         *
+*   This program is free software; you can redistribute it and/or modify      *
+*   it under the terms of the GNU General Public License as published by      *
+*   the Free Software Foundation; either version 2 of the License, or         *
+*   (at your option) any later version.                                       *
+*                                                                             *
+*   This program is distributed in the hope that it will be useful,           *
+*   but WITHOUT ANY WARRANTY; without even the implied warranty of            *
+*   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             *
+*   GNU General Public License for more details.                              *
+*                                                                             *
+*   You should have received a copy of the GNU General Public License         *
+*   along with this program; if not, write to the Free Software               *
+*   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA   *
 *                                                                             *
 *******************************************************************************
 
@@ -62,7 +68,6 @@ static char sCmd[MAX_STRING];
 ******************************************************************************/
 
 extern DWORD Checksum1(DWORD start, DWORD len);
-extern void OEMProtect(void);
 extern void DisplayMessage(void);
 extern void EdLin( char *sCmdLine );
 extern void ArmBreakpoints(void);
@@ -73,6 +78,8 @@ extern BOOL MultiTrace(void);
 extern BOOL RepeatSrcTrace(void);
 extern BOOL RepeatSrcStep(void);
 extern void DebPrintErrorString();
+extern void DispatchExtEnter();
+extern void DispatchExtLeave();
 
 
 /******************************************************************************
@@ -157,19 +164,7 @@ void DebuggerEnterBreak(void)
                     // trashed by a misbehaving debugee
                     if( deb.LiniceChecksum != Checksum1((DWORD)ObjectStart, (DWORD)ObjectEnd - (DWORD)ObjectStart) )
                     {
-                        // Protection: If the user continues to run with the corrupted Linice image,
-                        // we may have a hacker hacking into Linice code. So, after some random time, halt.
-                        static int HaltCount = 0;
-
                         dprinth(1, "MEMORY CORRUPTED - SYSTEM UNSTABLE. It is advisable to reboot.");
-
-                        if( HaltCount++ > (deb.r->eax & 0xf)+20 )
-                        {
-#if NOSELF
-                            while( 1 );
-#endif // NOSELF
-                            ;
-                        }
                     }
 
                     // Recalculate window locations based on visibility and number of lines
@@ -183,6 +178,9 @@ void DebuggerEnterBreak(void)
 
                         deb.fStep = FALSE;
                         deb.fSrcStep = FALSE;
+
+                        // Dispatch the message that we entered the debugger
+                        DispatchExtEnter();
 
                         //========================================================================
                         // MAIN COMMAND PROMPT LOOP
@@ -213,12 +211,11 @@ void DebuggerEnterBreak(void)
                                 deb.errorCode = NOERROR;
                             }
 
-                            // Protection: Parse the list of OEM modules and tag the one we want to mangle
-                            OEMProtect();
-
                         } while( fAcceptNext );
 
                         //========================================================================
+                        // Dispatch the message that we are leaving the debugger
+                        DispatchExtLeave();
                     }
 
                     // Restore background and disable output driver if flash is on or we are not in step or trace

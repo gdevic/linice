@@ -8,13 +8,19 @@
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
-*   This source code and produced executable is copyrighted by Goran Devic.   *
-*   This source, portions or complete, and its derivatives can not be given,  *
-*   copied, or distributed by any means without explicit written permission   *
-*   of the copyright owner. All other rights, including intellectual          *
-*   property rights, are implicitly reserved. There is no guarantee of any    *
-*   kind that this software would perform, and nobody is liable for the       *
-*   consequences of running it. Use at your own risk.                         *
+*   This program is free software; you can redistribute it and/or modify      *
+*   it under the terms of the GNU General Public License as published by      *
+*   the Free Software Foundation; either version 2 of the License, or         *
+*   (at your option) any later version.                                       *
+*                                                                             *
+*   This program is distributed in the hope that it will be useful,           *
+*   but WITHOUT ANY WARRANTY; without even the implied warranty of            *
+*   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             *
+*   GNU General Public License for more details.                              *
+*                                                                             *
+*   You should have received a copy of the GNU General Public License         *
+*   along with this program; if not, write to the Free Software               *
+*   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA   *
 *                                                                             *
 *******************************************************************************
 
@@ -71,7 +77,6 @@ extern void IoApicClamp(int cpu);
 extern void IoApicUnclamp();
 extern void smpSpinOtherCpus(void);
 
-
 /******************************************************************************
 *                                                                             *
 *   Local Defines, Variables and Macros                                       *
@@ -80,12 +85,12 @@ extern void smpSpinOtherCpus(void);
 
 // Array where we store the original Linux IDT entries at init time
 
-TIDT_Gate LinuxIdt[256];
+TIDT_Gate LinuxIdt[256] = {{0}};
 
 // Array that holds debugger private IDT table for the duration of its run
 
-TIDT_Gate IceIdt[256];
-TDescriptor IceIdtDescriptor;
+TIDT_Gate IceIdt[256] = {{0}};
+TDescriptor IceIdtDescriptor = {0};
 
 /******************************************************************************
 *                                                                             *
@@ -103,6 +108,9 @@ extern void  SpinlockSet(DWORD *pSpinlock);
 extern void  SpinlockReset(DWORD *pSpinlock);
 
 extern void IntAck(int nInt);
+
+extern BYTE TaskSwitchHookBuffer[];     // Internal buffer of the switch handler code
+extern DWORD switchto;                  // Address of the kernel's __switch_to()
 
 /******************************************************************************
 *                                                                             *
@@ -278,8 +286,6 @@ void Panic(void)
 }
 
 
-
-
 /******************************************************************************
 *                                                                             *
 *   DWORD InterruptHandler( DWORD nInt, TRegs *pRegs )                        *
@@ -303,6 +309,18 @@ DWORD InterruptHandler( DWORD nInt, PTREGS pRegs )
     //------------------------------------------------------------------------
     DWORD chain;
 //    BYTE savePIC1;
+
+    // If it is an embedded INT3 (0xCC) at the address of the hooked task switcher,
+    // Simply call our function followed by the return to our buffer where we kept
+    // the original code line. At the end of that buffer we jump to the original
+    // task switcher code.
+    if( pRegs->eip==switchto+1 )
+    {
+        pRegs->eip = (DWORD) &TaskSwitchHookBuffer;
+
+        // Return and dont chain to the handler
+        return( 0 );
+    }
 
     // Depending on the execution context, branch
 

@@ -8,13 +8,19 @@
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
-*   This source code and produced executable is copyrighted by Goran Devic.   *
-*   This source, portions or complete, and its derivatives can not be given,  *
-*   copied, or distributed by any means without explicit written permission   *
-*   of the copyright owner. All other rights, including intellectual          *
-*   property rights, are implicitly reserved. There is no guarantee of any    *
-*   kind that this software would perform, and nobody is liable for the       *
-*   consequences of running it. Use at your own risk.                         *
+*   This program is free software; you can redistribute it and/or modify      *
+*   it under the terms of the GNU General Public License as published by      *
+*   the Free Software Foundation; either version 2 of the License, or         *
+*   (at your option) any later version.                                       *
+*                                                                             *
+*   This program is distributed in the hope that it will be useful,           *
+*   but WITHOUT ANY WARRANTY; without even the implied warranty of            *
+*   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             *
+*   GNU General Public License for more details.                              *
+*                                                                             *
+*   You should have received a copy of the GNU General Public License         *
+*   along with this program; if not, write to the Free Software               *
+*   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA   *
 *                                                                             *
 *******************************************************************************
 
@@ -22,60 +28,6 @@
 
         This module contains main functions for Linice loader/translator.
 
-        Options:
-
-        Translate symbol information - create a symbol file:
-        =====================================================
-
-        linsym --translate path/program  -t -> creates path/program.sym
-        --translate:publics                 -> include only public symbols
-        --translate:typeinfo                -> include publics+type info
-        --translate:symbols                 -> include all symbol info
-        --translate:source                  -> include all + source files
-        --translate:package                 -> include all + source files
-
-        --source:{list of dirs;}         -p -> dirs to search for sources
-
-        --output:file_name               -o -> set the symbol file name
-
-        --prompt                         -p -> prompt for missing source files
-
-        Load debugee:
-        ==============
-
-        linsym --load {file}             -l -> loads module as a process
-        --load:BREAK {file}                 -> break on init_module()
-        --load:NOBREAK {file}               -> do not break on main()
-        (for applications, break is default; for modules, nobreak is default)
-        --args:{program arguments}       -a -> use these arguments
-        --args:"{program arguments}         -> use quote if there are spaces
-
-        Load/Unload linice debugger module:
-        ===================================
-
-        linsym --install{:System.map}    -i -> load debugger, specify System.map file
-        linsym --uninstall               -x -> unloads debugger
-
-        Loads/Unloads symbol table:
-        ============================
-
-        linsym --sym:{list of sym files;}-s -> loads symbol file(s)
-        linsym --unload:{symbol files;}  -u -> unloads symbol table(s)
-
-        Miscellaneous:
-        ===============
-
-        linsym --logfile:{file}          -g -> saves linice history into that file
-               --logfile:{file},APPEND      ->  optionally appending
-
-        linsym --help                    -h -> print command line symtax
-
-        linsym --verbose                 -v -> verbose output
-
-        Test/Debug:
-        ============
-
-        linsym --check:{file>            -c -> Check symbol file
 
 *******************************************************************************
 *                                                                             *
@@ -114,21 +66,18 @@
 
 extern char **environ;
 
-#define PATH_MAX    128
+#define PATH_MAX    256
 static char sOutputFile[PATH_MAX];      // Contains the name of the output file
 
-int nTranslate = TRAN_PACKAGE;          // Default translation is all
 char *pTranslate = NULL;                // File to translate
-char *pOutput = NULL;                   // Default output file is "input_file".sym
-char *pSource = ".";                    // Source search path is current directory
-char *pLoad = NULL;                     // Need to specify loading module
-char *pArgs = NULL;                     // Default no arguments
-char *pSym = NULL;                      // Default symbol table to load/unload
-char *pLogfile = "linice.log";          // Default logfile name
+char *pOutput    = NULL;                // Default output file is <input_file>.sym
+char *pPathSubst = NULL;                // Source path substitution string
+char *pSym       = NULL;                // Default symbol table to load/unload
+char *pLogfile   = "linice.log";        // Default logfile name
 char *pSystemMap = NULL;                // User supplied System.map file
-char *pCheck = NULL;                    // Check symbol file
-unsigned int opt;                       // Various option flags
-int nVerbose;                           // Verbose level
+char *pCheck     = NULL;                // Check symbol file
+unsigned int opt = 0;                   // Various option flags
+int nVerbose     = 0;                   // Verbose level
 
 /******************************************************************************
 *                                                                             *
@@ -136,7 +85,6 @@ int nVerbose;                           // Verbose level
 *                                                                             *
 ******************************************************************************/
 
-int strnicmp( const char *s1, const char *s2, size_t n );
 int strcmpi( const char *s1, const char *s2 );
 int tolower(int);
 
@@ -144,7 +92,7 @@ extern BOOL OptInstall(char *pSystemMap);
 extern void OptUninstall();
 extern void OptAddSymbolTable(char *sName);
 extern void OptRemoveSymbolTable(char *sName);
-extern void OptTranslate(char *pathOut, char *pathIn, char *pathSources, int nLevel);
+extern void OptTranslate(char *pathOut, char *pathIn, char *pPathSubst);
 extern void OptLogHistory(void);
 extern void OptCheck(char *pFile);
 
@@ -219,83 +167,58 @@ int system2(char *command)
 
 /******************************************************************************
 *                                                                             *
-*   void OptHelp(int shorth)                                                  *
+*   void OptHelp(BOOL fLong)                                                  *
 *                                                                             *
 *******************************************************************************
 *
-*   prints the command options and short (1), or long (2) help
+*   prints the command options, with short or long (TRUE) description.
 *
 ******************************************************************************/
-void OptHelp(int shorth)
+void OptHelp(BOOL fLong)
 {
-    if( shorth )
+    if( !fLong )
     {
-        printf("Usage: LINSYM [options] [<program-name>]\n");
         printf("Use LINSYM -h or --help for extended help\n\n");
+
+        printf("               www.linice.com\n");
+        printf("Send bug reports to:      bugs@linice.com\n");
+        printf("Send feature requests to: features@linice.com\n");
+        printf("Send comments to:         author@linice.com\n\n");
     }
     else
     {
-        printf("  -v:{0-3} or --verbose:{0-3}    Verbose level (0=silent)\n");
-//        printf("\n");
-        printf("       Example: --verbose:3\n");
-//        printf("\n");
-        printf("  -i{:System.map} or --install   Installs Linice debugger module\n");
-//        printf("\n");
+        printf("  -i, --install                       Install Linice debugger module\n");
         printf("       Example: --install\n");
-//        printf("\n");
-        printf("  -x or --uninstall              Uninstalls Linice debugger module\n");
-//        printf("\n");
+
+        printf("  -m, --map <System.map>              Specify alternate System.map file\n");
+        printf("       Example: --map /boot/System.map\n");
+
+        printf("  -x, --uninstall                     Uninstall Linice debugger module\n");
         printf("       Example: --uninstall\n");
-//        printf("\n");
-        printf("  -t or --translate:             Specify options for symbol translation\n");
-        printf("    [PUBLICS|TYPEINFO|SYMBOLS|SOURCE|*PACKAGE*]\n");
-//        printf("\n");
-        printf("       Example: --translate:source Myapp\n");
-//        printf("\n");
-        printf("  -l or --load:                  Specify options for loading module or symbols\n");
-        printf("    [BREAK|NOBREAK]\n");
-//        printf("\n");
-        printf("       Example: --load:break module.o\n");
-        printf("       Example: --load:nobreak a.out\n");
-//        printf("\n");
-        printf("  -o or --output:<filename>    Specify alternate filename for translation\n");
-//        printf("\n");
-        printf("       Example: --output:MySymbols.sym\n");
-//        printf("\n");
-        printf("  -p or --source:<path>[;<path>]       Specify path(s) for source searches OR\n");
-        printf("  -p or --source:<path-spec-file>      File that contains path specification\n");
-//        printf("\n");
-        printf("       Example: --source:/myproject/source;/myproject/include\n");
-        printf("       Example: --source:pathspec.txt\n");
-//        printf("\n");
-        printf("  -a or --args:<arg-string>            Specify program argument for loading\n");
-//        printf("\n");
-        printf("       Example: --args:\"-ftest.c -x -d\"\n");
-//        printf("\n");
-        printf("  -p or --prompt                       Prompt for missing source files\n");
-//        printf("\n");
-        printf("       Example: --prompt\n");
-//        printf("\n");
-        printf("  -s or --sym:<filename>[;<filename>]  Load symbol file(s)\n");
-//        printf("\n");
-        printf("       Example: --sym:MyProg.sym\n");
-//        printf("\n");
-        printf("  -u or --unload:<name>[;<name>]       Unload symbol table(s)\n");
-//        printf("\n");
-        printf("       Example: --unload:MyProg\n");
-//        printf("\n");
-        printf("  -g or --logfile[:<filename>]         Save the Linice history buffer\n");
-        printf("    [,APPEND]\n");
-//        printf("\n");
-        printf("       Example: --logfile:Mylog.log,append\n");
-//        printf("\n");
+
+        printf("  -t, --translate <module>            Translate and create a debug symbol file\n");
+        printf("       Example: --translate MyProgram\n");
+
+        printf("  -o, --output <filename>             Specify alternate name for translation\n");
+        printf("       Example: --output MyProgram.sym\n");
+
+        printf("  -p, --path <orig-path>:<new-path>   Specify source code path substitution\n");
+        printf("       Example: --path /myproject/source:/mnt/source\n");
+
+        printf("  -s, --sym <sym>[;<sym>]             Load symbol file(s)\n");
+        printf("       Example: --sym MyProgram.sym\n");
+
+        printf("  -u, --unload <sym>[;<sym>]          Unload symbol table(s)\n");
+        printf("       Example: --unload MyProgram\n");
+
+        printf("  -l, --logfile [<filename>][,append] Save the Linice history buffer\n");
+        printf("       Example: --logfile Mylog.log,append\n");
+
+        printf("  -v, --verbose {0-3}                 Verbose level (0=silent)\n");
+        printf("       Example: --verbose 3\n");
+
         printf("\n");
     }
-
-    printf("               www.linice.com\n");
-    printf("Send bug reports to:      bugs@linice.com\n");
-    printf("Send feature requests to: features@linice.com\n");
-    printf("Send comments to:         author@linice.com\n\n");
 
     exit(0);
 }
@@ -315,183 +238,209 @@ int main(int argn, char *argp[])
     int i;
     char *ptr;                          // Temporary pointer variable to use
 
-    pSource = "./";                     // Default source path is the current directory
-    opt = OPT_VERBOSE;                  // Default option
-    nVerbose = 1;                       // Default verbose level
-
     // Print the basic banner
-    printf("\nLinice Debugger Symbol Translator/Loader Version %d.%02d\n", LINSYMVER >> 8, LINSYMVER & 0xFF);
+    printf("\nLinice Debugger Symbol Translator/Loader Version %d.%d\n", LINSYMVER >> 8, LINSYMVER & 0xFF);
     printf("Linice and Linsym (C) 2004 by Goran Devic. All Rights Reserved.\n\n");
 
     // If there were no arguments, just print help and exit (help exits)
     if( argn==1 )
-        OptHelp(1);
+        OptHelp(FALSE);
 
     //------------------------------------------------------------------------
     // Parse command line arguments and assign opt bits and strings
     //------------------------------------------------------------------------
     for( i=1; i<argn; i++)
     {
-        if( !strnicmp(argp[i], "--translate", 11) || !strnicmp(argp[i], "-t", 2) )
+        if( !strcmpi(argp[i], "--translate") || !strcmpi(argp[i], "-t") )
         {
-            ptr = argp[i] + (*(argp[i]+1)=='-'? 11 : 2);
-
-            // --translate {file}
-            // --translate:publics {file}
-            // --translate:typeinfo {file}
-            // --translate:symbols {file}
-            // --translate:source {file}
-            // --translate:package {file}
+            // --translate <file>
             opt |= OPT_TRANSLATE;
 
-            if( !strcmpi(ptr, ":publics" ))
-                nTranslate = TRAN_PUBLICS;
-            if( !strcmpi(ptr, ":typeinfo" ))
-                nTranslate = TRAN_TYPEINFO;
-            if( !strcmpi(ptr, ":symbols" ))
-                nTranslate = TRAN_SYMBOLS;
-            if( !strcmpi(ptr, ":source" ))
-                nTranslate = TRAN_SOURCE;
-            if( !strcmpi(ptr, ":package" ))
-                nTranslate = TRAN_PACKAGE;
+            if( i+1<argn )
+            {
+                i++;
+                pTranslate = argp[i];
+
+                VERBOSE1 printf("TRANSLATE %s\n", pTranslate);
+            }
+            else
+                opt |= OPT_HELP;
+        }
+        else
+        if( !strcmpi(argp[i], "--path") || !strcmpi(argp[i], "-p") )
+        {
+            // --path <prefix-path>:<new-path>
+            opt |= OPT_PATH;
 
             if( i+1<argn )
             {
-                pTranslate = argp[i+1];  // Assign path/name of the file to translate
-
-                // Change all DOS-style backward slashes into UNIX style forward slashes
-                while(strchr(pTranslate,'\\')) *(char *)strchr(pTranslate,'\\') = '/';
                 i++;
+                pPathSubst = argp[i];
+
+                VERBOSE1 printf("PATH %s\n", pPathSubst);
             }
             else
-                opt |= OPT_HELP;    // Did not provide file name to translate
+                opt |= OPT_HELP;
         }
         else
-        if( !strnicmp(argp[i], "--source:", 9) || !strnicmp(argp[i], "-p:", 3) )
+        if( !strcmpi(argp[i], "--output") || !strcmpi(argp[i], "-o") )
         {
-            ptr = argp[i] + (*(argp[i]+1)=='-'? 9 : 3);
-
-            // --source:{dirs to search for source}
-            opt |= OPT_SOURCE;
-            pSource = ptr;
-        }
-        else
-        if( !strcmpi(argp[i], "--prompt") || !strcmpi(argp[i], "-p") )
-        {
-            // --prompt  says to prompt for the missing source (default is no prompt)
-            opt |= OPT_PROMPT;
-        }
-        else
-        if( !strnicmp(argp[i], "--output:", 9) || !strnicmp(argp[i], "-o:", 3) )
-        {
-            ptr = argp[i] + (*(argp[i]+1)=='-'? 9 : 3);
-
-            // --output:{output_file}
+            // --output <output_file>
             opt |= OPT_OUTPUT;
-            pOutput = ptr;
 
-            // Change all DOS-style backward slashes into UNIX style forward slashes
-            while(strchr(pOutput,'\\')) *(char *)strchr(pOutput,'\\') = '/';
-        }
-        else
-        if( !strnicmp(argp[i], "--load", 6) || !strnicmp(argp[i], "-l", 2) )
-        {
-            ptr = argp[i] + (*(argp[i]+1)=='-'? 6 : 2);
-
-            // --load [exec-file | symbol-file]
-            // --load:BREAK ..
-            // --load:NOBREAK ..
             if( i+1<argn )
             {
-                if( !strcmpi(ptr, ":break") )
-                    opt |= OPT_LOAD_BREAK;
-                if( !strcmpi(ptr, ":nobreak") )
-                    opt |= OPT_LOAD_NOBREAK;
-
-                pLoad = argp[i+1];  // Assign path/name of the module to load
                 i++;
+                pOutput = argp[i];
+
+                VERBOSE1 printf("OUTPUT %s\n", pOutput);
             }
             else
-                opt |= OPT_HELP;    // Did not provide file name to load
-            opt |= OPT_LOAD;
+                opt |= OPT_HELP;
         }
         else
-        if( !strnicmp(argp[i], "--args:", 7) || !strnicmp(argp[i], "-a:", 3) )
+        if( !strcmpi(argp[i], "--sym") || !strcmpi(argp[i], "-s") )
         {
-            ptr = argp[i] + (*(argp[i]+1)=='-'? 7 : 3);
-
-            // --args:{arguments}
-            // --args:"arguments"
-            opt |= OPT_ARGS;
-            pArgs = ptr;
-        }
-        else
-        if( !strnicmp(argp[i], "--sym:", 6) || !strnicmp(argp[i], "-s:", 3) )
-        {
-            ptr = argp[i] + (*(argp[i]+1)=='-'? 6 : 3);
-
-            // --sym:{symbols-to-load}
+            // --sym <symbols-to-load>[:<more-symbols>]
             opt |= OPT_SYM;
-            pSym = ptr;
-        }
-        else
-        if( !strnicmp(argp[i], "--unload:", 9) || !strnicmp(argp[i], "-u:", 3) )
-        {
-            ptr = argp[i] + (*(argp[i]+1)=='-'? 9 : 3);
 
-            // --unload:{symbols-to-unload}
-            opt |= OPT_UNLOAD;
-            pSym = ptr;
-        }
-        else
-        if( !strnicmp(argp[i], "--install", 9) || !strnicmp(argp[i], "-i", 2) )
-        {
-            ptr = argp[i] + (*(argp[i]+1)=='-'? 9 : 2);
-
-            // --install  install debugger
-            // --install:System.map
-            opt |= OPT_INSTALL;
-            if( *ptr == ':' )
+            if( i+1<argn )
             {
-                pSystemMap = ptr + 1;
+                i++;
+                pSym = argp[i];
+
+                VERBOSE1 printf("SYM %s\n", pSym);
             }
+            else
+                opt |= OPT_HELP;
+        }
+        else
+        if( !strcmpi(argp[i], "--unload") || !strcmpi(argp[i], "-u") )
+        {
+            // --unload <symbols-to-unload>[:<more-symbols>]
+            opt |= OPT_UNLOAD;
+
+            if( i+1<argn )
+            {
+                i++;
+                pSym = argp[i];
+
+                VERBOSE1 printf("UNLOAD %s\n", pSym);
+            }
+            else
+                opt |= OPT_HELP;
+        }
+        else
+        if( !strcmpi(argp[i], "--install") || !strcmpi(argp[i], "-i") )
+        {
+            // --install  install debugger
+            opt |= OPT_INSTALL;
+
+            VERBOSE1 printf("INSTALL\n");
+        }
+        else
+        if( !strcmpi(argp[i], "--map") || !strcmpi(argp[i], "-m") )
+        {
+            // --map <System.map>
+            // We dont have option code in the 'opt' for map
+
+            if( i+1<argn )
+            {
+                i++;
+                pSystemMap = argp[i];
+
+                VERBOSE1 printf("MAP %s\n", pSystemMap);
+            }
+            else
+                opt |= OPT_HELP;
         }
         else
         if( !strcmpi(argp[i], "--uninstall") || !strcmpi(argp[i], "-x") )
         {
             // --uninstall  uninstalls debugger
             opt |= OPT_UNINSTALL;
+
+            VERBOSE1 printf("INSTALL\n");
         }
         else
-        if( !strnicmp(argp[i], "--logfile", 9) || !strnicmp(argp[i], "-g", 2) )
+        if( !strcmpi(argp[i], "--logfile") || !strcmpi(argp[i], "-l") )
         {
-            ptr = argp[i] + (*(argp[i]+1)=='-'? 9 : 2);
-
             // --logfile                        - log to a default logfile
-            // --logfile:{log_file}             - specify a logfile
-            // --logfile,APPEND                 - append to a default logfile
-            // --logfiled:{logfile},APPEND      - append to a specified logfile
+            // --logfile {log_file}             - specify a logfile
+            // --logfile APPEND                 - append to a default logfile
+            // --logfiled {logfile},APPEND      - append to a specified logfile
             opt |= OPT_LOGFILE;
 
             // Check if we have a new logfile specified
-            if( *ptr == ':' )
+            if( i+1<argn )
             {
-                ptr++;
-                pLogfile = ptr;                 // New log file is specified
+                i++;
+                ptr = argp[i];
+
+                // Lonely "append"
+                if( !strcmpi(ptr, "append") )
+                    opt |= OPT_LOGFILE_APPEND;
+                else
+                {
+                    // We have a new file name
+                    pLogfile = ptr;
+
+                    // Find the end of the specified file name (it is either end of string
+                    // or a comma for append sub option
+                    if( strchr(ptr, ',') )
+                    {
+                        ptr = strchr(ptr, ',');
+                        *ptr = 0;                   // Zero-terminate the log file name
+                        ptr++;
+                    }
+
+                    // Check if we need to append instead of create/truncate existing logfile
+                    if( !strcmpi(ptr, "append") )
+                        opt |= OPT_LOGFILE_APPEND;
+                }
             }
 
-            // Find the end of the specified file name (it is either end of string
-            // or a comma for append sub option
-            if( strchr(ptr, ',') )
-            {
-                ptr = strchr(ptr, ',');
-                *ptr = 0;                   // Zero-terminate the log file name
-                ptr++;
-            }
+            VERBOSE1 printf("LOGFILE %s %s\n", pLogfile, (opt & OPT_LOGFILE_APPEND)? "APPEND":"");
+        }
+        else
+        if( !strcmpi(argp[i], "--verbose") || !strcmpi(argp[i], "-v") )
+        {
+            // --verbose {0,1,2,3}   display more output information
 
-            // Check if we need to append instead of create/truncate logfile
-            if( !strcmpi(ptr, "append") )
-                opt |= OPT_LOGFILE_APPEND;
+            if( i+1<argn )
+            {
+                i++;
+                ptr = argp[i];
+
+                switch( *ptr )
+                {
+                    case '0':   opt &= ~OPT_VERBOSE;  break;     // 0 means no output
+                    case '1':   nVerbose = 1;  break;
+                    case '2':   nVerbose = 2;  break;
+                    case '3':   nVerbose = 3;  break;
+                    default:
+                        opt |= OPT_HELP;
+                }
+                VERBOSE1 printf("VERBOSE %d\n", nVerbose);
+            }
+            else
+                opt |= OPT_HELP;
+        }
+        else
+        if( !strcmpi(argp[i], "--check") || !strcmpi(argp[i], "-c") )
+        {
+            // --check <file>
+            opt |= OPT_CHECK;
+
+            if( i+1<argn )
+            {
+                i++;
+                pCheck = argp[i];
+
+                VERBOSE1 printf("CHECK %s\n", pCheck);
+            }
+            else
+                opt |= OPT_HELP;
         }
         else
         if( !strcmpi(argp[i], "--help") || !strcmpi(argp[i], "-h") )
@@ -500,45 +449,11 @@ int main(int argn, char *argp[])
             opt |= OPT_HELP;
         }
         else
-        if( !strnicmp(argp[i], "--verbose", 9) || !strnicmp(argp[i], "-v:", 3) )
-        {
-            ptr = argp[i] + (*(argp[i]+1)=='-'? 9 : 2);
-
-            // --verbose:{0,1,2,3}   display more output information
-            if( *ptr == ':' )
-            {
-                ptr++;
-
-                // 1 is default verbose level, so switch to another
-                switch( *ptr )
-                {
-                    case '0':   opt &= ~OPT_VERBOSE;  break;     // 0 means no output
-                    case '2':   nVerbose = 2;  break;
-                    case '3':   nVerbose = 3;  break;
-                }
-            }
-        }
-        else
-        if( !strnicmp(argp[i], "--check:", 8) || !strnicmp(argp[i], "-c:", 3) )
-        {
-            ptr = argp[i] + (*(argp[i]+1)=='-'? 10 : 3);
-
-            // --check:{file}
-            opt |= OPT_CHECK;
-            pCheck = ptr;
-        }
-        else
         {
             printf("Error - Unknown option: %s\n\n", argp[i]);
 
-            // Unknown option? We should exit in that case
-            return(-1);
-        }
-
-        if( opt & OPT_HELP )
-        {
-            // Print help and EXIT (you can't do anything if you want help :-)
-            OptHelp(0);
+            // Unknown option? We should exit in that case, with some error code
+            exit(1);
         }
     }
 
@@ -546,22 +461,10 @@ int main(int argn, char *argp[])
     // Start executing command line options
     //------------------------------------------------------------------------
 
-    if( opt & OPT_LOGFILE )
+    if( opt & OPT_HELP )
     {
-        VERBOSE1 printf("Logfile: %s %s\n", pLogfile, (opt & OPT_LOGFILE_APPEND)? "APPEND":"");
-    }
-
-    // Now we need to do some adjustments:
-    // If an output symbol file is not given, use input+".sym"
-    if( opt & OPT_TRANSLATE )
-    {
-        if( pOutput==NULL )
-        {
-            strcpy(sOutputFile, pTranslate);
-            strcat(sOutputFile, ".sym");
-        }
-        // Assign the "real" pointer to an output file
-        pOutput = sOutputFile;
+        // Print help and EXIT (you can't do anything if you want help :-)
+        OptHelp(TRUE);
     }
 
     // If we need to load debugger, do it first
@@ -572,9 +475,22 @@ int main(int argn, char *argp[])
             exit(-1);
     }
 
-    // Translate the symbols
+    // Now we need to do some adjustments:
+    // If an output symbol file is not given, use input+".sym"
     if( opt & OPT_TRANSLATE )
-        OptTranslate(pOutput, pTranslate, pSource, nTranslate);
+    {
+        // Form the "real" pointer to an output file string
+        if( pOutput==NULL )
+        {
+            strcpy(sOutputFile, pTranslate);
+            strcat(sOutputFile, ".sym");
+        }
+        else
+            strcpy(sOutputFile, pOutput);
+
+        // Translate the symbols
+        OptTranslate(sOutputFile, pTranslate, pPathSubst);
+    }
 
     // Load symbol(s) into debugger
     if( opt & OPT_SYM )
@@ -582,8 +498,10 @@ int main(int argn, char *argp[])
         char *pDelim;
         do
         {
-            pDelim = strchr(pSym, ';');
+            pDelim = strchr(pSym, ':');
             if( pDelim ) *pDelim = 0;
+
+            VERBOSE1 printf("Add symbol table %s\n", pSym);
 
             OptAddSymbolTable(pSym);
 
@@ -598,8 +516,10 @@ int main(int argn, char *argp[])
         char *pDelim;
         do
         {
-            pDelim = strchr(pSym, ';');
+            pDelim = strchr(pSym, ':');
             if( pDelim ) *pDelim = 0;
+
+            VERBOSE1 printf("Remove symbol table %s\n", pSym);
 
             OptRemoveSymbolTable(pSym);
 
@@ -656,6 +576,20 @@ int strnicmp( const char *s1, const char *s2, size_t n )
     }
 }
 
+/******************************************************************************
+*
+*   int tolower(int c)
+*
+*       Returns lowercased character.
+*
+*   Where:
+*       c - any ASCII character
+*
+*   Returns:
+*       'A' - 'Z' will return 'a' to 'z'
+*       else return c unchanged.
+*
+******************************************************************************/
 int tolower(int c)
 {
     if( c>='A' && c<='Z' )

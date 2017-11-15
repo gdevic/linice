@@ -18,18 +18,9 @@ H2  = ../bin
 
 #-----------------------------------------------------------------------------
 # Compiler defines:
-#	make retail			- retail build
-#	make nvidia			- retail build - OEM nVidia
 #	make debug			- engineering debug build (default)
 #   make nd				- engineering non-debug build
 #-----------------------------------------------------------------------------
-# Defines that are recognized by the code:
-# 	NOSELF   - Linice is built so it cannot debug itself
-# 	NO_OEM   - Linice is built so it cannot debug module NVIDIA.O
-# 	NVIDIA   - Message about the special build for NVIDIA
-#   NEEDNV	 - Linice is built so it needs NV hardware to run
-# 	MESSAGES - Random messages
-#
 
 #-----------------------------------------------------------------------------
 # Compiler defines: Engineering DEBUG build (Development, default)
@@ -43,39 +34,10 @@ CFLAGS = -gstabs+ -Wall $(DEF) -O -I$(INC) -I$(H1) -I$(H2)
 #-----------------------------------------------------------------------------
 ifeq ($(MAKECMDGOALS),nd)
 
-DEF = -DMODULE -DLINUX
+DEF = -DMODULE -DLINUX -DND
 CFLAGS = -Wall $(DEF) -O2 -I$(INC) -I$(H1) -I$(H2)
 
 endif
-#-----------------------------------------------------------------------------
-# Compiler defines: RETAIL build
-#-----------------------------------------------------------------------------
-ifeq ($(MAKECMDGOALS),retail)
-
-# NOSELF   - Linice is built so it cannot debug itself
-# NO_OEM   - Linice is built so it cannot debug module NVIDIA.O
-# NVIDIA   - Message about the special build for NVIDIA
-# NEEDNV   - Linice is built so it needs NV hardware to run
-# MESSAGES - Random messages
-
-DEF = -DMODULE -DLINUX -DNOSELF -DNO_OEM -DMESSAGES	-DNEEDNV
-CFLAGS = -Wall $(DEF) -O2 -I$(INC) -I$(H1) -I$(H2)
-
-endif
-#-----------------------------------------------------------------------------
-# Compiler defines: NVIDIA build
-#-----------------------------------------------------------------------------
-ifeq ($(MAKECMDGOALS),nvidia)
-
-# NOSELF   - Linice is built so it cannot debug itself
-# NVIDIA   - Message about the special build for NVIDIA
-# NEEDNV   - Linice is built so it needs NV hardware to run
-
-DEF = -DMODULE -DLINUX -DNOSELF -DNVIDIA -DNEEDNV
-CFLAGS = -Wall $(DEF) -O2 -I$(INC) -I$(H1) -I$(H2)
-
-endif
-
 #-----------------------------------------------------------------------------
 # Compiler and assembler that are used. nasm is a mandatory assembler.
 #-----------------------------------------------------------------------------
@@ -90,12 +52,6 @@ AS = nasm
 debug:	../bin/linice_kernel.o ../bin/Version.txt
 
 nd:		../bin/linice_kernel.o ../bin/Version.txt
-	perl strip_symbols.pl ../bin/linice_kernel.o
-
-retail:	../bin/linice_kernel.o ../bin/Version.txt
-	perl strip_symbols.pl ../bin/linice_kernel.o
-
-nvidia:	../bin/linice_kernel.o ../bin/Version.txt
 	perl strip_symbols.pl ../bin/linice_kernel.o
 
 all:	../bin/linice_kernel.o ../bin/Version.txt
@@ -170,7 +126,9 @@ clean:
 			mda.o			\
 			lfb.o			\
             vt100o.o		\
-			objectend.o
+			extend.o		\
+			objectend.o		\
+			endasm.o
 	$(LD) -r $^ -o ../bin/linice_kernel.o
 
 objectstart.o:	objectstart.c
@@ -335,8 +293,15 @@ lfb.o:		output/lfb.c
 vt100o.o:	output/vt100o.c
 	$(CC) $(CFLAGS) -c output/vt100o.c -o vt100o.o
 
+extend.o:	extend.c
+	$(CC) $(CFLAGS) -c extend.c -o extend.o
+
 i386.o:		i386.asm
 	$(AS) -f elf i386.asm -o i386.o
 
 objectend.o:	objectend.c
 	$(CC) $(CFLAGS) -c objectend.c
+
+endasm.o:		endasm.asm
+	$(AS) -f elf endasm.asm -o endasm.o
+

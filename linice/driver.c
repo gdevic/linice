@@ -8,13 +8,19 @@
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
-*   This source code and produced executable is copyrighted by Goran Devic.   *
-*   This source, portions or complete, and its derivatives can not be given,  *
-*   copied, or distributed by any means without explicit written permission   *
-*   of the copyright owner. All other rights, including intellectual          *
-*   property rights, are implicitly reserved. There is no guarantee of any    *
-*   kind that this software would perform, and nobody is liable for the       *
-*   consequences of running it. Use at your own risk.                         *
+*   This program is free software; you can redistribute it and/or modify      *
+*   it under the terms of the GNU General Public License as published by      *
+*   the Free Software Foundation; either version 2 of the License, or         *
+*   (at your option) any later version.                                       *
+*                                                                             *
+*   This program is distributed in the hope that it will be useful,           *
+*   but WITHOUT ANY WARRANTY; without even the implied warranty of            *
+*   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             *
+*   GNU General Public License for more details.                              *
+*                                                                             *
+*   You should have received a copy of the GNU General Public License         *
+*   along with this program; if not, write to the Free Software               *
+*   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA   *
 *                                                                             *
 *******************************************************************************
 
@@ -50,17 +56,14 @@
 *                                                                             *
 ******************************************************************************/
 
-TINITPACKET Init;                       // Major Init packet
-TXINITPACKET XInit;                     // X-ice init packet
+TDEB         deb   = {0};               // Live debugee state structure
+TINITPACKET  Init  = {0};               // Major Init packet
+TXINITPACKET XInit = {0};               // X-ice init packet
+TWINDOWS     Win   = {{0}};             // Output windowing structure
+PTWINDOWS    pWin  = NULL;              // And a pointer to it
+PTOUT        pOut  = NULL;              // Pointer to a current Out class
 
-TDEB deb;                               // Live debugee state structure
-
-TWINDOWS Win;                           // Output windowing structure
-PTWINDOWS pWin;                         // And a pointer to it
-
-PTOUT pOut;                             // Pointer to a current Out class
-
-unsigned long **sys_table;             // alias for sys_call_table
+unsigned long **sys_table = NULL;       // alias for sys_call_table
 
 //=============================================================================
 
@@ -69,7 +72,6 @@ extern DWORD scan;
 extern DWORD *pmodule;
 extern DWORD sys;
 extern DWORD switchto;
-extern DWORD iceface;
 extern int ice_debug_level;
 
 
@@ -104,13 +106,13 @@ extern int XInitPacket(TXINITPACKET *pXInit);
 extern int UserAddSymbolTable(void *pSymtab);
 extern int UserRemoveSymbolTable(void *pSymtab);
 
-extern BOOL TestHookSwitch(void);
 extern void UnHookSwitch(void);
 extern BOOL KeyboardHook(DWORD handle_kbd_event, DWORD handle_scancode);
 extern void KeyboardUnhook();
 extern void UnHookDebuger(void);
 extern void UnHookSyscall(void);
 extern void DisarmBreakpoints(void);
+extern int QueryExtModule();
 
 extern int HistoryReadReset();
 extern char *HistoryReadNext(void);
@@ -121,8 +123,6 @@ extern WORD GetKernelCS();
 extern void memFreeHeap(BYTE *hHeap);
 
 extern WORD sel_ice_ds;                 // Place to self-modify the code with this value
-
-extern BOOL CheckNV(void);
 
 /******************************************************************************
 *                                                                             *
@@ -157,100 +157,77 @@ int IceInitModule(void)
     memset(&Win, 0, sizeof(TWINDOWS));
     pWin = &Win;
 
-#ifdef NEEDNV
-    // If we need NV hardware in order to run, check it here
-    if( !CheckNV() )
-    {
-        // NV hardware was not detected
-        ice_printk("ERROR: Could not detect NVIDIA graphics device!\n");
-        ice_printk("You need to have an NVIDIA graphics chip as your primary display controller.\n");
-
-        return -EFAULT;
-    }
-#endif // NEEDNV
-
     // Since we dont know at the compile time what is the kernel DS and CS will be,
     // we query it now. We also need to self-modify one place in the interrupt
     // handler that will load kernel DS. This is done here only since the i386.asm
     // module needs it. At other places in the Linice we call it as we need it.
     sel_ice_ds = GetKernelDS();
 
-    // Test the task switcher first because it checks the code bytes before hooking
-    // and it is a good indicator that we read from the proper kernel symbol map
-    // This does not hook it yet - we do it once we know we wont unload.
-    if( TestHookSwitch() )
+    // Hook the Linux keyboard handler function
+    if( KeyboardHook(kbd, scan) )
     {
-        // Next: Hook the Linux keyboard handler function
-        if( KeyboardHook(kbd, scan) )
+        // Register device driver
+        major_device_number = ice_register_chrdev(DEVICE_NAME);
+        if(major_device_number >= 0 )
         {
-            // Register device driver
-            major_device_number = ice_register_chrdev(DEVICE_NAME);
-            if(major_device_number >= 0 )
+            // Set up our own pointer to sys_call_table
+            // Starting with the kernel version 2.4.20 sys_call_table is not exported any more
+            sys_table = (unsigned long **)sys;
+
+            // Create a device node in the /dev directory
+            // and also make sure we have the functions in the systable
+
+            sys_mknod = (PFNMKNOD) sys_table[ice_get__NR_mknod()];
+            sys_unlink = (PFNUNLINK) sys_table[ice_get__NR_unlink()];
+
+            if(sys_mknod && sys_unlink)
             {
-                // Set up our own pointer to sys_call_table
-                // Starting with the kernel version 2.4.20 sys_call_table is not exported any more
-                sys_table = (unsigned long **)sys;
+                val = ice_mknod(sys_mknod, "/dev/"DEVICE_NAME, major_device_number);
 
-                // Create a device node in the /dev directory
-                // and also make sure we have the functions in the systable
-
-                sys_mknod = (PFNMKNOD) sys_table[ice_get__NR_mknod()];
-                sys_unlink = (PFNUNLINK) sys_table[ice_get__NR_unlink()];
-
-                if(sys_mknod && sys_unlink)
+                // Dev node created successfully
+                if(val >= 0)
                 {
-                    val = ice_mknod(sys_mknod, "/dev/"DEVICE_NAME, major_device_number);
-
-                    // Dev node created successfully
-                    if(val >= 0)
+                    // Register /proc/linice virtual file
+                    if( InitProcFs()==0 )
                     {
-                        // Register /proc/linice virtual file
-                        if( InitProcFs()==0 )
-                        {
-                            // Calculate the checksum of the Linice code
-                            deb.LiniceChecksum = Checksum1((DWORD)ObjectStart, (DWORD)ObjectEnd - (DWORD)ObjectStart);
+                        // Calculate the checksum of the Linice code
+                        deb.LiniceChecksum = Checksum1((DWORD)ObjectStart, (DWORD)ObjectEnd - (DWORD)ObjectStart);
 
-                            INFO(("Linice successfully loaded.\n"));
+                        INFO(("Linice successfully loaded.\n"));
 
-                            return 0;
-                        }
-                        else
-                        {
-                            ice_printk("ERROR: Failed to create /proc entry.");
-                        }
-
-                        ice_rmnod(sys_unlink, "/dev/"DEVICE_NAME);
+                        return 0;
                     }
                     else
                     {
-                        ice_printk("ERROR: Failed to mknod a /dev/"DEVICE_NAME" node.");
+                        ice_printk("ERROR: Failed to create /proc entry.");
                     }
+
+                    ice_rmnod(sys_unlink, "/dev/"DEVICE_NAME);
                 }
                 else
                 {
-                    ice_printk("ERROR: Incorrect sys_mknod and sys_unlink.\n");
-                    ice_printk("       Possibly a kernel symbol map mismatch - use 'linsym -i:<System.map>\n");
+                    ice_printk("ERROR: Failed to mknod a /dev/"DEVICE_NAME" node.");
                 }
-
-                ice_unregister_chrdev(major_device_number, DEVICE_NAME);
             }
             else
             {
-                ice_printk("ERROR: Failed to register character device\n");
+                ice_printk("ERROR: Incorrect sys_mknod and sys_unlink.\n");
+                ice_printk("       Possibly a kernel symbol map mismatch. Is the System.map correct?\n");
             }
 
-            KeyboardUnhook();
+            ice_unregister_chrdev(major_device_number, DEVICE_NAME);
         }
         else
         {
-            ice_printk("ERROR: Incorrect address of handle_scancode for keyboard hook.\n");
-            ice_printk("       Possibly a kernel symbol map mismatch - use 'linsym -i:<System.map>\n");
+            ice_printk("ERROR: Failed to register character device\n");
         }
+
+        KeyboardUnhook();
     }
     else
     {
-        ice_printk("ERROR: Unexpected code bytes hooking a task switcher.\n");
-        ice_printk("       Possibly a kernel symbol map mismatch - use 'linsym -i:<System.map>\n");
+        ice_printk("ERROR: Incorrect address of handle_scancode for keyboard hook.\n");
+        ice_printk("       Possibly a kernel symbol map mismatch. Is the System.map correct?\n");
     }
 
     return -EFAULT;
@@ -395,12 +372,19 @@ int DriverIOCTL(void *p1, void *p2, unsigned int ioctl, unsigned long param)
         //==========================================================================================
         case ICE_IOCTL_EXIT:            // Unload the module
 
-            // Linice is not operational any more
-            deb.fOperational = FALSE;
+            // If we have any extension modules still registered, we cannot unload
+            // since they linked into our symbols.
+            if( QueryExtModule()==0 )
+            {
+                // Linice is not operational any more
+                deb.fOperational = FALSE;
 
-            // Unhook the system call table hooks early here so we dont collide with the
-            // module unload hook function when unloading itself
-            UnHookSyscall();
+                // Unhook the system call table hooks early here so we dont collide with the
+                // module unload hook function when unloading itself
+                UnHookSyscall();
+            }
+            else
+                retval = 1;             // Special return value of 1
 
             break;
 
