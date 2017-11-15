@@ -79,9 +79,8 @@ extern BOOL InitMacros(int num);
 extern void InitEdit();
 extern void InitKeyboardLayout(char Layout[3][128]);
 extern BOOL cmdVer(char *args, int subClass);
-
-extern BYTE *ice_malloc(DWORD size);
-extern void ice_free_heap(BYTE *pHeap);
+extern BYTE *memInitHeap(UINT size);
+extern void memFreeHeap(BYTE *hHeap);
 
 /******************************************************************************
 *                                                                             *
@@ -107,11 +106,11 @@ int InitPacket(PTINITPACKET pInit)
 
     if( pInit->nSize == sizeof(TINITPACKET) )
     {
-        if( deb.pHistoryBuffer == NULL )
+        if( deb.hHistoryBufferHeap == NULL )
         {
             // Allocate heap for the history buffer
 
-            if( (deb.pHistoryBuffer = ice_malloc(pInit->nHistorySize)) != NULL)
+            if( (deb.hHistoryBufferHeap = memInitHeap(pInit->nHistorySize)) != NULL)
             {
                 INFO(("Allocated %d Kb for history pool\n", pInit->nHistorySize / 1024));
 
@@ -198,7 +197,7 @@ int InitPacket(PTINITPACKET pInit)
 
                 if( deb.hSymbolBufferHeap == NULL )
                 {
-                    if( (deb.hSymbolBufferHeap = ice_init_heap(pInit->nSymbolSize)) != NULL )
+                    if( (deb.hSymbolBufferHeap = memInitHeap(pInit->nSymbolSize)) != NULL )
                     {
                         INFO(("Allocated %d Kb for symbol pool\n", pInit->nSymbolSize / 1024));
 
@@ -208,7 +207,7 @@ int InitPacket(PTINITPACKET pInit)
 
                         if( deb.hHeap == NULL )
                         {
-                            if( (deb.hHeap = ice_init_heap(MAX_HEAP)) != NULL )
+                            if( (deb.hHeap = memInitHeap(MAX_HEAP)) != NULL )
                             {
                                 // Allocate space for user variables and macros
 
@@ -273,7 +272,14 @@ int InitPacket(PTINITPACKET pInit)
 
                                             deb.nScheduleKbdBreakTimeout = 2;
                                         }
+
+                                        // Restore background and disable output driver
+                                        dputc(DP_RESTOREBACKGROUND);
+                                        dputc(DP_DISABLE_OUTPUT);
+
                                         retval = 0;
+
+                                        return( retval );
                                     }
                                     else
                                     {
@@ -286,6 +292,8 @@ int InitPacket(PTINITPACKET pInit)
                                     ERROR(("INIT: Heap too small for VARS"));
                                     retval = -ENOMEM;
                                 }
+
+                                memFreeHeap(deb.hHeap);
                             }
                             else
                             {
@@ -297,6 +305,8 @@ int InitPacket(PTINITPACKET pInit)
                         {
                             ERROR(("deb.hHeap != NULL\n"));
                         }
+
+                        memFreeHeap(deb.hSymbolBufferHeap);
                     }
                     else
                     {
@@ -313,6 +323,7 @@ int InitPacket(PTINITPACKET pInit)
                 dputc(DP_RESTOREBACKGROUND);
                 dputc(DP_DISABLE_OUTPUT);
 
+                memFreeHeap(deb.hHistoryBufferHeap);
             }
             else
             {

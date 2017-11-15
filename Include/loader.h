@@ -77,7 +77,7 @@ extern int nVerbose;                    // Verbose level
 #define OPT_LOGFILE_APPEND  0x00002000  // Append method on logfile
 #define OPT_HELP            0x00004000  // Help command
 #define OPT_VERBOSE         0x00008000  // Option verbose, make output informative
-#define OPT_CAPTURE         0x00010000  // Capture test option
+#define OPT_CHECK           0x00010000  // Symbol test command
 
 #define VERBOSE0            // 0 simply means no output is desired
 #define VERBOSE1            (opt & OPT_VERBOSE) && (nVerbose>=1) &&

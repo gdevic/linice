@@ -57,6 +57,9 @@ extern void MemAccess_FAULT();
 extern DWORD IceIntHandlers[0x30];
 extern DWORD IceIntHandler80;
 
+extern void GetSysreg( TSysreg * pSys );
+extern void SetSysreg( TSysreg * pSys );
+
 extern void DebuggerEnterBreak(void);
 extern void DebuggerEnterDelayedArm(void);
 

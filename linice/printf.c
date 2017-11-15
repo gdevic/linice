@@ -59,9 +59,10 @@
 #define ZERO_PREFIX      0x0008
 #define HEX_UPPERCASE    0x0010
 #define NEGATIVE         0x0020
+#define SHORT            0x0040
 
 static char buf[10];
-static const char hex[16]="0123456789abcdef";
+static const char hex[]="0123456789abcdef";
 static const unsigned int dec[10] = {
     1000000000,
     100000000,
@@ -82,7 +83,7 @@ static const unsigned int dec[10] = {
 *                                                                             *
 ******************************************************************************/
 
-#define STR_APPEND(c)       { if(arg_buffer_size--) *str++ = (c); }
+#define STR_APPEND(c)       { if(arg_buffer_size-->0) *str++ = (c); }
 
 /******************************************************************************
 *                                                                             *
@@ -110,6 +111,7 @@ int vsprintf( char *dest, const char *format, va_list arg )
     int i, j, k, l;
     int flags;
     int width;
+    int nibbles;
 
     int arg_int;
     unsigned int arg_uint;
@@ -140,6 +142,7 @@ int vsprintf( char *dest, const char *format, va_list arg )
             {
                 flags = 0;
                 width = 0;
+                nibbles = 8;
 
                 c = *fmt++;
 
@@ -181,6 +184,13 @@ int vsprintf( char *dest, const char *format, va_list arg )
                     c = *fmt++;
                 }
 
+                // Short integer
+                if( c == 'h' )
+                {
+                    flags |= SHORT;
+                    nibbles = 4;
+                    c = *fmt++;
+                }
 
                 // Perform the conversion
                 //
@@ -191,7 +201,10 @@ int vsprintf( char *dest, const char *format, va_list arg )
                     //
                     case 'd':
                     case 'i':
-                        arg_int = va_arg( arg, int );
+                        if(flags & SHORT)
+                            arg_int = va_arg( arg, short int );
+                        else
+                            arg_int = va_arg( arg, int );
 
                         if( arg_int < 0 )
                         {
@@ -213,7 +226,10 @@ int vsprintf( char *dest, const char *format, va_list arg )
                     //                  NEGATIVE (from cases 'd','i')
                     //
                     case 'u':
-                         arg_uint = va_arg( arg, unsigned int );
+                         if(flags & SHORT)
+                            arg_uint = va_arg( arg, unsigned short int );
+                         else
+                            arg_uint = va_arg( arg, unsigned int );
 
                          // Print the decimal number into a temp buffer
                          // and count the number of digits excluding the
@@ -301,7 +317,10 @@ UnsignedInt:
                          flags |= HEX_UPPERCASE;
 
                     case 'x':
-                         arg_uint = va_arg( arg, unsigned int );
+                         if(flags & SHORT)
+                            arg_uint = va_arg( arg, unsigned short int );
+                         else
+                            arg_uint = va_arg( arg, unsigned int );
 
 
                          // Print the hex number into a temp buffer
@@ -336,7 +355,7 @@ UnsignedInt:
                          //
                          if( flags&LEFT_JUSTIFY )
                          {
-                            for( i=8-k; i<8; i++ )
+                            for( i=nibbles-k; i<nibbles; i++ )
                                 STR_APPEND(buf[i]);
 
                             while( width-k > 0 )

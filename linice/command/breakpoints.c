@@ -158,6 +158,9 @@ DWORD fnBpLog(DWORD arg)
 *                                                                             *
 ******************************************************************************/
 
+int BreakpointQuery(TADDRDESC Addr);
+
+
 /******************************************************************************
 *                                                                             *
 *   BOOL IsNeedHwBp(BYTE Type)                                                *
@@ -273,7 +276,7 @@ BOOL cmdBp(char *args, int subClass)
                         if( subClass==0 )
                         {
                             // Free the command line of a breakpoint and IF/DO statements
-                            _kFree(deb.hHeap, bp[index].pCmd);
+                            freeHeap(deb.hHeap, bp[index].pCmd);
 
                             // Clear the breakpoint entry
                             memset(&bp[index], 0, sizeof(TBP));
@@ -776,7 +779,7 @@ BOOL cmdBpx(char *args, int subClass)
         // If we are reusing a breakpoint slot, clear some variables
 
         if( pBp->pCmd )
-            _kFree(deb.hHeap, pBp->pCmd);
+            freeHeap(deb.hHeap, pBp->pCmd);
     }
     else
     {
@@ -798,7 +801,7 @@ BOOL cmdBpx(char *args, int subClass)
         memset(pBp, 0, sizeof(TBP));
 
         // Allocate space to copy the command line string
-        if( (pBp->pCmd = _kMalloc(deb.hHeap, strlen(args)+1)) )
+        if( (pBp->pCmd = mallocHeap(deb.hHeap, strlen(args)+1)) )
         {
             // Copy the breakpoint line into the new buffer
             strcpy(pBp->pCmd, args);
@@ -959,7 +962,7 @@ bpx_failed:;
                 deb.error = ERR_SYNTAX;     // Syntax error evaluating
 
             // Free the buffer since setting a bp failed
-            _kFree(deb.hHeap, pBp->pCmd);
+            freeHeap(deb.hHeap, pBp->pCmd);
 
             // Clear the breakpoint entry
             memset(pBp, 0, sizeof(TBP));
@@ -1013,7 +1016,7 @@ void SetOneTimeBreakpoint(TADDRDESC Addr)
     if( pBp->Flags & BP_USED )
     {
         // Free the command line of a breakpoint and IF/DO statements
-        _kFree(deb.hHeap, pBp->pCmd);
+        freeHeap(deb.hHeap, pBp->pCmd);
     }
 
     // Clear the breakpoint entry since we will rebuild it
@@ -1426,7 +1429,7 @@ BOOL EvalBreakpoint(void)
                     hwbpinuse--;
 
             // Free the command line of a breakpoint and IF/DO statements
-            _kFree(deb.hHeap, p->pCmd);
+            freeHeap(deb.hHeap, p->pCmd);
 
             // Clear the breakpoint entry
             memset(p, 0, sizeof(TBP));
@@ -1625,7 +1628,7 @@ void ArmDebugReg(int nDr, TADDRDESC Addr)
     deb.sysReg.dr[nDr] = Linear;
 
     // Set breakpoint on execution only (value 0)
-    deb.sysReg.dr7 &= ~3 << ((nDr*4)+16);
+    deb.sysReg.dr7 &= ~(3 << ((nDr*4)+16));
 
     // Set global and local flag to actually enable a breakpoint
     deb.sysReg.dr7 |= 3 << (nDr*2);

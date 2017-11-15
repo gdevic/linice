@@ -123,7 +123,7 @@ extern DWORD GetDec(char **psString);
 
 BOOL InitUserVars(int nVars)
 {
-    if( (pVars = _kMalloc(deb.hHeap, nVars * sizeof(TNAMEVAL)))==NULL )
+    if( (pVars = (TNAMEVAL *) mallocHeap(deb.hHeap, nVars * sizeof(TNAMEVAL)))==NULL )
         return(FALSE);
 
     memset(pVars, 0, nVars * sizeof(TNAMEVAL));
@@ -134,7 +134,7 @@ BOOL InitUserVars(int nVars)
 
 BOOL InitMacros(int nMacros)
 {
-    if( (pMacros = _kMalloc(deb.hHeap, nMacros * sizeof(TNAMEVAL)))==NULL )
+    if( (pMacros = (TNAMEVAL *) mallocHeap(deb.hHeap, nMacros * sizeof(TNAMEVAL)))==NULL )
         return(FALSE);
 
     memset(pMacros, 0, nMacros * sizeof(TNAMEVAL));
@@ -232,8 +232,8 @@ static void VarMacro(char *sOp, char *args, TNAMEVAL *pObject, int nElem)
             {
                 if( pObject[i].pName != NULL )
                 {
-                    _kFree(deb.hHeap, pObject[i].pName);
-                    _kFree(deb.hHeap, pObject[i].pValue);
+                    freeHeap(deb.hHeap, pObject[i].pName);
+                    freeHeap(deb.hHeap, pObject[i].pValue);
                     pObject[i].pName = NULL;
                     pObject[i].pValue = NULL;
                 }
@@ -287,8 +287,8 @@ static void VarMacro(char *sOp, char *args, TNAMEVAL *pObject, int nElem)
                 {
                     if( i < nElem )
                     {
-                        _kFree(deb.hHeap, pObject[i].pName);
-                        _kFree(deb.hHeap, pObject[i].pValue);
+                        freeHeap(deb.hHeap, pObject[i].pName);
+                        freeHeap(deb.hHeap, pObject[i].pValue);
                         pObject[i].pName = NULL;
                         pObject[i].pValue = NULL;
                     }
@@ -302,7 +302,7 @@ static void VarMacro(char *sOp, char *args, TNAMEVAL *pObject, int nElem)
                     if( i < nElem )
                     {
                         // We found a macro with that name.. Delete its value
-                        _kFree(deb.hHeap, pObject[i].pValue);
+                        freeHeap(deb.hHeap, pObject[i].pValue);
                         pObject[i].pValue = NULL;
                     }
                     else
@@ -321,7 +321,7 @@ static void VarMacro(char *sOp, char *args, TNAMEVAL *pObject, int nElem)
                         }
 
                         // Allocate space for the name and copy it there
-                        pObject[i].pName = _kMalloc(deb.hHeap, nameLen + 1);
+                        pObject[i].pName = mallocHeap(deb.hHeap, nameLen + 1);
                         if( pObject[i].pName==NULL )
                         {
                             deb.error = ERR_MEMORY;
@@ -333,10 +333,10 @@ static void VarMacro(char *sOp, char *args, TNAMEVAL *pObject, int nElem)
                     }
 
                     // We have name, we just need to add value string
-                    pObject[i].pValue = _kMalloc(deb.hHeap, valueLen + 1);
+                    pObject[i].pValue = mallocHeap(deb.hHeap, valueLen + 1);
                     if( pObject[i].pValue==NULL )
                     {
-                        _kFree(deb.hHeap, pObject[i].pName);
+                        freeHeap(deb.hHeap, pObject[i].pName);
                         pObject[i].pName = NULL;
 
                         deb.error = ERR_MEMORY;

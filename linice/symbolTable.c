@@ -62,14 +62,12 @@
 *                                                                             *
 ******************************************************************************/
 
-extern BYTE *ice_malloc(DWORD size);
-extern void ice_free(BYTE *p);
-extern void ice_free_heap(BYTE *pHeap);
 extern BOOL FindModule(TMODULE *pMod, char *pName, int nNameLen);
+extern BOOL FindSymbol(TExItem *item, char *pName, int *pNameLen);
 
 BOOL SymbolTableRemove(char *pTableName, TSYMTAB *pRemove);
 void SymTabRelocate(TSYMTAB *pSymTab, int pReloc[], int factor);
-void SymTabMakePointers(TSYMTAB *pSymTab, DWORD dStrings);
+static void SymTabMakePointers(TSYMTAB *pSymTab, DWORD dStrings);
 
 
 /******************************************************************************
@@ -121,6 +119,8 @@ int UserAddSymbolTable(void *pSymUser)
     DWORD dwDataReloc;
     TSYMRELOC  *pReloc;                 // Symbol table relocation header
     TMODULE Mod;                        // Module information structure
+    TExItem Item;                       // Expression item to store symbol value
+    int nNameLen = 11;                  // Length of the "init_module" string
 
 
     // Copy the header of the symbol table into the local structur to examine it
@@ -130,13 +130,13 @@ int UserAddSymbolTable(void *pSymUser)
         if( deb.nSymbolBufferAvail >= SymHeader.dwSize )
         {
             // Allocate memory for complete symbol table from the private pool
-            pSymTab = (TSYMTAB *) ice_malloc((unsigned int)SymHeader.dwSize);
+            pSymTab = (TSYMTAB *) mallocHeap(deb.hSymbolBufferHeap, SymHeader.dwSize);
             if( pSymTab )
             {
                 INFO(("Allocated %d bytes at %X for symbol table\n", (int) SymHeader.dwSize, (int) pSymTab));
 
                 // Allocate memory for the private section of the symbol table
-                pPriv = (TSYMPRIV *) ice_malloc(sizeof(TSYMPRIV));
+                pPriv = (TSYMPRIV *) mallocHeap(deb.hSymbolBufferHeap, sizeof(TSYMPRIV));
                 if( pPriv )
                 {
                     INFO(("Allocated %d bytes for private symbol table structure\n", sizeof(TSYMPRIV) ));
@@ -189,8 +189,10 @@ int UserAddSymbolTable(void *pSymUser)
                                     // Module is already loaded - we need to relocate symbol table based on it
 
                                     // Get the offset of the init_module global symbol from this symbol table
-                                    if( SymbolName2Value(pSymTab, &dwInitFunctionSymbol, "init_module", 11) )
+                                    if( FindSymbol(&Item, "init_module", &nNameLen) )
                                     {
+                                        dwInitFunctionSymbol = *Item.pData;
+
                                         dprinth(1, "Relocating symbols for `%s'", pSymTab->sTableName);
 
                                         // Details of relocation scheme are explained in ParseReloc.c file
@@ -256,7 +258,7 @@ int UserAddSymbolTable(void *pSymUser)
                     }
 
                     // Deallocate memory for the private symbol table structure
-                    ice_free_heap((void *) pPriv);
+                    freeHeap(deb.hSymbolBufferHeap, (void *) pPriv);
                 }
                 else
                 {
@@ -265,7 +267,7 @@ int UserAddSymbolTable(void *pSymUser)
                 }
 
                 // Deallocate memory for symbol table
-                ice_free_heap((void *) pSymTab);
+                freeHeap(deb.hSymbolBufferHeap, (void *) pSymTab);
             }
             else
             {
@@ -380,10 +382,10 @@ BOOL SymbolTableRemove(char *pTableName, TSYMTAB *pRemove)
             deb.nSymbolBufferAvail += pSym->dwSize;
 
             // Release the private symbol table data
-            ice_free((BYTE *)pSym->pPriv);
+            freeHeap(deb.hSymbolBufferHeap, (BYTE *)pSym->pPriv);
 
             // Release the symbol table itself
-            ice_free((BYTE *)pSym);
+            freeHeap(deb.hSymbolBufferHeap, (BYTE *)pSym);
 
             // Leave no dangling pointers...
             deb.pSymTabCur = deb.pSymTab;
@@ -624,6 +626,51 @@ TSYMSOURCE *SymTabFindSource(TSYMTAB *pSymTab, WORD fileID)
     return( NULL );
 }
 
+// TODO: Make one function of these two (above, below), abstract search for a given header type
+
+/******************************************************************************
+*                                                                             *
+*   TSYMTYPEDEF *SymTabFindTypedef(TSYMTAB *pSymTab, WORD fileID)             *
+*                                                                             *
+*******************************************************************************
+*
+*   Searches for the fileID descriptor of the given file id number
+*
+*   Where:
+*       pSymTab is the address of the symbol table to search
+*       fileID is the file ID to search for
+*
+*   Returns:
+*       Pointer to a typedef descriptor
+*       NULL if the file id descriptor can not be located
+*
+******************************************************************************/
+TSYMTYPEDEF *SymTabFindTypedef(TSYMTAB *pSymTab, WORD fileID)
+{
+    TSYMHEADER *pHead;                  // Generic section header
+    TSYMTYPEDEF *pTypedef;
+
+    if( pSymTab )
+    {
+        pHead = pSymTab->header;
+
+        while( pHead->hType != HTYPE__END )
+        {
+            if( (pHead->hType == HTYPE_TYPEDEF) )
+            {
+                pTypedef = (TSYMTYPEDEF *)pHead;
+
+                if( pTypedef->file_id==fileID )
+                    return( pTypedef );
+            }
+
+            pHead = (TSYMHEADER*)((DWORD)pHead + pHead->dwSize);
+        }
+    }
+
+    return( NULL );
+}
+
 
 /******************************************************************************
 *                                                                             *
@@ -762,8 +809,8 @@ static void SymTabMakePointers(TSYMTAB *pSymTab, DWORD dStrings)
     TSYMSTATIC   *pStatic;              // Static symbols section pointer
     TSYMSTATIC1  *pStatic1;             // Single static item
     TSYMSOURCE   *pSource;              // Source section header
-    TSYMFNLIN    *pFnLin;               // Function lines section pointer
-    TSYMFNLIN1   *pFnLin1;              // Single function line item
+//  TSYMFNLIN    *pFnLin;               // Function lines section pointer
+//  TSYMFNLIN1   *pFnLin1;              // Single function line item
     TSYMTYPEDEF  *pType;                // Type section pointer
     TSYMTYPEDEF1 *pType1;               // Single type item
 
@@ -780,6 +827,8 @@ static void SymTabMakePointers(TSYMTAB *pSymTab, DWORD dStrings)
 
                     pFnScope  = (TSYMFNSCOPE *) pHead;
                     pFnScope1 = &pFnScope->list[0];
+
+                    pFnScope->pName += dStrings;
 
                     for(count=0; count<pFnScope->nTokens; count++, pFnScope1++)
                     {
@@ -833,6 +882,7 @@ static void SymTabMakePointers(TSYMTAB *pSymTab, DWORD dStrings)
 
                     pType  = (TSYMTYPEDEF *) pHead;
                     pType1 = &pType->list[0];
+                    pType->pRel = (DWORD)pType->pRel + dStrings;
 
                     for(count=0; count<pType->nTypedefs; count++, pType1++)
                     {

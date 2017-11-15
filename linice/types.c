@@ -54,31 +54,6 @@
 *                                                                             *
 ******************************************************************************/
 
-// Names of the simple, built-in types
-
-static char *sSimpleTypes[TYPEDEF__LAST] =
-{
-    "<invalid>",
-    "int ",
-    "char ",
-    "long int ",
-    "unsigned int ",
-    "long unsigned int ",
-    "long long int ",
-    "long long unsigned int ",
-    "short int ",
-    "short unsigned int ",
-    "signed char ",
-    "unsigned char ",
-    "float ",
-    "double ",
-    "long double ",
-    "complex int ",
-    "complex float ",
-    "complex double ",
-    "complex long double "
-};
-
 // Enum values of the simple, built-in types
 
 enum
@@ -107,108 +82,56 @@ enum
 
 // Size (memory footprints) of the simple, built-in types
 
-//*****************************************************************************
-#ifdef WIN32
-//*****************************************************************************
-static int nSimpleTypes[TYPEDEF__LAST] =
+static UINT nSimpleTypes[TYPEDEF__LAST] =
 {
     sizeof(NULL),
-    sizeof(int),
-    sizeof(char),
-    sizeof(long int),
-    sizeof(unsigned int),
-    sizeof(long unsigned int),
-    sizeof(long int),
-    sizeof(long unsigned int),
-    sizeof(short int),
-    sizeof(short unsigned int),
-    sizeof(signed char),
-    sizeof(unsigned char),
-    sizeof(NULL),
-    sizeof(NULL),
-    sizeof(NULL),
-    sizeof(NULL),
-    sizeof(NULL),
-    sizeof(NULL),
-    sizeof(NULL)
+    sizeof(int),                    //  4
+    sizeof(char),                   //  1
+    sizeof(long int),               //  4
+    sizeof(unsigned int),           //  4
+    sizeof(long unsigned int),      //  4
+    8,   //     sizeof(long long int)
+    8,   //     sizeof(long long unsigned int)
+    sizeof(short int),              //  2
+    sizeof(short unsigned int),     //  2
+    sizeof(signed char),            //  1
+    sizeof(unsigned char),          //  1
+    4,   //     sizeof(float)
+    8,   //     sizeof(double)
+    12,  //     sizeof(long double)
+    8,   //     sizeof(complex int)
+    8,   //     sizeof(complex float)
+    16,  //     sizeof(complex double)
+    24,  //     sizeof(complex long double)
 };
 
 typedef union
 {
     int _int;
-    char _char;
+    unsigned char _char;
     long int _long_int;
     unsigned int _unsigned_int;
     long unsigned int _long_unsigned_int;
-  int _long_long_int;
-  int _long_long_unsigned_int;
+    //  int _long_long_int;
+    //  int _long_long_unsigned_int;
     short int _short_int;
     short unsigned int _short_unsigned_int;
     signed char _signed_char;
     unsigned char _unsigned_char;
-  int _float;
-  int _double;
-  int _long_double;
-  int _complex_int;
-  int _complex_float;
-  int _complex_double;
-  int _complex_long_double;
+    //  int _float;
+    //  int _double;
+    //  int _long_double;
+    //  int _complex_int;
+    //  int _complex_float;
+    //  int _complex_double;
+    //  int _complex_long_double;
+    BYTE padding[24];                   // The footprint has to match the largest data type: sizeof(complex long double)
 
 } TTYPEFOOTPRINT;
 
-//*****************************************************************************
-#else /*                          LINUX                                       */
-//*****************************************************************************
-static int nSimpleTypes[TYPEDEF__LAST] =
-{
-    sizeof(NULL),
-    sizeof(int),
-    sizeof(char),
-    sizeof(long int),
-    sizeof(unsigned int),
-    sizeof(long unsigned int),
-    sizeof(long long int),
-    sizeof(long long unsigned int),
-    sizeof(short int),
-    sizeof(short unsigned int),
-    sizeof(signed char),
-    sizeof(unsigned char),
-    sizeof(NULL),
-    sizeof(NULL),
-    sizeof(NULL),
-    sizeof(NULL),
-    sizeof(NULL),
-    sizeof(NULL),
-    sizeof(NULL)
-};
 
-typedef union
-{
-    int _int;
-    char _char;
-    long int _long_int;
-    unsigned int _unsigned_int;
-    long unsigned int _long_unsigned_int;
-    long long int _long_long_int;
-    long long unsigned int _long_long_unsigned_int;
-    short int _short_int;
-    short unsigned int _short_unsigned_int;
-    signed char _signed_char;
-    unsigned char _unsigned_char;
-    float _float;
-    double _double;
-    long double _long_double;
-    int _complex_int;
-    float _complex_float;
-    double _complex_double;
-    long double _complex_long_double;
+#define MAX_CHAR_PTR_SAMPLE  16         // How much of a sample string to get?
 
-} TTYPEFOOTPRINT;
-
-#endif
-
-
-static char *sPtr = "*****";
 
 /******************************************************************************
 *                                                                             *
@@ -216,16 +139,17 @@ static char *sPtr = "*****";
 *                                                                             *
 ******************************************************************************/
 
-TSYMTYPEDEF1 *Type2Typedef(char *pTypeName, int nLen);
+TSYMTYPEDEF1 *Type2Typedef(char *pTypeName, int nLen, WORD file_id);
 
 extern BOOL GlobalReadDword(DWORD *pDword, DWORD dwAddress);
 extern BOOL GlobalReadBYTE(BYTE *pByte, DWORD dwAddress);
 extern BOOL GlobalReadMem(BYTE *pBuf, DWORD dwAddress, UINT nLen);
+extern void scan2dec(char *pBuf, int *p1, int *p2);
 
 
 /******************************************************************************
 *                                                                             *
-*   TSYMTYPEDEF1 *Type2Typedef(char *pType, int nLen)                         *
+*   TSYMTYPEDEF1 *Type2Typedef(char *pType, int nLen, WORD file_id)           *
 *                                                                             *
 *******************************************************************************
 *
@@ -237,29 +161,33 @@ extern BOOL GlobalReadMem(BYTE *pBuf, DWORD dwAddress, UINT nLen);
 *
 *       For forms 1 and 2, nLen should be set to 0.
 *
+*   In order to resolve the type, a reference type array is first consulted
+*   for the file_id. Adjustment is applied to the major type number and then
+*   that file_id is searched for the type.
+*
 *   Where:
 *       pType is the type name or number pair
 *       nLen is the size of the input token len (only for type name strings)
+*       file_id is the file ID of the source where this type is defined
 *
 *   Returns:
 *       Typedef token
 *       NULL if the typedef describing that type name could not be found
 *
 ******************************************************************************/
-TSYMTYPEDEF1 *Type2Typedef(char *pTypeName, int nLen)
+TSYMTYPEDEF1 *Type2Typedef(char *pTypeName, int nLen, WORD file_id)
 {
-    TSYMHEADER *pHead;                  // Generic section header
+//    TSYMHEADER *pHead;                  // Generic section header
     TSYMTYPEDEF *pType;                 // Type structure header
     TSYMTYPEDEF1 *pType1;               // Pointer to a single type definition
     WORD nTypedefs;                     // How many types are in the current definition block
     char *pStr;                         // Pointer to name string
-    WORD maj=0, min=0;                  // Major and minor type number
+    int maj=0, min=0;                   // Major and minor type number
+    WORD new_file_id;                   // New file ID where the type is defined
 
     // Sanity check that we have symbols and pTypeName is properly given
     if( deb.pSymTabCur && deb.pFnScope && pTypeName && *pTypeName )
     {
-        pHead = deb.pSymTabCur->header;
-
         // If we are searching for a type number, read the (maj,min)
         if( nLen==0 )
         {
@@ -269,55 +197,70 @@ TSYMTYPEDEF1 *Type2Typedef(char *pTypeName, int nLen)
 
             if( *pTypeName=='(' )
             {
-                pTypeName++;                // Advance past '('
-                maj = GetDec(&pTypeName);   // Get the major type number
-                pTypeName++;                // Advance past delimiting comma
-                min = GetDec(&pTypeName);   // Get the minor type number
+                pTypeName++;                        // Advance past '('
+                scan2dec(pTypeName, &maj, &min);    // Scan 2 decimal numbers "%d,%d"
             }
         }
 
-        while( pHead->hType != HTYPE__END )
+        // Find the typedef record of the file_id whose type we are looking for
+        pType = SymTabFindTypedef(deb.pSymTabCur, file_id);
+
+        // Found the type descriptor of the given file_id
+        if( pType )
         {
-            if( pHead->hType == HTYPE_TYPEDEF )
+            // Apply the reference adjustment value to the major type number and get the
+            // resulting source file_id where this type is actually defined
+
+            new_file_id = pType->pRel[maj].file_id;
+            maj         = maj + pType->pRel[maj].adjust;
+
+            // Find the type descriptor of the new file_id
+            // To optimize the search, dont search if the type is in the same file ID
+            if( new_file_id != file_id )
             {
-                pType = (TSYMTYPEDEF*)pHead;
-
-                // Got a type header, make sure that the source contex match
-
-                if( pType->file_id == deb.pFnScope->file_id )
+                pType = SymTabFindTypedef(deb.pSymTabCur, new_file_id);
+                if( !pType )
                 {
-                    nTypedefs = pType->nTypedefs;
-                    pType1 = pType->list;
+                    // We should always be able to resolve the type using the reference lookup array
+                    // If we dont, the symbol table is bad, or I did not understand how the types are laid out...
+                    dprinth(1, "Internal error %s:%d", __FILE__, __LINE__);
 
-                    // We will do a search in two different ways, depending on the input
-                    if( nLen==0 )           // Input was "(a,b)"
-                    {
-                        // Search by the type number
-                        for(; nTypedefs>0; nTypedefs--)
-                        {
-                            if( pType1->min==min && pType1->maj==maj )
-                                return( pType1 );
-
-                            pType1++;
-                        }
-                    }
-                    else
-                    {
-                        // Search by the type name
-                        for(; nTypedefs>0; nTypedefs--)
-                        {
-                            pStr = pType1->pName;
-
-                            if( !strnicmp(pStr, pTypeName, nLen) && strlen(pStr)==nLen )
-                                return( pType1 );
-
-                            pType1++;
-                        }
-                    }
+                    // Well, return something - hopefully the above error message will ring the bell.
+                    pType = SymTabFindTypedef(deb.pSymTabCur, file_id);
+                    return( pType->list );
                 }
             }
 
-            pHead = (TSYMHEADER*)((DWORD)pHead + pHead->dwSize);
+            // Search for the new (major, minor) through the new file ID type definition record
+
+            nTypedefs = pType->nTypedefs;
+            pType1 = pType->list;
+
+            // We will do a search in two different ways, depending on the input
+            if( nLen==0 )           // Input was "(a,b)"
+            {
+                // Search by the type number
+                for(; nTypedefs>0; nTypedefs--)
+                {
+                    if( pType1->min==(WORD)min && pType1->maj==(WORD)maj )
+                        return( pType1 );
+
+                    pType1++;
+                }
+            }
+            else
+            {
+                // Search by the type name
+                for(; nTypedefs>0; nTypedefs--)
+                {
+                    pStr = pType1->pName;
+
+                    if( !strnicmp(pStr, pTypeName, nLen) && strlen(pStr)==nLen )
+                        return( pType1 );
+
+                    pType1++;
+                }
+            }
         }
     }
 
@@ -347,6 +290,7 @@ TSYMTYPEDEF1 *Type2Typedef(char *pTypeName, int nLen)
 void TypedefCanonical(TSYMTYPEDEF1 *pType1)
 {
     TSYMTYPEDEF1 *pTypeNext;            // Next type down the definition chain
+    TSYMTYPEDEF1 *pTypeNext2;           // Next type down the definition chain
     int nPtr = 0;                       // Level of pointer redirections
 
     // If a type is already in canonical form, don't do it again
@@ -371,7 +315,17 @@ void TypedefCanonical(TSYMTYPEDEF1 *pType1)
                 break;
 
             // Otherwise, follow the def chain
-            pTypeNext = Type2Typedef(pTypeNext->pDef, 0);
+            if((pTypeNext2 = Type2Typedef(pTypeNext->pDef, 0, pTypeNext->file_id))==NULL)
+                break;
+
+            // We do this to detect circular type definition: Sometimes a type is defined as
+            // itself, so in this case we break out
+            if( pTypeNext==pTypeNext2 )
+            {
+                break;
+            }
+            else
+                pTypeNext = pTypeNext2;
 
             // Assign the new name, if the next type has it defined as non-zero string
             if(*pTypeNext->pName)
@@ -387,7 +341,7 @@ void TypedefCanonical(TSYMTYPEDEF1 *pType1)
 
 /******************************************************************************
 *                                                                             *
-*   int GetTypeSize(TSYMTYPEDEF1 *pType1)                                     *
+*   UINT GetTypeSize(TSYMTYPEDEF1 *pType1)                                    *
 *                                                                             *
 *******************************************************************************
 *
@@ -402,10 +356,10 @@ void TypedefCanonical(TSYMTYPEDEF1 *pType1)
 *       0 if the type is invalid for some reasons
 *
 ******************************************************************************/
-int GetTypeSize(TSYMTYPEDEF1 *pType1)
+UINT GetTypeSize(TSYMTYPEDEF1 *pType1)
 {
     TSYMTYPEDEF1 Type1;                 // Local type storage
-    int nSize = 0;                      // Size variable
+    UINT nSize = 0;                     // Size variable
     char *pDef;                         // Pointer to the type definition
 
     // Make sure the given type descriptor is valid
@@ -446,15 +400,12 @@ int GetTypeSize(TSYMTYPEDEF1 *pType1)
             {
                 int lower, upper;           // Array bounds
 
-                // Find the first ';' to get to the bounds
-                pDef = strchr(pDef, ';');
-                sscanf(pDef, ";%d;%d;", &lower, &upper);
-
-                // Find the trailing '(' to get to the child element
-                pDef = strchr(pDef, '(');
+                pDef = strchr(pDef, ';');           // Find the first ';' to get to the bounds
+                scan2dec(pDef+1, &lower, &upper);   // Scan 2 decimal numbers "%d,%d"
+                pDef = strchr(pDef, '(');           // Find the trailing '(' to get to the child element
 
                 // This will call itself recursively to get the size of one array element
-                pType1 = Type2Typedef(pDef, 0);
+                pType1 = Type2Typedef(pDef, 0, Type1.file_id);
                 nSize = (upper-lower+1) * GetTypeSize(pType1);
             }
             break;
@@ -466,142 +417,6 @@ int GetTypeSize(TSYMTYPEDEF1 *pType1)
     }
 
     return( nSize );
-}
-
-
-/******************************************************************************
-*                                                                             *
-*   BOOL cmdTypes(char *args, int subClass)                                   *
-*                                                                             *
-*******************************************************************************
-*
-*   Display all types in a current symbol file or display a specific type
-*   structure information.
-*
-*   Symtax:
-*       TYPES           - lists all data types in the current symbol table
-*       TYPES *         - alternate way to list all types
-*       TYPES type      - display type information for a given symbol type
-*
-******************************************************************************/
-BOOL cmdTypes(char *args, int subClass)
-{
-    TSYMHEADER *pHead;                  // Generic section header
-    TSYMTYPEDEF *pType;                 // Type structure header
-    TSYMTYPEDEF1 *pType1;               // Pointer to a single type definition
-    TSYMSOURCE *pSource;                // Source file that a type belongs to
-    WORD nTypedefs;                     // How many types are in the current definition block
-    char *pStr;                         // Pointer to name string
-    int nLine = 1;
-    int nPtrLevel;
-    BOOL fPrinted;                      // Header is already printed flag
-
-    if( deb.pSymTabCur )
-    {
-        if( *args && *args!='*' )
-        {
-            // Argument is a specific type name - find it and list its members
-#if 0
-            pType1 = Type2Typedef(args, strlen(args));
-            pType1 = Type2BaseType(&nPtrLevel, pType1);
-            if( pType1 )
-            {
-                dprinth(nLine++, "(%d,%d) %s *%d", pType1->maj, pType1->min, GetTypeString(pType1), nPtrLevel);
-
-                // If the type is a complex type (structure etc.), print the complete typedef
-                if( pType1->pDef > TYPEDEF__LAST )
-                {
-// TODO -
-//                  PrettyPrintType(pType1);
-                }
-            }
-#endif
-#if 0
-            pHead = deb.pSymTabCur->header;
-
-            while( pHead->hType != HTYPE__END )
-            {
-                if( pHead->hType == HTYPE_TYPEDEF )
-                {
-                    pType = (TSYMTYPEDEF*)pHead;
-
-                    // Got a type header, show the source file name
-
-                    // TODO - sources do not seem to get assigned right...
-
-                    pSource = SymTabFindSource(deb.pSymTabCur, pType->file_id);
-                    fPrinted = FALSE;
-
-                    nTypedefs = pType->nTypedefs;
-                    pType1 = pType->list;
-
-                    for(; nTypedefs>0; nTypedefs--)
-                    {
-                        pStr = GET_STRING( pType1->dName );
-
-                        if( !stricmp(pStr+1, args) )
-                        {
-                            if( pSource && !fPrinted )
-                            {
-                                fPrinted = TRUE;
-#if 0
-                                if( dprinth(nLine++, "Defined in %s:",
-                                        GET_STRING( pSource->dSourcePath ),
-                                        GET_STRING( pSource->dSourceName ) )==FALSE)
-                                    return( TRUE );
-#endif
-                            }
-
-                            if( dprinth(nLine++, "(%d,%d) %-30s%s", pType1->maj, pType1->min, pStr+1, GetTypeString(pType1) )==FALSE)
-                                return( TRUE );
-                        }
-
-                        pType1++;
-                    }
-                }
-
-                pHead = (TSYMHEADER*)((DWORD)pHead + pHead->dwSize);
-            }
-#endif
-        }
-        else
-        {
-            // No arguments given or argument was '*' - lists all symbol types
-
-            pHead = deb.pSymTabCur->header;
-
-            while( pHead->hType != HTYPE__END )
-            {
-                if( pHead->hType == HTYPE_TYPEDEF )
-                {
-                    pType = (TSYMTYPEDEF*)pHead;
-
-                    // Got a type header, list all types defined there
-
-                    nTypedefs = pType->nTypedefs;
-                    pType1 = pType->list;
-
-                    dprinth(nLine++, "Type Name                     Typedef");
-
-                    for(; nTypedefs>0; nTypedefs--)
-                    {
-                        pStr = pType1->pName;
-
-//                        if( dprinth(nLine++, "(%d,%d) %-30s%s", pType1->maj, pType1->min, pStr, GetTypeString(pType1) )==FALSE)
-//                            return( TRUE );
-
-                        pType1++;
-                    }
-                }
-
-                pHead = (TSYMHEADER*)((DWORD)pHead + pHead->dwSize);
-            }
-        }
-    }
-    else
-        dprinth(1, "No symbol table loaded.");
-
-    return( TRUE );
 }
 
 
@@ -658,57 +473,86 @@ char *Type2Element(TSYMTYPEDEF1 *pType, char *pName, int nLen)
     return( NULL );
 }
 
-
-static void PrintBasicTypeValue(char *buf, TTYPEFOOTPRINT *pValue, TSYMTYPEDEF1 *pType1)
+/******************************************************************************
+*   int PrintBasicTypeValue(char *buf, TTYPEFOOTPRINT *pValue, TSYMTYPEDEF1 *pType1)
+*******************************************************************************
+*
+*   This function decodes the basic type and prints its value appropriately.
+*
+*   Where:
+*       buf - the destination buffer
+*       pValue - the address of the footprint variable for various types
+*       pType1 - the type descriptor to use
+*
+******************************************************************************/
+static int PrintBasicTypeValue(char *buf, TTYPEFOOTPRINT *pValue, TSYMTYPEDEF1 *pType1)
 {
+    static char sChar[] = "<\' \'>";    // Buffer that prints a printable character
+    int written = 0;                    // Number of characters written
+
     if( pType1 && pType1->pDef && *pType1->pDef <= TYPEDEF__LAST )
     {
+        // Printing a character is extra step that we may want to do in some cases
+        // It is simpler to store a byte and use it as a character if we do those cases
+        sChar[2] = pValue->_char;
+
         switch( *pType1->pDef )
         {
-            // TODO: Need to rewrite sprintf() to process all these new data types to print
-
-
-            case TYPE_INT:                      sprintf(buf, "%d", pValue->_int);
+            case TYPE_INT:                      written = sprintf(buf, "0x%X", pValue->_int);
                 break;
-            case TYPE_CHAR:                     sprintf(buf, "0x%02X %c", pValue->_char, isascii(pValue->_char)? pValue->_char : '?');
+            case TYPE_CHAR:                     written = sprintf(buf, "0x%02X %s", pValue->_char, isprint(pValue->_char)? sChar:"");
                 break;
-            case TYPE_LONG_INT:                 sprintf(buf, "%ld", pValue->_long_int);
+            case TYPE_LONG_INT:                 written = sprintf(buf, "0x%X", (UINT) pValue->_long_int);
                 break;
-            case TYPE_UNSIGNED_INT:             sprintf(buf, "0x%08X", pValue->_unsigned_int);
+            case TYPE_UNSIGNED_INT:             written = sprintf(buf, "0x%08X", pValue->_unsigned_int);
                 break;
-            case TYPE_LONG_UNSIGNED_INT:        sprintf(buf, "0x%08lX", pValue->_long_unsigned_int);
+            case TYPE_LONG_UNSIGNED_INT:        written = sprintf(buf, "0x%08X", pValue->_unsigned_int);   // pValue->_long_unsigned_int
                 break;
-            case TYPE_LONG_LONG_INT:            sprintf(buf, "%ll", pValue->_long_long_int);
+            case TYPE_LONG_LONG_INT:            written = sprintf(buf, "0x%08X%08X", *(int *)((UINT)&pValue->_int)+sizeof(int), *(int *)((UINT)&pValue->_int));
                 break;
-            case TYPE_LONG_LONG_UNSIGNED_INT:   sprintf(buf, "%llX", pValue->_long_long_unsigned_int);
+            case TYPE_LONG_LONG_UNSIGNED_INT:   written = sprintf(buf, "0x%08X%08X", *(int *)((UINT)&pValue->_int)+sizeof(int), *(int *)((UINT)&pValue->_int));
                 break;
-            case TYPE_SHORT_INT:                sprintf(buf, "%hd", pValue->_short_int);
+            case TYPE_SHORT_INT:                written = sprintf(buf, "0x%hX", pValue->_short_int);
                 break;
-            case TYPE_SHORT_UNSIGNED_INT:       sprintf(buf, "%hX", pValue->_short_unsigned_int);
+            case TYPE_SHORT_UNSIGNED_INT:       written = sprintf(buf, "0x%04hX", pValue->_short_unsigned_int);
                 break;
-            case TYPE_SIGNED_CHAR:              sprintf(buf, "%d %c", pValue->_signed_char, isascii(pValue->_signed_char)? pValue->_signed_char : '?');
+            case TYPE_SIGNED_CHAR:              written = sprintf(buf, "0x%X %s", pValue->_signed_char, isprint(pValue->_signed_char)? sChar:"");
                 break;
-            case TYPE_UNSIGNED_CHAR:            sprintf(buf, "%X %c", pValue->_signed_char, isascii(pValue->_signed_char)? pValue->_signed_char : '?');
+            case TYPE_UNSIGNED_CHAR:            written = sprintf(buf, "0x%02X %s", pValue->_unsigned_char, isprint(pValue->_unsigned_char)? sChar:"");
                 break;
-            case TYPE_FLOAT:                    sprintf(buf, "%f", pValue->_float);
+            case TYPE_FLOAT:                    written = sprintf(buf, "(float)%08X", *(int *)((UINT)&pValue->_int));
                 break;
-            case TYPE_DOUBLE:                   sprintf(buf, "%e", pValue->_double);
+            case TYPE_DOUBLE:                   written = sprintf(buf, "(double)%08X%08X", *(int *)((UINT)&pValue->_int)+sizeof(int), *(int *)((UINT)&pValue->_int));
                 break;
-            case TYPE_LONG_DOUBLE:              sprintf(buf, "%Le", pValue->_long_double);
+            case TYPE_LONG_DOUBLE:              written = sprintf(buf, "(long double)%08X%08X%08X", *(int *)((UINT)&pValue->_int)+sizeof(int)*2, *(int *)((UINT)&pValue->_int)+sizeof(int), *(int *)((UINT)&pValue->_int));
                 break;
-            case TYPE_COMPLEX_INT:              sprintf(buf, "(%d,%d)", *(int *)&pValue->_complex_int, *(int *)((BYTE)&pValue->_complex_int)+sizeof(int));
+            case TYPE_COMPLEX_INT:              written = sprintf(buf, "complex(%d,%d)", *(int *)((UINT)&pValue->_int), *(int *)((UINT)&pValue->_int)+sizeof(int));
                 break;
-            case TYPE_COMPLEX_FLOAT:            sprintf(buf, "(%f,%f)", *(float *)&pValue->_complex_float, *(float *)((BYTE)&pValue->_complex_float)+sizeof(float));
+            case TYPE_COMPLEX_FLOAT:            written = sprintf(buf, "complex(%08X,%08X)", *(int *)((UINT)&pValue->_int), *(int *)((UINT)&pValue->_int)+sizeof(int));
                 break;
-            case TYPE_COMPLEX_DOUBLE:           sprintf(buf, "(%e,%e)", *(double *)&pValue->_complex_double, *(double *)((BYTE)&pValue->_complex_double)+sizeof(double));
+            case TYPE_COMPLEX_DOUBLE:           written = sprintf(buf, "complex(%08X%08X,%08X%08X)", *(int *)((UINT)&pValue->_int)+sizeof(int), *(int *)((UINT)&pValue->_int), *(int *)((UINT)&pValue->_int)+sizeof(int)*3, *(int *)((UINT)&pValue->_int)+sizeof(int)*2);
                 break;
-            case TYPE_COMPLEX_LONG_DOUBLE:      sprintf(buf, "(%Le,%Le)", *(long double *)&pValue->_complex_long_double, *(long double *)((BYTE)&pValue->_complex_long_double)+sizeof(long double));
+            case TYPE_COMPLEX_LONG_DOUBLE:      written = sprintf(buf, "complex(%08X%08X%08X,%08X%08X%08X)", *(int *)((UINT)&pValue->_int)+sizeof(int)*2, *(int *)((UINT)&pValue->_int)+sizeof(int), *(int *)((UINT)&pValue->_int), *(int *)((UINT)&pValue->_int)+sizeof(int)*5, *(int *)((UINT)&pValue->_int)+sizeof(int)*4, *(int *)((UINT)&pValue->_int)+sizeof(int)*3);
                 break;
         }
     }
+
+    return( written );
 }
 
-void PrintEnumTypeValue(char *buf, char *pEnum, BYTE *pVar)
+/******************************************************************************
+*   void PrintEnumTypeValue(char *buf, char *pEnum, BYTE *pVar)
+*******************************************************************************
+*
+*   Since enums are a bit odd to decode (complex type yet simple integer),
+*   this function prints the enum literal string from its numerical value.
+*
+*   Where:
+*       buf - the destination buffer
+*       pVar - the address of the enum integer
+*
+******************************************************************************/
+static void PrintEnumTypeValue(char *buf, char *pEnum, BYTE *pVar)
 {
     int Value;                          // Enums are always ints
     char *p;                            // Walking pointer for the enum definition string
@@ -716,7 +560,7 @@ void PrintEnumTypeValue(char *buf, char *pEnum, BYTE *pVar)
 
     // Walk the enum definition list and find the literal value that corresponds to the variable value
 
-    if( GlobalReadDword(&Value, pVar) )
+    if( GlobalReadDword(&Value, (DWORD) pVar) )
     {
         // emon:1,tue:2,wed:3,thr:4,fri:5,sat:6,sun:7,;
         p = pEnum;                      // Start with the first name
@@ -757,9 +601,19 @@ void PrintEnumTypeValue(char *buf, char *pEnum, BYTE *pVar)
     }
 }
 
-#define MAX_CHAR_PTR_SAMPLE  16                       // How much of a sample string to get?
-
-void PrintExpandCharPtr(char *buf, BYTE *pPointee)
+/******************************************************************************
+*   void PrintExpandCharPtr(char *buf, BYTE *pPointee)
+*******************************************************************************
+*
+*   Print a certain number of character string being decoded from the
+*   target address.
+*
+*   Where:
+*       buf - the destination buffer
+*       pPointee - the address to start reading the string
+*
+******************************************************************************/
+static void PrintExpandCharPtr(char *buf, BYTE *pPointee)
 {
     static char String[MAX_CHAR_PTR_SAMPLE+1];  // String to store sample
     int i;                                      // String counter
@@ -767,14 +621,14 @@ void PrintExpandCharPtr(char *buf, BYTE *pPointee)
     // Try to read several values from the pointee and print them if they make up a string
     for(i=0; i<MAX_CHAR_PTR_SAMPLE; i++)
     {
-        if( GlobalReadBYTE(&String[i], pPointee) )
+        if( GlobalReadBYTE(&String[i], (DWORD) pPointee) )
         {
             // If this is end-of-string, break
             if( String[i]==0 )
                 break;
 
-            // If the character is not ascii, this is not a string
-            if( !isascii(String[i]) )
+            // If the character is not printable, this is not a string
+            if( !isprint(String[i]) )
                 return;
 
             pPointee++;
@@ -790,11 +644,30 @@ void PrintExpandCharPtr(char *buf, BYTE *pPointee)
 }
 
 
+/******************************************************************************
+*
+*   void PrintTypeValue(char *buf, TExItem *pItem, BYTE *pVar, UINT delta, UINT width)
+*
+*******************************************************************************
+*
+*   Main type print function. It looks up in the memory for the data that is
+*   addressed to by the pItem token.
+*
+*   Where:
+*       buf - buffer to print effective value of an item descriptor
+*       pItem - descriptor for the data
+*       pVar - the effective memory address of the data structure
+*       delta - TBD
+*       width - TBD
+*
+*   Returns:
+*       void
+*
+******************************************************************************/
 void PrintTypeValue(char *buf, TExItem *pItem, BYTE *pVar, UINT delta, UINT width)
 {
     TSYMTYPEDEF1 *pType1;               // Pointer to the type information
     TTYPEFOOTPRINT Value;               // Value of the variable
-    BYTE *pPointee;                     // Address of the target variable
 
     // pVar is the address of the variable or a memory footprint
 
@@ -815,9 +688,9 @@ void PrintTypeValue(char *buf, TExItem *pItem, BYTE *pVar, UINT delta, UINT widt
 
             // Read in the value of the variable, exactly the number of bytes that we need
 
-            GlobalReadMem(&Value, pVar, nSimpleTypes[*pType1->pDef]);
+            GlobalReadMem((BYTE *) &Value, (DWORD) pVar, nSimpleTypes[(int)*pType1->pDef]);
 
-            PrintBasicTypeValue(buf, &Value, pType1);
+            buf += PrintBasicTypeValue(buf, &Value, pType1);
         }
         else
         {
@@ -830,7 +703,7 @@ void PrintTypeValue(char *buf, TExItem *pItem, BYTE *pVar, UINT delta, UINT widt
             }
             else
             {
-                sprintf(buf, "%08X", pVar);
+                sprintf(buf, "%08X", (DWORD) pVar);
             }
         }
     }
@@ -846,27 +719,43 @@ void PrintTypeValue(char *buf, TExItem *pItem, BYTE *pVar, UINT delta, UINT widt
         }
         else
         {
-            // Read the effective address of that pointer
+            // Read the effective address of that pointer: "void *" is unsigned int
 
-            if( GlobalReadDword(&pPointee, pVar) )
+            if( GlobalReadDword(&Value._unsigned_int, (DWORD) pVar) )
             {
-                buf += sprintf(buf, "%08X ", pVar);
+                buf += sprintf(buf, "%08X ", (DWORD) pVar);
 
                 // Try to get one item from the pointee to print out
                 // but process "char *" separately since it is a string
 
                 if( *pType1->pDef==TYPE_CHAR || *pType1->pDef==TYPE_SIGNED_CHAR || *pType1->pDef==TYPE_UNSIGNED_CHAR )
                 {
-                    PrintExpandCharPtr(buf, pPointee);
+                    PrintExpandCharPtr(buf, (BYTE *) Value._unsigned_int);
                 }
                 else
                 {
-                    PrintBasicTypeValue(buf, &Value, pType1);
+                    if( *pType1->pDef <= TYPEDEF__LAST )
+                    {
+                        // Read in the value of the variable, exactly the number of bytes that we need
+
+                        GlobalReadMem((BYTE *) &Value, Value._unsigned_int, nSimpleTypes[(int)*pType1->pDef]);
+
+                        // Read the data from the memory being pointed to, but enclose it in brackets
+                        *buf++ = '<';
+                        buf += PrintBasicTypeValue(buf, &Value, pType1);
+                        *buf++ = '>';
+                    }
+                    else
+                    {
+                        // Pointer to a complex type
+
+                        buf += sprintf(buf, "{...}");
+                    }
                 }
             }
             else
             {
-                sprintf(buf, "%08X <illegal>", pVar);
+                sprintf(buf, "%08X <illegal>", (DWORD) pVar);
             }
         }
     }
@@ -881,7 +770,7 @@ void PrintTypeValue(char *buf, TExItem *pItem, BYTE *pVar, UINT delta, UINT widt
         }
         else
         {
-            sprintf(buf, "%08X", pVar);
+            sprintf(buf, "%08X {{...}}", (DWORD) pVar);
         }
     }
 }

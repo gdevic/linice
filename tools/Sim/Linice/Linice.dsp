@@ -190,10 +190,6 @@ SOURCE="$(LINICE_ROOT)\linice\include\pcihdr.h"
 # End Source File
 # Begin Source File
 
-SOURCE="$(LINICE_ROOT)\linice\include\queue.h"
-# End Source File
-# Begin Source File
-
 SOURCE="$(LINICE_ROOT)\linice\include\stdarg.h"
 # End Source File
 # Begin Source File
@@ -347,10 +343,6 @@ SOURCE="$(LINICE_ROOT)\linice\apic.c"
 # End Source File
 # Begin Source File
 
-SOURCE="$(LINICE_ROOT)\linice\capture.c"
-# End Source File
-# Begin Source File
-
 SOURCE="$(LINICE_ROOT)\linice\context.c"
 # End Source File
 # Begin Source File
@@ -392,10 +384,6 @@ SOURCE="$(LINICE_ROOT)\linice\printf.c"
 # Begin Source File
 
 SOURCE="$(LINICE_ROOT)\linice\proc.c"
-# End Source File
-# Begin Source File
-
-SOURCE="$(LINICE_ROOT)\linice\queue.c"
 # End Source File
 # Begin Source File
 

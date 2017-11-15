@@ -60,7 +60,6 @@
 
 extern TLISTITEM *ListAdd(TLIST *pList, TFRAME *pFrame);
 extern void ListDraw(TLIST *pList, TFRAME *pFrame, BOOL fForce);
-extern void ListDel(TLIST *pList, TLISTITEM *pItem, BOOL fDelRoot);
 extern BOOL Evaluate(TExItem *pItem, char *pExpr, char **ppNext, BOOL fSymbolsValueOf);
 extern void PrettyPrintVariableName(char *pString, char *pName, TSYMTYPEDEF1 *pType1);
 extern void MakeSelectedVisible(TLIST *pList, int nLines);
@@ -96,7 +95,7 @@ BOOL cmdWatch(char *args, int subClass)
         {
             // Add a new item to the end of the list
             // New item will also be marked as selected
-            if(pItem = ListAdd(&deb.Watch, &pWin->w))
+            if((pItem = ListAdd(&deb.Watch, &pWin->w)))
             {
                 // Copy the expression node
                 memcpy(&pItem->Item, &ExItem, sizeof(TExItem));

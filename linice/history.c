@@ -46,7 +46,7 @@
 *                                                                             *
 ******************************************************************************/
 
-#define HISTORY_BUFFER      (deb.pHistoryBuffer)
+#define HISTORY_BUFFER      (deb.hHistoryBufferHeap)
 #define MAX_HISTORY_BUF     (deb.nHistorySize)
 
 /******************************************************************************

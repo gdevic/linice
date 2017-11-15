@@ -355,9 +355,9 @@ static BOOL fDecimal;                   // Prefer decimal number
 extern BOOL EvalBreakpointAddress(TADDRDESC *pAddr, int index);
 extern char *Type2Element(TSYMTYPEDEF1 *pType, char *pName, int nLen);
 extern void TypedefCanonical(TSYMTYPEDEF1 *pType1);
-extern TSYMTYPEDEF1 *Type2Typedef(char *pTypeName, int nLen);
+extern TSYMTYPEDEF1 *Type2Typedef(char *pTypeName, int nLen, WORD file_id);
 extern BOOL GlobalReadDword(DWORD *ppDword, DWORD dwAddress);
-extern int GetTypeSize(TSYMTYPEDEF1 *pType1);
+extern UINT GetTypeSize(TSYMTYPEDEF1 *pType1);
 extern void ExpandPrintSymbol(TExItem *Item, char *pName);
 extern BOOL FindSymbol(TExItem *item, char *pName, int *pNameLen);
 
@@ -632,6 +632,27 @@ DWORD GetDec(char **ppString)
 }
 
 /******************************************************************************
+*
+*   void scan2dec(char *pBuf, int *p1, int *p2)
+*
+*******************************************************************************
+*
+*   Scans 2 decimal numbers. This is a handy shortcut since at several places
+*   we need to read type definition numbers etc.
+*
+*   Where:
+*       pBuf is the address of the input buffer
+*       p1, p2 are the destination variables to store the numbers
+*
+******************************************************************************/
+void scan2dec(char *pBuf, int *p1, int *p2)
+{
+    GetDecB(p1, &pBuf);
+    pBuf++;
+    GetDecB(p2, &pBuf);
+}
+
+/******************************************************************************
 *   TRegister *IsRegister(char *ptr, int nTokenLen)                           *
 *******************************************************************************
 *
@@ -787,19 +808,17 @@ static BOOL NextToken(char **ppNext)
 ******************************************************************************/
 static BOOL GetValue( TExItem *item, char **sExpr, int nTokenLen )
 {
-    static char enumdef[] = { 1 /*TYPE_INT*/, 0 };
+    static TSYMTYPEDEF1 intdef = { 0, 0, "", "\1"/*TYPE_INT*/, 0 };
     TRegister *pReg;                    // Register structure for CPU register compares
     TADDRDESC Addr;                     // Address structure for breakpoint evaluation
     char *pToken = *sExpr;              // Start of the token pointer
     int n;                              // Temp variable to use locally
 
-    memset(item, 0, sizeof(TExItem));   // Zero out the item to avoid stale data
+    // Zero out the item to avoid stale data
+    memset(item, 0, sizeof(TExItem));
 
     // Set up the default type to integer
-    item->Type.maj = 0;
-    item->Type.min = 0;   // Canonical int
-    item->Type.pName = "";
-    item->Type.pDef = enumdef;
+    memcpy(&item->Type, &intdef, sizeof(TSYMTYPEDEF1));
 
     //----------------------------------------------------------------------------------
     // If we switched to decimal radix, try a decimal number first
@@ -970,7 +989,7 @@ static BOOL EvalGetTypeCast( TExItem *Item, char **sExpr, int nTokenLen )
     TSYMTYPEDEF1 *pType1;
 
     // Get the type of the given token
-    if( (pType1 = Type2Typedef(*sExpr, nTokenLen)) )
+    if( (pType1 = Type2Typedef(*sExpr, nTokenLen, deb.pFnScope->file_id)) )
     {
         // Type was found. Copy its descriptor into the item and get the canonical version of it
         memcpy(&Item->Type, pType1, sizeof(TSYMTYPEDEF1));
@@ -1029,7 +1048,7 @@ static BOOL EvalGetArray( TStack *Values, TOpStack *Operators, TExItem *Item )
             if( (pDef = strrchr(item1.Type.pDef, '(')) )
             {
                 // Find the type of the element
-                if( (pType1 = Type2Typedef(pDef, 0)) )
+                if( (pType1 = Type2Typedef(pDef, 0, deb.pFnScope->file_id)) )
                 {
                     nSize = GetTypeSize(pType1);
 
@@ -1413,7 +1432,7 @@ BOOL Evaluate(TExItem *pItem, char *pExpr, char **ppNext, BOOL fSymbolsValueOf)
     TExItem Item;
     char *myNext;                       // This pointer is used if ppNext==NULL
     BYTE NewOp;
-    BOOL fUnary = TRUE;                 // Possible unary operator at the beginning
+    BOOL fExpectValue = TRUE;           // Expect operand value (as opposed to operator)
     int nTokenLen;                      // Length of the input token
     int nFunc1;                         // Temp index of the function
 
@@ -1438,139 +1457,143 @@ BOOL Evaluate(TExItem *pItem, char *pExpr, char **ppNext, BOOL fSymbolsValueOf)
     // Loop for every token in the input string, bail out on any kind of error
     while( NextToken(&pExpr) && !deb.error )
     {
-        // See if the new token is an operator
-        if( (NewOp = TableMatch( &pExpr)) )
+        if( fExpectValue )
         {
-            if(fUnary)
+            // We are expecting a operand (value) or an unary operator
+
+            // Check for the unary operator
+            if( (NewOp = TableMatch( &pExpr)) )
             {
                 // Modify some operators that are unary at this point
+                // Left bracket is simply pushed onto the stack as a placeholder
                 switch(NewOp)
                 {
-                // Appropriately for this application, +/- also signal decimal number
-                case OP_PLUS:   NewOp = OP_UNARY_PLUS,  fDecimal = TRUE; break;
-                case OP_MINUS:  NewOp = OP_UNARY_MINUS, fDecimal = TRUE; break;
-                case OP_DOT:    NewOp = OP_LINE_NUMBER, fDecimal = TRUE; break;
-                case OP_AND:    NewOp = OP_UNARY_AND;                    break;
-                case OP_TIMES:  NewOp = OP_UNARY_PTR;                    break;
+                // Appropriately for this application, +/- also signals a decimal number
+                case OP_PLUS:           NewOp = OP_UNARY_PLUS,  fDecimal = TRUE; break;
+                case OP_MINUS:          NewOp = OP_UNARY_MINUS, fDecimal = TRUE; break;
+                case OP_DOT:            NewOp = OP_LINE_NUMBER, fDecimal = TRUE; break;
+                case OP_AND:            NewOp = OP_UNARY_AND;                    break;
+                case OP_TIMES:          NewOp = OP_UNARY_PTR;                    break;
+                case OP_BRACKET_START:  NewOp = OP_BRACKET_START;                break;
                 };
 
-                // Dont expect unary next time around
-                fUnary = FALSE;
-
                 // Push the new operator on the operator stack
                 PushOp(&Operators, NewOp);
 
                 continue;
             }
-
-            // Left bracket is simply pushed onto the stack as a placeholder
-            if( NewOp==OP_BRACKET_START )
+            else
             {
-                PushOp(&Operators, OP_BRACKET_START);
+                // It was not unary value or a left bracket, so it has to be an operand
 
-                continue;
-            }
+                // Find the length of the token in the input buffer (We assume it is a token)
+                nTokenLen = GetTokenLen(pExpr);
 
-            // Right bracket needs stack unwinding
-            if( NewOp==OP_BRACKET_END )
-            {
-                while( PeekOp(&Operators)!=OP_BRACKET_START && !deb.error)
+                // Special case are structure elements as in X->Y or X.Y, where we wont be able to find
+                // Y in a symbol database since it is just a part of X's definition string.
+                // So, we peek the operator and do slightly more checking for them.
+                if( !((PeekOp(&Operators)==OP_PTR || PeekOp(&Operators)==OP_DOT)
+                   && GetValueStructureMember(&Values, &Operators, &Item, &pExpr, nTokenLen)) )
                 {
-                    Execute(&Values, PopOp(&Operators));
-                }
-
-                // Here we have to find left bracket, otherwise it's syntax error
-                if( PopOp(&Operators)!=OP_BRACKET_START )
-                    deb.error = ERR_SYNTAX;
-
-                // Evaluate the array index
-                EvalGetArray(&Values, &Operators, &Item);
-
-                continue;
-            }
-
-            // Right parenthesis needs stack unwinding
-            if( NewOp==OP_PAREN_END )
-            {
-                while( PeekOp(&Operators)!=OP_PAREN_START && !deb.error)
-                {
-                    Execute(&Values, PopOp(&Operators));
-                }
-
-                // Here we have to find left paren, otherwise it's syntax error
-                if( PopOp(&Operators)!=OP_PAREN_START )
-                    deb.error = ERR_SYNTAX;
-
-                continue;
-            }
-
-            // For anything except the left parenthesis, we recalculate the stack
-            if( NewOp!=OP_PAREN_START )
-            {
-                // Level the precedence with regards to the TOS
-                while( !IsEmptyOp(&Operators) && (PeekOp(&Operators)&OP_PRECEDENCE)>=(NewOp&OP_PRECEDENCE) )
-                {
-                    Execute(&Values, PopOp(&Operators));
-                }
-
-                // Push the new operator on the operator stack
-                PushOp(&Operators, NewOp);
-
-                continue;
-            }
-
-            // After a left parenthesis, we may have a unary operator
-            fUnary = TRUE;
-
-            // Left paremthesis is just pushed onto the stack as a placeholder
-            PushOp(&Operators, OP_PAREN_START);
-
-            continue;
-        }
-
-        // Find the length of the token in the input buffer (We assume it is a token)
-        nTokenLen = GetTokenLen(pExpr);
-
-        // Special case are structure elements as in X->Y or X.Y, where we wont be able to find
-        // Y in a symbol database since it is just a part of X's definition string.
-        // So, we peek the operator and do slightly more checking for them.
-        if( !((PeekOp(&Operators)==OP_PTR || PeekOp(&Operators)==OP_DOT)
-           && GetValueStructureMember(&Values, &Operators, &Item, &pExpr, nTokenLen)) )
-        {
-            // Get the next token - it should be an operand
-            if( !GetValue(&Item, &pExpr, nTokenLen) )
-            {
-                // If the token was not an operand, check if it is a type case
-                if( EvalGetTypeCast(&Item, &pExpr, nTokenLen) )
-                {
-                    // The token was a type cast. Insert the type case operand and we'll proceed to push the item
-                    PushOp(&Operators, OP_TYPECAST);
-
-                    pExpr += nTokenLen;
-                }
-                else
-                {
-                    // If the token was not a type cast, check if it is an internal function with 1 argument
-                    if( (nFunc1 = EvalGetFunc(&pExpr, nTokenLen, 1)) )
+                    // Get the next token - it should be an operand
+                    if( !GetValue(&Item, &pExpr, nTokenLen) )
                     {
-                        // The token was a function that takes 1 parameter. Insert the function token,
-                        // then push the index of the function
-                        PushOp(&Operators, OP_FUNCTION1);
+                        // If the token was not an operand, check if it is a type case
+                        if( EvalGetTypeCast(&Item, &pExpr, nTokenLen) )
+                        {
+                            // The token was a type cast. Insert the type case operand and we'll proceed to push the item
+                            PushOp(&Operators, OP_TYPECAST);
 
-                        Item.bType = EXTYPE_LITERAL;        // Function index is a literal number
-                        Item.Data  = nFunc1;                // Store the index
-                        Item.pData = (BYTE*) &Item.Data;    // and the pointer to it
+                            pExpr += nTokenLen;
+                        }
+                        else
+                        {
+                            // If the token was not a type cast, check if it is an internal function with 1 argument
+                            if( (nFunc1 = EvalGetFunc(&pExpr, nTokenLen, 1)) )
+                            {
+                                // The token was a function that takes 1 parameter. Insert the function token,
+                                // then push the index of the function
+                                PushOp(&Operators, OP_FUNCTION1);
 
-                        pExpr += nTokenLen;
+                                Item.bType = EXTYPE_LITERAL;        // Function index is a literal number
+                                Item.Data  = nFunc1;                // Store the index
+                                Item.pData = (BYTE*) &Item.Data;    // and the pointer to it
+
+                                pExpr += nTokenLen;
+                            }
+                            else
+                                break;
+                        }
                     }
-                    else
-                        break;
                 }
+
+                Push(&Values, &Item);
+
+
+                fExpectValue = FALSE;   // Next token has to be an operator
             }
         }
+        else
+        {
+            // We are expecting only an operator, but not unary, and not left paren
+            // but it could be a closing bracket
 
-        Push(&Values, &Item);
-        fUnary = FALSE;                 // After the first value no more unary (until left paren)
+            if( (NewOp = TableMatch( &pExpr)) )
+            {
+                // Right bracket needs stack unwinding: ]
+                if( NewOp==OP_BRACKET_END )
+                {
+                    while( PeekOp(&Operators)!=OP_BRACKET_START && !deb.error)
+                    {
+                        Execute(&Values, PopOp(&Operators));
+                    }
+
+                    // Here we have to find left bracket, otherwise it's syntax error
+                    if( PopOp(&Operators)!=OP_BRACKET_START )
+                        deb.error = ERR_SYNTAX;
+
+                    // Evaluate the array index
+                    EvalGetArray(&Values, &Operators, &Item);
+
+                    continue;
+                }
+
+                // Right parenthesis needs stack unwinding
+                if( NewOp==OP_PAREN_END )
+                {
+                    while( PeekOp(&Operators)!=OP_PAREN_START && !deb.error)
+                    {
+                        Execute(&Values, PopOp(&Operators));
+                    }
+
+                    // Here we have to find left paren, otherwise it's syntax error
+                    if( PopOp(&Operators)!=OP_PAREN_START )
+                        deb.error = ERR_SYNTAX;
+
+                    continue;
+                }
+
+                // For anything except the left parenthesis, we recalculate the stack
+                if( NewOp!=OP_PAREN_START )
+                {
+                    // Level the precedence with regards to the TOS
+                    while( !IsEmptyOp(&Operators) && (PeekOp(&Operators)&OP_PRECEDENCE)>=(NewOp&OP_PRECEDENCE) )
+                    {
+                        Execute(&Values, PopOp(&Operators));
+                    }
+
+                    // Push the new operator on the operator stack
+                    PushOp(&Operators, NewOp);
+
+                    fExpectValue = TRUE;    // Next token has to be a value (operand)
+
+                    continue;
+                }
+            }
+
+            // If we reached this point, the token was not legal
+            break;
+        }
     }
 
     // Evaluate what's left on the stack
@@ -1659,7 +1682,6 @@ BOOL cmdEvaluate(char *args, int subClass)
     TExItem Item;                         // Store the result of the evaluation
     DWORD Data;                         // Temp data store
     int i;                              // Temp store
-
 
     if( *args )
     {

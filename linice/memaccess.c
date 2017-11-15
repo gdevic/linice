@@ -51,6 +51,22 @@
 *                                                                             *
 ******************************************************************************/
 
+// Define structure that holds our checksums for verious regions
+
+typedef struct
+{
+    BYTE hSymbolBufferHeapChecksum;
+    BYTE hHistoryBufferHeapChecksum;
+    BYTE hHeapChecksum;
+    BYTE debChecksum;
+    BYTE WinChecksum;
+
+} TSTAMP;
+
+// Define that structure in the global uninitialized section (.BSS)
+
+static TSTAMP Stamp;
+
 /******************************************************************************
 *                                                                             *
 *   Functions                                                                 *
@@ -284,4 +300,115 @@ BOOL VerifyRange(PTADDRDESC pAddr, DWORD dwSize)
         return( FALSE );
 
     return( TRUE );                     // The whole range is ok
+}
+
+
+/******************************************************************************
+*
+*   Memory stamp (checksum) functions.
+*   They are not used at the moment since it turns out it takes too long to
+*   compute checksum on all areas that we would be interested in.
+*
+*   TODO: Find the better use for these checksum functions.
+*
+******************************************************************************/
+
+/******************************************************************************
+*                                                                             *
+*   BYTE ComputeChecksum(BYTE *pMem, UINT size)                               *
+*                                                                             *
+*******************************************************************************
+*
+*   Computes a BYTE-checksum of a memory region.
+*
+*   Where:
+*       pMem is the start memory address
+*       size is the size in bytes of the memory region
+*
+*   Returns:
+*       Checksum
+*
+******************************************************************************/
+BYTE ComputeChecksum(BYTE *pMem, UINT size)
+{
+    BYTE bChecksum = 0;
+
+    while( size-- )
+    {
+        bChecksum += *pMem++;
+    }
+
+    bChecksum = 0xFF - bChecksum;
+
+    return( bChecksum );
+}
+
+
+/******************************************************************************
+*                                                                             *
+*   void ComputeStamp(TSTAMP *pStamp)                                         *
+*                                                                             *
+*******************************************************************************
+*
+*   Helper function that does the actual filling in of the TSTAMP structure.
+*
+******************************************************************************/
+static void ComputeStamp(TSTAMP *pStamp)
+{
+    // Set the memory stamp on the following blocks:
+    //  Symbol file heap
+    //  History buffer heap
+    //  Internal heap
+    //  deb structure
+    //  Win structure
+
+    pStamp->hSymbolBufferHeapChecksum = ComputeChecksum(deb.hSymbolBufferHeap, deb.nSymbolBufferSize);
+    pStamp->hHistoryBufferHeapChecksum = ComputeChecksum(deb.hHistoryBufferHeap, deb.nHistorySize);
+    pStamp->hHeapChecksum = ComputeChecksum(deb.hHeap, MAX_HEAP);
+    pStamp->debChecksum = 0; //ComputeChecksum((BYTE *)&deb, sizeof(TDEB));
+    pStamp->WinChecksum = ComputeChecksum((BYTE *)&Win, sizeof(TWINDOWS));
+}
+
+/******************************************************************************
+*                                                                             *
+*   void SetMemoryStamp(void)                                                 *
+*                                                                             *
+*******************************************************************************
+*
+*   Stamps all the memory regions (areas) with the checksum
+*
+******************************************************************************/
+void SetMemoryStamp(void)
+{
+    // Set the memory stamp on the following blocks:
+    //  Symbol file heap
+    //  History buffer heap
+    //  Internal heap
+
+    ComputeStamp(&Stamp);
+}
+
+/******************************************************************************
+*                                                                             *
+*   BOOL VerifyMemoryStamp(void)                                              *
+*                                                                             *
+*******************************************************************************
+*
+*   Checksums all the memory regions (areas) and makes sure the checksum match
+*
+*   Returns:
+*       TRUE - Checksums are ok
+*       FALSE - Memory has been compromised!
+*
+******************************************************************************/
+BOOL VerifyMemoryStamp(void)
+{
+    TSTAMP CurrentStamp;
+
+    ComputeStamp(&CurrentStamp);
+
+    if( !memcmp(&Stamp, &CurrentStamp, sizeof(TSTAMP)) )
+        return( TRUE );
+
+    return( FALSE );
 }

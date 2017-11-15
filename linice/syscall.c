@@ -54,6 +54,7 @@ extern void ArmDebugReg(int nDr, TADDRDESC Addr);
 extern TSYMTAB *SymTabFind(char *name);
 extern void SymTabRelocate(TSYMTAB *pSymTab, int pReloc[], int factor);
 extern BOOL FindModule(TMODULE *pMod, char *pName, int nNameLen);
+extern BOOL FindSymbol(TExItem *item, char *pName, int *pNameLen);
 
 /******************************************************************************
 *                                                                             *
@@ -118,12 +119,14 @@ asmlinkage int SyscallInitModule(const char *name, void *image)
     DWORD dwDataReloc, dwSampleOffset;
     TSYMRELOC  *pReloc;                 // Symbol table relocation header
     TMODULE Mod;                        // Module information structure
+    TExItem Item;                       // Expression item to store symbol value
+    int nNameLen = 11;                  // Length of the "init_module" string
 
     dprinth(1, "SYSCALL: init_module(`%s', %08X)", name, image);
 
     // Find a kernel module descriptor that has been created after a previous system call
     // create_module. That should be found - else this call will fail anyways...
-    if( FindModule(&Mod, name, strlen(name)) )
+    if( FindModule(&Mod, (char *) name, strlen(name)) )
     {
         // Try to find if we have a symbol table loaded for this module, so we can relocate it
         // Find the symbol table with the name of this module
@@ -131,8 +134,10 @@ asmlinkage int SyscallInitModule(const char *name, void *image)
         if( pSymTab )
         {
             // Get the offset of the init_module global symbol from the symbol table
-            if( SymbolName2Value(pSymTab, &dwInitFunctionSymbol, "init_module", 11) )
+            if( FindSymbol(&Item, "init_module", &nNameLen) )
             {
+                dwInitFunctionSymbol = *Item.pData;
+
                 dprinth(1, "SYSCALL: Relocating symbols for `%s'", pSymTab->sTableName);
 
                 // Details of relocation scheme are explained in ParseReloc.c file

@@ -69,7 +69,7 @@ static TADDRDESC Addr = { 0, 0 };
 ******************************************************************************/
 
 extern int BreakpointQuery(TADDRDESC Addr);
-
+extern BOOL cmdGo           (char *args, int subClass);      // flow.c
 
 /******************************************************************************
 *                                                                             *

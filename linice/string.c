@@ -49,8 +49,6 @@
 *   Functions
 ******************************************************************************/
 
-extern char *_kMallocHeap(int size);
-
 /******************************************************************************
 *
 *   void * memchr( const void *s, int c, size_t n)
@@ -850,17 +848,21 @@ int strcmpi( const char *s1, const char *s2 )
 *
 *
 ******************************************************************************/
+#if 0
+// We are not using this function at the moment. Comment it out so we dont have to
+// include ice.h that defines deb structure
 char * strdup( const char *string )
 {
     char *new;
 
-    new = _kMallocHeap(strlen(string) + 1);
+    new = mallocHeap(deb.hHeap, strlen(string) + 1);
 
     if( new == NULL )
         return( NULL );
 
     return( strcpy(new, string) );
 }
+#endif
 
 /******************************************************************************
 *
@@ -1127,6 +1129,6 @@ int strccpy(char *s1, char *s2, char c)
 
     while((*s2 != 0) && (*s2 != c)) *s1++ = *s2++;
     *s1 = 0;
-    
+
     return( s1-original );
 }

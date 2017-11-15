@@ -142,9 +142,6 @@ extern void CacheTextCls();
 
 extern DWORD UserVirtToPhys(DWORD address);
 
-extern void ice_free_heap(BYTE *pHeap);
-extern BYTE *ice_malloc(DWORD size);
-
 /******************************************************************************
 *                                                                             *
 *   int XInitPacket(TXINITPACKET *pXInit)                                     *
@@ -193,7 +190,7 @@ int XInitPacket(TXINITPACKET *pXInit)
     // If we already allocated buffers etc., need to release before reallocating
     if( deb.pXDrawBuffer != NULL )
     {
-        ice_free_heap(deb.pXDrawBuffer);
+        ice_vfree(deb.pXDrawBuffer);
 
         if( deb.pXFrameBuffer != NULL )
             ice_iounmap(deb.pXFrameBuffer);
@@ -204,7 +201,7 @@ int XInitPacket(TXINITPACKET *pXInit)
 
     // Allocate memory that will be used to save the content of the framebuffer
     // over the area of drawing
-    if( (deb.pXDrawBuffer = ice_malloc(deb.nXDrawSize)) != NULL)
+    if( (deb.pXDrawBuffer = ice_vmalloc(deb.nXDrawSize)) != NULL)
     {
         INFO(("XWIN: Allocated %d for backing store buffer\n", (int)deb.nXDrawSize));
 
@@ -298,7 +295,7 @@ int XInitPacket(TXINITPACKET *pXInit)
 
             dprinth(1, "XWIN: Unable to map frame buffer (size=%d)!", dwMappingSize);
 
-            ice_free_heap(deb.pXDrawBuffer);
+            ice_vfree(deb.pXDrawBuffer);
         }
     }
     else

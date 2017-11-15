@@ -1,6 +1,6 @@
 /******************************************************************************
 *                                                                             *
-*   Module:     loader.c                                                      *
+*   Module:     Linsym.c                                                      *
 *                                                                             *
 *   Date:       09/05/00                                                      *
 *                                                                             *
@@ -75,7 +75,7 @@
         Test/Debug:
         ============
 
-        linsym --capture:{option}        -c -> capture ioctl
+        linsym --check:{file>            -c -> Check symbol file
 
 *******************************************************************************
 *                                                                             *
@@ -84,6 +84,7 @@
 *   DATE     DESCRIPTION OF CHANGES                               AUTHOR      *
 * --------   ---------------------------------------------------  ----------- *
 * 09/05/00   Initial version                                      Goran Devic *
+* 03/20/04   Renamed from loader.c into Linsym.c                  Goran Devic *
 * --------   ---------------------------------------------------  ----------- *
 *******************************************************************************
 *   Include Files                                                             *
@@ -125,7 +126,7 @@ char *pArgs = NULL;                     // Default no arguments
 char *pSym = NULL;                      // Default symbol table to load/unload
 char *pLogfile = "linice.log";          // Default logfile name
 char *pSystemMap = NULL;                // User supplied System.map file
-char *pCap = NULL;                      // Capture option string
+char *pCheck = NULL;                    // Check symbol file
 unsigned int opt;                       // Various option flags
 int nVerbose;                           // Verbose level
 
@@ -145,8 +146,7 @@ extern void OptAddSymbolTable(char *sName);
 extern void OptRemoveSymbolTable(char *sName);
 extern void OptTranslate(char *pathOut, char *pathIn, char *pathSources, int nLevel);
 extern void OptLogHistory(void);
-extern void OptCapture(char *pStr);
-
+extern void OptCheck(char *pFile);
 
 /******************************************************************************
 *                                                                             *
@@ -167,7 +167,7 @@ extern void OptCapture(char *pStr);
 ******************************************************************************/
 int system2(char *command)
 {
-#ifndef WINDOWS
+#ifndef WIN32
     int pid, status;
     char *argv[4];                      // Argument string pointers
     static char sExec[256];             // Line that we will be executing
@@ -262,9 +262,11 @@ void OptHelp(int shorth)
 //        printf("\n");
         printf("       Example: --output:MySymbols.sym\n");
 //        printf("\n");
-        printf("  -p or --source:<path>[;<path>]       Specify path(s) for source searches\n");
+        printf("  -p or --source:<path>[;<path>]       Specify path(s) for source searches OR\n");
+        printf("  -p or --source:<path-spec-file>      File that contains path specification\n");
 //        printf("\n");
         printf("       Example: --source:/myproject/source;/myproject/include\n");
+        printf("       Example: --source:pathspec.txt\n");
 //        printf("\n");
         printf("  -a or --args:<arg-string>            Specify program argument for loading\n");
 //        printf("\n");
@@ -314,8 +316,7 @@ int main(int argn, char *argp[])
     // Print the basic banner
     printf("\nLinice Debugger ");
     printf("Symbol Translator/Loader Version %d.%02d\n", LINSYMVER >> 8, LINSYMVER & 0xFF);
-
-    printf("Linice and Linsym (C) 2000-2004 by Goran Devic.  All Rights Reserved.");
+    printf("Linice and Linsym (C) 2000-2004 by Goran Devic.  All Rights Reserved.\n\n");
 
     // If there were no arguments, just print help and exit (help exits)
     if( argn==1 )
@@ -358,9 +359,9 @@ int main(int argn, char *argp[])
                 opt |= OPT_HELP;    // Did not provide file name to translate
         }
         else
-        if( !strnicmp(argp[i], "--source:", 9) || !strnicmp(argp[i], "-p", 2) )
+        if( !strnicmp(argp[i], "--source:", 9) || !strnicmp(argp[i], "-p:", 3) )
         {
-            ptr = argp[i] + (*(argp[i]+1)=='-'? 9 : 2);
+            ptr = argp[i] + (*(argp[i]+1)=='-'? 9 : 3);
 
             // --source:{dirs to search for source}
             opt |= OPT_SOURCE;
@@ -507,13 +508,13 @@ int main(int argn, char *argp[])
             }
         }
         else
-        if( !strnicmp(argp[i], "--capture:", 10) || !strnicmp(argp[i], "-c:", 3) )
+        if( !strnicmp(argp[i], "--check:", 8) || !strnicmp(argp[i], "-c:", 3) )
         {
             ptr = argp[i] + (*(argp[i]+1)=='-'? 10 : 3);
 
-            // --capture:{option}
-            opt |= OPT_CAPTURE;
-            pCap = ptr;
+            // --check:{file}
+            opt |= OPT_CHECK;
+            pCheck = ptr;
         }
         else
         {
@@ -606,17 +607,11 @@ int main(int argn, char *argp[])
     if( opt & OPT_UNINSTALL )
         OptUninstall();
 
-    // Test capture option
-    if( opt & OPT_CAPTURE )
-        OptCapture(pCap);
+    // Check symbol file option
+    if( opt & OPT_CHECK )
+        OptCheck(pCheck);
 
     return( 0 );
-}
-
-
-int _open(const char *path, int oflag)
-{
-    return(open(path, oflag));
 }
 
 /******************************************************************************

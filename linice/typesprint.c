@@ -105,60 +105,9 @@ enum
 } TENUMBUILTINTYPES;
 
 
-// Size (memory footprints) of the simple, built-in types
-
-#ifdef WIN32
-static int nSimpleTypes[TYPEDEF__LAST] =
-{
-    sizeof(NULL),
-    sizeof(int),
-    sizeof(char),
-    sizeof(long int),
-    sizeof(unsigned int),
-    sizeof(long unsigned int),
-    sizeof(long int),
-    sizeof(long unsigned int),
-    sizeof(short int),
-    sizeof(short unsigned int),
-    sizeof(signed char),
-    sizeof(unsigned char),
-    sizeof(NULL),
-    sizeof(NULL),
-    sizeof(NULL),
-    sizeof(NULL),
-    sizeof(NULL),
-    sizeof(NULL),
-    sizeof(NULL)
-};
-#else
-static int nSimpleTypes[TYPEDEF__LAST] =
-{
-    sizeof(NULL),
-    sizeof(int),
-    sizeof(char),
-    sizeof(long int),
-    sizeof(unsigned int),
-    sizeof(long unsigned int),
-    sizeof(long long int),
-    sizeof(long long unsigned int),
-    sizeof(short int),
-    sizeof(short unsigned int),
-    sizeof(signed char),
-    sizeof(unsigned char),
-    sizeof(NULL),
-    sizeof(NULL),
-    sizeof(NULL),
-    sizeof(NULL),
-    sizeof(NULL),
-    sizeof(NULL),
-    sizeof(NULL)
-};
-#endif
-
-
 /******************************************************************************
 *                                                                             *
-*   Functions                                                                 *
+*   External Functions                                                        *
 *                                                                             *
 ******************************************************************************/
 
@@ -169,11 +118,21 @@ extern TLISTITEM *ListAdd(TLIST *pList, TFRAME *pFrame);
 extern void ListDel(TLIST *pList, TLISTITEM *pItem, BOOL fDelRoot);
 extern void ListDraw(TLIST *pList, TFRAME *pFrame, BOOL fForce);
 extern TLISTITEM *ListGetNewItem();
+extern TSYMTYPEDEF1 *Type2Typedef(char *pTypeName, int nLen, WORD file_id);
+extern void TypedefCanonical(TSYMTYPEDEF1 *pType1);
+extern void scan2dec(char *pBuf, int *p1, int *p2);
 
-extern int GetTypeSize(TSYMTYPEDEF1 *pType1);
+extern UINT GetTypeSize(TSYMTYPEDEF1 *pType1);
+
+/******************************************************************************
+*                                                                             *
+*   Functions                                                                 *
+*                                                                             *
+******************************************************************************/
 
 void PrintTypeListExpand(TLISTITEM *pListItem);
-int PrintTypeName(char *buf, TSYMTYPEDEF1 *pType1);
+
+static int PrintTypeName(char *buf, TSYMTYPEDEF1 *pType1);
 
 
 /******************************************************************************
@@ -276,7 +235,7 @@ MultiDimArray:
         if( p )
         {
             // Get the child element type and resolve it into a new typedef
-            pType1 = Type2Typedef(p, 0);
+            pType1 = Type2Typedef(p, 0, pType1->file_id);
 
             // Make the new type a canonical
             memcpy(&Type1, pType1, sizeof(TSYMTYPEDEF1));
@@ -325,13 +284,13 @@ static int PrintTypeName(char *buf, TSYMTYPEDEF1 *pType1)
         {
             // The type is one of the base types
 
-            strcpy(buf, sSimpleTypes[*pType1->pDef]);
+            strcpy(buf, sSimpleTypes[(UINT)*pType1->pDef]);
 
-            written = strlen(sSimpleTypes[*pType1->pDef]);
+            written = strlen(sSimpleTypes[(UINT)*pType1->pDef]);
         }
         else
         {
-            // The type is a complex type
+            // The type is a complex type or a specific descriptor
 
             switch( *pType1->pDef )
             {
@@ -341,8 +300,10 @@ static int PrintTypeName(char *buf, TSYMTYPEDEF1 *pType1)
                 case 'a':   written = PrintArrayTypeName(buf, pType1);  break;
                 case 'f':   written = sprintf(buf, "function ");  break;
                 case 'r':   written = sprintf(buf, "int ");  break;
+                case 'B':   written = PrintTypeName(buf, Type2Typedef(pType1->pDef, 0, pType1->file_id)); break;     // volatile variable descriptor
+                    break;
                 default:
-                    written = sprintf(buf, "<unknown> %s ", pType1->pDef);
+                    written = sprintf(buf, "<unknown> %s...", substr(pType1->pDef, 0, 47));
             }
         }
 
@@ -390,9 +351,9 @@ ArrayNextDimension:
         pDef = Type1.pDef;
 
         // Read the array bounds
-        pDef = strchr(pDef, ';');   // Get to the bounds part
-        sscanf(pDef, ";%d;%d", &lower, &upper);
-        pDef = strchr(pDef, '(');   // Get to the typedef of a child element
+        pDef = strchr(pDef, ';');           // Get to the bounds part
+        scan2dec(pDef+1, &lower, &upper);   // Scan 2 decimal numbers "%d,%d"
+        pDef = strchr(pDef, '(');           // Get to the typedef of a child element
 
         // Print the current array dimension
 
@@ -400,7 +361,7 @@ ArrayNextDimension:
 
         // Read the typedef of a child element and loop if it is an array without redirection
 
-        pType1 = Type2Typedef(pDef, 0);
+        pType1 = Type2Typedef(pDef, 0, pType1->file_id);
 
         goto ArrayNextDimension;
     }
@@ -431,188 +392,6 @@ void PrettyPrintVariableName(char *pString, char *pName, TSYMTYPEDEF1 *pType1)
     // Expand with a list of possible array indices
 
     pString += PrintArrayIndexList(pString, pType1);
-}
-
-/******************************************************************************
-*                                                                             *
-*   int PrintTypedValue(char *buf, TSYMTYPEDEF1 *pType1, BYTE *pData)         *
-*                                                                             *
-*******************************************************************************
-*
-*   Prints the actual value formatted with the given type descriptor.
-*   The value's starting address is given in pData.
-*
-*   THIS FUNCTION CAN NOT BE USED FOR POINTERS, it also does not expand a complex type.
-*
-*   Where:
-*       buf - outout buffer to print to
-*       pType1 - Type descriptor to use as a template
-*       pData - address of the variable / symbol
-*
-*   Returns:
-*       The number of characters written
-*
-******************************************************************************/
-int PrintTypedValue(char *buf, TSYMTYPEDEF1 *pType1, BYTE *pData)
-{
-    DWORD dwData, dwSymbol;             // Data read
-
-    // Type may be a valid type pointer, otherwise, use "unsigned int"
-    if( GlobalReadDword(&dwSymbol, (DWORD)pData) )
-    {
-        // Get the actual data item from the variable
-        if( GlobalReadDword(&dwData, dwSymbol) )
-        {
-            if( pType1 && pType1->pDef )
-            {
-                if( *pType1->pDef <= TYPEDEF__LAST )
-                {
-                    // Simple built-in type: This is what we print here...
-
-                    switch( *pType1->pDef )
-                    {
-                        case TYPE_LONG_INT:
-                        case TYPE_UNSIGNED_INT:
-                        case TYPE_LONG_UNSIGNED_INT:
-                        case TYPE_LONG_LONG_INT:
-                        case TYPE_LONG_LONG_UNSIGNED_INT:
-                        case TYPE_INT:
-                            return( sprintf(buf, "%08X, %d", dwData, (signed) dwData) );
-
-                        case TYPE_CHAR:
-                        case TYPE_SIGNED_CHAR:
-                        case TYPE_UNSIGNED_CHAR:
-                            return( sprintf(buf, "%c", (dwData & 0xFF)<31? dwData & 0xFF : '.') );
-
-                        case TYPE_SHORT_INT:
-                        case TYPE_SHORT_UNSIGNED_INT:
-                            return( sprintf(buf, "%04X, %d", dwData & 0xFFFF, (signed) (dwData & 0xFFFF)) );
-
-                        case TYPE_FLOAT:
-                            return( sprintf(buf, "{float}") );
-
-                        case TYPE_DOUBLE:
-                        case TYPE_LONG_DOUBLE:
-                            return( sprintf(buf, "{double}") );
-
-                        case TYPE_COMPLEX_INT:
-                        case TYPE_COMPLEX_FLOAT:
-                        case TYPE_COMPLEX_DOUBLE:
-                        case TYPE_COMPLEX_LONG_DOUBLE:
-                            return( sprintf(buf, "{complex}") );
-                    }
-                }
-                else
-                {
-                    // The type is a complex type, we dont expand them here...
-                    return( sprintf(buf, "<{...}>") );
-                }
-            }
-            else
-            {
-                // The type is not properly formatted, or there is no type given -- print as UINT
-                return( sprintf(buf, "%X", dwData) );
-            }
-        }
-    }
-
-    // We could not access the symbol. That is weird. Print what you can...
-    return( sprintf(buf, "<?>") );
-}
-
-/******************************************************************************
-*
-*   int PrintTypedValueExpandCanonical(char *buf, TSYMTYPEDEF1 *pType1, BYTE *pData)
-*
-*******************************************************************************
-*
-*   This function prints some extra information for few of the simple built-in types,
-*   mainly by expanding one pointer level of int*, char* (giving a string) etc.
-*
-*   Where:
-*       buf - outout buffer to print to
-*       pType1 - Type descriptor to use as a template
-*       pData - address of the variable / symbol
-*
-*   Returns:
-*       The number of characters written
-*
-******************************************************************************/
-int PrintTypedValueExpandCanonical(char *buf, TSYMTYPEDEF1 *pType1, BYTE *pData)
-{
-    DWORD dwData, dwSymbol;             // Data read
-    BYTE bByte;                         // Data read / byte
-    int i;                              // Temporary counter
-
-    // See if we can print some additional data for the pointer dereferencing
-    // Type must have a valid pointer and a pointer redirection level of 1
-    if( pType1 && pType1->pDef && pType1->maj==1 && GlobalReadDword(&dwSymbol, (DWORD)pData) )
-    {
-        if( GlobalReadDword(&dwData, dwSymbol) )
-        {
-            switch( *pType1->pDef )
-            {
-                case TYPE_INT:
-                case TYPE_LONG_INT:
-                        return( sprintf(buf, "%d", (signed)dwData) );
-
-                case TYPE_UNSIGNED_INT:
-                case TYPE_LONG_UNSIGNED_INT:
-                        return( sprintf(buf, "%X", dwData) );
-
-                case TYPE_CHAR:
-                case TYPE_SIGNED_CHAR:
-                case TYPE_UNSIGNED_CHAR:
-                {
-                    // For characters, since they make up strings, we will iterate for
-                    // a number of characters and append them to the string
-
-#                   define SAMPLE_MAX  16                       // How much of a sample string to get?
-
-                    dwData = *(UINT *)pData;                    // Move the address into a local variable
-
-                    for(i=2; i<SAMPLE_MAX+2; i++)
-                    {
-                        if( GlobalReadBYTE(&bByte, dwSymbol) && isascii(bByte) )
-                        {
-                            buf[i] = bByte;
-                        }
-                        else
-                            return( 0 );
-                    }
-
-                    // Set the buffer header and trailer
-                    buf[0] = '<';
-                    buf[1] = '\"';
-                    buf[i] = '\"';
-                    buf[i+1] = '>';
-                    buf[i+2] = 0;
-                    return( i+2 );
-                }
-                    break;
-
-                case TYPE_SHORT_INT:
-                        return( sprintf(buf, "%d", (signed)(dwData & 0xFFFF)) );
-
-                case TYPE_SHORT_UNSIGNED_INT:
-                        return( sprintf(buf, "%X", dwData & 0xFFFF) );
-
-                case TYPE_LONG_LONG_INT:
-                case TYPE_LONG_LONG_UNSIGNED_INT:
-
-                case TYPE_FLOAT:
-                case TYPE_DOUBLE:
-                case TYPE_LONG_DOUBLE:
-                case TYPE_COMPLEX_INT:
-                case TYPE_COMPLEX_FLOAT:
-                case TYPE_COMPLEX_DOUBLE:
-                case TYPE_COMPLEX_LONG_DOUBLE:
-                    break;
-            }
-        }
-    }
-
-    return( 0 );
 }
 
 
@@ -662,7 +441,7 @@ void ExpandPrintSymbol(TExItem *Item, char *pName)
 
     List.ID = LIST_ID_EXPRESSION;
 
-    if(pItem = ListAdd(&List, &pWin->h))
+    if((pItem = ListAdd(&List, &pWin->h)))
     {
         // Copy the expression Item into the root list node and format the root list node
         memcpy(&pItem->Item, Item, sizeof(TExItem));
@@ -691,23 +470,24 @@ void ExpandPrintSymbol(TExItem *Item, char *pName)
 
 
 /******************************************************************************
-*                                                                             *
-*   TLISTITEM *TypeListExpandStruct(TLISTITEM *pListItem, PSTR pDef)          *
-*                                                                             *
+*
+*   TLISTITEM *TypeListExpandStruct(TLISTITEM *pListItem, TSYMTYPEDEF1 *pType1)
+
 *******************************************************************************
 *
 *   Expands a structure.
 *
 ******************************************************************************/
-static TLISTITEM *TypeListExpandStruct(TLISTITEM *pListItem, PSTR pDef)
+static TLISTITEM *TypeListExpandStruct(TLISTITEM *pListItem, TSYMTYPEDEF1 *pType1)
 {
-    TSYMTYPEDEF1 *pType1;               // Pointer to element type descriptor
     TLISTITEM *pFirstItem = NULL;       // First item that is added
-    TLISTITEM *pPrev;                   // Previous item so we can link them
+    TLISTITEM *pPrev = NULL;            // Previous item so we can link them
     TLISTITEM *pItem;                   // New item to add
+    PSTR pDef;                          // Type definition string
     int nStart, nSize;                  // Element start offset and size
 
     // Parse the structure type descriptor and keep adding new items to the list
+    pDef = pType1->pDef + 1;
 
     // Get the total structure size in bytes (and discard since we dont need that information)
     GetDec(&pDef);          // This will advance iterator past the decimal number
@@ -720,7 +500,7 @@ static TLISTITEM *TypeListExpandStruct(TLISTITEM *pListItem, PSTR pDef)
             if( pFirstItem==NULL )
                 pFirstItem = pPrev = pItem;
             else
-                pPrev->pNext = pItem, pPrev = pItem;
+                pPrev->pNext = (struct TLISTITEM *) pItem, pPrev = pItem;
 
             // Expanded items are one level higher than the parent item
             pItem->nLevel = pListItem->nLevel + 1;
@@ -732,7 +512,7 @@ static TLISTITEM *TypeListExpandStruct(TLISTITEM *pListItem, PSTR pDef)
             pDef++;
 
             // Get the type of that element and format the TExItem structure
-            pType1 = Type2Typedef(pDef, 0);
+            pType1 = Type2Typedef(pDef, 0, pType1->file_id);
 
             pItem->Item.bType = EXTYPE_SYMBOL;
             memcpy(&pItem->Item.Type, pType1, sizeof(TSYMTYPEDEF1));
@@ -741,12 +521,12 @@ static TLISTITEM *TypeListExpandStruct(TLISTITEM *pListItem, PSTR pDef)
             TypedefCanonical(&pItem->Item.Type);
 
             // Calculate the offset of that element from the start of the structure
-            pDef = strchr(pDef, ')') + 1;   // Advance past the type definition
-            sscanf(pDef, ",%d,%d;", &nStart, &nSize);
-            pDef = strchr(pDef, ';') + 1;   // Find the end of the element description
+            pDef = strchr(pDef, ')') + 1;       // Advance past the type definition
+            scan2dec(pDef+1, &nStart, &nSize);  // Scan 2 decimal numbers "%d,%d"
+            pDef = strchr(pDef, ';') + 1;       // Find the end of the element description
 
-            pItem->delta = nStart;          // Assign the starting offset in bits
-            pItem->width = nSize;           // Assign the size (width) in bits
+            pItem->delta = nStart;              // Assign the starting offset in bits
+            pItem->width = nSize;               // Assign the size (width) in bits
 
             // Finally, set up the root string for this element
 
@@ -758,50 +538,51 @@ static TLISTITEM *TypeListExpandStruct(TLISTITEM *pListItem, PSTR pDef)
 }
 
 /******************************************************************************
-*                                                                             *
-*   TLISTITEM *TypeListExpandUnion(TLISTITEM *pListItem, PSTR pDef)           *
-*                                                                             *
+*
+*   TLISTITEM *TypeListExpandUnion(TLISTITEM *pListItem, TSYMTYPEDEF1 *pType1)
+*
 *******************************************************************************
 *
 *   Expands an union.
 *
 ******************************************************************************/
-static TLISTITEM *TypeListExpandUnion(TLISTITEM *pListItem, PSTR pDef)
+static TLISTITEM *TypeListExpandUnion(TLISTITEM *pListItem, TSYMTYPEDEF1 *pType1)
 {
     // Unions are processed the same as structures
 
-    return( TypeListExpandStruct(pListItem, pDef) );
+    return( TypeListExpandStruct(pListItem, pType1) );
 }
 
 /******************************************************************************
-*                                                                             *
-*   TLISTITEM *TypeListExpandArray(TLISTITEM *pListItem, PSTR pDef)           *
-*                                                                             *
+*
+*   TLISTITEM *TypeListExpandArray(TLISTITEM *pListItem, TSYMTYPEDEF1 *pType1)
+*
 *******************************************************************************
 *
 *   Expands an array.
 *
 ******************************************************************************/
-static TLISTITEM *TypeListExpandArray(TLISTITEM *pListItem, PSTR pDef)
+static TLISTITEM *TypeListExpandArray(TLISTITEM *pListItem, TSYMTYPEDEF1 *pType1)
 {
     TSYMTYPEDEF1 Type1;                 // Actual type descriptor
-    TSYMTYPEDEF1 *pType1;               // Pointer to element type descriptor
     TLISTITEM *pFirstItem = NULL;       // First item that is added
-    TLISTITEM *pPrev;                   // Previous item so we can link them
+    TLISTITEM *pPrev = NULL;            // Previous item so we can link them
     TLISTITEM *pItem;                   // New item to add
     int lower, upper;                   // Array bounds variables
     UINT nDelta, nSize;                 // Offset and the Size of a child element
+    PSTR pDef;                          // Type definition string
 
     // Parse the structure type descriptor and keep adding new items to the list
+    pDef = pType1->pDef + 1;
 
     // Array: ar(%d,%d);%d;%d;(%d,%d)
     // (1,16) = ar(1,17);0;9;(0,2)
     //                        \ type of the child element
     //                    \ array bounds
 
-    pDef = strchr(pDef, ';');   // Get to the bounds part
-    sscanf(pDef, ";%d;%d", &lower, &upper);
-    pDef = strchr(pDef, '(');   // Get to the typedef of a child element
+    pDef = strchr(pDef, ';');           // Get to the bounds part
+    scan2dec(pDef+1, &lower, &upper);   // Scan 2 decimal numbers "%d,%d"
+    pDef = strchr(pDef, '(');           // Get to the typedef of a child element
 
     // If the array bounds are not explicitly set, assume 1 element; do this also
     // if there are too many elements
@@ -811,7 +592,7 @@ static TLISTITEM *TypeListExpandArray(TLISTITEM *pListItem, PSTR pDef)
         lower = 0, upper = MAX_ARRAY_EXPAND;
 
     // Get the type of the array element and copy it into our local structure
-    pType1 = Type2Typedef(pDef, 0);
+    pType1 = Type2Typedef(pDef, 0, pType1->file_id);
     memcpy(&Type1, pType1, sizeof(TSYMTYPEDEF1));
 
     // Make the stored type canonical
@@ -828,7 +609,7 @@ static TLISTITEM *TypeListExpandArray(TLISTITEM *pListItem, PSTR pDef)
             if( pFirstItem==NULL )
                 pFirstItem = pPrev = pItem;
             else
-                pPrev->pNext = pItem, pPrev = pItem;
+                pPrev->pNext = (struct TLISTITEM *) pItem, pPrev = pItem;
 
             // Expanded items are one level higher than the parent item
             pItem->nLevel = pListItem->nLevel + 1;
@@ -878,10 +659,164 @@ void PrintTypeListExpand(TLISTITEM *pListItem)
 
         switch( *pType1->pDef )
         {
-            case 's':   pListItem->pElement = TypeListExpandStruct(pListItem, pType1->pDef + 1);   break;
-            case 'u':   pListItem->pElement = TypeListExpandUnion(pListItem, pType1->pDef + 1);    break;
-            case 'a':   pListItem->pElement = TypeListExpandArray(pListItem, pType1->pDef + 1);    break;
+            case 's':   pListItem->pElement = (struct TLISTITEM *) TypeListExpandStruct(pListItem, pType1);  break;
+            case 'u':   pListItem->pElement = (struct TLISTITEM *) TypeListExpandUnion( pListItem, pType1);  break;
+            case 'a':   pListItem->pElement = (struct TLISTITEM *) TypeListExpandArray( pListItem, pType1);  break;
+
+//        case 's':   pListItem->pElement = (struct TLISTITEM *) TypeListExpandStruct(pListItem, pType1->pDef + 1);   break;
+//        case 'u':   pListItem->pElement = (struct TLISTITEM *) TypeListExpandUnion(pListItem, pType1->pDef + 1);    break;
+//        case 'a':   pListItem->pElement = (struct TLISTITEM *) TypeListExpandArray(pListItem, pType1->pDef + 1);    break;
         }
     }
+}
+
+
+/******************************************************************************
+*                                                                             *
+*   BOOL cmdTypes(char *args, int subClass)                                   *
+*                                                                             *
+*******************************************************************************
+*
+*   Display all types in a current symbol file or display a specific type
+*   structure information.
+*
+*   Symtax:
+*       TYPES           - lists all data types in the current symbol table
+*       TYPES *         - alternate way to list all types
+*       TYPES type      - display type information for a given symbol type
+*
+*   There is a slight difference between first two - '*' will cause all
+*   types to be printed out, it is more of a dumping option.
+*
+******************************************************************************/
+BOOL cmdTypes(char *args, int subClass)
+{
+    char buf[MAX_STRING+1];             // Temp string to print a line to
+    TSYMHEADER *pHead;                  // Generic section header
+    TSYMTYPEDEF *pType;                 // Type structure header
+    TSYMTYPEDEF1 *pType1;               // Pointer to a single type definition
+    WORD nTypedefs;                     // How many types are in the current definition block
+    char *pStr;                         // Pointer to name string
+    int nLine = 1;                      // Standard line counter
+    BOOL fPrint;                        // Whether we print a type of skip it
+    TSYMTYPEDEF1 Type1;                 // Type descriptor to make canonical
+    TLIST List;                         // List node
+    TLISTITEM *pItem;                   // Root item to be added to the list
+
+    buf[MAX_STRING] = 0;
+
+    if( deb.pSymTabCur )
+    {
+        if( deb.pFnScope )
+        {
+            if( *args && *args!='*' )
+            {
+                // Argument is a specific type name - find it and list its members
+
+                pType1 = Type2Typedef(args, strlen(args), deb.pFnScope->file_id);
+
+                if( pType1 )
+                {
+                    // Get the type name portion
+                    pStr = pType1->pName;
+
+                    // Copy the type descriptor since we will make it canonical
+                    memcpy(&Type1, pType1, sizeof(TSYMTYPEDEF1));
+
+                    TypedefCanonical(&Type1);
+
+                    // Create a temporary list with the symbol in the root
+                    memset(&List, 0, sizeof(TLIST));
+
+                    List.ID = LIST_ID_TYPE;
+
+                    if((pItem = ListAdd(&List, &pWin->h)))
+                    {
+                        PrettyPrintVariableName(pItem->String, "TYPE", pType1);
+
+                        // Expand that root symbol if possible
+
+                        memcpy(&pItem->Item.Type, pType1, sizeof(TSYMTYPEDEF1));
+                        pItem->Item.bType = EXTYPE_SYMBOL;
+
+                        PrintTypeListExpand(pItem);
+
+                        // Print the expanded item - at this point we need to set the history window to
+                        // not visible, so the list draw function will not try to print it from the
+                        // top of that window
+                        pWin->h.fVisible = FALSE;
+
+                        ListDraw(&List, &pWin->h, TRUE);
+
+                        pWin->h.fVisible = TRUE;        // Of course, history window is always visible :)
+
+                        // Now we are done, delete the list
+                        ListDel(&List, pItem, TRUE);
+                    }
+                }
+                else
+                    dprinth(1, "Unrecognized type name.");
+            }
+            else
+            {
+                // No arguments given or argument was '*' - lists all symbol types
+
+                pHead = deb.pSymTabCur->header;
+
+                while( pHead->hType != HTYPE__END )
+                {
+                    if( pHead->hType == HTYPE_TYPEDEF )
+                    {
+                        pType = (TSYMTYPEDEF*)pHead;
+
+                        // Got a type header, list all types defined there
+
+                        nTypedefs = pType->nTypedefs;
+                        pType1 = pType->list;
+
+                        dprinth(nLine++, "Size  Type Name                      Typedef");
+
+                        for(; nTypedefs>0; nTypedefs--)
+                        {
+                            fPrint = TRUE;  // Assume we will print every type
+
+                            // Get the type name portion
+                            pStr = pType1->pName;
+
+                            // Dont print if the type is not named or it is a basic type
+                            if( pStr==NULL || *pStr=='\0' )
+                                fPrint = FALSE;
+
+                            if( *pType1->pDef <= TYPEDEF__LAST )
+                                fPrint = FALSE;
+
+                            // Copy the type descriptor since we will make it canonical
+                            memcpy(&Type1, pType1, sizeof(TSYMTYPEDEF1));
+
+                            TypedefCanonical(&Type1);
+
+                            PrintTypeName(buf, &Type1);
+
+                            // If the argument was not '*', limit the type that we print
+
+                            if( !(*args!='*' && fPrint==FALSE) )
+                                if( dprinth(nLine++, "%04X  %-30s %s", GetTypeSize(&Type1), pStr, buf)==FALSE)
+                                    return( TRUE );
+
+                            pType1++;
+                        }
+                    }
+
+                    pHead = (TSYMHEADER*)((DWORD)pHead + pHead->dwSize);
+                }
+            }
+        }
+        else
+            dprinth(1, "Unknown context.");
+    }
+    else
+        dprinth(1, "No symbol table loaded.");
+
+    return( TRUE );
 }
 

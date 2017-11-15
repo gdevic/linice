@@ -117,6 +117,7 @@ void ConfigurationSave()
 {
     FILE *fp;
 
+    unlink(sConfig);
     fp = fopen(sConfig, "w");
 
     if(fp)
@@ -139,6 +140,8 @@ void ConfigurationSave()
         fprintf(fp, "Regs.ss = %04X\n", Regs.ss);
 
         fclose(fp);
+
+        flushall();
     }
 }
 

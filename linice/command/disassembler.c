@@ -56,6 +56,10 @@
 *                                                                             *
 ******************************************************************************/
 
+extern char *SymFnScope2Local(TSYMFNSCOPE *pFnScope, DWORD ebpOffset);
+extern char *SymAddress2FunctionName(WORD wSel, DWORD dwOffset);
+extern char *SymAddress2Name(WORD wSel, DWORD dwOffset);
+
 /******************************************************************************
 *                                                                             *
 *   Local Defines, Variables and Macros                                       *

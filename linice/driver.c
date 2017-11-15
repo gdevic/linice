@@ -103,21 +103,19 @@ extern int XInitPacket(TXINITPACKET *pXInit);
 extern int UserAddSymbolTable(void *pSymtab);
 extern int UserRemoveSymbolTable(void *pSymtab);
 
-extern void ice_free(BYTE *p);
-extern void ice_free_heap(BYTE *pHeap);
-
 extern void KeyboardHook(DWORD handle_kbd_event, DWORD handle_scancode);
 extern void KeyboardUnhook();
 extern void UnHookDebuger(void);
 extern void UnHookSyscall(void);
+extern void DisarmBreakpoints(void);
 
 extern int HistoryReadReset();
 extern char *HistoryReadNext(void);
 
-extern int Capture(void *);
-
 extern WORD GetKernelDS();
 extern WORD GetKernelCS();
+
+extern void memFreeHeap(BYTE *hHeap);
 
 extern WORD sel_ice_ds;                 // Place to self-modify the code with this value
 
@@ -247,20 +245,20 @@ void IceCleanupModule(void)
     ice_unregister_chrdev(major_device_number, "ice");
 
     // Free memory structures
-    if( deb.pHistoryBuffer != NULL )
-        ice_free(deb.pHistoryBuffer);
+    if( deb.hHistoryBufferHeap != NULL )
+        memFreeHeap(deb.hHistoryBufferHeap);
 
     if( deb.hSymbolBufferHeap != NULL )
-        ice_free_heap(deb.hSymbolBufferHeap);
+        memFreeHeap(deb.hSymbolBufferHeap);
 
     if( deb.pXDrawBuffer != NULL )
-        ice_free_heap(deb.pXDrawBuffer);
+        ice_vfree(deb.pXDrawBuffer);
 
     if( deb.pXFrameBuffer != NULL )
         ice_iounmap(deb.pXFrameBuffer);
 
     if( deb.hHeap != NULL )
-        ice_free_heap(deb.hHeap);
+        memFreeHeap(deb.hHeap);
 
     return;
 }
@@ -399,13 +397,6 @@ int DriverIOCTL(void *p1, void *p2, unsigned int ioctl, unsigned long param)
             else
                 retval = -EFAULT;       // Faulty memory access OR end of history stream
 
-            break;
-
-        //==========================================================================================
-        case ICE_IOCTL_CAPTURE:         // Get a capture image
-            INFO(("ICE_IOCTL_CAPTURE\n"));
-
-            retval = Capture((void *)param);
             break;
     }
 

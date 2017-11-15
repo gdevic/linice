@@ -508,6 +508,8 @@ extern unsigned char inp(unsigned short port);
 #define outw(port,value) __asm__ __volatile__("outw %w0,%w1\n\t":: "a" (value) , "d" (port) );
 #define outd(port,value) __asm__ __volatile__("outl %w0,%w1\n\t":: "a" (value) , "d" (port) );
 
+#define INT(_x) __asm__ __volatile__("int %0" :: "g" (_x))
+
 #else // SIM
 
 extern void outp(int port, int value);
@@ -517,6 +519,8 @@ extern unsigned char inp(unsigned short port);
 #define GET_IDT(a) GetIDT(&(a));
 extern void GetGDT(TDescriptor *p);
 extern void GetIDT(TDescriptor *p);
+
+#define INT(x)
 
 #endif // SIM
 

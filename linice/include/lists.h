@@ -84,6 +84,7 @@ typedef struct
 #define LIST_ID_WATCH       0x00        // Watch list
 #define LIST_ID_LOCALS      0x01        // Locals list
 #define LIST_ID_EXPRESSION  0x02        // Expression query
+#define LIST_ID_TYPE        0x03        // Typedef query (no evaluation needed)
 
 /******************************************************************************
 *                                                                             *

@@ -146,11 +146,6 @@ typedef struct
 //      Sent by the linsym multiple times to retrieve line by line of the
 //      history buffer. When finished, call returns error instead of 0.
 //
-//  ICE_IOCTL_CAPTURE
-//      Sent by the linsym to get a specific capture image. This is used
-//      for testing on a simulator to get specific module image named
-//      in the buffer, which *must* contain enough space to save it.
-//
 
 #define ICE_IOC_MAGIC       'I'         // Magic IOctl number (8 bits)
 
@@ -162,7 +157,6 @@ typedef struct
 #define ICE_IOCTL_XDGA          _IOC(_IOC_WRITE, ICE_IOC_MAGIC, 0x86, sizeof(TXINITPACKET))
 #define ICE_IOCTL_HISBUF_RESET  _IOC(_IOC_WRITE, ICE_IOC_MAGIC, 0x87, 0)
 #define ICE_IOCTL_HISBUF        _IOC(_IOC_READ,  ICE_IOC_MAGIC, 0x88, MAX_STRING)
-#define ICE_IOCTL_CAPTURE       _IOC(_IOC_WRITE, ICE_IOC_MAGIC, 0x89, MAX_STRING)
 
 
 #endif //  _ICE_IOCTL_H_

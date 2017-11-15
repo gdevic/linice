@@ -56,9 +56,9 @@
 
 static TSYMFNSCOPE1 *LocalsQueue[MAX_LOCALS_QUEUE];
 
-static char *RegisterVariables[] =
+static char *RegisterVariables[8] =
 {
-    "eax", "ecx", "edx", "ebx", "esp", "ebp", "esi", "edi", "eip", "eflags", "cs", "ss", "ds", "es", "fs", "gs",
+    "EAX", "ECX", "EDX", "EBX", "ESP", "EBP", "ESI", "EDI"
 };
 
 /******************************************************************************
@@ -127,57 +127,70 @@ static BOOL LocalBuildQueue(TSYMFNSCOPE *pFnScope, DWORD dwEIP)
     int i, index;                   // Running indices to function scope and queue
     int nBlock;                     // Current scope block
 
+    // Find where is our current EIP within the current function, then backtrack to the
+    // beginning of the scope array for the bracket start "{"
+    // Any closing brackets "}" will increment the scope indent counter so the
+    // following variables will not be visible, until the scope indent count comes back
+    // to the base level
 
-    // TODO: FIXME - fix the way locals are queued: Right now we look for the EIP position
-    // then walk back and fill up the queue. This is not correct. First, the local vars
-    // are defined _before_ an opening { for their scope, not within; second it picks
-    // up vars that are not defined yet for that scope.
-
-    // Find where is our current EIP within the current function
     if( pFnScope && pFnScope->dwStartAddress<=dwEIP && pFnScope->dwEndAddress>=dwEIP )
     {
-        // Scan forward for the right scope brackets depending on the code offset
+        // Scan forward for the matching code offset
         dwFnOffset = dwEIP - pFnScope->dwStartAddress;
 
         for(i=0; i<pFnScope->nTokens; i++ )
         {
-            // Only LBRAC and RBRAC contain the function offset value in param, so we know where we are
+            // Only LBRAC and RBRAC contain the function offset value in param, so we can compare to where we are
             if( pFnScope->list[i].TokType==TOKTYPE_LBRAC || pFnScope->list[i].TokType==TOKTYPE_RBRAC )
             {
                 // Since the offsets are in increasing order, if our offset is already less than the
-                // function scope offset, we assume we found our place
-                if( dwFnOffset <= pFnScope->list[i].param )
+                // function scope offset, we assume we found (or overshoot) our place
+                if( pFnScope->list[i].param < dwFnOffset )
+                    continue;
+                else
+                {
+                    if( pFnScope->list[i].param > dwFnOffset )
+                        i--;
+
                     break;
+                }
             }
         }
 
         // We have now index 'i' specifying where in the function scope array are we located
         // Need to start filling in the scope array by traversing backwards
-        nBlock = 0;
         index  = 0;
 
         for(; i>=0 && index<MAX_LOCALS_QUEUE; i--)
         {
-            // If there is a new scope block staring, decrement the block number, but never past 0
-            if( pFnScope->list[i].TokType==TOKTYPE_LBRAC )
-            {
-                if( nBlock>0 )
-                    nBlock--;
-            }
-
-            // If there is a scope block ending, increment the block number
-            if( pFnScope->list[i].TokType==TOKTYPE_RBRAC )
-                nBlock++;
-
-            // Take a variable only if the current block is visible
-            // Add in only local variables
+            // Take a variable only if the current block is visible; Add in only local variables
             if( pFnScope->list[i].TokType==TOKTYPE_PARAM || pFnScope->list[i].TokType==TOKTYPE_RSYM || pFnScope->list[i].TokType==TOKTYPE_LSYM )
             {
-                if( nBlock==0 )
+                // Store a local variable that is now visible
+                LocalsQueue[index] = &pFnScope->list[i];
+                index++;            // Increment the index into the locals queue
+            }
+            else
+            {
+                // If there is a scope nested block starting "}", find the end of the nesting thus prohibiting the
+                // variables of that scope level(s) to be stored
+                if( pFnScope->list[i].TokType==TOKTYPE_RBRAC )          // }
                 {
-                    // Store a local variable that is now visible
-                    LocalsQueue[index] = &pFnScope->list[i];
-                    index++;            // Increment the index into the locals queue
+                    nBlock = 0;
+
+                    do
+                    {
+                        if( pFnScope->list[i].TokType==TOKTYPE_RBRAC )  // }
+                            nBlock++;
+                        else
+                        if( pFnScope->list[i].TokType==TOKTYPE_LBRAC )  // {
+                            nBlock--;
+                        i--;
+
+                    } while( i>0 && nBlock );
+
+                    // Find the next { so we can start taking variables
+                    while( i>=0 && pFnScope->list[i].TokType!=TOKTYPE_LBRAC )  i--;
                 }
             }
         }
@@ -211,7 +224,7 @@ static void LocalBuildList()
         {
             // Found an item in the queue, add it up to the list of locals
 
-            if(pItem = ListAdd(&deb.Local, &pWin->l))
+            if((pItem = ListAdd(&deb.Local, &pWin->l)))
             {
                 // Get the type descriptor into the new list node
                 ParseLocalSymbol(
@@ -221,7 +234,23 @@ static void LocalBuildList()
                 // Copy the variable name into the Name field
                 strccpy(pItem->Name, LocalsQueue[index]->pName, ':');
 
-                PrettyPrintVariableName(pItem->String, pItem->Name, &pItem->Item.Type);
+                // Print the variable header, the offset from the EBP or the register variable
+
+                if( LocalsQueue[index]->TokType==TOKTYPE_RSYM )
+                {
+                    sprintf(pItem->String, "[%s] ", RegisterVariables[LocalsQueue[index]->param & 7]);
+                }
+                else
+                {
+                    // It is either a parameter or a local variable - both are off the EBP
+
+                    if( (signed)LocalsQueue[index]->param < 0 )
+                        sprintf(pItem->String, "[EBP-%X] ", -(signed)LocalsQueue[index]->param);
+                    else
+                        sprintf(pItem->String, "[EBP+%X] ", LocalsQueue[index]->param);
+                }
+
+                PrettyPrintVariableName(pItem->String+strlen(pItem->String), pItem->Name, &pItem->Item.Type);
             }
         }
     }
@@ -251,153 +280,17 @@ BOOL FillLocalScope(TSYMFNSCOPE *pFnScope, DWORD dwEIP)
 
     memset(&LocalsQueue, 0, sizeof(LocalsQueue));
 
-    if( LocalBuildQueue(pFnScope, dwEIP) )
+    // Build the scope only if the function scope is valid
+    if( deb.pFnScope )
     {
-        // Rebuild the list of locals based on the queue
+        if( LocalBuildQueue(pFnScope, dwEIP) )
+        {
+            // Rebuild the list of locals based on the queue
 
-        LocalBuildList();
+            LocalBuildList();
+        }
     }
 
     return( TRUE );
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-#if 0
-    // Make sure our code offset is within this function scope descriptor
-    if( pFnScope && pFnScope->dwStartAddress<=dwEIP && pFnScope->dwEndAddress>=dwEIP )
-    {
-        // Scan forward for the right scope brackets depending on the code offset
-        dwFnOffset = dwEIP - pFnScope->dwStartAddress;
-        position = -1;                  // -1 means we did not find any locals or out of scope
-
-        for(i=0; i<pFnScope->nTokens; i++ )
-        {
-            // Only LBRAC and RBRAC contain the function offset value in param, so we know where we are
-            if( pFnScope->list[i].TokType==TOKTYPE_LBRAC || pFnScope->list[i].TokType==TOKTYPE_RBRAC )
-            {
-                if( dwFnOffset >= pFnScope->list[i].param )
-                    position = i;
-                else
-                if( dwFnOffset < pFnScope->list[i].param )
-                    break;
-            }
-        }
-
-        i = position;               // We will use 'i' from now on...
-
-        // Fill in the queue by traversing back the function scope list
-        if( i >= 0 )
-        {
-            index = 0;              // Index into the locals queue
-            xNested = 1;            // Make the current nesting level normal
-
-            while( index<MAX_LOCALS_QUEUE && i>=0 )
-            {
-                if( pFnScope->list[i].TokType==TOKTYPE_RBRAC )
-                    xNested++;      // Increase nesting level - hide scope variables of that level
-                else
-                if( pFnScope->list[i].TokType==TOKTYPE_LBRAC )
-                {
-                    if( xNested>0 ) // Decrease nesting level only if we have an extra scope to avoid
-                        xNested--;
-                }
-                else
-                {
-                    if( xNested==0 )
-                    {
-                        // Store a local variable that is now visible
-                        LocalsQueue[index] = &pFnScope->list[i];
-                        index++;            // Increment the index into the locals queue
-                    }
-                }
-                i--;                // Decrement the index within the function scope list
-            }
-        }
-    }
-    else
-        return( FALSE );
-
-
-    LocalsQueue[index] = NULL;      // Always terminate the queue
-
-    // Now we have the local scope array filled with the tokens...
-    // It is time to set up the master list for local variables
-
-    // Add all the items that we queued up, in reverse order, index still points to the last item
-    index--;                        // Index the previous one, not the last one
-
-    while( index>=0 )
-    {
-#if 0
-        if( (pItem = ListAdd(&deb.Local, &pWin->l)) )
-#endif
-        {
-            // A new list node has been added. Populate it with the type data etc.
-
-            // Get the type descriptor into the new list node
-            FindLocalSymbol(
-                &pItem->Item,
-                LocalsQueue[index]->pName,
-                strchr(LocalsQueue[index]->pName, ':') - LocalsQueue[index]->pName);
-
-//            TypedefCanonical(&pItem->Item.Type);
-
-            // Print the initial string for the given variable
-//            pStr = &pItem->sExp[0];
-
-            if( pItem->Item.bType==EXTYPE_REGISTER )
-            {
-                pStr += sprintf(pStr, "[%s] ", RegisterVariables[LocalsQueue[index]->param]);
-            }
-            else
-            {
-                if( (int)pItem->Item.Data > 0 )
-                    pStr += sprintf(pStr, "[EBP+%X] ", pItem->Item.Data);
-                else
-                    pStr += sprintf(pStr, "[EBP-%X] ", -(int)pItem->Item.Data);
-            }
-
-            pStr += PrintTypeName(pStr, &pItem->Item.Type);
-
-            pStr += sprintf(pStr, "%s = ", substr(LocalsQueue[index]->pName, 0, strchr(LocalsQueue[index]->pName, ':') - LocalsQueue[index]->pName));
-
-            pStr += PrintTypedValue(pStr, &pItem->Item.Type, &pItem->Item.pData);
-
-            pStr += PrintTypedValueExpandCanonical(pStr, &pItem->Item.Type, &pItem->Item.pData);
-
-
-            index--;                // Repeat until our index becomes 0
-        }
-//        else
-            //break;                  // Could not add the list node
-    }
-#endif

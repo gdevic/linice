@@ -62,8 +62,6 @@ static char sCmd[MAX_STRING];
 ******************************************************************************/
 
 extern void EdLin( char *sCmdLine );
-extern void GetSysreg( TSysreg * pSys );
-extern void SetSysreg( TSysreg * pSys );
 extern void ArmBreakpoints(void);
 extern void DisarmBreakpoints(void);
 extern BOOL EvalBreakpoint(void);

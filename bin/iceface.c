@@ -221,7 +221,10 @@ int ice_debug_level = 1;                // default value
 *                                                                             *
 ******************************************************************************/
 
-//struct mpc_config_ioapic mp_ioapics[MAX_IO_APICS];
+// Uncomment this on RH9.0 SMP
+#ifdef IO_APIC
+struct mpc_config_ioapic mp_ioapics[MAX_IO_APICS];
+#endif // IO_APIC
 
 /******************************************************************************
 *                                                                             *

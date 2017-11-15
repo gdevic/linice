@@ -47,6 +47,8 @@
 *                                                                             *
 ******************************************************************************/
 
+extern BOOL FillLocalScope(TSYMFNSCOPE *pFnScope, DWORD dwEIP);
+
 /******************************************************************************
 *                                                                             *
 *   Local Defines, Variables and Macros                                       *
@@ -347,7 +349,7 @@ void SetSymbolContext(WORD wSel, DWORD dwOffset)
             // Set the current function line descriptor based on the current CS:EIP
             deb.pFnLin = SymAddress2FnLin(wSel, dwOffset);
 
-            // Set the array of local scope variables
+            // Set the array of local scope variables (only if the function scope is valid)
             FillLocalScope(deb.pFnScope, deb.r->eip);
 
             if( deb.pFnLin )

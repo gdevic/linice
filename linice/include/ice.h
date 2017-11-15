@@ -36,7 +36,9 @@
 #ifndef _ICE_H_
 #define _ICE_H_
 
+#ifdef SIM
 #pragma warning( disable : 4133 )
+#endif
 
 #include "intel.h"                      // Include Intel x86 specific defines
 #include "ice-limits.h"                 // Include our limits
@@ -121,7 +123,7 @@ typedef struct
     BYTE *hSymbolBufferHeap;            // Handle to symbol buffer memory pool heap
 
     UINT nHistorySize;                  // History buffer size
-    BYTE *pHistoryBuffer;               // Pointer to a history buffer
+    BYTE *hHistoryBufferHeap;           // Handle to a history buffer memory pool heap
 
     UINT nXDrawSize;                    // DrawSize parameter
     BYTE *pXDrawBuffer;                 // Backstore buffer pointer, if XInitPacket accepted
@@ -129,7 +131,7 @@ typedef struct
 
     UINT nVars;                         // Number of user variables
     UINT nMacros;                       // Number of macros
-    BYTE *hHeap;                        // Handle to internal memory heap
+    BYTE *hHeap;                        // Handle to internal memory pool heap
 
     TLIST Watch;                        // Watch window data list
     TLIST Local;                        // Locals window data list
@@ -140,6 +142,7 @@ typedef struct
 
     DWORD error;                        // Error code
     DWORD memaccess;                    // Last memaccess code, or memaccess error code
+    BOOL fStamp;                        // Last memory stamp (checksum) result
 
     // Define the particular state of the machine at the time of break
 
@@ -241,21 +244,6 @@ extern TCommand Cmd[];                  // Command structure array
 extern char *sHelp[];                   // Help lines
 
 /////////////////////////////////////////////////////////////////
-// INTERNAL SYMBOL STRUCTURE
-/////////////////////////////////////////////////////////////////
-
-// TODO - this structure needs to go!
-
-typedef struct
-{
-    char *pName;                        // Pointer to symbol name string
-    char *pType;                        // Pointer to symbol type definition string
-    DWORD Data;                         // Symbol value
-    DWORD Address;                      // Address of a symbol
-
-} TSYMBOL;
-
-/////////////////////////////////////////////////////////////////
 // INTERNAL MOUSE PACKET STRUCTURE
 /////////////////////////////////////////////////////////////////
 // This is the internal mouse packet structure, device independent
@@ -355,6 +343,8 @@ extern void memset_d(void *dest, DWORD data, int size);
 extern WORD getTR(void);
 extern WORD GetKernelCS(void);
 extern WORD GetKernelDS(void);
+extern char *mallocHeap(BYTE *pHeap, UINT size);
+extern void freeHeap(BYTE *pHeap, void *mPtr );
 
 extern DWORD SelLAR(WORD Sel);
 extern BOOL AddrIsPresent(PTADDRDESC pAddr);
@@ -371,20 +361,15 @@ extern DWORD GetDec(char **psString);
 
 extern int GetOnOff(char *args);
 
-extern char *SymAddress2FunctionName(WORD wSel, DWORD dwOffset);
 extern void *SymTabFindSection(TSYMTAB *pSymTab, BYTE hType);
 extern TSYMSOURCE *SymTabFindSource(TSYMTAB *pSymTab, WORD fileID);
+extern TSYMTYPEDEF *SymTabFindTypedef(TSYMTAB *pSymTab, WORD fileID);
 
-extern BOOL SymbolName2Value(TSYMTAB *pSymTab, DWORD *pValue, char *name, int TokenLen);
-extern char *SymAddress2FunctionName(WORD wSel, DWORD dwOffset);
-extern char *SymAddress2Name(WORD wSel, DWORD dwOffset);
 extern DWORD SymLinNum2Address(DWORD line);
 extern TSYMFNLIN *SymAddress2FnLin(WORD wSel, DWORD dwOffset);
-extern BOOL FillLocalScope(TSYMFNSCOPE *pFnScope, DWORD dwEIP);
 extern char *SymFnLin2Line(WORD *pLineNumber, TSYMFNLIN *pFnLin, DWORD dwAddress);
 extern char *SymFnLin2LineExact(WORD *pLineNumber, TSYMFNLIN *pFnLin, DWORD dwAddress);
 extern TSYMFNSCOPE *SymAddress2FnScope(WORD wSel, DWORD dwOffset);
-extern char *SymFnScope2Local(TSYMFNSCOPE *pFnScope, DWORD ebpOffset);
 
 extern void SetSymbolContext(WORD wSel, DWORD dwOffset);
 

@@ -16,12 +16,12 @@ INC = /lib/modules/`uname -r`/build/include
 
 # Set the compiler flags - note that you have to specify at least -O when
 # compiling a Linux kernel
-#CFLAGS = -gstabs+ -Wall -O
-CFLAGS = -Wall -O
+CFLAGS = -gstabs+ -Wall -O
+#CFLAGS = -Wall -O
 #CFLAGS = -O
 
-#DEF = $(TARGET) -I$(INC) -D__KERNEL__ -D_LOOSE_KERNEL_NAMES -DMODULE -DLINUX -DDBG
-DEF = $(TARGET) -I$(INC) -D__KERNEL__ -D_LOOSE_KERNEL_NAMES -DMODULE -DLINUX
+DEF = $(TARGET) -I$(INC) -D__KERNEL__ -D_LOOSE_KERNEL_NAMES -DMODULE -DLINUX -DDBG
+#DEF = $(TARGET) -I$(INC) -D__KERNEL__ -D_LOOSE_KERNEL_NAMES -DMODULE -DLINUX
 
 CC = gcc
 

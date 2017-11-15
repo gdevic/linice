@@ -53,20 +53,27 @@
 *                                                                             *
 ******************************************************************************/
 
+static TSYMTYPEDEF1 TypeUnsignedInt =
+{
+    0,      // maj
+    0,      // min
+    "",     // pName
+    "\4",   // pDef -> TYPE_UNSIGNED_INT
+    0       // file_id
+};
+
 /******************************************************************************
 *                                                                             *
 *   Functions                                                                 *
 *                                                                             *
 ******************************************************************************/
 
-extern TSYMTYPEDEF1 *Type2Typedef(char *pTypeName, int nLen);
+extern TSYMTYPEDEF1 *Type2Typedef(char *pTypeName, int nLen, WORD file_id);
+extern void TypedefCanonical(TSYMTYPEDEF1 *pType1);
 extern void *SymTabFindSection(TSYMTAB *pSymTab, BYTE hType);
 extern BOOL FindModule(TMODULE *pMod, char *pName, int nNameLen);
 extern DWORD fnPtr(DWORD arg);
 extern int GetTokenLen(char *pToken);
-
-BOOL SymName2LocalSymbol(TSYMBOL *pSymbol, char *pName, int nTokenLen);
-
 
 /******************************************************************************
 *                                                                             *
@@ -97,11 +104,7 @@ void ParseLocalSymbol(TExItem *item, TSYMFNSCOPE1 *pLocal)
         case TOKTYPE_PARAM:
             // Parameter is on the stack, addressed with SS:EBP
             item->bType = EXTYPE_SYMBOL;
-            item->pData = (BYTE *) pLocal->param + (DWORD) &deb.r->ebp;
-
-// TODO: Problem: it should really be this way, but I get segmentation fault in vmware
-// item->pData = (BYTE *) pLocal->param + (DWORD) deb.r->ebp;
-
+            item->pData = (BYTE *) ((int)pLocal->param + (int)deb.r->ebp);
 
             item->wSel  = deb.r->ss;        // This is valid only for LSYM and PARAM
             item->Data  = pLocal->param;    // Keep the EBP offset in the Data field
@@ -134,16 +137,20 @@ void ParseLocalSymbol(TExItem *item, TSYMFNSCOPE1 *pLocal)
             break;
     }
 
-    // Get the type of the symbol
-    memset(&item->Type, 0, sizeof(TSYMTYPEDEF1));
+    // Get the type of the symbol, default to unsigned int
+    memcpy(&item->Type, &TypeUnsignedInt, sizeof(TSYMTYPEDEF1));
 
     pDef = strchr(pLocal->pName, '(');
     if( pDef )
     {
         // Found the type portion, get the type pointer
-        pType1 = Type2Typedef(pDef, 0);
+        pType1 = Type2Typedef(pDef, 0, deb.pFnScope->file_id);
         if( pType1 )
+        {
+            // Make the resulting type canonical
             memcpy(&item->Type, pType1, sizeof(TSYMTYPEDEF1));
+            TypedefCanonical(&item->Type);
+        }
     }
 }
 
@@ -269,11 +276,15 @@ BOOL FindStaticSymbol(TExItem *item, char *pName, int nNameLen)
                         item->pData = (BYTE*) pStatic->list[i].dwAddress;
 
                         // Get the type of the symbol
-                        pType1 = Type2Typedef(pStatic->list[i].pDef, 0);
+                        pType1 = Type2Typedef(pStatic->list[i].pDef, 0, pStatic->file_id);
                         if( pType1 )
+                        {
+                            // Make the resulting type canonical
                             memcpy(&item->Type, pType1, sizeof(TSYMTYPEDEF1));
+                            TypedefCanonical(&item->Type);
+                        }
                         else
-                            memset(&item->Type, 0, sizeof(TSYMTYPEDEF1));
+                            memcpy(&item->Type, &TypeUnsignedInt, sizeof(TSYMTYPEDEF1));
 
                         return( TRUE );
                     }
@@ -329,14 +340,20 @@ BOOL FindGlobalSymbol(TExItem *item, char *pName, int nNameLen)
                     // Fill in the item structure
 
                     item->bType = EXTYPE_SYMBOL;
+
+                    // TODO: I am puzzled. For some global symbols, we need & dereference... Investigate...
                     item->pData = (BYTE*) pGlobal->list[i].dwStartAddress;
 
-                    // Get the type of the symbol
-                    pType1 = Type2Typedef(pGlobal->list[i].pDef, 0);
+                    // Get the type of the symbol. The file ID is stored with the global symbol
+                    pType1 = Type2Typedef(pGlobal->list[i].pDef, 0, pGlobal->list[i].file_id);
                     if( pType1 )
+                    {
+                        // Make the resulting type canonical
                         memcpy(&item->Type, pType1, sizeof(TSYMTYPEDEF1));
+                        TypedefCanonical(&item->Type);
+                    }
                     else
-                        memset(&item->Type, 0, sizeof(TSYMTYPEDEF1));
+                        memcpy(&item->Type, &TypeUnsignedInt, sizeof(TSYMTYPEDEF1));
 
                     return( TRUE );
                 }
@@ -401,7 +418,7 @@ BOOL FindModuleSymbol(TExItem *item, char *pName, int nNameLen)
                 item->bType = EXTYPE_LITERAL;
                 item->pData = (BYTE*) &item->Data;
 
-                memset(&item->Type, 0, sizeof(TSYMTYPEDEF1));
+                memcpy(&item->Type, &TypeUnsignedInt, sizeof(TSYMTYPEDEF1));
 
                 return( TRUE );
             }
@@ -416,14 +433,14 @@ BOOL FindModuleSymbol(TExItem *item, char *pName, int nNameLen)
         if( nNameLen==11 && !strnicmp(pSymName, "init_module", 11) )
         {
             // Store the value of that symbol from the module structure
-            item->Data  = Mod.init;
+            item->Data  = (DWORD) Mod.init;
             goto FoundValue;
         }
 
         if( nNameLen==14 && !strnicmp(pSymName, "cleanup_module", 14) )
         {
             // Store the value of that symbol from the module structure
-            item->Data  = Mod.cleanup;
+            item->Data  = (DWORD) Mod.cleanup;
             goto FoundValue;
         }
     }
@@ -724,185 +741,6 @@ BOOL cmdFile(char *args, int subClass)
     return( TRUE );
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-/******************************************************************************
-*
-*   BOOL SymbolFindByName(DWORD **pSym, TSYMTYPEDEF1 **ppType1, char *pName, int nNameLen)
-*
-*******************************************************************************
-*
-*   Looks for the symbol within the current context and returns its address
-*   and type descriptor.
-*
-*   Where:
-*       pSym is the returning address of a symbol
-*       ppType1 is the (optional) returning type descriptor
-*       pName is the name of the symbol to look for
-*       nNameLen is thelength of the name string
-*
-*   Returns:
-*       FALSE - symbol name not found
-*       TRUE - *pSym contains the address of the symbol
-*              *ppType1 contains the pointer to the type descriptor
-*
-******************************************************************************/
-BOOL SymbolFindByName(DWORD **pSym, TSYMTYPEDEF1 **ppType1, char *pName, int nNameLen)
-{
-    TSYMGLOBAL  *pGlobals;              // Globals section pointer
-    TSYMGLOBAL1 *pGlobal;               // Single global item
-    DWORD count;
-    char *pSymDef;
-    static TSYMTYPEDEF1 StubType = { 0, 0, "", "\x4" }; // Default type is "unsigned int"
-
-    // Search in this order:
-    //  * Local scope variables
-    //  * Current file static variables
-    //  * Global variables
-    //  * Function names
-    //  * Module global symbol in the form "module!symbol"
-
-    if( deb.pSymTabCur )
-    {
-        // Symbol table is loaded and active
-
-        // Search global symbols
-        pGlobals = (TSYMGLOBAL *) SymTabFindSection(deb.pSymTabCur, HTYPE_GLOBALS);
-        if( pGlobals )
-        {
-            // Search global symbols for a specified symbol name
-
-            pGlobal = &pGlobals->list[0];
-
-            for(count=0; count<pGlobals->nGlobals; count++, pGlobal++ )
-            {
-                if( *(char *)(pGlobal->pName + nNameLen) == 0 &&
-                   !strnicmp(pGlobal->pName, pName, nNameLen) )
-                {
-                    // Found a global symbol with this name
-                    *pSym = pGlobal->dwStartAddress;
-                    pSymDef = pGlobal->pDef;
-
-                    if( *pSymDef=='G' )
-                        pSymDef++;
-
-                    // Find the symbol type descriptor and store it back if requested
-                    if( ppType1 )
-                    {
-                        if( (*ppType1 = Type2Typedef(pSymDef, strlen(pSymDef)))==NULL )
-                        {
-                            // We have to store a valid type for a symbol, so if we are unable
-                            // to find it, return a pointer to the local stub type
-                            *ppType1 = &StubType;
-                        }
-                    }
-
-                    return( TRUE );
-                }
-            }
-        }
-    }
-    else
-    {
-        // There is no active symbol table
-    }
-
-    return( FALSE );
-}
-
-/******************************************************************************
-*                                                                             *
-*   BOOL SymbolName2Value(TSYMTAB *pSymTab, DWORD *pValue, char *name, int nTokenLen)
-*                                                                             *
-*******************************************************************************
-*
-*   Translates symbol name to its value from a given symbol table
-*
-*   Where:
-*       pSymTab is the symbol table to look
-*       pValue is the address of the variable to receive the value DWORD
-*       name is the symbol name
-*       nTokenLen is the length of the input token
-*   Returns:
-*       FALSE - symbol name not found
-*       TRUE - *pValue is set with the symbol value
-*
-******************************************************************************/
-BOOL SymbolName2Value(TSYMTAB *pSymTab, DWORD *pValue, char *name, int nTokenLen)
-{
-//    TSYMHEADER *pHead;                  // Generic section header
-    DWORD count;
-
-    TSYMGLOBAL  *pGlobals;              // Globals section pointer
-    TSYMGLOBAL1 *pGlobal;               // Single global item
-
-//    TSYMFNLIN   *pFnLin;                // Function lines section pointer
-//    TSYMFNSCOPE *pFnScope;              // Function scope section pointer
-//    TSYMFNSCOPE1 *pFnScope1;            // Single item of a function scope (local)
-//    TSYMSTATIC  *pStatic;               // Static symbols section pointer
-//    TSYMSTATIC1 *pStatic1;              // Single static item
-
-    TSYMBOL Symbol;
-
-    // Search in this order:
-    //  * Local scope variables
-    //  * Current file static variables
-    //  * Global variables
-    //  * Function names
-    //  * Module global symbol in the form "module!symbol"
-
-    if( pSymTab )
-    {
-        // Search local symbols inside a current local scope
-
-        if( SymName2LocalSymbol(&Symbol, name, nTokenLen) )
-        {
-            *pValue = Symbol.Data;
-            return( TRUE );
-        }
-
-        // Global symbols from the given symbol table
-
-        pGlobals = (TSYMGLOBAL *) SymTabFindSection(pSymTab, HTYPE_GLOBALS);
-        if( pGlobals )
-        {
-            // Search global symbols for a specified symbol name
-
-            pGlobal = &pGlobals->list[0];
-
-            for(count=0; count<pGlobals->nGlobals; count++, pGlobal++ )
-            {
-                if( !strnicmp(pGlobal->pName, name, nTokenLen) )
-                {
-                    *pValue = pGlobal->dwStartAddress;
-
-                    return( TRUE );
-                }
-            }
-        }
-    }
-
-    return( FALSE );
-}
-
 /******************************************************************************
 *                                                                             *
 *   char *SymAddress2Name(WORD wSel, DWORD dwOffset)                          *
@@ -921,9 +759,6 @@ BOOL SymbolName2Value(TSYMTAB *pSymTab, DWORD *pValue, char *name, int nTokenLen
 ******************************************************************************/
 char *SymAddress2Name(WORD wSel, DWORD dwOffset)
 {
-//  TSYMHEADER *pHead;                  // Generic section header
-//    struct module* pMod;                // Pointer to a module list
-
     void *pmodule;                      // Kernel pmodule pointer
     struct module_symbol* pSym;         // Pointer to a module symbol structure
     TMODULE Mod;                        // Current module internal structure
@@ -1147,252 +982,6 @@ char *SymFnScope2Local(TSYMFNSCOPE *pFnScope, DWORD ebpOffset)
 
     return( NULL );
 }
-
-TADDRDESC GetLocalVarAddr(TSYMFNSCOPE1 *pLocal);
-
-
-/******************************************************************************
-*                                                                             *
-*   BOOL SymName2LocalSymbol(TSYMBOL *pSymbol, char *pName)                   *
-*                                                                             *
-*******************************************************************************
-*
-*   Looks for the local symbol given its string name.
-*   Fills in the symbol structure.
-*
-*   Where:
-*       pSymbol is the address where to store symbol data
-*       pName is the input symbol name string
-*       nTokenLen is the length of the input symbol name string
-*
-*   Returns:
-*       TRUE - Symbol is found, pSymbol contains symbol data
-*       FALSE - Symbol is not found
-*
-******************************************************************************/
-BOOL SymName2LocalSymbol(TSYMBOL *pSymbol, char *pName, int nTokenLen)
-{
-    TSYMFNSCOPE *pFnScope;
-    DWORD dwOffset;
-    TADDRDESC Addr;                     // Variable address
-    char *pVar, *pType;
-    int len, i;
-
-    pFnScope = deb.pFnScope;
-
-    if( pFnScope )
-    {
-        dwOffset = deb.r->eip - pFnScope->dwStartAddress;
-
-        // Traverse function scope array from back to front until we find we passed our offset
-        for(i = pFnScope->nTokens-1; i>=0; i-- )
-        {
-            if( pFnScope->list[i].TokType==TOKTYPE_RBRAC || pFnScope->list[i].TokType==TOKTYPE_LBRAC )
-            {
-                if( pFnScope->list[i].param >= dwOffset )
-                {
-                    // We found where our eip currently is. Search backward for the symbol name.
-                    // TODO: We should skip any increasing LBRAC that could form alternate "bubble" sub-scope
-                    while( --i>=0 )
-                    {
-                        // Ignore RBRAC and LBRAC...
-                        if( pFnScope->list[i].TokType==TOKTYPE_RBRAC || pFnScope->list[i].TokType==TOKTYPE_LBRAC )
-                        {
-                            ;
-                        }
-                        else
-                        {
-                            // All other tokens point to a variable name (P2)
-                            pVar = pFnScope->list[i].pName;
-
-                            // Compare variable name to what was given as an input parameter
-                            pType = strchr(pVar, ':');
-
-                            if( pType )
-                                len = MIN(pType-pVar, MAX_SYMBOL_LEN-1);
-                            else
-                                // This is just in case that we did not find the type delimiter ':'
-                                len = MIN(strlen(pVar), MAX_SYMBOL_LEN-1);
-
-                            if( len==nTokenLen && !strnicmp(pVar, pName, len) )
-                            {
-                                // Names match! Return information about the symbol
-                                pSymbol->pName     = pVar;
-                                pSymbol->pType     = pVar + len + 1;
-
-                                // dprinth(1, "p1=%08X p2=%08X type=%d", pFnScope->list[i].p1, pFnScope->list[i].p2, pFnScope->list[i].TokType);
-
-                                // Get the address where a local variable keeps its data
-                                Addr = GetLocalVarAddr(&pFnScope->list[i]);
-
-                                pSymbol->Address = Addr.offset;
-                                pSymbol->Data    = fnPtr(Addr.offset);
-
-                                return( TRUE );
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    return( FALSE );
-}
-
-
-/******************************************************************************
-*                                                                             *
-*   BOOL SymEvalFnScope1(char *pBuf, TSYMFNSCOPE1 *pLocal)                    *
-*                                                                             *
-*******************************************************************************
-*
-*   Evaluates a single local variable into a string. The variable will be
-*   computed based on the current register state in deb.r structure.
-*
-*   Where:
-*       pBuf is the buffer to store the resulting string
-*       pLocal is the address of the local variable descriptor
-*   Returns:
-*       TRUE string ok
-*       FALSE result is not stored due to an error
-*
-******************************************************************************/
-
-
-//  TODO - Is this a dead function?
-
-
-BOOL SymEvalFnScope1(char *pBuf, TSYMFNSCOPE1 *pLocal)
-{
-    int pos = 0, i;
-    char *pVar, *pType;                 // Pointer to a variable name
-    static char sVar[MAX_SYMBOL_LEN+1]; // Temp store of the variable full name
-    TADDRDESC Addr;                     // Variable address
-
-    if( pBuf && pLocal )
-    {
-        // Get the address where a local variable stores data
-        Addr = GetLocalVarAddr(pLocal);
-
-        // Print into a buffer the scope local variable in the proper format
-        switch( pLocal->TokType )
-        {
-            case TOKTYPE_PARAM:
-                pos = sprintf(pBuf, "[EBP+%X]", pLocal->param);
-                break;
-
-            case TOKTYPE_RSYM:
-                pos = sprintf(pBuf, "[reg %X]", pLocal->param);
-                break;
-
-            case TOKTYPE_LSYM:
-                pos = sprintf(pBuf, "[EBP-%X]", -pLocal->param);
-                break;
-
-            case TOKTYPE_LCSYM:
-                pos = sprintf(pBuf, "[%08X]", pLocal->param);
-                break;
-        }
-
-        // Print the variable name and the value
-        pVar = pLocal->pName;
-
-        // Since that variable name contains the type description, we
-        // need to copy only the name away
-
-        pType = strchr(pVar, ':');
-
-        if( pType )
-            i = MIN(pType-pVar, MAX_SYMBOL_LEN-1);
-        else
-            // This is just in case that we did not find the type delimiter ':'
-            i = MIN(strlen(pVar), MAX_SYMBOL_LEN-1);
-
-        // Copy the variable name portion of its definition
-        strncpy(sVar, pVar, i);
-        sVar[i] = 0;
-
-        // Test the final address of the variable to be valid
-        if( AddrIsPresent(&Addr)==FALSE)
-        {
-            pos += sprintf(pBuf+pos, " %s = <invalid>", sVar);
-        }
-        else
-        {
-            pos += sprintf(pBuf+pos, " %s = %08X (%s)", sVar, GetDWORD(Addr.sel, Addr.offset), pType);
-        }
-
-        return( TRUE );
-    }
-
-    return( FALSE );
-}
-
-
-/******************************************************************************
-*                                                                             *
-*   TADDRDESC GetLocalVarAddr(TSYMFNSCOPE1 *pLocal)                           *
-*                                                                             *
-*******************************************************************************
-*
-*   Returns the address where a given local variable stores data.
-*
-******************************************************************************/
-TADDRDESC GetLocalVarAddr(TSYMFNSCOPE1 *pLocal)
-{
-    TADDRDESC Addr;                     // Address to return
-
-    switch( pLocal->TokType )
-    {
-        case TOKTYPE_PARAM:
-            // Parameter is on the stack, addressed with SS:EBP
-            Addr.sel    = deb.r->ss;
-            Addr.offset = deb.r->ebp + pLocal->param;
-            break;
-
-        case TOKTYPE_RSYM:
-            // Variable is stored in a CPU register, we can point to a register file
-            Addr.sel = GetKernelDS();     // Register file resides in the Ice' address space
-
-            // This is the gcc i386 register allocation
-            switch( pLocal->param )
-            {
-                case 0x0:     Addr.offset = (DWORD) &deb.r->eax;     break;
-                case 0x1:     Addr.offset = (DWORD) &deb.r->ecx;     break;
-                case 0x2:     Addr.offset = (DWORD) &deb.r->edx;     break;
-                case 0x3:     Addr.offset = (DWORD) &deb.r->ebx;     break;
-                case 0x4:     Addr.offset = (DWORD) &deb.r->esp;     break;
-                case 0x5:     Addr.offset = (DWORD) &deb.r->ebp;     break;
-                case 0x6:     Addr.offset = (DWORD) &deb.r->esi;     break;
-                case 0x7:     Addr.offset = (DWORD) &deb.r->edi;     break;
-                case 0x8:     Addr.offset = (DWORD) &deb.r->eip;     break;
-                case 0x9:     Addr.offset = (DWORD) &deb.r->eflags;  break;
-                case 0xA:     Addr.offset = (DWORD) &deb.r->cs;      break;
-                case 0xB:     Addr.offset = (DWORD) &deb.r->ss;      break;
-                case 0xC:     Addr.offset = (DWORD) &deb.r->ds;      break;
-                case 0xD:     Addr.offset = (DWORD) &deb.r->es;      break;
-                case 0xE:     Addr.offset = (DWORD) &deb.r->fs;      break;
-                case 0xF:     Addr.offset = (DWORD) &deb.r->gs;      break;
-            }
-            break;
-
-        case TOKTYPE_LSYM:
-            // Local symbol is also on the stack addresses by SS:EBP
-            Addr.sel    = deb.r->ss;
-            Addr.offset = deb.r->ebp + pLocal->param;
-            break;
-
-        case TOKTYPE_LCSYM:
-            // Local static symbol has absolute address
-            Addr.sel    = deb.r->ds;
-            Addr.offset = pLocal->param;
-            break;
-    }
-
-    return( Addr );
-}
-
 
 /******************************************************************************
 *                                                                             *

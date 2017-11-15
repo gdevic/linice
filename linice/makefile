@@ -24,8 +24,8 @@ H2  = ../bin
 
 DEF = -DMODULE -DLINUX
 
-#CFLAGS = -gstabs+ -Wall $(DEF) -O -I$(INC) -I$(H1) -I$(H2)
-CFLAGS =         -Wall $(DEF) -O -I$(INC) -I$(H1) -I$(H2)
+CFLAGS = -gstabs+ -Wall $(DEF) -O -I$(INC) -I$(H1) -I$(H2)
+#CFLAGS =         -Wall $(DEF) -O -I$(INC) -I$(H1) -I$(H2)
 
 #-----------------------------------------------------------------------------
 # Compiler and assembler that is used. nasm is a mandatory assembler.
@@ -40,68 +40,63 @@ clean:
 	rm -f ../bin/linice_kernel.o
 	rm -f *.o *~ core
 
-../bin/linice_kernel.o:	\
-			driver.o	\
-			capture.o	\
-			malloc.o	\
-			memaccess.o	\
-			evalex.o	\
-			init.o		\
+../bin/linice_kernel.o:		\
+			driver.o		\
+			malloc.o		\
+			memaccess.o		\
+			evalex.o		\
+			init.o			\
 			errors.o		\
 			syscall.o		\
 			symbolTable.o	\
-			symbols.o	\
-			context.o	\
-			types.o	\
+			symbols.o		\
+			context.o		\
+			types.o			\
 			typesprint.o	\
-			string.o 	\
-			printf.o 	\
-			ctype.o		\
-			proc.o		\
-			edlin.o		\
-			debugger.o	\
-			dis.o		\
-			dis_len.o	\
-			i386.o		\
-			interrupt.o	\
-			apic.o	\
-			command.o	\
-			registers.o	\
-			lists.o	\
-			queue.o	\
-			locals.o	\
-			watch.o		\
-			data.o		\
-			code.o		\
+			string.o 		\
+			printf.o 		\
+			ctype.o			\
+			proc.o			\
+			edlin.o			\
+			debugger.o		\
+			dis.o			\
+			dis_len.o		\
+			interrupt.o		\
+			apic.o			\
+			command.o		\
+			registers.o		\
+			lists.o			\
+			locals.o		\
+			watch.o			\
+			data.o			\
+			code.o			\
 			customization.o	\
 			windowcontrol.o	\
 			blockops.o		\
-			ioport.o	\
-			sysinfo.o	\
-			page.o		\
+			ioport.o		\
+			sysinfo.o		\
+			page.o			\
 			breakpoints.o	\
-			pci.o		\
-			flow.o		\
-			history.o	\
-			input.o		\
-			keyboard.o	\
-			vt100i.o	\
-			mouse.o		\
-			serial.o	\
-			output.o	\
-			font.o      \
-			window.o	\
-			vga.o		\
-			mda.o		\
-			lfb.o		\
-            vt100o.o
+			pci.o			\
+			flow.o			\
+			history.o		\
+			input.o			\
+			keyboard.o		\
+			vt100i.o		\
+			mouse.o			\
+			serial.o		\
+			output.o		\
+			font.o      	\
+			window.o		\
+			vga.o			\
+			mda.o			\
+			lfb.o			\
+            vt100o.o		\
+			i386.o
 	$(LD) -r $^ -o ../bin/linice_kernel.o
 
 driver.o:	driver.c
 	$(CC) $(CFLAGS) -c driver.c
-
-capture.o:	capture.c
-	$(CC) $(CFLAGS) -c capture.c
 
 malloc.o:	malloc.c
 	$(CC) $(CFLAGS) -c malloc.c
@@ -124,8 +119,8 @@ symbolTable.o:		symbolTable.c
 symbols.o:		symbols.c
 	$(CC) $(CFLAGS) -c symbols.c
 
-conetext.o:		conetext.c
-	$(CC) $(CFLAGS) -c conetext.c
+context.o:		context.c
+	$(CC) $(CFLAGS) -c context.c
 
 types.o:		types.c
 	$(CC) $(CFLAGS) -c types.c
@@ -144,9 +139,6 @@ ctype.o:		ctype.c
 
 proc.o:		proc.c
 	$(CC) $(CFLAGS) -c proc.c
-
-i386.o:		i386.asm
-	$(AS) -f elf i386.asm -o i386.o
 
 interrupt.o:		interrupt.c
 	$(CC) $(CFLAGS) -c interrupt.c
@@ -180,9 +172,6 @@ registers.o:		command/registers.c
 
 lists.o:			command/lists.c
 	$(CC) $(CFLAGS) -c command/lists.c
-
-queue.o:			queue.c
-	$(CC) $(CFLAGS) -c queue.c
 
 locals.o:	command/locals.c
 	$(CC) $(CFLAGS) -c command/locals.c
@@ -259,4 +248,5 @@ lfb.o:		output/lfb.c
 vt100o.o:	output/vt100o.c
 	$(CC) $(CFLAGS) -c output/vt100o.c -o vt100o.o
 
-
+i386.o:		i386.asm
+	$(AS) -f elf i386.asm -o i386.o

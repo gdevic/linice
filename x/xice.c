@@ -45,6 +45,7 @@
 #include <stdio.h>                      // Include standard C headers
 #include <stdlib.h>
 #include <string.h>
+#include <asm/ioctl.h>                  // Include IO control macros
 
 #include "ice-types.h"                  // Include private data types
 #include "ice-symbols.h"                // Include symbol file defines

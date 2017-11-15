@@ -288,7 +288,7 @@ BOOL OptInstall(char *pSystemMap)
     hIce = open("/dev/"DEVICE_NAME, O_RDONLY);
     if( hIce>=0 )
     {
-        fprintf(stderr, "Linice module already installed!\n");
+        fprintf(stderr, "Linice module already installed, or /dev/%s exists.\n", DEVICE_NAME);
 
         return( TRUE );
     }

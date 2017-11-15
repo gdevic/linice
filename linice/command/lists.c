@@ -101,18 +101,14 @@ static char buf[MAX_STRING];            // Temp buffer to print the final string
 
 extern BOOL GlobalReadDword(DWORD *pDword, DWORD dwAddress);
 extern BOOL GlobalReadBYTE(BYTE *pByte, DWORD dwAddress);
-
+extern void PrintTypeValue(char *buf, TExItem *pItem, BYTE *pVar, UINT delta, UINT width);
+extern void PrintTypeListExpand(TLISTITEM *pListItem);
 
 /******************************************************************************
 *                                                                             *
 *   Functions                                                                 *
 *                                                                             *
 ******************************************************************************/
-
-extern BYTE *ice_malloc(DWORD size);
-extern void ice_free(BYTE *p);
-
-extern void PrintTypeListExpand(TLISTITEM *pListItem);
 
 /******************************************************************************
 *                                                                             *
@@ -137,7 +133,7 @@ BOOL ListFindItem(TLIST *pList, TExItem *pExItem)
         if( !memcmp(pExItem, &pItem->Item, sizeof(TExItem)) )
             return( TRUE );
 
-        pItem = pItem->pNext;
+        pItem = (TLISTITEM *) pItem->pNext;
     }
 
     return( FALSE );
@@ -160,7 +156,7 @@ TLISTITEM *ListGetNewItem()
 {
     TLISTITEM *pItem;                   // New item
 
-    if( (pItem = (TLISTITEM *) ice_malloc(sizeof(TLISTITEM))) )
+    if( (pItem = (TLISTITEM *) mallocHeap(deb.hHeap, sizeof(TLISTITEM))) )
         memset(pItem, 0, sizeof(TLISTITEM));
 
     return( pItem );
@@ -196,9 +192,9 @@ TLISTITEM *ListAdd(TLIST *pList, TFRAME *pFrame)
         if( pEnd )
         {
             while( pEnd->pNext )
-                pEnd = pEnd->pNext;
+                pEnd = (TLISTITEM *) pEnd->pNext;
 
-            pEnd->pNext = pItem;
+            pEnd->pNext = (struct TLISTITEM *) pItem;
         }
         else
         {
@@ -217,10 +213,6 @@ TLISTITEM *ListAdd(TLIST *pList, TFRAME *pFrame)
 }
 
 /******************************************************************************
-*                                                                             *
-*   TLISTITEM *ListFindPrev(TLISTITEM *pTraverse, TLISTITEM *pItem)           *
-*                                                                             *
-*******************************************************************************
 *
 *   This is a helper function to select a previous item in the list from the
 *   given one.
@@ -243,11 +235,23 @@ static void ListFindPrevRecurse(TLISTITEM *pTraverse, TLISTITEM *pItem, BOOL *fT
             *pResultItem = pTraverse;
         }
 
-        ListFindPrevRecurse(pTraverse->pElement, pItem, fTakeNext, pResultItem);
-        ListFindPrevRecurse(pTraverse->pNext, pItem, fTakeNext, pResultItem);
+        ListFindPrevRecurse((TLISTITEM *) pTraverse->pElement, pItem, fTakeNext, pResultItem);
+        ListFindPrevRecurse((TLISTITEM *) pTraverse->pNext, pItem, fTakeNext, pResultItem);
     }
 }
 
+/******************************************************************************
+*                                                                             *
+*   TLISTITEM *ListFindPrev(TLISTITEM *pTraverse, TLISTITEM *pItem)           *
+*                                                                             *
+*******************************************************************************
+*
+*   This is a helper function to select a previous item in the list from the
+*   given one.
+*
+*   ListFindPrevRecurse() is its helper traversal function.
+*
+******************************************************************************/
 static TLISTITEM *ListFindPrev(TLIST *pList, TLISTITEM *pItem)
 {
     BOOL fTakeNext = TRUE;              // Take all of them until the node hits
@@ -259,10 +263,6 @@ static TLISTITEM *ListFindPrev(TLIST *pList, TLISTITEM *pItem)
 }
 
 /******************************************************************************
-*                                                                             *
-*   TLISTITEM *ListFindNext(TLIST *pList, TLISTITEM *pItem)                   *
-*                                                                             *
-*******************************************************************************
 *
 *   This is a helper function to select a next item in the list from the
 *   given one. This is not as simple as it seems since after we've done with
@@ -287,11 +287,24 @@ static void ListFindNextRecurse(TLISTITEM *pTraverse, TLISTITEM *pItem, BOOL *fT
             *fTakeNext = TRUE;
         }
 
-        ListFindNextRecurse(pTraverse->pElement, pItem, fTakeNext, pResultItem);
-        ListFindNextRecurse(pTraverse->pNext, pItem, fTakeNext, pResultItem);
+        ListFindNextRecurse((TLISTITEM *) pTraverse->pElement, pItem, fTakeNext, pResultItem);
+        ListFindNextRecurse((TLISTITEM *) pTraverse->pNext, pItem, fTakeNext, pResultItem);
     }
 }
 
+/******************************************************************************
+*                                                                             *
+*   TLISTITEM *ListFindNext(TLIST *pList, TLISTITEM *pItem)                   *
+*                                                                             *
+*******************************************************************************
+*
+*   This is a helper function to select a next item in the list from the
+*   given one. This is not as simple as it seems since after we've done with
+*   an element list, we may need to backtrack to the next parent item.
+*
+*   ListFindNextRecurse() is its helper traversal function.
+*
+******************************************************************************/
 static TLISTITEM *ListFindNext(TLIST *pList, TLISTITEM *pItem)
 {
     BOOL fTakeNext = FALSE;             // Dont take any until the node hits
@@ -300,6 +313,24 @@ static TLISTITEM *ListFindNext(TLIST *pList, TLISTITEM *pItem)
     ListFindNextRecurse(pList->pList, pItem, &fTakeNext, &pResultItem);
 
     return( pResultItem );
+}
+
+/******************************************************************************
+*
+*   Returns the last item in the list.
+*
+*   ListFindLastRecurse() is its helper traversal function.
+*
+******************************************************************************/
+static void ListFindLastRecurse(TLISTITEM *pTraverse, TLISTITEM **pResultItem)
+{
+    if( pTraverse )
+    {
+        *pResultItem = pTraverse;
+
+        ListFindLastRecurse((TLISTITEM *) pTraverse->pElement, pResultItem);
+        ListFindLastRecurse((TLISTITEM *) pTraverse->pNext, pResultItem);
+    }
 }
 
 /******************************************************************************
@@ -313,17 +344,6 @@ static TLISTITEM *ListFindNext(TLIST *pList, TLISTITEM *pItem)
 *   ListFindLastRecurse() is its helper traversal function.
 *
 ******************************************************************************/
-static void ListFindLastRecurse(TLISTITEM *pTraverse, TLISTITEM **pResultItem)
-{
-    if( pTraverse )
-    {
-        *pResultItem = pTraverse;
-
-        ListFindLastRecurse(pTraverse->pElement, pResultItem);
-        ListFindLastRecurse(pTraverse->pNext, pResultItem);
-    }
-}
-
 static TLISTITEM *ListFindLast(TLIST *pList)
 {
     TLISTITEM *pResultItem = NULL;
@@ -345,7 +365,7 @@ static TLISTITEM *ListFindLast(TLIST *pList)
 static void ListDeleteItem(TLISTITEM *pItem)
 {
     if( pItem )
-        ice_free(pItem);
+        freeHeap(deb.hHeap, pItem);
 }
 
 /******************************************************************************
@@ -364,8 +384,8 @@ static void ListDelRecurse(TLISTITEM *pItem)
 {
     if( pItem )
     {
-        ListDelRecurse(pItem->pElement);
-        ListDelRecurse(pItem->pNext);
+        ListDelRecurse((TLISTITEM *) pItem->pElement);
+        ListDelRecurse((TLISTITEM *) pItem->pNext);
 
         ListDeleteItem(pItem);
     }
@@ -393,7 +413,7 @@ BOOL ListDel(TLIST *pList, TLISTITEM *pItem, BOOL fDelRoot)
     BOOL retval = TRUE;                 // Assume there are more nodes on the root list
 
     // Recursively delete all child elements from that list
-    ListDelRecurse(pItem->pElement);
+    ListDelRecurse((TLISTITEM *) pItem->pElement);
 
     // Depending on if we need to delete the root or not, unlink them
     // We can only delete a root node (variable or expression)
@@ -402,7 +422,7 @@ BOOL ListDel(TLIST *pList, TLISTITEM *pItem, BOOL fDelRoot)
         if( pList->pList==pItem )
         {
             // Deleting the first item on the root list
-            if( (pList->pList = pItem->pNext)==NULL)
+            if( (pList->pList = (TLISTITEM *) pItem->pNext)==NULL)
             {
                 // There are no more items on the root list, exit the focus mode
                 pList->pSelected = NULL;
@@ -419,14 +439,14 @@ BOOL ListDel(TLIST *pList, TLISTITEM *pItem, BOOL fDelRoot)
             pPrev = pList->pList;
 
             // Find the node that immediately preceeds our node to be deleted
-            while( pPrev->pNext != pItem )
-                pPrev = pPrev->pNext;
+            while( (TLISTITEM *) pPrev->pNext != pItem )
+                pPrev = (TLISTITEM *) pPrev->pNext;
 
             // Bypass our node that will be deleted
             if( (pPrev->pNext = pItem->pNext)==NULL )
                 pList->pSelected = pPrev;
             else
-                pList->pSelected = pPrev->pNext;
+                pList->pSelected = (TLISTITEM *) pPrev->pNext;
         }
 
         ListDeleteItem(pItem);          // Delete our node
@@ -441,12 +461,8 @@ BOOL ListDel(TLIST *pList, TLISTITEM *pItem, BOOL fDelRoot)
 }
 
 /******************************************************************************
-*                                                                             *
-*   void ListPrintRecurse(TLISTITEM *pSelected, TLISTITEM *pItem, UINT n...)  *
-*                                                                             *
-*******************************************************************************
 *
-*   Prints the given subtree including all elements.
+*   Helper function to ListPrint()
 *
 ******************************************************************************/
 static void ListPrintRecurse(TLIST *pList, TLISTITEM *pItem, BOOL *fPrintNext, int *pLineCount)
@@ -472,9 +488,11 @@ static void ListPrintRecurse(TLIST *pList, TLISTITEM *pItem, BOOL *fPrintNext, i
                 col = COL_NORMAL;
 
             // Take into account possible shift in X direction
-
-//            sprintf(buf, "%s%s", sIndent + strlen(sIndent) - pItem->nLevel * 2, pItem->String);
-            sprintf(buf, "%s%s = %s", sIndent + strlen(sIndent) - pItem->nLevel * 2, pItem->String, pItem->Value);
+            // If the list is TYPEDEF, print only element name, not the value
+            if( pList->ID==LIST_ID_TYPE )
+                sprintf(buf, "%s%s;", sIndent + strlen(sIndent) - pItem->nLevel * 2, pItem->String);
+            else
+                sprintf(buf, "%s%s = %s", sIndent + strlen(sIndent) - pItem->nLevel * 2, pItem->String, pItem->Value);
 
 
             if( pList->nXOffset > strlen(buf) )
@@ -482,14 +500,23 @@ static void ListPrintRecurse(TLIST *pList, TLISTITEM *pItem, BOOL *fPrintNext, i
             else
                 pLine = buf + pList->nXOffset;
 
-            dprinth(1, "%c%c%s\r", DP_SETCOLINDEX, col, pLine);
+            dprinth(1, "%c%c%s", DP_SETCOLINDEX, col, pLine);
         }
 
-        ListPrintRecurse(pList, pItem->pElement, fPrintNext, pLineCount);
-        ListPrintRecurse(pList, pItem->pNext, fPrintNext, pLineCount);
+        ListPrintRecurse(pList, (TLISTITEM *) pItem->pElement, fPrintNext, pLineCount);
+        ListPrintRecurse(pList, (TLISTITEM *) pItem->pNext, fPrintNext, pLineCount);
     }
 }
 
+/******************************************************************************
+*                                                                             *
+*   TLISTITEM *ListPrint(TLIST *pList, int nLines)                            *
+*                                                                             *
+*******************************************************************************
+*
+*   Prints the given subtree including all elements.
+*
+******************************************************************************/
 static TLISTITEM *ListPrint(TLIST *pList, int nLines)
 {
     TLISTITEM *pResultItem = NULL;
@@ -551,8 +578,47 @@ void MakeSelectedVisible(TLIST *pList, int nLines)
     }
 }
 
-void ListEvaluate(TLIST *pList);
+/******************************************************************************
+*
+*   Helper function to ListEvaluate() that evaluates all the nodes recursively.
+*
+******************************************************************************/
+static void ListEvaluateRecurse(TLISTITEM *pItem, BYTE *pVar )
+{
+    if( pItem )
+    {
+        PrintTypeValue(pItem->Value, &pItem->Item, pVar+pItem->delta/8, pItem->delta, pItem->width);
 
+        ListEvaluateRecurse((TLISTITEM *) pItem->pElement, pVar+pItem->delta/8);
+        ListEvaluateRecurse((TLISTITEM *) pItem->pNext, pVar);
+    }
+}
+
+/******************************************************************************
+*                                                                             *
+*   void ListEvaluate(TLIST *pList)                                           *
+*                                                                             *
+*******************************************************************************
+*
+*   Evaluates the effective values for all expression items in the given list.
+*
+*   Where:
+*       pList is the list to evaluate
+*
+******************************************************************************/
+void ListEvaluate(TLIST *pList)
+{
+    TLISTITEM *pItem;
+
+    pItem = pList->pList;
+
+    while( pItem )
+    {
+        ListEvaluateRecurse(pItem, pItem->Item.pData);
+
+        pItem = (TLISTITEM *) pItem->pNext;
+    }
+}
 
 /******************************************************************************
 *                                                                             *
@@ -590,40 +656,17 @@ void ListDraw(TLIST *pList, TFRAME *pFrame, BOOL fForce)
         if( fForce==FALSE )
             return;
 
-    ListEvaluate(pList);
+    // Evaluate type structure into effective values, except for the type list
+    // (command TYPES) where we just print the type definition
+    if( pList->ID!=LIST_ID_TYPE )
+    {
+        ListEvaluate(pList);
+    }
 
     ListPrint(pList, maxLines);
 
     if( pFrame->fVisible==TRUE )
         dprint("%c", DP_RESTOREXY);
-}
-
-extern void PrintTypeValue(char *buf, TExItem *pItem, BYTE *pVar, UINT delta, UINT width);
-
-
-void ListEvaluateRecurse(TLISTITEM *pItem, BYTE *pVar )
-{
-    if( pItem )
-    {
-        PrintTypeValue(pItem->Value, &pItem->Item, pVar+pItem->delta/8, pItem->delta, pItem->width);
-
-        ListEvaluateRecurse(pItem->pElement, pVar+pItem->delta/8);
-        ListEvaluateRecurse(pItem->pNext, pVar);
-    }
-}
-
-void ListEvaluate(TLIST *pList)
-{
-    TLISTITEM *pItem;
-
-    pItem = pList->pList;
-
-    while( pItem )
-    {
-        ListEvaluateRecurse(pItem, pItem->Item.pData);
-
-        pItem = pItem->pNext;
-    }
 }
 
 /******************************************************************************

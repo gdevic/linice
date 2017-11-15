@@ -54,6 +54,8 @@ static int nSO = 0;                     // Total number of source files
 static int nSources = 0;                // Pruned number of source files
 static char *pSources = NULL;           // Memory buffer to store file names
 
+extern BOOL OpenSourceFile(FILE **fp, char *pPath);
+
 /******************************************************************************
 *                                                                             *
 *   BOOL SetupSourcesArray(FILE *fSources, long maxLen)                       *
@@ -356,10 +358,12 @@ static BOOL WriteSourceFile(int fd, int fs, char *ptr, WORD file_id)
         if( strchr(pTmp, 0x0D) )
             *strchr(pTmp, 0x0D) = 0;
 
-        fp = fopen(pTmp, "rt");
-        if( fp==NULL )
+        if( OpenSourceFile(&fp, pTmp)==FALSE )
         {
+            // File was not found on the path
+
             // File can not be opened. By default, we skip it, but command line option can change that
+            // TODO: This is broken. Do we care to implement the PROMPT option??
             if( opt & OPT_PROMPT )
             {
                 // Force prompt for the missing file
@@ -371,6 +375,16 @@ static BOOL WriteSourceFile(int fd, int fs, char *ptr, WORD file_id)
             else
             {
                 printf("Unable to open source file %s. Skipping...\n", pTmp);
+
+                return( TRUE );
+            }
+        }
+        else
+        {
+            // File was found on the path, fp can tell us if it was open or excluded
+            if( fp==NULL )
+            {
+                VERBOSE1 printf("File excluded: %s\n", pTmp);
 
                 return( TRUE );
             }
@@ -538,7 +552,7 @@ BOOL ParseSource(int fd, int fs)
 *
 *   Where:
 *       pSoDir - path to the file
-*       pSo - file name or a full path/name
+*       pSo - file name or partial path/name
 *
 *   Returns:
 *       0 - Source is not found
@@ -552,9 +566,9 @@ WORD GetFileId(char *pSoDir, char *pSo)
     char *ptr;                          // Pointer to a current source file name
     int i;                              // Generic counter
 
-    // If file name does contain '/' or '\' characters, use it as is since it
-    // already is a path/name. If not, prefix the given path.
-    if( !strchr(pSo, '/') && !strchr(pSo, '\\') )
+    // If the first character is '/', use it since that is absolute path/name,
+    // otherwise, concat the path name with the file name
+    if( *pSo != '/' )
     {
         // We need to prefix given path and use that
         strcpy(PathName, pSoDir);

@@ -163,7 +163,6 @@ typedef struct
 {
     TSYMHEADER h;                       // Section header
 
-// TODO: Change DWORDs here into UINT
     DWORD nGlobals;                     // Number of global items in the array
     TSYMGLOBAL1 list[1];                // Array of global symbol descriptors
     //           ...
@@ -280,17 +279,26 @@ typedef struct
     WORD min;                           // Type ordinal definition number
     PSTR pName;                         // Typedef name string
     PSTR pDef;                          // Typedef definition string
+    WORD file_id;                       // Typedef is defined in this file scope
 
 } PACKED TSYMTYPEDEF1;
+
+typedef struct
+{
+    SWORD adjust;                       // Major number adjustment value
+    WORD file_id;                       // File where this major type is defined
+
+} PACKED TSYMADJUST;
 
 typedef struct
 {
     TSYMHEADER h;                       // Section header
 
     WORD file_id;                       // Typedefs refer to this file unique ID number
-// TODO - do this one as UINT
+    WORD nRel;                          // How many reference adjustment entries?
     WORD nTypedefs;                     // How many typedefs are in the array?
 
+    TSYMADJUST *pRel;                   // External type adjustment array
     TSYMTYPEDEF1 list[1];               // Typedef array
     //           ...
 } PACKED TSYMTYPEDEF;

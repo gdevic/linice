@@ -82,125 +82,24 @@ typedef struct                          // Free node structure
 *                                                                             *
 ******************************************************************************/
 
-static BYTE * _Init_Alloc( BYTE *pRamStart, DWORD dwRamSize );
-
-/******************************************************************************
-*                                                                             *
-*   BYTE *ice_malloc(DWORD size)                                              *
-*                                                                             *
-*******************************************************************************
-*
-******************************************************************************/
-BYTE *ice_malloc(DWORD size)
-{
-    return( (BYTE *)ice_vmalloc(size) );
-}
-
-
-/******************************************************************************
-*                                                                             *
-*   void ice_free(BYTE *p)                                                    *
-*                                                                             *
-*******************************************************************************
-*
-******************************************************************************/
-void ice_free(BYTE *p)
-{
-    ice_vfree((char *)p);
-}
-
-
-/******************************************************************************
-*                                                                             *
-*   char *_kMallocHeap(int size)                                              *
-*                                                                             *
-******************************************************************************/
-char *_kMallocHeap(int size)
-{
-    return( _kMalloc(deb.hHeap, size) );
-}
-
-/******************************************************************************
-*                                                                             *
-*   void _kFreeHeap(void *mPtr)                                               *
-*                                                                             *
-******************************************************************************/
-void _kFreeHeap(void *mPtr)
-{
-    _kFree(deb.hHeap, mPtr);
-}
-
-
-
-/******************************************************************************
-*                                                                             *
-*   BYTE * ice_init_heap(size_t size)                                         *
-*                                                                             *
-*******************************************************************************
-*
-*   This function initializes a local memory heap.
-*
-*   Where:
-*       size is the requested size of the heap
-*
-*   Returns:
-*       Memory handle to be passed to subsequent _kMalloc() and _kFree().
-*
-*       NULL - memory could not be initialized (invalid size/address)
-*
-******************************************************************************/
-BYTE * ice_init_heap(size_t size)
-{
-    BYTE *pHeap;
-
-    // Allocate memory from the kernel non-paged pool
-
-    pHeap = ice_vmalloc(size);
-    if( pHeap != NULL )
-    {
-        // Initialize our new heap
-        pHeap = _Init_Alloc(pHeap, size);
-    }
-
-    return( pHeap );
-}
-
-
-/******************************************************************************
-*                                                                             *
-*   void ice_free_heap(BYTE *pHeap)                                           *
-*                                                                             *
-*******************************************************************************
-*
-*   Use this function to free a heap.
-*
-*   Where:
-*       pHeap is the heap allocated via ice_init_heap() call.
-*
-******************************************************************************/
-void ice_free_heap(BYTE *pHeap)
-{
-    ice_vfree(pHeap);
-}
-
-
 /******************************************************************************
 *                                                                             *
 *   BYTE * _Init_Alloc( BYTE *pRamStart, DWORD dwRamSize )                    *
 *                                                                             *
 *******************************************************************************
 *
-*   This function initializes a buffer for the memory allocation pool.
+*   This function initializes a buffer for the internal memory allocation pool.
 *
 *   Where:
 *       pRamStart - beginning address of the linear buffer memory
 *       dwRamTop  - size in bytes of the buffer memory
 *
 *   Returns:
-*       Memory handle to be passed to subsequent kMalloc() and kFree().
-#       This is actually the starting address pRamStart.
-#
-#       NULL - memory could not be initialized (invalid size/address)
+*       Memory handle to be passed to subsequent mallocHeap() and freeHeap()
+*               functions. That is the "heap".
+*       This is actually the starting address pRamStart.
+*
+*       NULL - memory could not be initialized (invalid size/address)
 *
 ******************************************************************************/
 static BYTE * _Init_Alloc( BYTE *pRamStart, DWORD dwRamSize )
@@ -231,94 +130,74 @@ static BYTE * _Init_Alloc( BYTE *pRamStart, DWORD dwRamSize )
     return( pFree );
 }
 
-
 /******************************************************************************
 *                                                                             *
-*   int _Alloc_Check( BYTE *pHeap, DWORD dwInitSize )                         *
+*   BYTE *memInitHeap(UINT size)                                              *
 *                                                                             *
 *******************************************************************************
 *
-*   This function traverses the memory structures and checks if the allocation
-#   links are in order.  It also adds up the free (availble) memory to be
-#   allocated.
+*   Allocated and initializes a local memory heap.
 *
 *   Where:
-*       pHeap - handle of a heap as returned by Init_Alloc()
-#       dwInitSize - initially requested memory size in bytes
+*       size is the requested size of the heap
 *
 *   Returns:
-*       Positive number - available memory in bytes
-#       Negative number - data structure memory check error:
-#           -1  - pHeap is NULL
-#           -2  - init size parameter is too small
-#           -3  - pointer out of bounds
-#           -4  - size out of bounds
-#
+*       Memory handle to be passed to subsequent mallocHeap() and freeHeap()
+*               functions. That is the "heap".
+*       NULL - memory could not be initialized
+*
 ******************************************************************************/
-#if 0
-static int _Alloc_Check( BYTE *pHeap, DWORD dwInitSize )
+BYTE *memInitHeap(UINT size)
 {
-    Tmalloc *pLast;
-    Tmalloc *pNew;
-    BYTE *pEnd;
-    int nFree = 0;
+    BYTE *pHeap;
 
+    // Allocate memory from the kernel non-paged pool
 
-    // Check the pointer to heap
-
-    if( pHeap == NULL )  return( -1 );
-
-    // Check the size
-
-    if( dwInitSize < 32 )  return( -2 );
-
-    pEnd = pHeap + dwInitSize;
-
-    pLast = TM(pHeap);
-    pNew  = TM(pLast->next);
-
-    if( ((BYTE *)pNew < pHeap) || ((BYTE *)pNew > pEnd) )  return( -3 );
-
-    // Traverse the list and check all the nodes
-
-    while( pNew != NULL )
+    pHeap = ice_vmalloc(size);
+    if( pHeap != NULL )
     {
-        if( (pNew->size < 4) || (pNew->size + (BYTE *)pNew > pEnd) ) return( -4 );
-
-        // Add the free size
-
-        nFree += pNew->size;
-
-        pLast = pNew;
-        pNew  = TM(pNew->next);
-
-        if( pNew != NULL )
-            if( ((BYTE *)pNew < pHeap) || ((BYTE *)pNew >= pEnd) )  return( -3 );
+        // Initialize our new heap
+        pHeap = _Init_Alloc(pHeap, size);
     }
 
-    return( nFree );
+    return( pHeap );
 }
-#endif
 
 /******************************************************************************
 *                                                                             *
-*   void * _kMalloc( BYTE *pHeap, size_t size )                               *
+*   void memFreeHeap(BYTE *pHeap)                                             *
 *                                                                             *
 *******************************************************************************
 *
-*   This function allocates `size' bytes from the given heap `pHeap' and
-#   returns a pointer to the first byte in it.
+*   Frees the local memory heap.
 *
 *   Where:
-*       pHeap - handle of a heap as returned by Init_Alloc()
-#       size - requested memory size in bytes
-*
-*   Returns:
-*       pointer to a memory block
-#       NULL if memory could not be allocated
+*       pHeap is the handle of the heap, returned by memInitHeap
 *
 ******************************************************************************/
-void * _kMalloc( BYTE *pHeap, DWORD size )
+void memFreeHeap(BYTE *hHeap)
+{
+    ice_vfree((char *) hHeap);
+}
+
+/******************************************************************************
+*                                                                             *
+*   char *mallocHeap(BYTE *pHeap, UINT size)                                  *
+*                                                                             *
+*******************************************************************************
+*
+*   Allocates a block of memory within the Linice internal heap.
+*
+*   Where:
+*       pHeap is the requested heap
+*       size is the requested size of the memory block
+*
+*   Returns:
+*       Pointer to newly allocated block
+*       NULL - memory could not be allocated
+*
+******************************************************************************/
+char *mallocHeap(BYTE *pHeap, UINT size)
 {
     Tmalloc *pLast;
     Tmalloc *pNew;
@@ -397,25 +276,23 @@ void * _kMalloc( BYTE *pHeap, DWORD size )
     }
 }
 
-
 /******************************************************************************
 *                                                                             *
-*   void _kFree( BYTE *pHeap, void *pMem )                                    *
+*   void freeHeap(BYTE *pHeap, void *mPtr )                                   *
 *                                                                             *
 *******************************************************************************
 *
-*   Frees a memory block allocated by kMalloc().  If the pMem is NULL, this
-#   function returns without doing any harm :)
+*   Frees the memory that was allocated using mallocHeap() from the internal
+*   memory allocation pool (heap).
+*
+*   The pointer mPtr can be NULL.
 *
 *   Where:
-*       pHeap - handle of a heap as returned by Init_Alloc()
+*       pHeap is the requested heap
 *       pMem - pointer to a memory block to be freed
 *
-*   Returns:
-*       void
-*
 ******************************************************************************/
-void _kFree( BYTE *pHeap, void *mPtr )
+void freeHeap(BYTE *pHeap, void *mPtr )
 {
     Tmalloc *pLast;
     Tmalloc *pMem;
@@ -510,6 +387,74 @@ void _kFree( BYTE *pHeap, void *mPtr )
 
 /******************************************************************************
 *                                                                             *
+*   int _Alloc_Check( BYTE *pHeap, DWORD dwInitSize )                         *
+*                                                                             *
+*******************************************************************************
+*
+*   This function traverses the memory structures and checks if the allocation
+#   links are in order.  It also adds up the free (availble) memory to be
+#   allocated.
+*
+*   Where:
+*       pHeap - handle of a heap as returned by Init_Alloc()
+#       dwInitSize - initially requested memory size in bytes
+*
+*   Returns:
+*       Positive number - available memory in bytes
+#       Negative number - data structure memory check error:
+#           -1  - pHeap is NULL
+#           -2  - init size parameter is too small
+#           -3  - pointer out of bounds
+#           -4  - size out of bounds
+#
+******************************************************************************/
+#if 0
+static int _Alloc_Check( BYTE *pHeap, DWORD dwInitSize )
+{
+    Tmalloc *pLast;
+    Tmalloc *pNew;
+    BYTE *pEnd;
+    int nFree = 0;
+
+
+    // Check the pointer to heap
+
+    if( pHeap == NULL )  return( -1 );
+
+    // Check the size
+
+    if( dwInitSize < 32 )  return( -2 );
+
+    pEnd = pHeap + dwInitSize;
+
+    pLast = TM(pHeap);
+    pNew  = TM(pLast->next);
+
+    if( ((BYTE *)pNew < pHeap) || ((BYTE *)pNew > pEnd) )  return( -3 );
+
+    // Traverse the list and check all the nodes
+
+    while( pNew != NULL )
+    {
+        if( (pNew->size < 4) || (pNew->size + (BYTE *)pNew > pEnd) ) return( -4 );
+
+        // Add the free size
+
+        nFree += pNew->size;
+
+        pLast = pNew;
+        pNew  = TM(pNew->next);
+
+        if( pNew != NULL )
+            if( ((BYTE *)pNew < pHeap) || ((BYTE *)pNew >= pEnd) )  return( -3 );
+    }
+
+    return( nFree );
+}
+#endif
+
+/******************************************************************************
+*                                                                             *
 *   int _ReAlloc( BYTE * pHeap, void * ptr, size_t new_size )                 *
 *                                                                             *
 *******************************************************************************
@@ -533,10 +478,8 @@ void _kFree( BYTE *pHeap, void *mPtr )
 #       NULL if the block cannot be resized
 *
 ******************************************************************************/
-
 #if 0   // ==============   WORK IN PROGRESS   ==============
         // Since `96  :-P
-
 static int _ReAlloc( BYTE * pHeap, void * ptr, size_t new_size )
 {
     Tmalloc *pLast;
@@ -597,4 +540,3 @@ static int _ReAlloc( BYTE * pHeap, void * ptr, size_t new_size )
 }
 
 #endif
-

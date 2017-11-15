@@ -109,15 +109,6 @@ enum
 #define MEMACCESS_GPF       0xF1FFFFFF  // Memory access caused a GP fault
 #define MEMACCESS_LIM       0xF2FFFFFF  // Memory access invalid limit
 
-
-extern BYTE *ice_init_heap( size_t size );
-extern void * _kMalloc( BYTE *pHeap, DWORD size );
-extern void _kFree( BYTE *pHeap, void *mPtr );
-
-// Use these functions to allocate and free memory from the Ice local heap
-extern char *_kMallocHeap(int size);
-extern void _kFreeHeap(void *mPtr);
-
 ///////////////////////////////////////////////////////////////////////////////
 // From stdlib, defining function in printf.c
 ///////////////////////////////////////////////////////////////////////////////

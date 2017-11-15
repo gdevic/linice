@@ -42,13 +42,14 @@
 #define offsetof(s,m) (int)&(((s*)0)->m)
 #endif
 
-typedef unsigned char  BYTE;
-typedef unsigned short WORD;
-typedef unsigned int   DWORD;
-typedef unsigned int   BOOL;
-typedef unsigned int   UINT;
-typedef int            ENUM;
-typedef char *         PSTR;
+typedef unsigned char  BYTE;            // 8  bits
+typedef unsigned short WORD;            // 16 bits
+typedef signed short   SWORD;           // 16 bits
+typedef unsigned int   DWORD;           // 32 bits
+typedef unsigned int   BOOL;            // - not relevant -
+typedef unsigned int   UINT;            // - not relevant -
+typedef int            ENUM;            // - not relevant -
+typedef char *         PSTR;            // - not relevant - (pointer size)
 
 #ifndef TRUE
 #define TRUE    (1==1)

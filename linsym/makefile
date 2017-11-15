@@ -15,7 +15,7 @@ clean:
 	rm -f *.o *~ core
 
 ../bin/linsym:	install.o	\
-        load_elf.o  \
+        ElfToSym.o  \
 		ParseDump.o	\
 		ParseFunctionLines.o	\
 		ParseFunctionScope.o	\
@@ -25,11 +25,11 @@ clean:
 		ParseTypedefs.o	\
 		ParseReloc.o	\
 		Keymaps.o	\
-		loader.o	\
+		Linsym.o	\
 		History.o	\
 		symbols.o   \
         symutils.o  \
-        Capture.o
+		ChkSym.o
 	$(CC) $^ -o linsym.o
 	cp linsym.o ../bin/linsym
 	chmod +x ../bin/linsym
@@ -64,8 +64,8 @@ ParseReloc.o:	ParseReloc.c
 Keymaps.o:		Keymaps.c
 	$(CC) $(CFLAGS) -c Keymaps.c
 
-loader.o:		loader.c
-	$(CC) $(CFLAGS) -c loader.c
+Linsym.o:		Linsym.c
+	$(CC) $(CFLAGS) -c Linsym.c
 
 History.o:		History.c
 	$(CC) $(CFLAGS) -c History.c
@@ -73,13 +73,13 @@ History.o:		History.c
 symbols.o:		symbols.c
 	$(CC) $(CFLAGS) -c symbols.c
 
-load_elf.o:		load_elf.c
-	$(CC) $(CFLAGS) -c load_elf.c
+ElfToSym.o:		ElfToSym.c
+	$(CC) $(CFLAGS) -c ElfToSym.c
 
 symutils.o:		symutils.c
 	$(CC) $(CFLAGS) -c symutils.c
 
-Capture.o:		Capture.c
-	$(CC) $(CFLAGS) -c Capture.c
+ChkSym.o:		ChkSym.c
+	$(CC) $(CFLAGS) -c ChkSym.c
 
 

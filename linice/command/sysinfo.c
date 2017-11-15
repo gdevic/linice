@@ -443,14 +443,14 @@ BOOL cmdModule(char *args, int subClass)
     void *pmodule;                      // Kernel pmodule pointer
     int nLine = 1;                      // Line counter
 
+    // Get the pointer to the module structure (internal) and loop
+    pmodule = ice_get_module(NULL, &Mod);
+
     if( pmodule )
     {
         // Display all modules matching search criteria
         dprinth(nLine++, "%c%cModule   Name              Size   Syms Deps init()   cleanup() Use Flags:",
             DP_SETCOLINDEX, COL_BOLD);
-
-        // Get the pointer to the module structure (internal) and loop
-        pmodule = ice_get_module(NULL, &Mod);
 
         do
         {
