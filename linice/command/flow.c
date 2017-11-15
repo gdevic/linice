@@ -34,12 +34,10 @@
 *   Include Files                                                             *
 ******************************************************************************/
 
-#include "module-header.h"              // Versatile module header file
-
 #include "clib.h"                       // Include C library header file
 #include "ice.h"                        // Include main debugger structures
-
 #include "debug.h"                      // Include our dprintk()
+
 #include "disassembler.h"               // Include disassembler
 
 /******************************************************************************
@@ -88,7 +86,6 @@ extern void machine_power_off(void);
 ******************************************************************************/
 BOOL cmdXit(char *args, int subClass)
 {
-
     return( FALSE );
 }
 
@@ -109,8 +106,8 @@ BOOL cmdXit(char *args, int subClass)
 ******************************************************************************/
 BOOL cmdGo(char *args, int subClass)
 {
-    TADDRDESC StartAddr, BpAddr;
-    BOOL fStart, fBreak;
+    TADDRDESC StartAddr, BpAddr;        // Actual start and break address
+    BOOL fStart, fBreak;                // We have start, break address
 
     fStart = fBreak = FALSE;
 
@@ -119,14 +116,22 @@ BOOL cmdGo(char *args, int subClass)
         // Arguments present. Is it start-address?
         if( *args=='=' )
         {
+            args++;                     // Skip the '=' character
+
             // Set the default selector to current CS
             evalSel = deb.r->cs;
 
             if( Expression(&StartAddr.offset, args, &args) )
             {
-                // Assign the complete start address
-                StartAddr.sel = evalSel;
-                fStart = TRUE;
+                // Verify that the selector is readable and valid
+                if( VerifySelector(evalSel) )
+                {
+                    // Assign the complete start address
+                    StartAddr.sel = evalSel;
+                    fStart = TRUE;
+                }
+                else
+                    return( TRUE );
             }
             else
             {
@@ -144,9 +149,15 @@ BOOL cmdGo(char *args, int subClass)
 
             if( Expression(&BpAddr.offset, args, &args) )
             {
-                // Assign the complete bp address
-                BpAddr.sel = evalSel;
-                fBreak = TRUE;
+                // Verify that the selector is readable and valid
+                if( VerifySelector(evalSel) )
+                {
+                    // Assign the complete bp address
+                    BpAddr.sel = evalSel;
+                    fBreak = TRUE;
+                }
+                else
+                    return( TRUE );
             }
             else
             {
@@ -236,7 +247,7 @@ BOOL cmdTrace(char *args, int subClass)
     // right place, since we may have it set differenly
     SetSymbolContext(deb.r->cs, deb.r->eip);
 
-    if( (deb.eSrc==1 || deb.eSrc==2) && deb.pFnScope && deb.pFnLin )
+    if( (deb.eSrc==SRC_ON || deb.eSrc==SRC_MIXED) && deb.pFnScope && deb.pFnLin )
     {
         // SOURCE CODE ACTIVE
 
@@ -359,7 +370,7 @@ BOOL cmdStep(char *args, int subClass)
     // right place, since we may have it set differenly
     SetSymbolContext(deb.r->cs, deb.r->eip);
 
-    if( (deb.eSrc==1 || deb.eSrc==2) && deb.pFnScope && deb.pFnLin )
+    if( (deb.eSrc==SRC_ON) && deb.pFnScope && deb.pFnLin )
     {
         // SOURCE CODE ACTIVE
 
@@ -456,7 +467,7 @@ BOOL cmdZap(char *args, int subClass)
         Addr.offset = deb.r->eip - 1;
 
         // Zap the INT3
-        AddrSetByte(&Addr, 0x90);
+        AddrSetByte(&Addr, 0x90, TRUE);
     }
     else
     if( b0==0x01 || b0==0x03 )
@@ -467,10 +478,10 @@ BOOL cmdZap(char *args, int subClass)
 
             // Zap the 2-byte INT 1 or INT 3
             Addr.offset = deb.r->eip - 1;
-            AddrSetByte(&Addr, 0x90);
+            AddrSetByte(&Addr, 0x90, TRUE);
 
             Addr.offset = deb.r->eip - 2;
-            AddrSetByte(&Addr, 0x90);
+            AddrSetByte(&Addr, 0x90, TRUE);
         }
     }
 

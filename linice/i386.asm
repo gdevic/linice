@@ -35,6 +35,8 @@ global  WriteCRTC
 global  ReadMdaCRTC
 global  WriteMdaCRTC
 global  inp
+global  getTR
+global  SelLAR
 
 global  MemAccess_START
 global  GetByte
@@ -497,6 +499,40 @@ inp:
 
 ;==============================================================================
 ;
+;   DWORD getTR(void)
+;
+;   Returns:
+;       ax - Task Register value
+;
+;==============================================================================
+getTR:
+        str     ax
+        ret
+
+;==============================================================================
+;
+;   DWORD SelLAR(WORD sel)
+;
+;   Where:
+;       [ebp + 8 ]      selector
+;
+;   Returns:
+;       eax - Access rights
+;           0 if the selector was invalid
+;
+;==============================================================================
+SelLAR:
+        push    ebp
+        mov     ebp, esp
+        lar     eax, [ebp + 8]          ; Load access rights of a selector
+        jz      @sel_ok                 ; Jump forth if the selector was ok
+        xor     eax, eax                ; Reset to zero for invalid selector
+@sel_ok:
+        pop     ebp
+        ret
+
+;==============================================================================
+;
 ;   int GetByte( WORD sel, DWORD offset )
 ;
 ;   Reads a byte from a memory location sel:offset
@@ -508,6 +544,14 @@ inp:
 ;       [ebp + 12 ]     offset
 ;
 ;==============================================================================
+;
+;   We do some checks here, and leave others to PF handler and GPF handler
+;
+
+MEMACCESS_PF        equ 0F0FFFFFFh      ; Memory access caused a page fault
+MEMACCESS_GPF       equ 0F1FFFFFFh      ; Memory access caused a GP fault
+MEMACCESS_LIM       equ 0F2FFFFFFh      ; Memory access invalid limit
+
 MemAccess_START:
 
 GetByte:
@@ -516,18 +560,26 @@ GetByte:
         push    ebx
         push    gs
 
+        ; Perform a sanity check of the selector value
+        mov     eax, MEMACCESS_GPF      ; Assume failure with the access right
+        lar     bx, [ebp + 8]           ; Load access rights of a selector
+        jnz     @bad_selector_rb        ; Exit if the selector is invisible or invalid
+
+        mov     eax, MEMACCESS_LIM      ; Assume failure with the segment limit
+        lsl     ebx, [ebp + 8]          ; Load segment limit into ebx register
+        cmp     ebx, [ebp + 12]         ; Compare to what we requested
+        jl      @bad_selector_rb        ; Exit if the limit is exceeded
+
         mov     ax, [ebp + 8]           ; Get the selector
         mov     gs, ax                  ; Store it in the GS
         mov     ebx, [ebp + 12]         ; Get the offset off that selector
 
-        ; Get the byte from the memory, possibly page faulting
-        ; if the memory address was not valid.  Anyhow, since
-        ; we installed PF handler, we will return 0xFFFFFFFF
-        ; in EAX register in that case
+        ; Access the memory using the GS selector, possibly causing PF or GPF
+        ; since we installed handlers, they will return the correct error code
 
         xor     eax, eax
         mov     al, [gs:ebx]
-
+@bad_selector_rb:
         pop     gs
         pop     ebx
         pop     ebp
@@ -551,17 +603,25 @@ GetDWORD:
         push    ebx
         push    gs
 
+        ; Perform a sanity check of the selector value
+        mov     eax, MEMACCESS_GPF      ; Assume failure with the access right
+        lar     bx, [ebp + 8]           ; Load access rights of a selector
+        jnz     @bad_selector_rd        ; Exit if the selector is invisible or invalid
+
+        mov     eax, MEMACCESS_LIM      ; Assume failure with the segment limit
+        lsl     ebx, [ebp + 8]          ; Load segment limit into ebx register
+        cmp     ebx, [ebp + 12]         ; Compare to what we requested
+        jl      @bad_selector_rd        ; Exit if the limit is exceeded
+
         mov     ax, [ebp + 8]           ; Get the selector
         mov     gs, ax                  ; Store it in the GS
         mov     ebx, [ebp + 12]         ; Get the offset off that selector
 
-        ; Get a DWORD from the memory, possibly page faulting
-        ; if the memory address was not valid.  Anyhow, since
-        ; we installed PF handler, we will return 0xFFFFFFFF
-        ; in EAX register in that case
+        ; Access the memory using the GS selector, possibly causing PF or GPF
+        ; since we installed handlers, they will return the correct error code
 
         mov     eax, [gs:ebx]
-
+@bad_selector_rd:
         pop     gs
         pop     ebx
         pop     ebp
@@ -585,19 +645,28 @@ SetByte:
         push    ebx
         push    gs
 
+        ; Perform a sanity check of the selector value
+        mov     eax, MEMACCESS_GPF      ; Assume failure with the access right
+        lar     bx, [ebp + 8]           ; Load access rights of a selector
+        jnz     @bad_selector_wb        ; Exit if the selector is invisible or invalid
+
+        mov     eax, MEMACCESS_LIM      ; Assume failure with the segment limit
+        lsl     ebx, [ebp + 8]          ; Load segment limit into ebx register
+        cmp     ebx, [ebp + 12]         ; Compare to what we requested
+        jl      @bad_selector_wb        ; Exit if the limit is exceeded
+
         mov     ax, [ebp + 8]           ; Get the selector
         mov     gs, ax                  ; Store it in the GS
         mov     ebx, [ebp + 12]         ; Get the offset off that selector
 
         mov     eax, [ebp + 16]         ; Get the byte value
 
-        ; Store a byte to the memory, possibly page faulting
-        ; if the memory address was not valid.  Anyhow, since
-        ; we installed PF handler, we will return 0xFFFFFFFF
-        ; in EAX register in that case
+        ; Access the memory using the GS selector, possibly causing PF or GPF
+        ; since we installed handlers, they will return the correct error code
 
         mov     [gs:ebx], al            ; Store the byte
 
+@bad_selector_wb:
 MemAccess_FAULT:
         pop     gs
         pop     ebx

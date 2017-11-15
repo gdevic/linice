@@ -35,15 +35,9 @@
 *   Include Files                                                             *
 ******************************************************************************/
 
-#include "module-header.h"              // Versatile module header file
-
-#include <asm/page.h>
-//#include <asm/pgtable.h>
-#include <linux/mm.h>                   // Include memory management protos
-#include <asm/io.h>
-
 #include "clib.h"                       // Include C library header file
 #include "ice-ioctl.h"                  // Include our own IOCTL numbers
+#include "iceface.h"                    // Include iceface module stub protos
 #include "ice.h"                        // Include main debugger structures
 
 #include "debug.h"                      // Include our dprintk()
@@ -200,7 +194,7 @@ int XInitPacket(TXINITPACKET *pXInit)
         ice_free_heap(pIce->pXDrawBuffer);
 
         if( pIce->pXFrameBuffer != NULL )
-            iounmap(pIce->pXFrameBuffer);
+            ice_iounmap(pIce->pXFrameBuffer);
 
         pIce->pXDrawBuffer = NULL;
         pIce->pXFrameBuffer = NULL;
@@ -219,7 +213,7 @@ int XInitPacket(TXINITPACKET *pXInit)
         dwMappingSize = pXInit->stride * pXInit->yres;
 
         // Map the graphics card physical memory into the kernel address space
-        pIce->pXFrameBuffer = ioremap(physicalAddress, dwMappingSize);
+        pIce->pXFrameBuffer = ice_ioremap(physicalAddress, dwMappingSize);
 
         if( pIce->pXFrameBuffer )
         {
@@ -784,6 +778,9 @@ static void DgaSprint(char *s)
             else
             switch( c )
             {
+                case DP_ENABLE_OUTPUT:  // Which we ignore
+                    break;
+
                 case DP_DISABLE_OUTPUT:
                         dga.fEnabled = FALSE;
                     break;

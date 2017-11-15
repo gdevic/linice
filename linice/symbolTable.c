@@ -34,15 +34,12 @@
 *   Include Files                                                             *
 ******************************************************************************/
 
-#include "module-header.h"              // Versatile module header file
-
-#include <asm/uaccess.h>                // User space memory access functions
-#include <linux/string.h>
-
 #define __NO_VERSION__
-#include <linux/module.h>
+#include <linux/module.h>               // Include required module include
+                                        // so we are able to browse module list
 
 #include "clib.h"                       // Include C library header file
+#include "iceface.h"                    // Include iceface module stub protos
 #include "ice.h"                        // Include main debugger structures
 
 #include "debug.h"                      // Include our dprintk()
@@ -126,7 +123,7 @@ int UserAddSymbolTable(void *pSymUser)
     struct module *image;               // *this* module kernel descriptor
 
     // Copy the header of the symbol table into the local structur to examine it
-    if( copy_from_user(&SymHeader, pSymUser, sizeof(TSYMTAB))==0 )
+    if( ice_copy_from_user(&SymHeader, pSymUser, sizeof(TSYMTAB))==0 )
     {
         // Check if we should allocate memory for the symbol table from the allowed pool
         if( pIce->nSymbolBufferAvail >= SymHeader.dwSize )
@@ -145,7 +142,7 @@ int UserAddSymbolTable(void *pSymUser)
                     memset(pPriv, 0, sizeof(TSYMPRIV));
 
                     // Copy the complete symbol table from the use space
-                    if( copy_from_user(pSymTab, pSymUser, SymHeader.dwSize)==0 )
+                    if( ice_copy_from_user(pSymTab, pSymUser, SymHeader.dwSize)==0 )
                     {
                         // Make sure we are really loading a symbol table
                         if( !strcmp(pSymTab->sSig, SYMSIG) )
@@ -308,7 +305,7 @@ int UserRemoveSymbolTable(void *pSymtab)
     char sName[MAX_MODULE_NAME];
 
     // Copy the symbol table name from the user address space
-    if( copy_from_user(sName, pSymtab, MAX_MODULE_NAME)==0 )
+    if( ice_copy_from_user(sName, pSymtab, MAX_MODULE_NAME)==0 )
     {
         sName[MAX_MODULE_NAME-1] = 0;
 

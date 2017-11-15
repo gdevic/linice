@@ -72,6 +72,8 @@
 
         linsym --help                    -h -> print command line symtax
 
+        linsym --verbose                 -b -> verbose output
+
 *******************************************************************************
 *                                                                             *
 *   Major changes:                                                            *
@@ -96,6 +98,7 @@
 #include <sys/wait.h>                   // Include waitpid
 #endif // WIN32
 
+#include "ice-ioctl.h"                  // Include shared header file
 #include "loader.h"                     // Include global protos
 
 /******************************************************************************
@@ -121,7 +124,7 @@ char *pLoad = NULL;                     // Need to specify loading module
 char *pArgs = NULL;                     // Default no arguments
 char *pSym = NULL;                      // Default symbol table to load/unload
 char *pLogfile = "linice.log";          // Default logfile name
-char *pSystemMap = "/boot/System.map";  // Default System.map file
+char *pSystemMap = NULL;                // User supplied System.map file
 unsigned int opt;                       // Various option flags
 
 /******************************************************************************
@@ -130,11 +133,16 @@ unsigned int opt;                       // Various option flags
 *                                                                             *
 ******************************************************************************/
 
-extern void OptInstall(char *pSystemMap);
+int strnicmp( const char *s1, const char *s2, size_t n );
+int strcmpi( const char *s1, const char *s2 );
+int tolower(int);
+
+extern BOOL OptInstall(char *pSystemMap);
 extern void OptUninstall();
 extern void OptAddSymbolTable(char *sName);
 extern void OptRemoveSymbolTable(char *sName);
 extern void OptTranslate(char *pathOut, char *pathIn, char *pathSources, int nLevel);
+extern void OptLogHistory(void);
 
 
 /******************************************************************************
@@ -158,20 +166,35 @@ int system2(char *command)
 {
 #ifndef WINDOWS
     int pid, status;
+    char *argv[4];                      // Argument string pointers
+    static char sExec[256];             // Line that we will be executing
 
     if( command==NULL )
         return( -1 );
 
-    pid = fork();
+    pid = fork();                       // Create a secondary process that will execute a line
     if( pid==-1 )
         return( -1 );
+
     if( pid==0 )
     {
-        char *argv[4];
+        // Form the line to be executed.. Append pipe to dev/null if no verbose was set
+
+        strcpy(sExec, command);
+
+        if( !(opt & OPT_VERBOSE) )
+        {
+            // Ok, this is a little kludge worth explaining: if a line already contains
+            // indirection > we can't redirect it further to dev null
+            if( !strchr(sExec, '>') )
+                strcat(sExec, " >& /dev/null");
+        }
+
         argv[0] = "sh";
         argv[1] = "-c";
-        argv[2] = command;
+        argv[2] = sExec;
         argv[3] = 0;
+
         execve("/bin/sh", argv, environ);
         exit(127);
     }
@@ -297,7 +320,7 @@ void OptVersion()
 int main(int argn, char *argp[])
 {
     int i;
-    char *ptr;
+    char *ptr;                          // Temporary pointer variable to use
 
     pSource = "./";                     // Default source path is the current directory
     opt = 0;
@@ -310,10 +333,12 @@ int main(int argn, char *argp[])
     if( argn==1 )
         OptHelp(1);
 
-    // Parse command line arguments and assign opt bits
+    //------------------------------------------------------------------------
+    // Parse command line arguments and assign opt bits and strings
+    //------------------------------------------------------------------------
     for( i=1; i<argn; i++)
     {
-        if( !strncmp(argp[i], "--translate", 11) || !strncmp(argp[i], "-t", 2) )
+        if( !strnicmp(argp[i], "--translate", 11) || !strnicmp(argp[i], "-t", 2) )
         {
             ptr = argp[i] + (*(argp[i]+1)=='-'? 11 : 2);
 
@@ -325,15 +350,15 @@ int main(int argn, char *argp[])
             // --translate:package {file}
             opt |= OPT_TRANSLATE;
 
-            if( !strcmp(ptr, ":publics" ))
+            if( !strcmpi(ptr, ":publics" ))
                 nTranslate = TRAN_PUBLICS;
-            if( !strcmp(ptr, ":typeinfo" ))
+            if( !strcmpi(ptr, ":typeinfo" ))
                 nTranslate = TRAN_TYPEINFO;
-            if( !strcmp(ptr, ":symbols" ))
+            if( !strcmpi(ptr, ":symbols" ))
                 nTranslate = TRAN_SYMBOLS;
-            if( !strcmp(ptr, ":source" ))
+            if( !strcmpi(ptr, ":source" ))
                 nTranslate = TRAN_SOURCE;
-            if( !strcmp(ptr, ":package" ))
+            if( !strcmpi(ptr, ":package" ))
                 nTranslate = TRAN_PACKAGE;
 
             if( i+1<argn )
@@ -345,7 +370,7 @@ int main(int argn, char *argp[])
                 opt |= OPT_HELP;    // Did not provide file name to translate
         }
         else
-        if( !strncmp(argp[i], "--source:", 9) || !strncmp(argp[i], "-p", 2) )
+        if( !strnicmp(argp[i], "--source:", 9) || !strnicmp(argp[i], "-p", 2) )
         {
             ptr = argp[i] + (*(argp[i]+1)=='-'? 9 : 2);
 
@@ -354,13 +379,13 @@ int main(int argn, char *argp[])
             pSource = ptr;
         }
         else
-        if( !strcmp(argp[i], "--prompt") || !strcmp(argp[i], "-p") )
+        if( !strcmpi(argp[i], "--prompt") || !strcmpi(argp[i], "-p") )
         {
             // --prompt  says to prompt for the missing source (default is no prompt)
             opt |= OPT_PROMPT;
         }
         else
-        if( !strncmp(argp[i], "--output:", 9) || !strncmp(argp[i], "-o:", 3) )
+        if( !strnicmp(argp[i], "--output:", 9) || !strnicmp(argp[i], "-o:", 3) )
         {
             ptr = argp[i] + (*(argp[i]+1)=='-'? 9 : 3);
 
@@ -369,7 +394,7 @@ int main(int argn, char *argp[])
             pOutput = ptr;
         }
         else
-        if( !strncmp(argp[i], "--load", 6) || !strncmp(argp[i], "-l", 2) )
+        if( !strnicmp(argp[i], "--load", 6) || !strnicmp(argp[i], "-l", 2) )
         {
             ptr = argp[i] + (*(argp[i]+1)=='-'? 6 : 2);
 
@@ -378,9 +403,9 @@ int main(int argn, char *argp[])
             // --load:NOBREAK ..
             if( i+1<argn )
             {
-                if( !strcmp(ptr, ":break") )
+                if( !strcmpi(ptr, ":break") )
                     opt |= OPT_LOAD_BREAK;
-                if( !strcmp(ptr, ":nobreak") )
+                if( !strcmpi(ptr, ":nobreak") )
                     opt |= OPT_LOAD_NOBREAK;
 
                 pLoad = argp[i+1];  // Assign path/name of the module to load
@@ -391,7 +416,7 @@ int main(int argn, char *argp[])
             opt |= OPT_LOAD;
         }
         else
-        if( !strncmp(argp[i], "--args:", 7) || !strncmp(argp[i], "-a:", 3) )
+        if( !strnicmp(argp[i], "--args:", 7) || !strnicmp(argp[i], "-a:", 3) )
         {
             ptr = argp[i] + (*(argp[i]+1)=='-'? 7 : 3);
 
@@ -401,7 +426,7 @@ int main(int argn, char *argp[])
             pArgs = ptr;
         }
         else
-        if( !strncmp(argp[i], "--sym:", 6) || !strncmp(argp[i], "-s:", 3) )
+        if( !strnicmp(argp[i], "--sym:", 6) || !strnicmp(argp[i], "-s:", 3) )
         {
             ptr = argp[i] + (*(argp[i]+1)=='-'? 6 : 3);
 
@@ -410,7 +435,7 @@ int main(int argn, char *argp[])
             pSym = ptr;
         }
         else
-        if( !strncmp(argp[i], "--unload:", 9) || !strncmp(argp[i], "-u:", 3) )
+        if( !strnicmp(argp[i], "--unload:", 9) || !strnicmp(argp[i], "-u:", 3) )
         {
             ptr = argp[i] + (*(argp[i]+1)=='-'? 9 : 3);
 
@@ -419,7 +444,7 @@ int main(int argn, char *argp[])
             pSym = ptr;
         }
         else
-        if( !strncmp(argp[i], "--install", 9) || !strncmp(argp[i], "-i", 2) )
+        if( !strnicmp(argp[i], "--install", 9) || !strnicmp(argp[i], "-i", 2) )
         {
             ptr = argp[i] + (*(argp[i]+1)=='-'? 9 : 2);
 
@@ -432,47 +457,59 @@ int main(int argn, char *argp[])
             }
         }
         else
-        if( !strcmp(argp[i], "--uninstall") || !strcmp(argp[i], "-x") )
+        if( !strcmpi(argp[i], "--uninstall") || !strcmpi(argp[i], "-x") )
         {
             // --uninstall  uninstalls debugger
             opt |= OPT_UNINSTALL;
         }
         else
-        if( !strncmp(argp[i], "--logfile", 9) || !strncmp(argp[i], "-g", 2) )
+        if( !strnicmp(argp[i], "--logfile", 9) || !strnicmp(argp[i], "-g", 2) )
         {
             ptr = argp[i] + (*(argp[i]+1)=='-'? 9 : 2);
 
-            // --logfile
-            // --logfile:{log_file}
-            // --logfiled:{logfile},APPEND
+            // --logfile                        - log to a default logfile
+            // --logfile:{log_file}             - specify a logfile
+            // --logfile,APPEND                 - append to a default logfile
+            // --logfiled:{logfile},APPEND      - append to a specified logfile
+            opt |= OPT_LOGFILE;
+
+            // Check if we have a new logfile specified
             if( *ptr == ':' )
             {
-                int len;
-
-                // Log file is specified
-                pLogfile = ptr + 1;
-                len = strlen(pLogfile);
-                if( len > 8 && !strcmp(pLogfile+len-7, ",append") )
-                {
-                    opt |= OPT_LOGFILE_APPEND;
-                    pLogfile[len-7] = 0;
-                }
+                ptr++;
+                pLogfile = ptr;                 // New log file is specified
             }
-            // Case where we append to a default logfile:
-            if( !strcmp(ptr, ":append") )
+
+            // Find the end of the specified file name (it is either end of string
+            // or a comma for append sub option
+            if( strchr(ptr, ',') )
+            {
+                ptr = strchr(ptr, ',');
+                *ptr = 0;                   // Zero-terminate the log file name
+                ptr++;
+            }
+            
+            // Check if we need to append instead of create/truncate logfile
+            if( !strcmpi(ptr, "append") )
                 opt |= OPT_LOGFILE_APPEND;
         }
         else
-        if( !strcmp(argp[i], "--ver") || !strcmp(argp[i], "-v") )
+        if( !strcmpi(argp[i], "--ver") || !strcmpi(argp[i], "-v") )
         {
             // --ver  display version
             opt |= OPT_VER;
         }
         else
-        if( !strcmp(argp[i], "--help") || !strcmp(argp[i], "-h") )
+        if( !strcmpi(argp[i], "--help") || !strcmpi(argp[i], "-h") )
         {
             // --help  display help information and exit
             opt |= OPT_HELP;
+        }
+        else
+        if( !strcmpi(argp[i], "--verbose") || !strcmpi(argp[i], "-b") )
+        {
+            // --verbose   display more output information
+            opt |= OPT_VERBOSE;
         }
         else
         {
@@ -486,6 +523,18 @@ int main(int argn, char *argp[])
         {
             // Print help and EXIT (you can't do anything if you want help :-)
             OptHelp(0);
+        }
+    }
+
+    //------------------------------------------------------------------------
+    // Start executing command line options
+    //------------------------------------------------------------------------
+
+    if( opt & OPT_VERBOSE )
+    {
+        if( opt & OPT_LOGFILE )
+        {
+            printf("Logfile: %s %s\n", pLogfile, (opt & OPT_LOGFILE_APPEND)? "APPEND":"");
         }
     }
 
@@ -504,7 +553,11 @@ int main(int argn, char *argp[])
 
     // If we need to load debugger, do it first
     if( opt & OPT_INSTALL )
-        OptInstall(pSystemMap);
+    {
+        // If installation failed, we need to exit
+        if( OptInstall(pSystemMap)==FALSE )
+            exit(-1);
+    }
 
     // Print the version
     if( opt & OPT_VER )
@@ -546,6 +599,12 @@ int main(int argn, char *argp[])
         while( pDelim );
     }
 
+    // Get the history strings into a log file
+    if( opt & OPT_LOGFILE )
+    {
+        OptLogHistory();
+    }
+
     // If uninstall debugger is needed, do it last
     if( opt & OPT_UNINSTALL )
         OptUninstall();
@@ -559,3 +618,70 @@ int _open(const char *path, int oflag)
     return(open(path, oflag));
 }
 
+/******************************************************************************
+*
+*   int strnicmp( const char *s1, const char *s2, size_t n )
+*
+*      Compares two counted strings with case insensitivity.
+*
+*   Where:
+*      s1 - pointer to string 1
+*      s2 - pointer to string 2
+*      n - maximum number of characters to compare
+*
+*   Returns:
+*      An int that is greather than, equal to, or less than zero according to
+*      the relative order of s1 and s2.
+*
+*      Example, if s1 > s2, return a positive value.
+*
+******************************************************************************/
+int strnicmp( const char *s1, const char *s2, size_t n )
+{
+    if( n==0 ) return( 0 );
+    while( 1 )
+    {
+        if (tolower(*s1) != tolower(*s2))
+            return(tolower(*s1) - tolower(*s2));
+        if (*s1 == 0 || --n == 0) return(0);
+        s1++;
+        s2++;
+    }
+}
+
+int tolower(int c)
+{
+    if( c>='A' && c<='Z' )
+        return( c + 0x20 );
+
+    return( c );
+}
+
+/******************************************************************************
+*
+*   int strcmpii( const char *s1, const char *s2 )
+*
+*      Compares s1 with s2 with case insensitivity.
+*      This function is identical to stricmp()
+*
+*   Where:
+*      s1 - pointer to string 1
+*      s2 - pointer to string 2
+*
+*   Returns:
+*      An int that is greather than, equal to, or less than zero according to
+*      the relative order of s1 and s2.
+*
+*      Example, if s1 > s2, return a positive value.
+*
+******************************************************************************/
+int strcmpi( const char *s1, const char *s2 )
+{
+    while( 1 )
+    {
+        if (tolower(*s1) != tolower(*s2)) return(tolower(*s1) - tolower(*s2));
+        if (*s1 == 0) return(0);
+        s1++;
+        s2++;
+    }
+}

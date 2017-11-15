@@ -34,16 +34,12 @@
 *   Include Files                                                             *
 ******************************************************************************/
 
-#include "module-header.h"              // Versatile module header file
-
-#include <asm/uaccess.h>                // User space memory access functions
-
+#include "ice-ioctl.h"                  // Include our own IOCTL numbers
+#include "ice-keycode.h"                // Include keyboard codes
 #include "clib.h"                       // Include C library header file
+#include "iceface.h"                    // Include iceface module stub protos
 #include "ice.h"                        // Include main debugger structures
 #include "ibm-pc.h"                     // Include hardware defines
-
-#include "ice-ioctl.h"                  // Include our own IOCTL numbers
-
 #include "debug.h"                      // Include our dprintk()
 #include "intel.h"                      // Include processor specific stuff
 
@@ -77,6 +73,7 @@ extern void HookSyscall(void);
 extern BOOL InitUserVars(int num);
 extern BOOL InitMacros(int num);
 extern void InitEdit();
+extern void InitKeyboardLayout(char Layout[3][128]);
 extern BOOL cmdVer(char *args, int subClass);
 
 extern BYTE *ice_malloc(DWORD size);
@@ -113,6 +110,20 @@ int InitPacket(PTINITPACKET pInit)
             if( (pIce->pHistoryBuffer = ice_malloc(pInit->nHistorySize)) != NULL)
             {
                 INFO(("Allocated %d Kb for history pool\n", pInit->nHistorySize / 1024));
+
+                if( ice_get_flags() & 1 )
+                {
+                    // IO APIC is present
+                    deb.fIoApic = TRUE;
+                }
+
+                if( ice_get_flags() & 2 )
+                {
+                    // SMP machine
+                    deb.fSmp    = TRUE;
+                }
+
+                // Build the command help index
 
                 CommandBuildHelpIndex();
 
@@ -160,7 +171,7 @@ int InitPacket(PTINITPACKET pInit)
                 deb.codeTopAddr.sel = __KERNEL_CS;
                 deb.codeTopAddr.offset = 0;
                 deb.fCode = FALSE;
-                deb.eSrc = 1;                       // Default Source ON
+                deb.eSrc = SRC_ON;                  // Default Source ON
 
                 // Initialize the default break key
                 deb.BreakKey = CHAR_CTRL | 'Q';
@@ -170,15 +181,6 @@ int InitPacket(PTINITPACKET pInit)
                 pIce->nXDrawSize = pInit->nDrawSize;
 
                 // Initialize interrupt handling subsystem
-
-
-#if 0
-                deb.fIoApic = TRUE;
-                deb.fSmp    = TRUE;
-#else
-                deb.fIoApic = FALSE;
-                deb.fSmp    = FALSE;
-#endif
 
                 InterruptInit();
 
@@ -212,9 +214,11 @@ int InitPacket(PTINITPACKET pInit)
 
                                         InitEdit();
 
-                                        // Set different default values
+                                        // Copy the keyboard layout overrides
 
-                                        pIce->layout = LAYOUT_US;
+                                        InitKeyboardLayout(pInit->Layout);
+
+                                        // Set different default values
 
                                         deb.bpIndex = -1;
 
@@ -251,7 +255,7 @@ int InitPacket(PTINITPACKET pInit)
 
                                         dprinth(1, "");
                                         dprinth(1, "LINICE: Init: %s", pInit->sInit);
-                        
+
                                         if( CommandExecute(pInit->sInit)==TRUE )
                                         {
                                             // Enter the debugger if the init string did not end with command 'X'
@@ -294,6 +298,11 @@ int InitPacket(PTINITPACKET pInit)
                 {
                     ERROR(("pIce->hSymbolBuffer != NULL\n"));
                 }
+
+                // Restore background and disable output driver
+                dputc(DP_RESTOREBACKGROUND);
+                dputc(DP_DISABLE_OUTPUT);
+
             }
             else
             {

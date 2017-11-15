@@ -118,8 +118,6 @@ static char *sSize[4] = { "byte", "word", "", "dword" };
 *                                                                             *
 ******************************************************************************/
 
-// TODO: Now we have DP_ESCAPE, so we could dump raw ascii characters in the DD output...
-
 static int PrintAscii(int pos)
 {
     int i;
@@ -346,7 +344,7 @@ static BOOL DataGetSet(int cmd, TADDRDESC *pAddr, int pos, char key)
                     for(i=deb.DumpSize-1; i>=0; i--)
                     {
                         bValue = ReadByte(&sField[i*2]);
-                        AddrSetByte(pAddr, bValue);
+                        AddrSetByte(pAddr, bValue, TRUE);
                         pAddr->offset++;
                     }
 
@@ -537,7 +535,7 @@ static void DataEdit()
 
                         // Store the ASCII character
                         Addr.offset = deb.dataAddr.offset + DATA_BYTES * (yCur - pWin->d.Top - 1) + (xCur - pDataDesc->xAsciiStart);
-                        AddrSetByte(&Addr, Key);
+                        AddrSetByte(&Addr, Key, TRUE);
 
                         // Redraw the window to display data in both panes
                         DataDraw(TRUE, deb.dataAddr.offset);
@@ -804,6 +802,8 @@ static void DataEdit()
 ******************************************************************************/
 BOOL cmdDdump(char *args, int subClass)
 {
+    DWORD offset;                       // Temporary offset portion
+
     // If data size was explicitly specified, set it as default
     if( subClass )
         deb.DumpSize = subClass;
@@ -812,17 +812,22 @@ BOOL cmdDdump(char *args, int subClass)
     {
         // Argument present: D <address> [L <len>]
         evalSel = deb.dataAddr.sel;
-        deb.dataAddr.offset = Evaluate(args, &args);
-        deb.dataAddr.sel = evalSel;
+        offset = Evaluate(args, &args);
+
+        // Verify the selector value
+        if( VerifySelector(evalSel) )
+        {
+            deb.dataAddr.offset = offset;
+            deb.dataAddr.sel = evalSel;
+        }
+        else
+            return( TRUE );
     }
     else
     {
         // No arguments - advance current address
         deb.dataAddr.offset += DATA_BYTES * GetDataLines();
     }
-
-
-//deb.dataAddr.offset = testbuf;
 
     DataDraw(TRUE, deb.dataAddr.offset);
 

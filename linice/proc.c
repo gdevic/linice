@@ -34,15 +34,9 @@
 *   Include Files                                                             *
 ******************************************************************************/
 
-#include "module-header.h"              // Versatile module header file
-#include <linux/proc_fs.h>              // Include proc filesystem support
-#include <asm/uaccess.h>
-
-#define __NO_VERSION__
-#include <linux/module.h>
-
 #include "clib.h"                       // Include C library header file
 #include "ice.h"                        // Include main debugger structures
+#include "iceface.h"                    // Include iceface module stub protos
 
 #include "debug.h"                      // Include our dprintk()
 
@@ -61,9 +55,6 @@
 static int ProcRead(char *buf, char **start, off_t offset, int len, int *unused, int *data);
 static int ProcWrite(struct file *file, char *buf, unsigned long count, void *data);
 
-static struct proc_dir_entry *pProcEntry;
-
-
 /******************************************************************************
 *                                                                             *
 *   Functions                                                                 *
@@ -72,27 +63,13 @@ static struct proc_dir_entry *pProcEntry;
 
 int InitProcFs()
 {
-    pProcEntry = create_proc_entry("linice", 0644, &proc_root);
-    if( pProcEntry )
-    {
-        pProcEntry->read_proc  = ProcRead;
-        pProcEntry->write_proc = ProcWrite;
-    }
-    else
-    {
-        return( -1 );                   // Return failure
-    }
-
-    // Return success    
-    return( 0 );
+    return( ice_init_proc((int) ProcRead, (int) ProcWrite) );
 }
 
 
 int CloseProcFs()
 {
-    remove_proc_entry("linice", &proc_root);
-
-    return( 0 );
+    return( ice_close_proc() );
 }
 
 
@@ -115,7 +92,7 @@ static int ProcRead(char *buf, char **start, off_t offset, int len, int *unused,
 {
     len = 0;
 
-    MOD_INC_USE_COUNT;
+    ice_mod_inc_use_count();
 
     // Print the number of interrupts that we trapped
 
@@ -129,7 +106,7 @@ static int ProcRead(char *buf, char **start, off_t offset, int len, int *unused,
     len += sprintf(buf+len, " ps/2:  %5d     %5d\n", pIce->nIntsPass[0x2C], pIce->nIntsIce[0x2C]);
     len += sprintf(buf+len, " PF:    %5d     %5d\n", pIce->nIntsPass[0x0E], pIce->nIntsIce[0x0E]);
 
-    MOD_DEC_USE_COUNT;
+    ice_mod_dec_use_count();
 
     return( len );
 }
@@ -155,3 +132,4 @@ static int ProcWrite(struct file *file, char *buf, unsigned long count, void *da
     // Return the count of data.
     return( count );
 }
+

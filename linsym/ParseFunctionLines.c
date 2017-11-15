@@ -170,7 +170,7 @@ BOOL ParseFunctionLines(int fd, int fs, BYTE *pBuf)
                             Header.dwStartAddress = GetGlobalSymbolAddress(pStr);
 
                         // Print function start & name
-                        printf("START-%08lX--%s\n", Header.dwStartAddress, pStr);
+                        printf("START-%08X--%s\n", Header.dwStartAddress, pStr);
 
                         nLines = 0;
 

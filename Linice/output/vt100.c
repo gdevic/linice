@@ -206,10 +206,14 @@ static void SerialSprint(char *s)
         else
         switch( c )
         {
-            case DP_SAVEBACKGROUND:
+            case DP_ENABLE_OUTPUT:
+            case DP_DISABLE_OUTPUT:
+                    // Enable and disable output are ignored on a terminal device
                 break;
 
+            case DP_SAVEBACKGROUND:
             case DP_RESTOREBACKGROUND:
+                    // Save and restore background are ignored on a terminal device
                 break;
 
             case DP_CLS:

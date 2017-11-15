@@ -228,7 +228,7 @@ static BYTE GetCodeLine(PTADDRDESC pAddr, BOOL fDecodeExtra, BOOL fTarget)
     // Make the string lowercased if the variable was set so
     if( deb.fLowercase==TRUE )
     {
-        strtolower(sCodeLine);
+        strlwr(sCodeLine);
     }
 
     return( bLen );
@@ -496,7 +496,7 @@ void CodeScroll(int Xdir, int Ydir)
     if( pWin->c.fVisible )
     {
         // If we have source code, scrolling is different than machine code
-        if( deb.eSrc==1 && deb.pSource )
+        if( deb.eSrc==SRC_ON && deb.pSource )
         {
             // Code window contains a source file
             //====================================
@@ -636,12 +636,22 @@ void CodeScroll(int Xdir, int Ydir)
 ******************************************************************************/
 BOOL cmdUnasm(char *args, int subClass)
 {
+    DWORD offset;                       // Temporary offset portion
+
     if( *args!=0 )
     {
         // Argument present: U <address> [L <len>]
         evalSel = deb.codeTopAddr.sel;
-        deb.codeTopAddr.offset = Evaluate(args, &args);
-        deb.codeTopAddr.sel = evalSel;
+        offset = Evaluate(args, &args);
+
+        // Verify the selector value
+        if( VerifySelector(evalSel) )
+        {
+            deb.codeTopAddr.offset = offset;
+            deb.codeTopAddr.sel = evalSel;
+        }
+        else
+            return( TRUE );
     }
     else
     {

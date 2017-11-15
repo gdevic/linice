@@ -37,9 +37,7 @@
 #ifndef _ICE_IOCTL_H_
 #define _ICE_IOCTL_H_
 
-#ifdef __KERNEL__
-#include <linux/ioctl.h>                // Include io control defines
-#else
+#ifndef __KERNEL__
 #ifndef WINDOWS
 #include <sys/ioctl.h>                  // Include io control defines
 #endif // WINDOWS
@@ -78,6 +76,7 @@ typedef struct
 
     char sInit[MAX_STRING];             // Init string
     char keyFn [4 * 12][MAX_STRING];    // Key assignment for F, SF, AF and CF keys
+    char Layout[3][128];                // Keyboard layout override for key & Shift & Alt
 
 } PACKED TINITPACKET, *PTINITPACKET;
 
@@ -120,6 +119,10 @@ typedef struct
 //      the module usage count will not be 0, and the module will
 //      not unload. This call is sent to reset the usage count to 1
 //
+//  ICE_IOCTL_EXIT_FORCE
+//      Used mainly during the development to force unload with
+//      module usage count reset back to 0
+//
 //  ICE_IOCTL_ADD_SYM
 //      Sent any time to add a symbol table.
 //
@@ -129,14 +132,24 @@ typedef struct
 //  ICE_IOCTL_XDGA
 //      Sent by the xice to init or reset output to X linear framebuffer
 //
+//  ICE_IOCTL_HISBUF_RESET
+//      Sent by the linsym before fetching history lines to reset the reader
+//
+//  ICE_IOCTL_HISBUF
+//      Sent by the linsym multiple times to retrieve line by line of the
+//      history buffer. When finished, call returns error instead of 0.
+//
 
 #define ICE_IOC_MAGIC       'I'         // Magic IOctl number (8 bits)
 
-#define ICE_IOCTL_INIT       _IOC(_IOC_WRITE, ICE_IOC_MAGIC, 0x81, sizeof(TINITPACKET))
-#define ICE_IOCTL_EXIT       _IOC(_IOC_WRITE, ICE_IOC_MAGIC, 0x82, 0)
-#define ICE_IOCTL_ADD_SYM    _IOC(_IOC_WRITE, ICE_IOC_MAGIC, 0x83, sizeof(TSYMTAB))
-#define ICE_IOCTL_REMOVE_SYM _IOC(_IOC_WRITE, ICE_IOC_MAGIC, 0x84, MAX_MODULE_NAME)
-#define ICE_IOCTL_XDGA       _IOC(_IOC_WRITE, ICE_IOC_MAGIC, 0x85, sizeof(TXINITPACKET))
+#define ICE_IOCTL_INIT          _IOC(_IOC_WRITE, ICE_IOC_MAGIC, 0x81, sizeof(TINITPACKET))
+#define ICE_IOCTL_EXIT          _IOC(_IOC_WRITE, ICE_IOC_MAGIC, 0x82, 0)
+#define ICE_IOCTL_EXIT_FORCE    _IOC(_IOC_WRITE, ICE_IOC_MAGIC, 0x83, 0)
+#define ICE_IOCTL_ADD_SYM       _IOC(_IOC_WRITE, ICE_IOC_MAGIC, 0x84, sizeof(TSYMTAB))
+#define ICE_IOCTL_REMOVE_SYM    _IOC(_IOC_WRITE, ICE_IOC_MAGIC, 0x85, MAX_MODULE_NAME)
+#define ICE_IOCTL_XDGA          _IOC(_IOC_WRITE, ICE_IOC_MAGIC, 0x86, sizeof(TXINITPACKET))
+#define ICE_IOCTL_HISBUF_RESET  _IOC(_IOC_WRITE, ICE_IOC_MAGIC, 0x87, 0)
+#define ICE_IOCTL_HISBUF        _IOC(_IOC_READ,  ICE_IOC_MAGIC, 0x88, MAX_STRING)
 
 
 #endif //  _ICE_IOCTL_H_

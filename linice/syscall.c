@@ -34,15 +34,14 @@
 *   Include Files                                                             *
 ******************************************************************************/
 
-#include "module-header.h"              // Versatile module header file
+#include <asm/unistd.h>                 // Include system call numbers
+#define __NO_VERSION__
+#include <linux/module.h>               // Include required module include
+                                        // so we are able to browse module list
 
 #include "clib.h"                       // Include C library header file
 #include "ice.h"                        // Include main debugger structures
 #include "debug.h"                      // Include our dprintk()
-
-#include <asm/unistd.h>                 // Include system call numbers
-#define __NO_VERSION__
-#include <linux/module.h>
 
 
 /******************************************************************************

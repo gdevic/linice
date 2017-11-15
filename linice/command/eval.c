@@ -77,7 +77,7 @@
 
 // Predefined default base is hex and there are no literal handlers.
 
-WORD evalSel;               // Selector result of the expression (optional)
+WORD evalSel = 0x0000;                  // Selector result of the expression (optional)
 int nEvalDefaultBase = 16;
 int (*pfnEvalLiteralHandler)( char *sName ) = NULL;
 
@@ -229,10 +229,10 @@ static TFunction Func[] = {
 #define OP_NE           13
 #define OP_SHL          14
 #define OP_SHR          15
-#define OP_L            16
-#define OP_LE           17
-#define OP_G            18
-#define OP_GE           19
+#define OP_LE           16
+#define OP_L            17
+#define OP_GE           18
+#define OP_G            19
 #define OP_PLUS         20
 #define OP_MINUS        21
 #define OP_TIMES        22
@@ -254,7 +254,7 @@ static char *sTokens[] =
     "|", "^", "&",
     "==", "!=",
     "<<", ">>",
-    "<", "<=", ">", ">=",
+    "<=", "<", ">=", ">",
     "+", "-",
     "*", "/", "%",
     "!",
@@ -643,12 +643,12 @@ static void Execute( TStack *Values, int Operation )
         case OP_AND:    Push( Values, Pop( Values ) &  Pop( Values ) );  break;
         case OP_EQ:     Push( Values, Pop( Values ) == Pop( Values ) );  break;
         case OP_NE:     Push( Values, Pop( Values ) != Pop( Values ) );  break;
-        case OP_L:      Push( Values, Pop( Values ) <  Pop( Values ) );  break;
-        case OP_LE:     Push( Values, Pop( Values ) <= Pop( Values ) );  break;
-        case OP_G:      Push( Values, Pop( Values ) >  Pop( Values ) );  break;
-        case OP_GE:     Push( Values, Pop( Values ) >= Pop( Values ) );  break;
-        case OP_SHL:    Push( Values, Pop( Values ) << Pop( Values ) );  break;
-        case OP_SHR:    Push( Values, Pop( Values ) >> Pop( Values ) );  break;
+        case OP_L:      top = Pop( Values ); Push( Values, Pop( Values ) <  top );  break;
+        case OP_LE:     top = Pop( Values ); Push( Values, Pop( Values ) <= top );  break;
+        case OP_G:      top = Pop( Values ); Push( Values, Pop( Values ) >  top );  break;
+        case OP_GE:     top = Pop( Values ); Push( Values, Pop( Values ) >= top );  break;
+        case OP_SHL:    top = Pop( Values ); Push( Values, Pop( Values ) << top );  break;
+        case OP_SHR:    top = Pop( Values ); Push( Values, Pop( Values ) >> top );  break;
         case OP_PLUS:   Push( Values, Pop( Values ) +  Pop( Values ) );  break;
         case OP_MINUS:  top = Pop( Values );  Push( Values, Pop( Values ) - top );  break;
         case OP_TIMES:  Push( Values, Pop( Values ) * Pop( Values ) );   break;

@@ -57,16 +57,17 @@
 
 typedef struct tagLine
 {
-    struct tagLine *next;           // Next line record
-    struct tagLine *prev;           // Previous line record
-    BYTE bSize;                     // Size of the whole record
-    char line[1];                   // ASCIIZ line itself
+    struct tagLine *next;               // Next line record
+    struct tagLine *prev;               // Previous line record
+    BYTE bSize;                         // Size of the whole record
+    char line[1];                       // ASCIIZ line itself
 
 } PACKED TLine;
 
-static TLine *pHead;
-static TLine *pTail;
-static DWORD avail;
+static TLine *pHead;                    // Pointer to the head line
+static TLine *pTail;                    // Pointer to the tail line
+static DWORD avail;                     // Number of bytes available in the buffer
+static TLine *pRead = NULL;             // Read history ioctl pointer
 
 /******************************************************************************
 *                                                                             *
@@ -79,6 +80,62 @@ static DWORD avail;
 *   Functions                                                                 *
 *                                                                             *
 ******************************************************************************/
+
+
+/******************************************************************************
+*                                                                             *
+*   int HistoryReadReset()                                                    *
+*                                                                             *
+*******************************************************************************
+*
+*   This function should be called once before calling HistoryReadNext()
+*   multiple times. It resets the read pointer to the start of the history
+*   buffer.
+*
+*   Returns: 0
+*
+******************************************************************************/
+int HistoryReadReset()
+{
+    // pTail points to the last line (the oldest) in the buffer
+
+    pRead = pTail;
+
+    return( 0 );
+}
+
+/******************************************************************************
+*                                                                             *
+*   char *HistoryReadNext(void)                                               *
+*                                                                             *
+*******************************************************************************
+*
+*   This is the counterpart to HistoryReadReset(). It needs to be called
+*   multiple times, one time per line. When no more lines are to be returned,
+*   it will return NULL.
+*
+******************************************************************************/
+char *HistoryReadNext(void)
+{
+    char *pRet;                         // Returning pointer
+
+    if( pRead )
+    {
+        // Return the address of the ASCIIZ line
+        pRet = pRead->line;
+
+        // Advance the read pointer if there are still more lines left
+        if( pRead != pHead )
+        {
+            pRead = pRead->next;
+
+            return( pRet );
+        }
+    }
+
+    return( NULL );
+}
+
 
 /******************************************************************************
 *                                                                             *

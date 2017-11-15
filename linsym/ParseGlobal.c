@@ -212,12 +212,12 @@ BOOL StoreGlobalSymbols(FILE *fGlobals, int nGlobals)
         // Read each global item and store it in the array
         for(i=0; i<nGlobals; i++ )
         {
-            fscanf(fGlobals, "%08X %08X %04X %s %s\n", 
+            fscanf(fGlobals, "%08X %08X %04hX %s %s\n", 
                 &pGlob->dwAddress,
                 &pGlob->dwEndAddress,
                 &pGlob->wAttribute,
-                &pGlob->SectionName,
-                &pGlob->Name);
+                pGlob->SectionName,
+                pGlob->Name);
 
             pGlob++;
         }

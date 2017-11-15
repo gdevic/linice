@@ -34,14 +34,10 @@
 *   Include Files                                                             *
 ******************************************************************************/
 
-#include "module-header.h"              // Versatile module header file
-
-#define __NO_VERSION__
-#include <linux/module.h>               // Include required module include
-
 #include <linux/pci.h>                  // Include PCI bus defines
 
 #include "clib.h"                       // Include C library header file
+#include "iceface.h"                    // Include iceface module stub protos
 #include "ice.h"                        // Include main debugger structures
 
 #include "pcihdr.h"                     // Include PCI header file
@@ -190,9 +186,14 @@ static void ReadPCIConfig(struct pci_dev *dev, int start, int bytes)
 *       FALSE if the printing should be stopped
 *
 ******************************************************************************/
-static BOOL DumpPCI(struct pci_dev *pci)
+static BOOL DumpPCI(struct pci_dev *p)
 {
     int address = 0, count = 0, i;
+    TPCI pci_store;                     // Place to store PCI information
+    TPCI *pci = &pci_store;             // PCI device information pointer
+
+    // Get the information about that PCI device
+    ice_get_pci_info(&pci_store, p);
 
     if( opt & PCI_TERSE )
     {
@@ -200,7 +201,7 @@ static BOOL DumpPCI(struct pci_dev *pci)
         // Brief PCI information : -terse
         // =============================================================================
         if(!dprinth(nLine++, "%02X/%02X/%02X %04X-%04X %s",
-                pci->bus->number, PCI_SLOT(pci->devfn), PCI_FUNC(pci->devfn),
+                pci->bus, PCI_SLOT(pci->devfn), PCI_FUNC(pci->devfn),
                 pci->vendor, pci->device, GetVendorName(pci->vendor))) return(FALSE);
     }
     else
@@ -208,33 +209,26 @@ static BOOL DumpPCI(struct pci_dev *pci)
         // =============================================================================
         // Default PCI information
         // =============================================================================
+        if( pci->pDevice )
+            if(!dprinth(nLine++, "%s", pci->pDevice)) return(FALSE);
+
         if(!dprinth(nLine++, "Bus %02X  Device %02X  Function: %02X",
-                pci->bus->number, PCI_SLOT(pci->devfn), PCI_FUNC(pci->devfn))) return(FALSE);
+                pci->bus, PCI_SLOT(pci->devfn), PCI_FUNC(pci->devfn))) return(FALSE);
         if(!dprinth(nLine++, "     Vendor: %04X    %s", pci->vendor, GetVendorName(pci->vendor)))  return(FALSE);
 
         if(!dprinth(nLine++, "     Device: %04X    %s  %s", pci->device,
             GetChipName(pci->vendor, pci->device), GetChipDesc(pci->vendor, pci->device)))  return(FALSE);
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,4,0)
-        for(i=0; i<DEVICE_COUNT_RESOURCE; i++)
-        {
-            if( pci->resource[i].start )
-                if(!dprinth(nLine++, "     Base address %d: %08X", i+1, pci->resource[i].start ))  return(FALSE);
-        }
-#else
         for(i=0; i<6; i++)
         {
             if( pci->base_address[i] )
-                if(!dprinth(nLine++, "     Base address %d: %08X", i+1, pci->base_address[0] ))  return(FALSE);
+                if(!dprinth(nLine++, "     Base address %d: %08X", i+1, pci->base_address[i] ))  return(FALSE);
         }
-#endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,4,0)
         if( pci->rom_address )
             if(!dprinth(nLine++, "     ROM address: %08X", pci->rom_address ))  return(FALSE);
 
         if(!dprinth(nLine++, "     IRQ: %02X   Bus Master: %d", pci->irq, pci->master ))  return(FALSE);
-#endif
 
         // If option was -extended, dump all 256 bytes out
         if( opt & PCI_EXTENDED )
@@ -257,7 +251,7 @@ static BOOL DumpPCI(struct pci_dev *pci)
         if( (opt & PCI_EXTENDED) || (opt & PCI_RAW) )
         {
             // Read PCI config registers from address to address+count
-            ReadPCIConfig(pci, address, count);
+            ReadPCIConfig(p, address, count);
 
             for(; count>0; count -= 16, address += 16 )
             {
@@ -395,18 +389,11 @@ BOOL cmdPci(char *args, int subClass)
 
 Proceed:
     // Get the root PCI node and walk it
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,4,0)
-    pci = pci_devices;
-#else
-    pci = pci_dev_g(pci_devices.next);
-#endif
+    pci = ice_get_pci();
+
     if( pci )
     {
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,4,0)
-        while( pci )
-#else
-        while (pci != pci_dev_g(&pci_devices))
-#endif
+        while( ice_is_pci(pci) )
         {
             // If we selected a particular device, check for it; otherwise, dump every one
             if( bus==0xFF )
@@ -424,11 +411,7 @@ Proceed:
                 }
             }
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,4,0)
-            pci = pci->next;
-#else
-            pci = pci_dev_g(pci->global_list.next);
-#endif
+            pci = ice_get_pci_next(pci);
         }
     }
     else

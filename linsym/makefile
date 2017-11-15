@@ -23,7 +23,9 @@ clean:
 		ParseTypedefs.o	\
 		ParseReloc.o	\
 		HashTable.o	\
+		Keymaps.o	\
 		loader.o	\
+		History.o	\
 		symbols.o   \
         symutils.o
 	$(CC) $^ -o linsym.o
@@ -54,8 +56,14 @@ ParseReloc.o:	ParseReloc.c
 HashTable.o:		HashTable.c
 	$(CC) $(CFLAGS) -c HashTable.c
 
+Keymaps.o:		Keymaps.c
+	$(CC) $(CFLAGS) -c Keymaps.c
+
 loader.o:		loader.c
 	$(CC) $(CFLAGS) -c loader.c
+
+History.o:		History.c
+	$(CC) $(CFLAGS) -c History.c
 
 symbols.o:		symbols.c
 	$(CC) $(CFLAGS) -c symbols.c

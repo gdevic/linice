@@ -36,3 +36,7 @@ AF11="^dd dataaddr->0;"
 AF12="^dd dataaddr->4;"
 CF1="altscr off; lines 60; wc 32; wd 8;"
 CF2="^wr;^wd;^wc;"
+
+; Set the optional keyboard layout (default is 'us')
+;layout=uk
+

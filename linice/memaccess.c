@@ -51,41 +51,114 @@
 *                                                                             *
 ******************************************************************************/
 
-#define MAX_AUXBUF       256            // Maximum fill/search string len
-
 /******************************************************************************
 *                                                                             *
 *   Functions                                                                 *
 *                                                                             *
 ******************************************************************************/
 
-
 BOOL AddrIsPresent(PTADDRDESC pAddr)
 {
-    DWORD fPresent;
+    deb.memaccess = GetByte(pAddr->sel, pAddr->offset);
 
-    fPresent = GetByte(pAddr->sel, pAddr->offset);
-
-    return( fPresent <= 0xFF );
+    return( (deb.memaccess <= 0xFF)? TRUE : FALSE );
 }
 
 BYTE AddrGetByte(PTADDRDESC pAddr)
 {
-    BYTE value;
+    deb.memaccess = GetByte(pAddr->sel, pAddr->offset);
 
-    value = (GetByte(pAddr->sel, pAddr->offset) & 0xFF);
-
-    return( value );
+    return( deb.memaccess & 0xFF );
 }
 
-void AddrSetByte(PTADDRDESC pAddr, BYTE value)
+DWORD AddrSetByte(PTADDRDESC pAddr, BYTE value, BOOL fForce)
 {
-    // Since we are writing a byte and the selector value may be of any privilege,
-    // we use kernel ds that has base=0 so we recalculate offset.
+    TADDRDESC Addr;
+    DWORD Access;
+    TGDT_Gate *pGdt;
 
-    // TODO: Right now we support only user/kernel selectors with base 0
-    //       In order to provide more generic support, we need to recompute
-    //       offset based on the base address of the given selector
+    deb.memaccess = SetByte(pAddr->sel, pAddr->offset, value);
 
-    SetByte(__KERNEL_DS, pAddr->offset, value);
+    // If the set memory failed, and we really wanted to override
+    // protection, use kernel DS selector to set the value, since that is
+    // always a writable selector
+    if( deb.memaccess>0xFF && fForce )
+    {
+        Access = SelLAR(pAddr->sel);
+        if( Access )
+        {
+            // If the source selector was ok, get its base address
+            pGdt = (TGDT_Gate *) (deb.gdt.base + pAddr->sel);
+
+            Addr.sel    = __KERNEL_DS;
+            Addr.offset = GET_GDT_BASE(pGdt) + pAddr->offset;
+
+            deb.memaccess = SetByte(Addr.sel, Addr.offset, value);
+        }
+    }
+
+    return( deb.memaccess );
+}
+
+
+/******************************************************************************
+*                                                                             *
+*   BOOL VerifySelector(WORD Sel)                                             *
+*                                                                             *
+*******************************************************************************
+*
+*   Verifies a given selector value and prints error message if the selector
+*   is invalid.
+*
+******************************************************************************/
+BOOL VerifySelector(WORD Sel)
+{
+    if( SelLAR(Sel)==0 )
+    {
+        dprinth(1, "Invalid selector 0x%04X", Sel);
+
+        return( FALSE );
+    }
+
+    return( TRUE );
+}
+
+
+/******************************************************************************
+*                                                                             *
+*   BOOL VerifyRange(PTADDRDESC pAddr, DWORD dwSize)                          *
+*                                                                             *
+*******************************************************************************
+*
+*   Verified a set of memory locations for access
+*
+******************************************************************************/
+BOOL VerifyRange(PTADDRDESC pAddr, DWORD dwSize)
+{
+    int pages;                          // Page counter
+    TADDRDESC Addr;                     // Local copy of address descriptor
+
+    Addr = *pAddr;                      // that we can modify
+
+    // Both starting and ending address needs to be accessible,
+    // as well as every page in between
+
+    pages = (dwSize / 4096) + 1;
+
+    do
+    {
+        if( !AddrIsPresent(&Addr) )     // If we can't access it, return failure
+            return( FALSE );
+
+        Addr.offset += 4096;            // Advance to the next page
+        
+    } while( --pages );
+
+    // Verify the last byte of the region
+    Addr.offset = pAddr->offset + dwSize - 1;
+
+    if( !AddrIsPresent(&Addr) )         // If we can't access it, return failure
+        return( FALSE );
+
+    return( TRUE );                     // The whole range is ok
 }

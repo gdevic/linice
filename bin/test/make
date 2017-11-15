@@ -7,3 +7,4 @@ gcc -gstabs+ -Wall -DDBG app12.c app22.c -o app
 gcc -gstabs+ -Wall -DDBG -c module.c
 gcc -gstabs+ -Wall -DDBG -c modlp.c
 gcc -gstabs+ -Wall -DDBG -c modscope.c
+

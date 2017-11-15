@@ -34,18 +34,12 @@
 *   Include Files                                                             *
 ******************************************************************************/
 
-#include "module-header.h"              // Versatile module header file
-
 #define __NO_VERSION__
 #include <linux/module.h>               // Include required module include
-#include <linux/sched.h>                // What could we do w/o this one?
-
-#include <asm/uaccess.h>                // User space memory access functions
-//#include <linux/string.h>
+                                        // so we are able to browse module list
 
 #include "clib.h"                       // Include C library header file
 #include "ice.h"                        // Include main debugger structures
-
 #include "debug.h"                      // Include our dprintk()
 
 /******************************************************************************
@@ -387,7 +381,7 @@ BOOL SymbolName2Value(TSYMTAB *pSymTab, DWORD *pValue, char *name)
 ******************************************************************************/
 char *SymAddress2Name(WORD wSel, DWORD dwOffset)
 {
-    TSYMHEADER *pHead;                  // Generic section header
+//  TSYMHEADER *pHead;                  // Generic section header
     struct module* pMod;                // Pointer to a module list
     struct module_symbol* pSym;         // Pointer to a module symbol structure
     int count;                          // Symbol loop counter

@@ -14,13 +14,14 @@ AS = nasm
 CFLAGS =         -Wall $(DEF) -O -I$(INC) -I$(H1) -I$(H2)
 
 
-all:	../bin/linice.o
+all:	../bin/linice_kernel.o
 
 clean:
-	rm -f ../bin/linice.o
+	rm -f ../bin/linice_kernel.o
 	rm -f *.o *~ core
 
-../bin/linice.o:	driver.o	\
+../bin/linice_kernel.o:	\
+			driver.o	\
 			malloc.o	\
 			memaccess.o	\
 			eval.o		\
@@ -30,6 +31,8 @@ clean:
 			symbolTable.o	\
 			symbols.o	\
 			types.o	\
+			string.o 	\
+			ctype.o		\
 			proc.o		\
 			edlin.o		\
 			debugger.o	\
@@ -65,7 +68,7 @@ clean:
 			mda.o		\
 			lfb.o		\
             vt100o.o
-	$(LD) -r $^ -o ../bin/linice.o
+	$(LD) -r $^ -o ../bin/linice_kernel.o
 
 driver.o:	driver.c
 	$(CC) $(CFLAGS) -c driver.c
@@ -93,6 +96,12 @@ symbols.o:		symbols.c
 
 types.o:		types.c
 	$(CC) $(CFLAGS) -c types.c
+
+string.o:		string.c
+	$(CC) $(CFLAGS) -c string.c
+
+ctype.o:		ctype.c
+	$(CC) $(CFLAGS) -c ctype.c
 
 proc.o:		proc.c
 	$(CC) $(CFLAGS) -c proc.c

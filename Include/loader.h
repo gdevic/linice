@@ -77,6 +77,7 @@ unsigned int opt;                       // Various command line options
 #define OPT_LOGFILE_APPEND  0x00002000  // Append method on logfile
 #define OPT_VER             0x00004000  // Version command
 #define OPT_HELP            0x00008000  // Help command
+#define OPT_VERBOSE         0x00010000  // Option verbose, make output informative
 
 
 #endif //  _LOADER_H_

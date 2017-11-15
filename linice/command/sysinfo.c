@@ -34,13 +34,12 @@
 *   Include Files                                                             *
 ******************************************************************************/
 
-#include "module-header.h"              // Versatile module header file
-
 #define __NO_VERSION__
 #include <linux/module.h>               // Include required module include
 #include <linux/sched.h>                // What could we do w/o this one?
 
 #include "clib.h"                       // Include C library header file
+#include "iceface.h"                    // Include iceface module stub protos
 #include "ice.h"                        // Include main debugger structures
 
 #include "debug.h"                      // Include our dprintk()
@@ -271,7 +270,7 @@ BOOL cmdGdt(char *args, int subClass)
         // than PAGE_OFFSET, display the GDT from that address
 
         sel = Evaluate(args, &args);
-        if( sel < PAGE_OFFSET )
+        if( sel < ice_page_offset() )
         {
             PrintGDT(1, pDesc->base, sel);
             return( TRUE );
@@ -333,7 +332,7 @@ BOOL cmdIdt(char *args, int subClass)
         // than PAGE_OFFSET, display the IDT starting from that address
 
         intnum = Evaluate(args, &args);
-        if( intnum < PAGE_OFFSET )
+        if( intnum < ice_page_offset() )
         {
             PrintIDT(1, pDesc->base, intnum);
             return( TRUE );
@@ -573,10 +572,6 @@ BOOL cmdVer(char *args, int subClass)
     dprinth(1, "Linice (C) 2000-2002 by Goran Devic.  All Rights Reserved.");
     dprinth(1, "Version: %d.%d", LINICEVER >> 8, LINICEVER & 0xFF);
 
-    // Display temporary warning
-
-    dprinth(1, "This is early unofficial release!");
-
     if( *args )
     {
         dprinth(1, "Symbol check: %d", CheckSymtab(pIce->pSymTabCur));
@@ -672,96 +667,150 @@ BOOL cmdProc(char *args, int subClass)
 
 /******************************************************************************
 *                                                                             *
-*   BOOL cmdTss(char *args, int subClass)                                     *
+*   BOOL DumpTSS(TADDRDESC *pAddr, int tr, int limit)                         *
 *                                                                             *
 *******************************************************************************
 *
-*   Display current TSS structure. If the argument is given, display that
-*   TSS selector.
+*   Helper function that verifies and displays a TSS structure
+*
+*   Where:
+*       pAddr is the address of the TSS structure
+*       tr if 0, ignored; otherwise it is a TSS selector to print
+*       limit is the TSS selector limit value
 *
 ******************************************************************************/
-BOOL cmdTss(char *args, int subClass)
+BOOL DumpTSS(TADDRDESC *pAddr, int tr, DWORD limit)
 {
-    int nLine = 1;
-    int tr;
-    TGDT_Gate *pGdt;
-    TSS_Struct *pTss;
+    int nLine = 1;                      // Print line counter
+    TSS_Struct *pTss;                   // Final verified TSS address
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,4,0)
-#else
-    struct thread_struct *tss;
-#endif
-
-    if( *args )
+    if( VerifyRange(pAddr, limit)==TRUE )
     {
-        // Display a selected TSS structure
+        // We can safely access what is possibly a TSS
+        pTss = (TSS_Struct *) pAddr->offset;
 
-        tr = Evaluate(args, &args);
-    }
-    else
-    {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,4,0)
-        // Select CPU #0 TSS
-        tr = 0xA0;
-#else
-        // TSS that is current should be the same as the one in current->tss
-        tr = current->tss.tr;
-#endif
-    }
+        // If a TR selector is given, display additional line, otherwise skip it
+        // since we really dont know this information if only given an address
+        if( tr )
+        {
+            if(dprinth(nLine++, "TR=%04X   BASE=%08X  LIMIT=%X",
+                    tr,
+                    pAddr->offset,
+                    limit)==FALSE) return( TRUE );
+        }
 
-    pGdt = (TGDT_Gate *) (deb.gdt.base + (tr & ~7));
-
-    if( pGdt->type==DESC_TYPE_TSS16B || pGdt->type==DESC_TYPE_TSS16A ||
-        pGdt->type==DESC_TYPE_TSS32B || pGdt->type==DESC_TYPE_TSS32A )
-    {
-        pTss = (TSS_Struct *) GET_GDT_BASE(pGdt);
-
-        dprinth(nLine++, "TR=%04X   BASE=%08X  LIMIT=%X",
-                tr,
-                GET_GDT_BASE(pGdt),
-                GET_GDT_LIMIT(pGdt));
-
-        dprinth(nLine++, "LDT=%04X  GS=%04X  FS=%04X  DS=%04X  SS=%04X  CS=%04X  ES=%04X",
+        if(dprinth(nLine++, "LDT=%04X  GS=%04X  FS=%04X  DS=%04X  SS=%04X  CS=%04X  ES=%04X",
                 pTss->ldt,
                 pTss->gs,
                 pTss->fs,
                 pTss->ds,
                 pTss->ss,
                 pTss->cs,
-                pTss->es);
+                pTss->es)==FALSE) return( TRUE );
 
-        dprinth(nLine++, "CR3=%08X", pTss->cr3);
+        if(dprinth(nLine++, "CR3=%08X", pTss->cr3)==FALSE) return( TRUE );
 
-        dprinth(nLine++, "EAX=%08X  EBX=%08X  ECX=%08X  EDX=%08X  EIP=%08X",
+        if(dprinth(nLine++, "EAX=%08X  EBX=%08X  ECX=%08X  EDX=%08X  EIP=%08X",
                 pTss->eax,
                 pTss->ebx,
                 pTss->ecx,
                 pTss->edx,
-                pTss->eip);
+                pTss->eip)==FALSE) return( TRUE );
 
-        dprinth(nLine++, "ESI=%08X  EDI=%08X  EBP=%08X  ESP=%08X  EFL=%08X",
+        if(dprinth(nLine++, "ESI=%08X  EDI=%08X  EBP=%08X  ESP=%08X  EFL=%08X",
                 pTss->esi,
                 pTss->edi,
                 pTss->ebp,
                 pTss->esp,
-                pTss->eflags);
+                pTss->eflags)==FALSE) return( TRUE );
 
-        dprinth(nLine++, "SS0=%04X:%08X  SS1=%04X:%08X  SS2=%04X:%08X",
+        if(dprinth(nLine++, "SS0=%04X:%08X  SS1=%04X:%08X  SS2=%04X:%08X",
                 pTss->ss0,
                 pTss->esp0,
                 pTss->ss1,
                 pTss->esp1,
                 pTss->ss2,
-                pTss->esp2);
+                pTss->esp2)==FALSE) return( TRUE );
 
-        dprinth(nLine++, "I/O Map Base=%04X  I/O Map Size=%X",
+        if(dprinth(nLine++, "I/O Map Base=%04X  I/O Map Size=%X",
                 (int)&pTss->ioperm - (int)pTss,
-                IO_BITMAP_SIZE);
+                IO_BITMAP_SIZE)==FALSE) return( TRUE );
+
+        return( TRUE );
+        
+    }
+
+    return( FALSE );
+}
+
+
+/******************************************************************************
+*                                                                             *
+*   BOOL cmdTss(char *args, int subClass)                                     *
+*                                                                             *
+*******************************************************************************
+*
+*   Display current TSS structure. If the argument is given, it can be either
+*   a GDT selector or an address of a TSS in memory:
+*
+*   If the parameter is <  4096, it is a selector
+*   If the parameter is >= 4096, it is an address
+*
+******************************************************************************/
+BOOL cmdTss(char *args, int subClass)
+{
+    DWORD tr;                           // Task register value
+    TGDT_Gate *pGdt;
+    TADDRDESC Addr;
+
+    Addr.sel = __KERNEL_DS;             // Only use kernel DS for this command
+
+    if( *args )
+    {
+        // Get the Task Register selector from the user argument
+
+        tr = Evaluate(args, &args);
+
+        if( tr>=4096 )
+        {
+            // Argument specified an address
+
+            Addr.offset = tr;
+
+            if( DumpTSS(&Addr, 0, 4095)==FALSE )
+            {
+                dprinth(1, "Invalid TSS address %04X:%08X", Addr.sel, Addr.offset);
+            }
+
+            return( TRUE );
+        }
     }
     else
     {
-        dprinth(nLine++, "Invalid TSS descriptor %04X", tr);
+        // Get the Task Register selector number from the running kernel
+        tr = getTR();
     }
+
+    // Verify TR selector - privilege level and the limit
+    if( (tr&7)==0 && tr<=deb.gdt.limit )
+    {
+        pGdt = (TGDT_Gate *) (deb.gdt.base + tr);
+
+        // Verify that the descriptor indeed contains a TSS structure
+        if( pGdt->type==DESC_TYPE_TSS16B || pGdt->type==DESC_TYPE_TSS16A ||
+            pGdt->type==DESC_TYPE_TSS32B || pGdt->type==DESC_TYPE_TSS32A )
+        {
+            Addr.offset = GET_GDT_BASE(pGdt);
+
+            if( DumpTSS(&Addr, tr, GET_GDT_LIMIT(pGdt)) )
+            {
+                return( TRUE );
+            }
+        }
+    }
+
+    // For everything else, we had a bad selector
+    dprinth(1, "Invalid TSS selector %04X", tr);
 
     return( TRUE );
 }

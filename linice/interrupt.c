@@ -42,6 +42,7 @@
 #include "ibm-pc.h"                     // Include PC architecture defines
 #include "debug.h"                      // Include our dprintk()
 #include "intel.h"                      // Include processor specific stuff
+#include "iceface.h"                    // Include iceface module stub protos
 
 /******************************************************************************
 *                                                                             *
@@ -68,6 +69,17 @@ TDEBUGGER_STATE_FN DebuggerEnter[MAX_DEBUGGER_STATE] =
     DebuggerEnterDelayedTrace,
     DebuggerEnterDelayedArm
 };
+
+
+// From apic.c
+
+extern int IrqRedirect(int nIrq);
+extern void GetIrqRedirection(void);
+extern int ReverseMapIrq(int nInt);
+extern void IoApicClamp(int cpu);
+extern void IoApicUnclamp();
+extern void smpSpinOtherCpus(void);
+
 
 /******************************************************************************
 *                                                                             *
@@ -97,7 +109,6 @@ extern void MouseHandler(void);
 
 extern DWORD TestAndReset(DWORD *pSpinlock);
 extern DWORD SpinlockTest(DWORD *pSpinlock);
-extern DWORD SpinUntilReset(DWORD *pSpinlock);
 extern void  SpinlockSet(DWORD *pSpinlock);
 extern void  SpinlockReset(DWORD *pSpinlock);
 
@@ -166,7 +177,7 @@ void InterruptInit(void)
     // Hook private IDT with debuger-run hooks - this IDT is switched to
     // during the debugger run, so we want to "hook" most of them
 
-    // These are BAD if they happen:
+    // These are mostly BAD if they happen:
 
     HookIdt(IceIdt,0x00, 0x0);        // Divide error
     HookIdt(IceIdt,0x01, 0x1);        // INT 1
@@ -177,10 +188,10 @@ void InterruptInit(void)
     HookIdt(IceIdt,0x0A, 0xA);        // Invalid TSS
     HookIdt(IceIdt,0x0B, 0xB);        // Segment not present
     HookIdt(IceIdt,0x0C, 0xC);        // Stack exception
-    HookIdt(IceIdt,0x0D, 0xD);        // GP fault
+    HookIdt(IceIdt,0x0D, 0xD);        // GP fault (also used with memaccess)
 
     // These we expect to happen:
-    HookIdt(IceIdt,0x0E, 0x0E);       // Page fault
+    HookIdt(IceIdt,0x0E, 0x0E);       // Page fault (used with memaccess)
     HookIdt(IceIdt,0x20, 0x20);       // PIT
     HookIdt(IceIdt,0x21, 0x21);       // Keyboard
     HookIdt(IceIdt,0x23, 0x23);       // COM2
@@ -354,7 +365,7 @@ DWORD InterruptHandler( DWORD nInt, PTREGS pRegs )
 
     //------------------------------------------------------------------------
     DWORD chain;
-    BYTE savePIC1;
+//    BYTE savePIC1;
 
     // Depending on the execution context, branch
 
@@ -398,18 +409,38 @@ DWORD InterruptHandler( DWORD nInt, PTREGS pRegs )
             // ---------------- CPU Traps and Faults ---------------------
 
             case 0x0E:      // PAGE FAULT - we handle internal page faults
-                // from the very specific functions differently:
-                //  GetByte() and GetDWORD()
+                            // from the very specific functions differently:
+                            //  GetByte() and GetDWORD()
+                if( (pRegs->eip > (DWORD)MemAccess_START) && (pRegs->eip < (DWORD)MemAccess_END) )
+                {
+                    // Set the default value for invalid data / page fault into eax and
+                    // position EIP to the function epilogue
+
+                    pRegs->eax = MEMACCESS_PF;          // Page not present error code
+                    pRegs->eip = (DWORD)MemAccess_FAULT;
+
+                    break;
+                }
+                chain = GET_IDT_BASE( &LinuxIdt[ReverseMapIrq(nInt)] );
+                break;
+
+            case 0x0D:      // GP FAULT - we handle internal GP faults
+                            // from the very specific functions differently:
+                            //  GetByte() and GetDWORD()
                 if( (pRegs->eip > (DWORD)MemAccess_START) && (pRegs->eip < (DWORD)MemAccess_END) )
                 {
                     // Set the default value for invalid data into eax and
                     // position EIP to the function epilogue
 
-                    pRegs->eax = 0xFFFFFFFF;
+                    pRegs->eax = MEMACCESS_GPF;         // Invalid selector error code
                     pRegs->eip = (DWORD)MemAccess_FAULT;
 
                     break;
                 }
+
+                // TODO: Chanining to kernel GPF will most likely cause oops, so we want to
+                // do something different eventually...
+
                 chain = GET_IDT_BASE( &LinuxIdt[ReverseMapIrq(nInt)] );
                 break;
 
@@ -440,7 +471,7 @@ DWORD InterruptHandler( DWORD nInt, PTREGS pRegs )
         if( nInt!=0x20 || (nInt==0x20 && TestAndReset(&pIce->fKbdBreak)) )
         {
             // Store the CPU number that we happen to be using
-            deb.cpu = smp_processor_id();
+            deb.cpu = ice_smp_processor_id();
         
             // Limit all IRQ's to the current CPU
             IoApicClamp( deb.cpu );

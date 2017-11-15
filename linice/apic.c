@@ -40,15 +40,8 @@
 #include "ice.h"                        // Include main debugger structures
 #include "ibm-pc.h"                     // Include PC architecture defines
 #include "intel.h"                      // Include processor specific stuff
+#include "iceface.h"                    // Include iceface module stub protos
 
-//#include <asm/smp.h>
-//#include <asm/smplock.h>
-
-#if 1
-DWORD io_apic_read(int n, DWORD reg){ return( 0 ); }
-void io_apic_write(int n, DWORD reg, DWORD val) { return; }
-void ack_APIC_irq(void){ ; }
-#endif
 
 /******************************************************************************
 *                                                                             *
@@ -77,6 +70,7 @@ static int IrqRedir[0x10] = { 0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x
 ******************************************************************************/
 
 extern void SetSysreg( TSysreg * pSys );
+extern DWORD SpinUntilReset(DWORD *pSpinlock);
 
 
 /******************************************************************************
@@ -97,15 +91,15 @@ void GetIrqRedirection(void)
     {
         // Read first two IO APIC registers
 
-        *(DWORD *)& deb.IoApic0 = io_apic_read(0, 0);
-        *(DWORD *)& deb.IoApic1 = io_apic_read(0, 4);
+        *(DWORD *)& deb.IoApic0 = ice_io_apic_read(0, 0);
+        *(DWORD *)& deb.IoApic1 = ice_io_apic_read(0, 4);
 
         // Our redirection table contains a number of entries; read them in
 
         for(n=0; n<MAX_IOAPICREG; n++)
         {
-            *(DWORD *)& deb.IoApicRedir[n]        = io_apic_read(0, 0x10+n*2);      // Low-order dword
-            *(DWORD *)& deb.IoApicRedir[n].dword2 = io_apic_read(0, 0x10+n*2+1);    // High-order dword
+            *(DWORD *)& deb.IoApicRedir[n]        = ice_io_apic_read(0, 0x10+n*2);      // Low-order dword
+            *(DWORD *)& deb.IoApicRedir[n].dword2 = ice_io_apic_read(0, 0x10+n*2+1);    // High-order dword
 
             // If IO APIC redirection entry is not masked, it is active,
             // so we need to copy its interrupt into our redirection array
@@ -169,7 +163,7 @@ void IntAck(int nInt)
             if( IrqRedir[nInt-0x20] != nInt )
             {
                 // We are using IO APIC
-                ack_APIC_irq();
+                ice_ack_APIC_irq();
 
                 return;
             }
@@ -219,7 +213,7 @@ void IoApicClamp(int cpu)
             {
                 // Set the destination field to the given CPU
 
-                io_apic_write(0, 0x10+n*2+1, ((*(DWORD *)& deb.IoApicRedir[n].dword2) & 0x00FFFFFF) | mask);
+                ice_io_apic_write(0, 0x10+n*2+1, ((*(DWORD *)& deb.IoApicRedir[n].dword2) & 0x00FFFFFF) | mask);
             }
         }
     }
@@ -248,7 +242,7 @@ void IoApicUnclamp()
             {
                 // We really only need to set the CPU mask...
                 // io_apic_write(0, 0x10+n*2,   *(DWORD *)& deb.IoApicRedir[n]);
-                io_apic_write(0, 0x10+n*2+1, *(DWORD *)& deb.IoApicRedir[n].dword2);
+                ice_io_apic_write(0, 0x10+n*2+1, *(DWORD *)& deb.IoApicRedir[n].dword2);
             }
         }
     }
@@ -270,7 +264,7 @@ void smpSpin(void *ptr)
 {
     SpinUntilReset(&pIce->fRunningIce);
 
-//    SetSysreg(&deb.sysReg);
+    SetSysreg(&deb.sysReg);
 }
 
 /******************************************************************************
@@ -285,6 +279,6 @@ void smpSpin(void *ptr)
 ******************************************************************************/
 void smpSpinOtherCpus(void)
 {
-    smp_call_function(smpSpin, NULL, TRUE, 0);
+    ice_smp_call_function(smpSpin, NULL, TRUE, 0);
 }
 

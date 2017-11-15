@@ -1,10 +1,10 @@
 /******************************************************************************
 *                                                                             *
-*   Module:     debug.h                                                       *
+*   Module:     ice-keycode.h                                                 *
 *                                                                             *
-*   Date:       09/03/00                                                      *
+*   Date:       08/26/02                                                      *
 *                                                                             *
-*   Copyright (c) 2001 Goran Devic                                            *
+*   Copyright (c) 2002 Goran Devic                                            *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -20,56 +20,74 @@
 
     Module Description:
 
-        This header file defines debug functions
+        This header file defines special key codes used by keyboard
+        layout routines and linice.
 
 *******************************************************************************
 *                                                                             *
-*   Major changes:                                                            *
+*   Changes:                                                                  *
 *                                                                             *
 *   DATE     DESCRIPTION OF CHANGES                               AUTHOR      *
 * --------   ---------------------------------------------------  ----------- *
-* 09/03/00   Initial version                                      Goran Devic *
+* 08/26/02   Original                                             Goran Devic *
 * --------   ---------------------------------------------------  ----------- *
 *******************************************************************************
 *   Important Defines                                                         *
 ******************************************************************************/
-#ifndef _DEBUG_H_
-#define _DEBUG_H_
+#ifndef _KEYCODE_H_
+#define _KEYCODE_H_
 
-/******************************************************************************
-*                                                                             *
-*   Global Defines, Variables and Macros                                      *
-*                                                                             *
-******************************************************************************/
+///////////////////////////////////////////////////////////////////////////////
+//
+// Key-codes
+//
+///////////////////////////////////////////////////////////////////////////////
 
-#ifdef DBG // ----------------------------------------------------------------
+#define CHAR_SHIFT      0x1000          // <key> + SHIFT
+#define CHAR_ALT        0x2000          // <key> + ALT
+#define CHAR_CTRL       0x4000          // <key> + CTRL
 
-extern int ice_debug_level;
+// Define pseudo-ascii codes for control characters:
 
-#define INFO(args)                                          \
-{                                                           \
-    if(ice_debug_level > 0)                                 \
-    {                                                       \
-        printk("Info: %s,%d: ", __FILE__, __LINE__);        \
-        printk##args;                                       \
-    }                                                       \
-}
+#define UP              2
+#define DOWN            3
+#define PGUP            4
+#define PGDN            5
+#define LEFT            6
+#define RIGHT           7
+
+#define BACKSPACE       8               // ASCII '\b'
+#define TAB             9               // ASCII '\t'
+#define ENTER           10              // ASCII '\n'
+
+#define F1              11
+#define F2              12
+#define F3              13
+#define F4              14
+#define F5              15
+#define F6              16
+#define F7              17
+#define F8              18
+#define F9              19
+#define F10             20
+#define F11             21
+#define F12             22
+
+#define NUMLOCK         23
+#define SCROLL          24
+#define INS             25
+#define DEL             26
+
+#define ESC             27
+
+#define HOME            28
+#define END             29
 
 
-#define ERROR(args)                                         \
-{                                                           \
-    printk("Error: %s,%d: ", __FILE__, __LINE__);           \
-    printk##args;                                           \
-}
+#define UNUSED1         1
+#define UNUSED2         30
+#define UNUSED3         31
 
 
-#else // DBG -----------------------------------------------------------------
-
-#define INFO(args)      do{;}while(0)
-#define ERROR(args)     do{;}while(0)
-
-#endif // DBG ----------------------------------------------------------------
-
-
-#endif //  _DEBUG_H_
+#endif //  _KEYCODE_H_
 

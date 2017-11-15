@@ -35,13 +35,10 @@
 *   Include Files                                                             *
 ******************************************************************************/
 
-#include "module-header.h"              // Versatile module header file
-
 #include "clib.h"                       // Include C library header file
+#include "iceface.h"                    // Include iceface module stub protos
 #include "ice.h"                        // Include main debugger structures
 #include "debug.h"                      // Include our dprintk()
-
-#include <asm/page.h>                   // We need page offset
 
 /******************************************************************************
 *                                                                             *
@@ -57,7 +54,7 @@ TOUT outVga;
 *                                                                             *
 ******************************************************************************/
 
-#define LINUX_VGA_TEXT  (PAGE_OFFSET + 0xB8000)
+#define LINUX_VGA_TEXT  (ice_page_offset() + 0xB8000)
 
 #define MAX_VGA_SIZEX       80
 #define MAX_VGA_SIZEY       60
@@ -140,7 +137,7 @@ void VgaInit(void)
     vga.scrollBottom = MAX_VGA_SIZEY - 1;
     vga.pText = (BYTE *) LINUX_VGA_TEXT;
     vga.col = COL_NORMAL;
-    vga.fEnabled = TRUE;
+    vga.fEnabled = FALSE;
 }
 
 
@@ -355,6 +352,9 @@ void VgaSprint(char *s)
             else
             switch( c )
             {
+                case DP_ENABLE_OUTPUT:  // Which we ignore
+                    break;
+
                 case DP_DISABLE_OUTPUT:
                         vga.fEnabled = FALSE;
                     break;

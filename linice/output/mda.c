@@ -40,13 +40,10 @@
 *   Include Files                                                             *
 ******************************************************************************/
 
-#include "module-header.h"              // Versatile module header file
-
 #include "clib.h"                       // Include C library header file
+#include "iceface.h"                    // Include iceface module stub protos
 #include "ice.h"                        // Include main debugger structures
 #include "debug.h"                      // Include our dprintk()
-
-#include <asm/page.h>                   // We need page offset
 
 #include "font.h"                       // Include font declarations
 
@@ -64,7 +61,7 @@ TOUT outMda;
 *                                                                             *
 ******************************************************************************/
 
-#define LINUX_MDA_TEXT  (PAGE_OFFSET + 0xB0000)
+#define LINUX_MDA_TEXT  (ice_page_offset() + 0xB0000)
 
 //---------------------------------------------------
 // MDA registers content for text mode 80x25

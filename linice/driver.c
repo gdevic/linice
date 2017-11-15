@@ -34,21 +34,14 @@
 *   Include Files                                                             *
 ******************************************************************************/
 
-#include "module-header.h"              // Versatile module header file
-
-#include <linux/module.h>               // Include required module include
-#include <linux/init.h>
-#include <linux/kernel.h>               // Include this only in this file
-#include <linux/types.h>                // Include kernel data types
-#include <linux/times.h>
-#include <asm/uaccess.h>                // User space memory access functions
-#include <linux/devfs_fs_kernel.h>      // Include file operations file
-#include <asm/unistd.h>                 // Include system call numbers
-
 #include "ice-ioctl.h"                  // Include our own IOCTL numbers
+#include "iceface.h"                    // Include iceface module stub protos
 #include "clib.h"                       // Include C library header file
 #include "ice.h"                        // Include main debugger structures
 #include "debug.h"                      // Include our dprintk()
+
+// from errno.h  :p
+#define	EFAULT		14	/* Bad address */
 
 /******************************************************************************
 *                                                                             *
@@ -70,32 +63,14 @@ PTWINDOWS pWin;                         // And a pointer to it
 PTOUT pOut;                             // Pointer to a current Out class
 
 //=============================================================================
-MODULE_AUTHOR("Goran Devic");
-MODULE_DESCRIPTION("Linux kernel debugger");
-//
-// Define parameters for the module:
-//  linice=<string>                     What???
-//  kbd=<address>                       Address of the handle_kbd_event function
-//  scan=<address>                      Address of the handle_scancode function
-//  mod=<address>                       Address of the module_list variable
-//  ice_debug_level=[0 - 1]             Set the level for the output messages:
-//                                      0 - Do not display INFO level
-//                                      1 - Display INFO level messages
 
-MODULE_PARM(linice, "s");               // linice=<string>
-char *linice = "";                      // default value
+extern char *linice;                           // default value
+extern DWORD kbd;                              // default value
+extern DWORD scan;                             // default value
+extern DWORD *pmodule;                         // default value
+extern DWORD iceface;                          // default value
+extern int ice_debug_level;                    // default value
 
-MODULE_PARM(kbd, "i");                  // kbd=<integer>
-DWORD kbd = 0;                          // default value
-
-MODULE_PARM(scan, "i");                 // scan=<integer>
-DWORD scan = 0;                         // default value
-
-MODULE_PARM(pmodule, "i");              // mod=<integer>
-DWORD *pmodule = NULL;                  // default value
-
-MODULE_PARM(ice_debug_level, "i");      // ice_debug_level=<integer>
-int ice_debug_level = 1;                // default value
 
 //=============================================================================
 // DEV DEVICE NODE ACCESS
@@ -103,38 +78,6 @@ int ice_debug_level = 1;                // default value
 
 static int major_device_number;
 
-static int DriverOpen(struct inode *inode, struct file *file);
-static DEV_CLOSE_RET DriverClose(struct inode *inode, struct file *file);
-static int DriverIOCTL(struct inode *inode, struct file *file, unsigned int ioctl, unsigned long param);
-
-// File operations structure; in the 2.4 kernel we define it new way, otherwise
-// define it old way:
-//----------------------------------------------
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,4,0)
-//----------------------------------------------
-struct file_operations ice_fops = {
-    owner:      THIS_MODULE,
-    ioctl:      DriverIOCTL,
-    open:       DriverOpen,
-    release:    DriverClose,
-};
-//----------------------------------------------
-#else   // 2.2, 2.1 kernel version
-//----------------------------------------------
-struct file_operations ice_fops = {
-    NULL,               /* seek    */
-    NULL,               /* read    */
-    NULL,               /* write   */
-    NULL,               /* readdir */
-    NULL,               /* select  */
-    DriverIOCTL,        /* ioctl   */
-    NULL,               /* mmap    */
-    DriverOpen,         /* open    */
-    FLUSH_FOPS(NULL)    /* flush   */
-    DriverClose,        /* close   */
-};
-#endif
-//----------------------------------------------
 
 /******************************************************************************
 *                                                                             *
@@ -152,6 +95,9 @@ typedef asmlinkage int (*PFNUNLINK)(const char *filename);
 static PFNMKNOD sys_mknod;
 static PFNUNLINK sys_unlink;
 
+extern int ice_mknod(PFNMKNOD sys_mknod, char *pDevice, int major_device_number);
+extern void ice_rmnod(PFNUNLINK sys_unlink, char *pDevice);
+
 extern int InitPacket(PTINITPACKET pInit);
 extern int XInitPacket(TXINITPACKET *pXInit);
 extern int UserAddSymbolTable(void *pSymtab);
@@ -165,18 +111,21 @@ extern void KeyboardUnhook();
 extern void UnHookDebuger(void);
 extern void UnHookSyscall(void);
 
+extern int HistoryReadReset();
+extern char *HistoryReadNext(void);
+
+
 /******************************************************************************
 *                                                                             *
 *   int init_module(void)                                                     *
 *                                                                             *
 *******************************************************************************
 *
-*
+*   Called once when driver loads
 *
 ******************************************************************************/
-int init_module(void)
+int IceInitModule(void)
 {
-    mm_segment_t oldFS;
     int val;
 
     INFO(("init_module\n"));
@@ -192,24 +141,19 @@ int init_module(void)
 
     // Register driver
 
-    major_device_number = register_chrdev(0, DEVICE_NAME, &ice_fops);
+    major_device_number = ice_register_chrdev(DEVICE_NAME);
 
     if(major_device_number >= 0 )
     {
         // Create a device node in the /dev directory
         // and also make sure we have the functions in the systable
 
-        sys_mknod = (PFNMKNOD) sys_call_table[__NR_mknod];
-        sys_unlink = (PFNUNLINK) sys_call_table[__NR_unlink];
+        sys_mknod = (PFNMKNOD) sys_call_table[ice_get__NR_mknod()];
+        sys_unlink = (PFNUNLINK) sys_call_table[ice_get__NR_unlink()];
 
         if(sys_mknod && sys_unlink)
         {
-            // Dont perform argument validity checking..
-            oldFS = get_fs(); set_fs(KERNEL_DS);
-
-            val = sys_mknod("/dev/"DEVICE_NAME, S_IFCHR | S_IRWXUGO, major_device_number<<8);
-
-            set_fs(oldFS);
+            val = ice_mknod(sys_mknod, "/dev/"DEVICE_NAME, major_device_number);
 
             // Module loaded ok
             if(val >= 0)
@@ -244,7 +188,7 @@ int init_module(void)
         ERROR(("Failed to register character device (%d)\n", major_device_number));
     }
 
-    unregister_chrdev(major_device_number, DEVICE_NAME);
+    ice_unregister_chrdev(major_device_number, DEVICE_NAME);
 
     return -EFAULT;
 }
@@ -256,13 +200,11 @@ int init_module(void)
 *                                                                             *
 *******************************************************************************
 *
-*
+*   Called once when driver unloads
 *
 ******************************************************************************/
-void cleanup_module(void)
+void IceCleanupModule(void)
 {
-    mm_segment_t oldFS;
-
     INFO(("cleanup_module\n"));
 
     // Unhook the keyboard hook
@@ -274,19 +216,14 @@ void cleanup_module(void)
     // Delete a devce node in the /dev/ directory
     if(sys_unlink != 0)
     {
-        // Dont perform argument validity checking..
-        oldFS = get_fs(); set_fs(KERNEL_DS);
-
-        sys_unlink("/dev/"DEVICE_NAME);
-
-        set_fs(oldFS);
+        ice_rmnod(sys_unlink, "/dev/"DEVICE_NAME);
     }
 
     // Restore original Linux IDT table
     UnHookDebuger();
 
     // Unregister driver
-    unregister_chrdev(major_device_number, "ice");
+    ice_unregister_chrdev(major_device_number, "ice");
 
     // Free memory structures
     if( pIce->pHistoryBuffer != NULL )
@@ -299,7 +236,7 @@ void cleanup_module(void)
         ice_free_heap(pIce->pXDrawBuffer);
 
     if( pIce->pXFrameBuffer != NULL )
-        iounmap(pIce->pXFrameBuffer);
+        ice_iounmap(pIce->pXFrameBuffer);
 
     if( pIce->hHeap != NULL )
         ice_free_heap(pIce->hHeap);
@@ -308,28 +245,45 @@ void cleanup_module(void)
 }
 
 
-static int DriverOpen(struct inode *inode, struct file *file)
+/******************************************************************************
+*                                                                             *
+*   IO CONTROL CALLS                                                          *
+*                                                                             *
+*******************************************************************************
+*
+*   Function handling various IO Controls callbacks.
+*
+*   These are the "real" function prototypes:
+*
+*   int DriverOpen(struct inode *inode, struct file *file)
+*   int DriverClose(struct inode *inode, struct file *file)
+*   int DriverIOCTL(struct inode *inode, struct file *file, unsigned int ioctl, unsigned long param)
+*
+******************************************************************************/
+int DriverOpen(void)
 {
     INFO(("IceOpen\n"));
 
-    MOD_INC_USE_COUNT;
+    ice_mod_inc_use_count();
 
     return(0);
 }
 
 
-static DEV_CLOSE_RET DriverClose(struct inode *inode, struct file *file)
+int DriverClose(void)
 {
     INFO(("IceClose\n"));
 
-    MOD_DEC_USE_COUNT;
+    ice_mod_dec_use_count();
 
-    return DEV_CLOSE_RET_VAL;
+    // We should be really returning DEV_CLOSE_RET_VAL value
+    return(0);
 }
 
-static int DriverIOCTL(struct inode *inode, struct file *file, unsigned int ioctl, unsigned long param)
+int DriverIOCTL(void *p1, void *p2, unsigned int ioctl, unsigned long param)
 {
     int retval = -EINVAL;                   // Return error code
+    char *pBuf;                             // Temporary line buffer pointer
 
     INFO(("IceIOCTL %X param %X\n", ioctl, (int)param));
 
@@ -340,7 +294,7 @@ static int DriverIOCTL(struct inode *inode, struct file *file, unsigned int ioct
             INFO(("ICE_IOCTL_INIT\n"));
 
             // Copy the init block to the driver
-            if( copy_from_user(&Init, (void *)param, sizeof(TINITPACKET))==0 )
+            if( ice_copy_from_user(&Init, (void *)param, sizeof(TINITPACKET))==0 )
             {
                 retval = InitPacket(&Init);
             }
@@ -353,7 +307,7 @@ static int DriverIOCTL(struct inode *inode, struct file *file, unsigned int ioct
             INFO(("ICE_IOCTL_XDGA\n"));
 
             // Copy the X-init block to the driver
-            if( copy_from_user(&XInit, (void *)param, sizeof(TXINITPACKET))==0 )
+            if( ice_copy_from_user(&XInit, (void *)param, sizeof(TXINITPACKET))==0 )
             {
                 retval = XInitPacket(&XInit);
             }
@@ -362,20 +316,29 @@ static int DriverIOCTL(struct inode *inode, struct file *file, unsigned int ioct
             break;
 
         //==========================================================================================
-        case ICE_IOCTL_EXIT:            // Decrement usage count to 1 so we can unload the module
+        case ICE_IOCTL_EXIT:            // Unload the module
 
             // Unhook the system call table hooks early here so we dont collide with the
             // module unload hook function when unloading itself
             UnHookSyscall();
 
-#if 0
+            break;
+
+        //==========================================================================================
+        case ICE_IOCTL_EXIT_FORCE:      // Decrement usage count to 1 so we can unload the module
+
+            // Unhook the system call table hooks early here so we dont collide with the
+            // module unload hook function when unloading itself
+            UnHookSyscall();
+
             // This loop comes really handy when linice does not want to be unloaded
-            while( MOD_IN_USE )
+            // This call is mainly useful during the development
+            while( ice_mod_in_use() )
             {
-                MOD_DEC_USE_COUNT;
+                ice_mod_dec_use_count();
             }
-            MOD_INC_USE_COUNT;          // Back to 1
-#endif
+            ice_mod_inc_use_count();    // Back to 1
+
             break;
 
         //==========================================================================================
@@ -390,6 +353,27 @@ static int DriverIOCTL(struct inode *inode, struct file *file, unsigned int ioct
             INFO(("ICE_IOCTL_REMOVE_SYM\n"));
 
             retval = UserRemoveSymbolTable((void *)param);
+            break;
+
+        //==========================================================================================
+        case ICE_IOCTL_HISBUF_RESET:    // Fetch a seria of history lines - reset the internal reader
+            INFO(("ICE_IOCTL_HISBUF_RESET\n"));
+
+            retval = HistoryReadReset();    // It should normally return 0
+            break;
+
+        //==========================================================================================
+        case ICE_IOCTL_HISBUF:          // Fetch a number of history lines, called multiple times
+            INFO(("ICE_IOCTL_HISBUF\n"));
+
+            pBuf = HistoryReadNext();
+            if( pBuf && ice_copy_to_user((void *)param, pBuf, MIN(MAX_STRING, strlen(pBuf)+1))==0 )
+            {
+                retval = 0;
+            }
+            else
+                retval = -EFAULT;       // Faulty memory access OR end of history stream
+
             break;
     }
 

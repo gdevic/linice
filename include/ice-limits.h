@@ -102,8 +102,8 @@
 //////////////////////////////////////////////////////////////////////
 // Define maximum X and Y size of the output window in all modes and devices
 //
-#define MAX_OUTPUT_SIZEX    160             // ie. WIDTH
-#define MAX_OUTPUT_SIZEY    90              // ie. LINES
+#define MAX_OUTPUT_SIZEX    160         // ie. WIDTH
+#define MAX_OUTPUT_SIZEY    90          // ie. LINES
 
 //////////////////////////////////////////////////////////////////////
 // Moving the X-Window Linice frame by this number of pixels

@@ -40,11 +40,8 @@
 *   Include Files                                                             *
 ******************************************************************************/
 
-#include "module-header.h"              // Versatile module header file
-
-#include <linux/vmalloc.h>              // Include kernel allocation
-
 #include "clib.h"                       // Include C library header file
+#include "iceface.h"                    // Include iceface module stub protos
 
 /******************************************************************************
 *                                                                             *
@@ -93,7 +90,7 @@ static BYTE * _Init_Alloc( BYTE *pRamStart, DWORD dwRamSize );
 ******************************************************************************/
 BYTE *ice_malloc(DWORD size)
 {
-    return( vmalloc(size) );
+    return( (BYTE *)ice_vmalloc(size) );
 }
 
 
@@ -106,7 +103,7 @@ BYTE *ice_malloc(DWORD size)
 ******************************************************************************/
 void ice_free(BYTE *p)
 {
-    vfree(p);
+    ice_vfree((char *)p);
 }
 
 
@@ -133,7 +130,7 @@ BYTE * ice_init_heap(size_t size)
 
     // Allocate memory from the kernel non-paged pool
 
-    pHeap = vmalloc(size);
+    pHeap = ice_vmalloc(size);
     if( pHeap != NULL )
     {
         // Initialize our new heap
@@ -158,7 +155,7 @@ BYTE * ice_init_heap(size_t size)
 ******************************************************************************/
 void ice_free_heap(BYTE *pHeap)
 {
-    vfree(pHeap);
+    ice_vfree(pHeap);
 }
 
 

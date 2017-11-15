@@ -34,12 +34,8 @@
 *   Include Files                                                             *
 ******************************************************************************/
 
-#include "module-header.h"              // Versatile module header file
-
-#include <linux/mm.h>
-#include <asm/pgtable.h>
-
 #include "clib.h"                       // Include C library header file
+#include "iceface.h"                    // Include iceface module stub protos
 #include "intel.h"
 #include "ice.h"                        // Include main debugger structures
 
@@ -88,7 +84,7 @@ BOOL cmdPage(char *args, int subClass)
     int nLine = 1;                      // Standard dprinth line counter
 
     // Get the page directory virtual address
-    pPD = (TPage *) (PAGE_OFFSET + deb.sysReg.cr3);
+    pPD = (TPage *) (ice_page_offset() + deb.sysReg.cr3);
 
     if( *args )
     {
@@ -153,7 +149,7 @@ Proceed:
                 {
                     // PD marks pte present, so we can examine it
 
-                    pPTE = (TPage *) (PAGE_OFFSET + pPD[pg].Index * 4096);
+                    pPTE = (TPage *) (ice_page_offset() + pPD[pg].Index * 4096);
 
                     if( pPTE[pt].fPresent )
                     {
@@ -241,7 +237,7 @@ Proceed:
                 // Print only present pages
                 if( pPD[pg].fPresent )
                 {
-                    pPTE = (TPage *) (PAGE_OFFSET + pPD[pg].Index * 4096);
+                    pPTE = (TPage *) (ice_page_offset() + pPD[pg].Index * 4096);
 
                     if( pPTE[pt].fPresent )
                     {
@@ -295,7 +291,7 @@ BOOL cmdPhys(char *args, int subClass)
             address_index = address >> 12;
 
             // Get the page directory virtual address
-            pPD = (TPage *) (PAGE_OFFSET + deb.sysReg.cr3);
+            pPD = (TPage *) (ice_page_offset() + deb.sysReg.cr3);
 
             // Search through the complete Intel page table structure
             for(pg=0; pg<1024; pg++)
@@ -313,7 +309,7 @@ BOOL cmdPhys(char *args, int subClass)
                     }
                     else
                     {
-                        pPTE = (TPage *) (PAGE_OFFSET + pPD[pg].Index * 4096);
+                        pPTE = (TPage *) (ice_page_offset() + pPD[pg].Index * 4096);
 
                         // 4Kb page - loop through the page tables
                         for(pt=0; pt<1024; pt++)
@@ -356,7 +352,7 @@ BOOL cmdPeek(char *args, int subClass)
     if( Expression(&address, args, &args) )
     {
         // Map the physical memory into the virtual address space so we can access it
-        ptr = ioremap(address, 4);
+        ptr = ice_ioremap(address, 4);
         if( ptr )
         {
             // Read the value from the memory page
@@ -375,7 +371,7 @@ BOOL cmdPeek(char *args, int subClass)
                     break;
             }
 
-            iounmap(ptr);
+            ice_iounmap(ptr);
         }
         else
             dprinth(1, "Unable to map physical %08X", address);
@@ -409,7 +405,7 @@ BOOL cmdPoke(char *args, int subClass)
         if( Expression(&value, args, &args) )
         {
             // Map the physical memory into the virtual address space so we can access it
-            ptr = ioremap(address, 4);
+            ptr = ice_ioremap(address, 4);
             if( ptr )
             {
                 // Write a value to the memory page
@@ -434,7 +430,7 @@ BOOL cmdPoke(char *args, int subClass)
                         break;
                 }
 
-                iounmap(ptr);
+                ice_iounmap(ptr);
             }
             else
                 dprinth(1, "Unable to map physical %08X", address);
@@ -475,7 +471,7 @@ DWORD UserVirtToPhys(DWORD address)
     GetSysreg(&deb.sysReg);
 
     // Get the page directory virtual address
-    pPD = (TPage *) (PAGE_OFFSET + deb.sysReg.cr3);
+    pPD = (TPage *) (ice_page_offset() + deb.sysReg.cr3);
 
     // Find the page directory and page table index for the given virtual address
     pg = address >> 22;
@@ -496,7 +492,7 @@ DWORD UserVirtToPhys(DWORD address)
         if( pPD[pg].fPresent )
         {
             // PD marks pte present, so we can examine it
-            pPTE = (TPage *) (PAGE_OFFSET + pPD[pg].Index * 4096);
+            pPTE = (TPage *) (ice_page_offset() + pPD[pg].Index * 4096);
 
             if( pPTE[pt].fPresent )
             {

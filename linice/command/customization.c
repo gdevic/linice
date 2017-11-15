@@ -1113,12 +1113,14 @@ BOOL cmdDisplay(char *args, int subClass)
 ******************************************************************************/
 BOOL cmdSrc(char *args, int subClass)
 {
-    // Toggle:
-    //  0 = Disassembly
-    //  1 = Source on
-    //  2 = Mixed source and disassembly
+    // Cycle source mode:
 
-    deb.eSrc = (deb.eSrc + 1) % 3;
+    switch( deb.eSrc )
+    {
+        case SRC_OFF    : deb.eSrc = SRC_ON;    break;
+        case SRC_ON     : deb.eSrc = SRC_MIXED; break;
+        case SRC_MIXED  : deb.eSrc = SRC_OFF;   break;
+    }
 
     // Reset the symbol context
 //    SetSymbolContext(deb.codeTopAddr.sel, deb.codeTopAddr.offset);

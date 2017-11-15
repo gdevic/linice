@@ -400,11 +400,10 @@ void EdLin( char *sCmdLine )
         Key = GetKey( TRUE );
 
         // If the imput key is one of the Function key combinations, copy or exec the string
-        // THIS CODE ASSUMES F1 CODE STARTS AT 0x80 !!!!
 
         pSource = "";
 
-        if( Key & 0x80 )
+        if( (Key & 0xFF)>=F1 && (Key & 0xFF)<=F12 )
         {
             if( Key & CHAR_SHIFT )
                 map = 1;
@@ -417,7 +416,9 @@ void EdLin( char *sCmdLine )
             else
                 map = 0;
 
-            if( pIce->keyFn[map][Key & 0x1F][0]=='^' )
+            Key = (Key & 0xFF) - F1;
+
+            if( pIce->keyFn[map][Key][0]=='^' )
             {
                 // First character was ^ execute immediately and silently.
                 // Now, we should really preserve the current line for the next edit pass,
@@ -427,11 +428,11 @@ void EdLin( char *sCmdLine )
                 ClearLine();     // Clear the current command line and reset the cursor
 
                 // Copy the string into our edit line but skip leading ^
-                pSource = pIce->keyFn[map][Key & 0x1F] + 1;
+                pSource = pIce->keyFn[map][Key] + 1;
             }
             else
                 // Copy the string into our edit line
-                pSource = pIce->keyFn[map][Key & 0x1F];
+                pSource = pIce->keyFn[map][Key];
         }
 
         do
@@ -633,7 +634,7 @@ void EdLin( char *sCmdLine )
 
                     break;
 
-                case '\b':
+                case BACKSPACE:
                     // Backspace key deletes a character to the left of the cursor
                     // and moves the cursor to the left
 
@@ -671,7 +672,7 @@ void EdLin( char *sCmdLine )
 
                     break;
 
-                case '\n':
+                case ENTER:
                     // Enter key accepts the line.  If the line is different from
                     // any history line, it copies it to the writing history line.
                     // If the line is identical, do not copy, but use its prevous
@@ -718,7 +719,7 @@ void EdLin( char *sCmdLine )
                     // Proceed with adding in the space...
 
                 default:
-                    if( Key < 0x7F && isascii(Key) )
+                    if( Key <= 0xFF && Key >= ' ' )
                     {
                         // Any other character is written in the buffer in insert or
                         // overwrite mode

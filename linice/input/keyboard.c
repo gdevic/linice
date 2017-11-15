@@ -56,8 +56,8 @@
 *                                                                             *
 ******************************************************************************/
 
-static const BYTE code_table[MAX_LAYOUT][2][128] = {
-{    //                                         LAYOUT_US
+static BYTE code_table[3][128] =
+{
     {// Normal keys
     '?',  ESC,  '1',  '2',  '3',  '4',  '5',  '6',       '7',  '8',  '9',  '0',  '-',  '=',  '\b',  '\t',
     'q',  'w',  'e',  'r',  't',  'y',  'u',  'i',       'o',  'p',  '[',  ']',  ENTER,'?',  'a',   's',
@@ -75,28 +75,16 @@ static const BYTE code_table[MAX_LAYOUT][2][128] = {
     F6,   F7,   F8,   F9,   F10, NUMLOCK, SCROLL, HOME,  UP,  PGUP,  '?',  LEFT, '5', RIGHT, '?',   END,
     DOWN, PGDN, INS,  DEL,  '?',  '?',  '?',  F11,       F12,  '?',  '?',  '?',  '?',  '?',  '?',  '?',
     '?',  '?',  '?',  '?',  '?',  '?',  '?',  '?',       '?',  '?',  '?',  '?',  '?',  '?',  '?',  '?'
-    }
-},
-{    //                                       LAYOUT_GERMAN
-    {// Normal keys
-    '?',  ESC,  '1',  '2',  '3',  '4',  '5',  '6',       '7',  '8',  '9',  '0',  '-',  '=',  '\b',  '\t',
-    'q',  'w',  'e',  'r',  't',  'y',  'u',  'i',       'o',  'p',  '[',  ']',  ENTER,'?',  'a',   's',
-    'd',  'f',  'g',  'h',  'j',  'k',  'l',  ';',       '\'', '`',  '?',  '\\', 'z',  'x',  'c',   'v',
-    'b',  'n',  'm',  ',',  '.',  '/',  '?',  '*',       '?',  ' ',  '?',  F1,   F2,   F3,   F4,   F5,
-    F6,   F7,   F8,   F9,   F10, NUMLOCK, SCROLL, HOME,  UP,  PGUP,  '?',  LEFT, '5', RIGHT, '?',   END,
-    DOWN, PGDN, INS,  DEL,  '?',  '?',  '?',  F11,       F12,  '?',  '?',  '?',  '?',  '?',  '?',  '?',
-    '?',  '?',  '?',  '?',  '?',  '?',  '?',  '?',       '?',  '?',  '?',  '?',  '?',  '?',  '?',  '?'
     },
-    {// Shift + key
-    '?',  ESC,  '!',  '@',  '#',  '$',  '%',  '^',       '&',  '*',  '(',  ')',  '_',  '+',  '\b', '\t',
-    'Q',  'W',  'E',  'R',  'T',  'Y',  'U',  'I',       'O',  'P',  '{',  '}',  ENTER,'?',  'A',  'S',
-    'D',  'F',  'G',  'H',  'J',  'K',  'L',  ':',       '"',  '~',  '?',  '|',  'Z',  'X',  'C',  'V',
-    'B',  'N',  'M',  '<',  '>',  '?',  '?',  '*',       '?',  ' ',  '?',  F1,   F2,   F3,   F4,   F5,
-    F6,   F7,   F8,   F9,   F10, NUMLOCK, SCROLL, HOME,  UP,  PGUP,  '?',  LEFT, '5', RIGHT, '?',   END,
-    DOWN, PGDN, INS,  DEL,  '?',  '?',  '?',  F11,       F12,  '?',  '?',  '?',  '?',  '?',  '?',  '?',
-    '?',  '?',  '?',  '?',  '?',  '?',  '?',  '?',       '?',  '?',  '?',  '?',  '?',  '?',  '?',  '?'
+    {// Alt + key
+    0,    0,    0,    '@',  0,    '$',  0,    0,         '{',  '[',  ']',  '}',  '\\', 0,    0,    0,
+    0,    0,    0,    0,    0,    0,    0,    0,         0,    0,    0,    '~',  ENTER,0,    0,    0,
+    0,    0,    0,    0,    0,    0,    0,    0,         0,    0,    0,    0,    0,    0,    0,    0,
+    0,    0,    0,    0,    0,    0,    0,    0,         0,    0,    0,    0,    0,    0,    0,    0,
+    0,    0,    0,    0,    0,    0,    0,    0,         0,    0,    0,    0,    0,    0,    0,    0,
+    0,    0,    0,    0,    0,    0,    0,    0,         0,    0,    0,    0,    0,    0,    0,    0,
+    0,    0,    0,    0,    0,    0,    0,    0,         0,    0,    0,    0,    0,    0,    0,    0
     }
-}
 };
 
 
@@ -120,6 +108,30 @@ static DWORD KbdHook;                       // Original kbd hook value
 
 extern void MouseHandler(PTMPACKET pPacket);
 
+/******************************************************************************
+*                                                                             *
+*   void InitKeyboardLayout(char Layout[2][128])                              *
+*                                                                             *
+*******************************************************************************
+*
+*   Initializes update to default (US) keyboard layout. If we are using
+*   some other layout, we need to update some keys.
+*
+******************************************************************************/
+void InitKeyboardLayout(char Layout[2][128])
+{
+    int i, j;
+
+    // Update only values that were passed on as non-zero
+    for(i=0; i<3; i++)
+    {
+        for(j=0; j<128; j++)
+        {
+            if( Layout[i][j]!=0 )
+                code_table[i][j] = Layout[i][j];
+        }
+    }
+}
 
 /******************************************************************************
 *
@@ -243,20 +255,29 @@ void KeyboardHandler(void)
 
             if( fPressed )
             {
-                // Map a scancode to an ASCII code
-                AsciiCode = code_table[pIce->layout][fShift][ Code ];
+                // Map a scancode to an ASCII code - select from normal, shift or alt
+                // key combinations maps
+                AsciiCode = code_table[fShift][ Code ];
+
+                if( fAlt )
+                {
+                    // Alternate map (Alt+key) should contain some extra symbols
+                    // but mostly 0, in which case we only add a flag CHAR_ALT to a
+                    // regular character mapped there
+                    if( code_table[2][ Code ] )
+                        AsciiCode = code_table[2][ Code ];
+                    else
+                        AsciiCode |= CHAR_ALT;
+                }
 
                 // Caps Lock key inverts the caps state of the alphabetical characters
                 if( isalpha(AsciiCode) && fCapsLock )
                     AsciiCode ^= 0x20;
 
                 // Set the shift flag only on function keys, ignore otherwise
-                if( AsciiCode >= F1 )
+                if( AsciiCode>=F1 && AsciiCode<=F12 )
                     if( fShift )
                         AsciiCode |= CHAR_SHIFT;
-
-                if( fAlt )
-                    AsciiCode |= CHAR_ALT;
 
                 if( fControl )
                     AsciiCode |= CHAR_CTRL;
@@ -300,7 +321,7 @@ void LiniceHandleScancode(BYTE scancode, BOOL fPressed)
     // have to include one of them
 
     // Insert the current ASCII code
-    Key = (Key & ~0xFF) | code_table[pIce->layout][1][code];
+    Key = (Key & ~0xFF) | code_table[1][code];
 
     // Modify our copy of shift state
     if( code==SC_CONTROL )

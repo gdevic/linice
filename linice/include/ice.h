@@ -82,7 +82,6 @@ typedef struct
 #define DEB_STATE_DELAYED_ARM       2
 #define MAX_DEBUGGER_STATE          3
 
-    int layout;                         // Keyboard layout
     char keyFn[4][12][MAX_STRING];      // Key assignments for function keys
                                         // Fn:0 Shift:1 Alt:2 Control:3
 
@@ -175,7 +174,10 @@ typedef struct
     WORD codeFileTopLine;               // Line number of the top of code window source file
     WORD codeFileEipLine;               // Line number of the current EIP in the windows source file
     WORD codeFileXoffset;               // X offset of the source code text
-    int eSrc;                           // 0=Source off; 1=Source on; 2=Mixed
+    int eSrc;                           // 0=Source off; 1=Source on; 2=Mixed:
+#   define SRC_OFF          0
+#   define SRC_ON           1
+#   define SRC_MIXED        2
 
     BOOL fAltscr;
     BOOL fFaults;
@@ -202,6 +204,7 @@ typedef struct
 
     BOOL fRedraw;                       // Request to redraw the screen after the current command
     DWORD error;                        // Error code
+    DWORD memaccess;                    // Last memaccess code, or memaccess error code
 
     CHAR BreakKey;                      // Key combination for break
 
@@ -321,10 +324,6 @@ extern PTOUT pOut;                      // Pointer to a current output device
 *                                                                             *
 ******************************************************************************/
 
-#define LAYOUT_US               0       // US keyboard layout
-#define LAYOUT_GERMAN           1       // German keyboard layout
-#define MAX_LAYOUT              2
-
 #define MAX_INPUT_QUEUE         32      // Set max input queue size
 
 extern CHAR GetKey( BOOL fBlock );      // Read a key code from the input queue
@@ -356,13 +355,17 @@ extern BYTE ReadMdaCRTC(int index);
 extern void WriteMdaCRTC(int index, int value);
 extern int GetByte(WORD sel, DWORD offset);
 extern DWORD GetDWORD(WORD sel, DWORD offset);
-extern void SetByte(WORD sel, DWORD offset, BYTE value);
+extern DWORD SetByte(WORD sel, DWORD offset, BYTE value);
 extern void memset_w(void *dest, WORD data, int size);
 extern void memset_d(void *dest, DWORD data, int size);
+extern WORD getTR(void);
 
+extern DWORD SelLAR(WORD Sel);
 extern BOOL AddrIsPresent(PTADDRDESC pAddr);
 extern BYTE AddrGetByte(PTADDRDESC pAddr);
-extern void AddrSetByte(PTADDRDESC pAddr, BYTE value);
+extern DWORD AddrSetByte(PTADDRDESC pAddr, BYTE value, BOOL fForce);
+extern BOOL VerifyRange(PTADDRDESC pAddr, DWORD dwSize);
+extern BOOL VerifySelector(WORD Sel);
 
 // Command parser helpers:
 extern BOOL Expression(DWORD *value, char *sExpr, char **psNext );

@@ -59,10 +59,12 @@ extern char *pCmdEdit;                  // Push edit line string
 // Define a structure that holds a breakpoint info
 
 // Flags:
+
 #define BP_USED         0x01            // Breakpoint is used (not empty slot)
 #define BP_ENABLED      0x02            // Breakpoint is enabled (active)
 
-// Types:
+// Types (types and subclasses are the same number):
+
 #define BP_TYPE_BPX     0x01            // Breakpoint is BPX   (subClass 1)
 #define BP_TYPE_BPINT   0x02            // Breakpoint is BPINT (subClass 2)
 #define BP_TYPE_BPIO    0x03            // Breakpoint is BPIO  (subClass 3)
@@ -132,6 +134,8 @@ static char *pBuf;
 ******************************************************************************/
 
 extern DWORD GetHex(char **psString);
+extern void SetSysreg( TSysreg * pSys );
+
 
 DWORD fnBpCount(DWORD arg) { return( deb.bpIndex>=0? bp[deb.bpIndex].CurHits : 0 ); };
 DWORD fnBpMiss(DWORD arg) { return( deb.bpIndex>=0? bp[deb.bpIndex].CurMisses : 0 ); };
@@ -150,6 +154,10 @@ DWORD fnBpLog(DWORD arg)
 *   Functions                                                                 *
 *                                                                             *
 ******************************************************************************/
+
+BOOL AssignDebugReg(TBP *pBp);
+BOOL VerifyBreakpoint(TBP *pBp);
+BOOL BreakpointCheckSpecial(void);
 
 void InitBreakpoints()
 {
@@ -300,13 +308,13 @@ static char *GetBpString(TBP *pBp)
             break;
 
         case BP_TYPE_BPIO:
-            pBuf += sprintf(pBuf, "BPIO %X %s %s", pBp->address.offset, sDr[pBp->DrUse], pBp->Access );
+            pBuf += sprintf(pBuf, "BPIO %X %s %s", pBp->address.offset, sDr[pBp->DrUse], sBpio[pBp->Access] );
             break;
 
         case BP_TYPE_BPMB:
         case BP_TYPE_BPMW:
         case BP_TYPE_BPMD:
-            pBuf += sprintf(pBuf, "BPM%c %04X:%08X %s %s",
+            pBuf += sprintf(pBuf, "BPM%s %04X:%08X %s %s",
                 sBpm[pBp->Type - BP_TYPE_BPMB],
                 pBp->address.sel, pBp->address.offset,
                 sDr[pBp->DrUse],
@@ -695,6 +703,10 @@ BOOL AssignDebugReg(TBP *pBp)
 *   BPMW  = subClass 5
 *   BPMD  = subClass 7
 *
+*   Note: Global variable 'hint' is normally kept at -1 unless the option
+*         BPE selects an existing breakpoint to be modified, in which case
+*         it temporarily indexes selected slot to be used.
+*
 ******************************************************************************/
 BOOL cmdBpx(char *args, int subClass)
 {
@@ -708,6 +720,8 @@ BOOL cmdBpx(char *args, int subClass)
     {
         index = hint;                   // Use that breakpoint
         hint = -1;                      // Reset the hint
+
+        pBp = &bp[index];               // Assign the pointer to the old bp
 
         // If we are reusing a breakpoint slot, clear some variables
 
@@ -726,6 +740,8 @@ BOOL cmdBpx(char *args, int subClass)
         }
     }
 
+    // `index' now selects a breakpoint slot
+
     if( index<MAX_BREAKPOINTS )
     {
         pBp = &bp[index];               // Assign the pointer to a new bp
@@ -739,140 +755,146 @@ BOOL cmdBpx(char *args, int subClass)
             // Start parsing a copy of the command line
             args = pBp->pCmd;
 
+            // Set the breakpoint type
+            pBp->Type = subClass;
+
             // Get the mandatory address portion: selector portion is CS by default
             evalSel = deb.r->cs;
 
             // Evaluate expression for the address portion
             if( Expression(&pBp->address.offset, args, &args))
             {
-                pBp->address.sel = evalSel;
-
-                // With BPIO and BPM, we can specify an optional access verb here
-                if( subClass==BP_TYPE_BPIO || subClass==BP_TYPE_BPMB
-                 || subClass==BP_TYPE_BPMW || subClass==BP_TYPE_BPMD )
+                // Verify that the selector is readable and valid
+                if( VerifySelector(evalSel) )
                 {
-                    if( !strnicmp(args, "RW", 2) )
+                    pBp->address.sel = evalSel;
+
+                    // With BPIO and BPM, we can specify an optional access verb here
+                    if( subClass==BP_TYPE_BPIO || subClass==BP_TYPE_BPMB
+                     || subClass==BP_TYPE_BPMW || subClass==BP_TYPE_BPMD )
                     {
-                        args += 2;
-                        pBp->Access = 3;
-                    }
-                    else
-                    if( !strnicmp(args, "R", 1) )
-                    {
-                        args += 1;
-                        pBp->Access = 1;
-                    }
-                    else
-                    if( !strnicmp(args, "W", 1) )
-                    {
-                        args += 1;
-                        pBp->Access = 2;
-                    }
-                    else
-                        pBp->Access = 3;        // default is "RW"
-                }
-
-                while( *args==' ' ) args++;     // Skip spaces
-
-                // Specify the size parameter that is valid for memory breakpoints
-                if( subClass==BP_TYPE_BPMB || subClass==BP_TYPE_BPMW || subClass==BP_TYPE_BPMD )
-                {
-                    pBp->Size = subClass - BP_TYPE_BPMB;        // 0 (B), 1 (W), 3 (D)
-                }
-
-                // Memory and IO breakpoints can specify an optional debug register DR0..DR3
-                // In any case, we need to assign a debug register here
-                if( subClass==BP_TYPE_BPIO || subClass==BP_TYPE_BPMB || subClass==BP_TYPE_BPMW || subClass==BP_TYPE_BPMD )
-                {
-                    if( !strnicmp(*args, "DR", 2) )
-                    {
-                        args += 2;                              // Point to the DR register number
-
-                        pBp->DrHint = 1 << GetHex(&args);       // Get the DR register bit
-
-                        pBp->DrUse = pBp->DrHint;               // Use the one that is hinted
-
-                        while( *args==' ' ) args++;                 // Skip spaces
-                    }
-                    else
-                    {
-                        // Assign a debug register
-                        if( AssignDebugReg(pBp)==FALSE )
+                        if( !strnicmp(args, "RW", 2) )
                         {
-                            // Failed to assign a debug register, which is error
-                            deb.error = ERR_DRUSEDUP;           // All debug registers used
-                            goto bpx_failed;
+                            args += 2;
+                            pBp->Access = 3;
+                        }
+                        else
+                        if( !strnicmp(args, "R", 1) )
+                        {
+                            args += 1;
+                            pBp->Access = 1;
+                        }
+                        else
+                        if( !strnicmp(args, "W", 1) )
+                        {
+                            args += 1;
+                            pBp->Access = 2;
+                        }
+                        else
+                            pBp->Access = 3;        // default is "RW"
+                    }
+
+                    while( *args==' ' ) args++;     // Skip spaces
+
+                    // Specify the size parameter that is valid for memory breakpoints
+                    if( subClass==BP_TYPE_BPMB || subClass==BP_TYPE_BPMW || subClass==BP_TYPE_BPMD )
+                    {
+                        pBp->Size = subClass - BP_TYPE_BPMB;        // 0 (B), 1 (W), 3 (D)
+                    }
+
+                    // Memory and IO breakpoints can specify an optional debug register DR0..DR3
+                    // In any case, we need to assign a debug register here
+                    if( subClass==BP_TYPE_BPIO || subClass==BP_TYPE_BPMB || subClass==BP_TYPE_BPMW || subClass==BP_TYPE_BPMD )
+                    {
+                        if( !strnicmp(args, "DR", 2) )
+                        {
+                            args += 2;                              // Point to the DR register number
+
+                            pBp->DrHint = 1 << GetHex(&args);       // Get the DR register bit
+
+                            pBp->DrUse = pBp->DrHint;               // Use the one that is hinted
+
+                            while( *args==' ' ) args++;                 // Skip spaces
+                        }
+                        else
+                        {
+                            // Assign a debug register
+                            if( AssignDebugReg(pBp)==FALSE )
+                            {
+                                // Failed to assign a debug register, which is error
+                                deb.error = ERR_DRUSEDUP;           // All debug registers used
+                                goto bpx_failed;
+                            }
                         }
                     }
-                }
 
-                //------------------------------------------------------------------
-                // If the next statement is "IF", accept it
-                if( !strnicmp(args, "IF", 2) )
-                {
-                    // Store a pointer to the IF expression statement
-                    args += 2;
-                    pBp->pIF = args;
-
-                    // Massage the pointer to IF<expression> to skip heading spaces
-                    while( *pBp->pIF==' ' ) pBp->pIF++;
-
-                    // Dummy evalute the expression to skip it
-                    Expression(&dummy, args, &args);
-
-                    // ("DO" will sometimes evaluate as 0xD + 'O' by our eval. Fix it)
-                    if( !strnicmp(args-1, "DO", 2) ) args--;
-
-                    // Terminate "IF" expression substring
-                    *(args-1) = 0;
-                }
-
-                //------------------------------------------------------------------
-                // If the next statement is "DO", accept it
-                if( !strnicmp(args, "DO", 2) )
-                {
-                    // Store a pointer to DO statements
-                    args += 2;
-                    pBp->pDO = args;
-
-                    // Massage the pointer to DO<cmd> to skip heading spaces
-                    while( *pBp->pDO==' ' ) pBp->pDO++;
-                }
-
-                // For BPX breakpoints, set a possible file_id and line number
-                if( subClass==BP_TYPE_BPX )
-                {
-                    TSYMFNSCOPE *pFnScope;
-                    TSYMFNLIN *pFnLin;
-
-                    pFnScope = SymAddress2FnScope(pBp->address.sel, pBp->address.offset);
-                    if( pFnScope )
+                    //------------------------------------------------------------------
+                    // If the next statement is "IF", accept it
+                    if( !strnicmp(args, "IF", 2) )
                     {
-                        pBp->file_id = pFnScope->file_id;
+                        // Store a pointer to the IF expression statement
+                        args += 2;
+                        pBp->pIF = args;
 
-                        pFnLin = SymAddress2FnLin(pBp->address.sel, pBp->address.offset);
-                        SymFnLin2Line(&pBp->line, pFnLin, pBp->address.offset);
+                        // Massage the pointer to IF<expression> to skip heading spaces
+                        while( *pBp->pIF==' ' ) pBp->pIF++;
+
+                        // Dummy evalute the expression to skip it
+                        Expression(&dummy, args, &args);
+
+                        // ("DO" will sometimes evaluate as 0xD + 'O' by our eval. Fix it)
+                        if( !strnicmp(args-1, "DO", 2) ) args--;
+
+                        // Terminate "IF" expression substring
+                        *(args-1) = 0;
                     }
 
-                    // Also, for BPX breakpoints, redraw the screen since we may want to 
-                    // highlight differently the code pane (source or machine)
-
-                    deb.fRedraw = TRUE;
-                }
-
-                //------------------------------------------------------------------
-                // Perform validity check for all types of breakpoints
-                //------------------------------------------------------------------
-                if( VerifyBreakpoint(pBp)==TRUE )
-                {
-                    // If everything went OK, we activate a new breakpoint
-                    if( !deb.error )
+                    //------------------------------------------------------------------
+                    // If the next statement is "DO", accept it
+                    if( !strnicmp(args, "DO", 2) )
                     {
-                        // Finalize the breakpoint as valid and active and activate type
-                        pBp->Flags |= BP_USED | BP_ENABLED;
-                        pBp->Type = subClass;
+                        // Store a pointer to DO statements
+                        args += 2;
+                        pBp->pDO = args;
 
-                        return(TRUE);
+                        // Massage the pointer to DO<cmd> to skip heading spaces
+                        while( *pBp->pDO==' ' ) pBp->pDO++;
+                    }
+
+                    // For BPX breakpoints, set a possible file_id and line number
+                    if( subClass==BP_TYPE_BPX )
+                    {
+                        TSYMFNSCOPE *pFnScope;
+                        TSYMFNLIN *pFnLin;
+
+                        pFnScope = SymAddress2FnScope(pBp->address.sel, pBp->address.offset);
+                        if( pFnScope )
+                        {
+                            pBp->file_id = pFnScope->file_id;
+
+                            pFnLin = SymAddress2FnLin(pBp->address.sel, pBp->address.offset);
+                            SymFnLin2Line(&pBp->line, pFnLin, pBp->address.offset);
+                        }
+
+                        // Also, for BPX breakpoints, redraw the screen since we may want to 
+                        // highlight differently the code pane (source or machine)
+
+                        deb.fRedraw = TRUE;
+                    }
+
+                    //------------------------------------------------------------------
+                    // Perform validity check for all types of breakpoints
+                    //------------------------------------------------------------------
+                    if( VerifyBreakpoint(pBp)==TRUE )
+                    {
+                        // If everything went OK, we activate a new breakpoint
+                        if( !deb.error )
+                        {
+                            // Finalize the breakpoint as valid and active
+                            pBp->Flags |= BP_USED | BP_ENABLED;
+
+                            return(TRUE);
+                        }
                     }
                 }
 
@@ -957,11 +979,10 @@ void ClearNonStickyBreakpoint(void)
 ******************************************************************************/
 void ArmBreakpoints(void)
 {
-    TADDRDESC Addr;                     // Address of a breakpoint
     int index, dr;
 
     // Translation from DR bitfield into DR register number
-    static const bDr[] = {  0, 0, 1, 0, 2, 0, 0, 0, 3  };
+    static const int bDr[] = {  0, 0, 1, 0, 2, 0, 0, 0, 3  };
 
     // Reset debug registers
     deb.sysReg.dr7 = 3 << 8;            // LE GE set recommended
@@ -983,7 +1004,7 @@ void ArmBreakpoints(void)
         {
             // Save the original byte and place int3
             nsbp.origValue = AddrGetByte(&nsbp.address);
-            AddrSetByte(&nsbp.address, 0xCC);
+            AddrSetByte(&nsbp.address, 0xCC, TRUE);
         }
 
         for(index=0; index<MAX_BREAKPOINTS; index++ )
@@ -997,7 +1018,7 @@ void ArmBreakpoints(void)
                     case BP_TYPE_BPX:
                         // Save the original byte and place int3
                         bp[index].origValue = AddrGetByte(&bp[index].address);
-                        AddrSetByte(&bp[index].address, 0xCC);
+                        AddrSetByte(&bp[index].address, 0xCC, TRUE);
                         break;
 
                     case BP_TYPE_BPINT:
@@ -1071,7 +1092,6 @@ void ArmBreakpoints(void)
 ******************************************************************************/
 void *DisarmBreakpoints(void)
 {
-    TADDRDESC Addr;                     // Address to reset breakpoint
     int index;
     TBP *pBp;                           // Pointer to a breakpoint that hit
 
@@ -1090,7 +1110,7 @@ void *DisarmBreakpoints(void)
                     if( AddrGetByte(&bp[index].address)==0xCC )  // Was it INT3?
                     {
                         // Restore original value
-                        AddrSetByte(&bp[index].address, bp[index].origValue);
+                        AddrSetByte(&bp[index].address, bp[index].origValue, TRUE);
 
                         // If the current cs:eip-1 matches the bpx address, set the index
                         if( deb.r->cs==bp[index].address.sel && deb.r->eip-1==bp[index].address.offset )
@@ -1125,7 +1145,7 @@ void *DisarmBreakpoints(void)
     {
         if( AddrGetByte(&nsbp.address)==0xCC )  // Was it INT3?
         {
-            AddrSetByte(&nsbp.address, nsbp.origValue);
+            AddrSetByte(&nsbp.address, nsbp.origValue, TRUE);
 
             // If the current cs:eip-1 matches the non-sticky bp address, do not reset the nbsp.Flags
             // to signal later that we indeed hit one INT3
