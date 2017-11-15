@@ -53,6 +53,8 @@ static char digits[36] = "0123456789abcdefghijklmnopqrstuvwxyz";
 *                                                                             *
 ******************************************************************************/
 
+extern int printk(char *, ...);
+
 // OK stuck assert here for now...
 
 void __assert(char * file, int line)
@@ -112,7 +114,7 @@ unsigned long _strtoul( char *ptr, char **endptr, int base, int _signed )
             base = 10;
     }
     else    // If the base is hex, we can remove leading characters
-    if( (base==16) && (*ptr=='0') && (*++ptr=='x') || (*ptr=='X') )
+    if( (base==16) && (*ptr=='0') && (tolower(*++ptr)=='x') )
         ptr++;
 
     // Base must be assigned at this point

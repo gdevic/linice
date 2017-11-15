@@ -162,7 +162,14 @@ typedef struct
 
 } TGDT_Gate;
 
-#define GET_GDT_BASE(pGDT_Gate)    ( *(pGDT_Gate)->baseLow +  (*(pGDT_Gate)->baseMid << 16) + (*(pGDT_Gate)->baseHigh << 24) )
+#define GET_GDT_BASE(pGDT_Gate) \
+          ( (pGDT_Gate)->baseLow + \
+           ((pGDT_Gate)->baseMid << 16) + \
+           ((pGDT_Gate)->baseHigh << 24) )
+
+#define GET_GDT_LIMIT(pGDT_Gate) \
+          ( (pGDT_Gate)->limitLow + \
+           ((pGDT_Gate)->limitHigh << 16) )
 
 #define DESC_TYPE_TSS16A    0x01        // 16 bit TSS (Available)
 #define DESC_TYPE_LDT       0x02        // LDT (CodeData must be 0)
@@ -222,7 +229,6 @@ typedef struct
 #define IOPL_BIT0           12
 #define IOPL_BIT1           13
 #define NT_BIT              14
-
 #define RF_BIT              16
 #define VM_BIT              17
 #define AC_BIT              18
@@ -230,8 +236,16 @@ typedef struct
 #define VIP_BIT             20
 #define ID_BIT              21
 
-#define IF_MASK             (1 << IF_BIT)
+
+#define CF_MASK             (1 << CF_BIT)
+#define PF_MASK             (1 << PF_BIT)
+#define AF_MASK             (1 << AF_BIT)
+#define ZF_MASK             (1 << ZF_BIT)
+#define SF_MASK             (1 << SF_BIT)
 #define TF_MASK             (1 << TF_BIT)
+#define IF_MASK             (1 << IF_BIT)
+#define DF_MASK             (1 << DF_BIT)
+#define OF_MASK             (1 << OF_BIT)
 #define IOPL_MASK           (3 << IOPL_BIT0)
 #define NT_MASK             (1 << NT_BIT)
 #define RF_MASK             (1 << RF_BIT)
@@ -240,9 +254,6 @@ typedef struct
 #define VIF_MASK            (1 << VIF_BIT)
 #define VIP_MASK            (1 << VIP_BIT)
 #define ID_MASK             (1 << ID_BIT)
-
-#define EFLAGS_MASK         0x003F7FD5
-#define EFLAGS_SET          0x00000002
 
 //-----------------------------------------------------------------------------
 

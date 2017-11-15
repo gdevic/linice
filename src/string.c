@@ -309,7 +309,7 @@ char * strchr( const char *s, int c )
         s++;
     }
 
-    return( s );
+    return( (char *)  s );
 }
 
 /******************************************************************************
@@ -409,9 +409,9 @@ size_t strcspn( const char *s1, const char *s2 )
     int count;
 
     count = 0;
-    for( scan1 = s1; *scan1 != 0; scan1++ )
+    for( scan1 = (char *) s1; *scan1 != 0; scan1++ )
     {
-        for( scan2 = s2; *scan2 != 0; )
+        for( scan2 = (char *) s2; *scan2 != 0; )
                 if( *scan1 == *scan2++ )
                         return(count);
         count++;
@@ -457,7 +457,7 @@ char * strerror( int errnum )
 ******************************************************************************/
 size_t strlen( const char *s )
 {
-    char *original = s;
+    char *original = (char *) s;
 
     while( *s != 0 ) s++;
 
@@ -585,8 +585,8 @@ char * strpbrk( const char *s1, const char *s2 )
     char *scan1;
     char *scan2;
 
-    for( scan1 = s1; *scan1 != 0; scan1++ )
-        for( scan2 = s2; *scan2 != 0; )
+    for( scan1 = (char *) s1; *scan1 != 0; scan1++ )
+        for( scan2 = (char *) s2; *scan2 != 0; )
                 if( *scan1 == *scan2++ )
                         return( scan1 );
     return( NULL );
@@ -614,7 +614,7 @@ char * strrchr( const char *s, int c )
 
     while( *s )
     {
-        if( *s == c ) last = s;
+        if( *s == c ) last = (char *) s;
         s++;
     }
 
@@ -645,7 +645,7 @@ size_t strspn( const char *s1, const char *s2 )
     len = 0;
     while( *s1 != 0 )
     {
-        for( scan = s2; *scan != 0; scan++ )
+        for( scan = (char *) s2; *scan != 0; scan++ )
         {
             if( *s1==*scan )
                 break;
@@ -683,8 +683,8 @@ char * strstr( const char *s1, const char *s2 )
 
     while( *s1 != 0 )
     {
-        orig = s1;
-        scan = s2;
+        orig = (char *) s1;
+        scan = (char *) s2;
 
         for( ; *scan != 0; scan++, orig++ )
         {
@@ -693,7 +693,7 @@ char * strstr( const char *s1, const char *s2 )
         }
 
         if( *scan == 0 )
-            return( s1 );
+            return( (char *) s1 );
 
         s1++;
     }

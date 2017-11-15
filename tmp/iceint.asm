@@ -17,10 +17,17 @@ PICACK  equ     0x20
         push    dword 0
 %endif
         pushad
-        cld                     ; Set the direction bit
+
+; Push the address of the register structure that we just set up
+        mov     eax, esp
+        push    eax
+
+; Push interrupt number on the stack and call our C handler
+
         push    dword %1
+        cld                     ; Set the direction bit
         call    IceInterrupt
-        add     esp, 4
+        add     esp, 8
 %if %1 >= 0x28
         mov     dx, PIC2        ; Ack PIC 2
         mov     al, PICACK
@@ -32,9 +39,7 @@ PICACK  equ     0x20
         out     (dx), al
 %endif
         popad
-%if %2 == 0
-        add     esp, 4
-%endif
+        add     esp, 4          ; Skip the error code
         iretd
 %endmacro
 
@@ -53,8 +58,11 @@ PICACK  equ     0x20
 ;            ---
 ;            ebp
 ;            esi
-;            edi
-;
+;            edi                                 <---\
+;                                                    |
+; Then we add:                                       |
+;            pDebRegs - pointer to that register stack
+;            nInt - interrupt number
 
 Intr00:      int_handler 0x00, 0
 Intr01:      int_handler 0x01, 0

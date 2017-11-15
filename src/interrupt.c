@@ -10,7 +10,7 @@
 
     Module Description:
 
-        This module contains interrupt handlers
+        This module contains debugger interrupt handlers
 
 *******************************************************************************
 *                                                                             *
@@ -44,21 +44,11 @@
 *                                                                             *
 ******************************************************************************/
 
-#define MAX_SAVE_IDT        34          // Number of IDT entries to handle
+// TODO: Are we safe to assume Linux IDT has 256 entries ?
 
-// Array where we store the original IDT entries
+// Array where we store the original Linux IDT entries
 
-TIDT_Gate origIdt[MAX_SAVE_IDT];
-
-// Private IDT that debugger uses
-
-#define MAX_ICE_IDT         0x30
-
-TIDT_Gate ice_idt[MAX_ICE_IDT];
-
-// And the descriptor for it
-
-TDescriptor ice_idt_descriptor;
+static TIDT_Gate origIdt[256];
 
 /******************************************************************************
 *                                                                             *
@@ -85,29 +75,45 @@ void DecodeIDT(TIDT_Gate *pIdt)
 
 /******************************************************************************
 *                                                                             *
-*   void HookIdt(TIDT_Gate *pGate, DWORD IntHandlerFunction)                  *
+*   void Halt(void)                                                           *
+*                                                                             *
+*******************************************************************************
+*
+*   Unrecoverable fault within LinIce - dump some state information and halt
+*
+******************************************************************************/
+void Halt(void)
+{
+    HaltCpu();
+}    
+
+
+/******************************************************************************
+*                                                                             *
+*   void HookIdt(BYTE bIntNumber)                                             *
 *                                                                             *
 *******************************************************************************
 *
 *   Hooks a single IDT entry
 *
 *   Where:
-*       pIdt is the pointer to an IDT entry to hook
+*       bIntNumber is the interrupt number to hook 
 *
 ******************************************************************************/
-void HookIdt(TIDT_Gate *pGate, DWORD IntHandlerFunction)
+void HookIdt(DWORD bIntNumber)
 {
-#ifdef DBG
-    DecodeIDT(pGate);
-#endif
+    TIDT_Gate *pGate;
+    DWORD IntHandlerFunction;
+
+    pGate = deb.pIdt + bIntNumber;
+    IntHandlerFunction = IceIntHandlers[bIntNumber];
+
     pGate->offsetLow  = LOWORD(IntHandlerFunction);
     pGate->offsetHigh = HIWORD(IntHandlerFunction);
     pGate->selector   = SEL_ICE_CS;
     pGate->type       = INT_TYPE_INT32;
     pGate->dpl        = 0;
     pGate->present    = TRUE;
-
-    DecodeIDT(pGate);
 }    
 
 
@@ -119,91 +125,82 @@ void HookIdt(TIDT_Gate *pGate, DWORD IntHandlerFunction)
 *
 *   Hooks all IDT entries for monitoring debugee
 *
-*   Where:
-*       pIdt is the pointer to the IDT[0]
-*
 ******************************************************************************/
 void HookDebuger(void)
 {
-    TIDT_Gate *pIdt;
-
-    // Get the address of the debugee IDT
-
-    pIdt = GET_DESC_BASE(&deb.idt);
-#ifdef DBG
-    printk("<1>IDT: %08X [%X]\n", GET_DESC_BASE(&deb.idt), deb.idt.limit);
-#endif
-
-    // Store the original IDT table aside
-
-    memcpy((void *)origIdt, pIdt, sizeof(TIDT_Gate) * MAX_SAVE_IDT);
-
     // We hook selcted CPU interrupts and traps
 
-    if( deb.fInt1Here==TRUE )
-        HookIdt(pIdt+1,  (DWORD) Interrupt_1);
+    if( deb.fInt1Here==TRUE ) HookIdt(1);
+    if( deb.fInt3Here==TRUE ) HookIdt(3);
 
-    if( deb.fInt3Here==TRUE )
-        HookIdt(pIdt+3,  (DWORD) Interrupt_3);
-
-    HookIdt(pIdt+0,  (DWORD) Interrupt_0);
-    HookIdt(pIdt+6,  (DWORD) Interrupt_6);
-    HookIdt(pIdt+8,  (DWORD) Interrupt_8);
-    HookIdt(pIdt+10, (DWORD) Interrupt_10);
-    HookIdt(pIdt+13, (DWORD) Interrupt_13);
+//    HookIdt(0);
+//    HookIdt(6);
+//    HookIdt(8);
+//    HookIdt(10);
+//    HookIdt(13);
 }    
 
 
 /******************************************************************************
 *                                                                             *
-*   void UnhookDebuger(void)                                                  *
+*   void HookIce(void)                                                        *
 *                                                                             *
 *******************************************************************************
 *
-*   Unhooks all IDT entries for monitoring debugee
+*   Hooks all IDT entries needed for running debugger
 *
 ******************************************************************************/
-void UnhookDebuger(void)
+void HookIce(void)
 {
-    TIDT_Gate *pIdt;
+    // We hook selcted CPU interrupts and traps
 
-    // Get the address of the debugee IDT
+    HookIdt(0x01);            // Int1
+    HookIdt(0x03);            // Int3
+    HookIdt(0x06);            // Invalid opcode
+    HookIdt(0x08);            // Double fault
+    HookIdt(0x0A);            // Invalid TSS
+    HookIdt(0x0B);            // Segment not present
+    HookIdt(0x0C);            // Stack exception
+    HookIdt(0x0D);            // GPF
+    HookIdt(0x0E);            // Page Fault
 
-    pIdt = GET_DESC_BASE(&deb.idt);
-
-    // Simply copy back all IDT entries that we saved before
-
-    memcpy(pIdt, (void *)origIdt, sizeof(TIDT_Gate) * MAX_SAVE_IDT);
+    HookIdt(0x20);            // System timer
+    HookIdt(0x21);            // Keyboard
+    HookIdt(0x2C);            // PS/2 Mouse
 }    
 
 
 /******************************************************************************
 *                                                                             *
-*   void InitIceIdt(void)                                                     *
+*   void SaveIDT(void)                                                        *
 *                                                                             *
 *******************************************************************************
 *
-*   Initializes private debugger IDT
+*   Saves original Linux IDT table before we hook anything
 *
 ******************************************************************************/
-void InitIceIdt(void)
+void SaveIDT(void)
 {
-    int i;
+    // Store the original IDT table aside
 
-    // Set up the debugger privte IDT
+    memcpy((void *)origIdt, deb.pIdt, sizeof(origIdt));
+}    
 
-    SET_DESC_BASE(&ice_idt_descriptor, ice_idt);
-    ice_idt_descriptor.limit = sizeof(ice_idt) - 1;
 
-    for( i=0; i<MAX_ICE_IDT; i++)
-    {
-        ice_idt[i].offsetLow = LOWORD(IceIntHandlers[i]);
-        ice_idt[i].offsetHigh = HIWORD(IceIntHandlers[i]);
-        ice_idt[i].selector = SEL_ICE_CS;
-        ice_idt[i].type = INT_TYPE_INT32;
-        ice_idt[i].dpl = 0;
-        ice_idt[i].present = TRUE;
-    }
+/******************************************************************************
+*                                                                             *
+*   void RestoreIDT(void)                                                     *
+*                                                                             *
+*******************************************************************************
+*
+*   Restores original Linux IDT table
+*
+******************************************************************************/
+void RestoreIDT(void)
+{
+    // Simply copy back all IDT entries that we have saved before
+
+    memcpy(deb.pIdt, (void *)origIdt, sizeof(origIdt));
 }    
 
 
@@ -213,108 +210,163 @@ void InitIceIdt(void)
 *                                                                             *
 *******************************************************************************
 *
-*   This function is called on an exception/interrupt/trap originating in
-*   the debugee that we hooked up.
+*   This function is called on an exception/interrupt/trap.  It may originate
+*   either in the debugee or while running debugger.
 *
 *   Where:
-*       nInt is the interrupt number that happen
-*       pRegs is the debugee register structure
+*       nInt is the interrupt number that happened
+*       pRegs is the register structure on the stack
 *
 *   Returns:
+*       NULL
 *
 ******************************************************************************/
 DWORD DebInterruptHandler( DWORD nInt, TRegs *pRegs )
 {
-DWORD pKeyMod;
-    // Store the address of the registers into the debugee state structure
-    // and the current interrupt number
+    // Depending on the execution context, branch
 
-    deb.r = pRegs;
-    deb.nInterrupt = nInt;
-
-    // Unhook all the interrupts since so they can be examined by the debugger
-
-    UnhookDebuger();
-
-    // Set up alternate IDT to run the debuger with
-
-    SetIDT(&ice_idt_descriptor);
-
-    // Be sure to enable interrupts so we can operate
-
-    EnableInterrupts();
-
-    video.SaveBackground();
-  
+    if( deb.fRunningIce == TRUE )
     {
-        TIDT_Gate *p;
-        DWORD mod;
-        volatile int i;
-        char c = 0;
-        
-        printk("<1> %02X \n", nInt);
+        //---------------------------------------------
+        //  Exception occurred during the LinIce run
+        //---------------------------------------------
 
-        p = GET_DESC_BASE(&ice_idt_descriptor);
-        printk("<1> IDT: %08X:%04X\n", p, ice_idt_descriptor.limit);
+        // Handle some limited number of interrupts, ignore the rest
 
-        for( i=1; i<4; i++)
+        switch( nInt )
         {
-            DecodeIDT(p++);
+            case 0x01:
+                    dprint("LINICE: INT 1\n");
+                    Halt();
+                break;
+
+            case 0x03:
+                    dprint("LINICE: INT 3\n");
+                    Halt();
+                break;
+
+            case 0x06:
+                    dprint("LINICE: INVALID OPCODE\n");
+                    Halt();
+                break;
+
+            case 0x08:
+                    dprint("LINICE: DOUBLE FAULT\n");
+                    Halt();
+                break;
+
+            case 0x0A:
+                    dprint("LINICE: INVALID TSS\n");
+                    Halt();
+                break;
+
+            case 0x0B:
+                    dprint("LINICE: SEGMENT NP\n");
+                    Halt();
+                break;
+
+            case 0x0C:
+                    dprint("LINICE: STACK OVERFLOW\n");
+                    Halt();
+                break;
+
+            case 0x0D:
+                    dprint("LINICE: GPF\n");
+                    Halt();
+                break;
+
+            case 0x0E:  // PAGE FAULT
+                if( (pRegs->eip > (DWORD) GetByte) && (pRegs->eip < (DWORD) GetByte + 50) )
+                {
+                    pRegs->eip += 3;            // Skip  65 8A 03  mov al, gs:[ebx]
+                    pRegs->eax  = 0xFFFFFFFF;   // Set invalid address value
+                }
+                else
+                {
+                    dprint("LINICE: PAGE FAULT\n");                    
+                    Halt();
+                }
+                break;
+
+            case 0x20:      // Timer
+                break;
+
+            case 0x21:      // Keyboard interrupt
+                Deb_Keyboard_Handler();
+            break;
+
+            case 0x2C:
+                break;
+
+            default:   
+                    dprint("LINICE: INVALID INTERRUPT %02X\n", nInt);
+                    Halt();
+                break;
         }
 
-        while( c != 27 )
-        {
-            c = GetKey( TRUE, &mod);
-            printk("<1>%c\n", c);
-        }
+//        if( nInt != 0x20 )
+//            dprint(">%02X<", nInt);
+
+        // Acknowledge interrupt controller
+
+        if( (nInt >= 0x28) && (nInt < 0x30) )
+            outp(PIC2, PIC_ACK);
+
+        if( (nInt >= 0x20) && (nInt < 0x30) )
+            outp(PIC1, PIC_ACK);
     }
+    else
+    {
+        //---------------------------------------------
+        //  Exception occurred during the debugee run
+        //---------------------------------------------
 
-    video.RestoreBackground();
+        deb.fRunningIce = TRUE;
+                
+        // Store the address of the registers into the debugee state structure
+        // and the current interrupt number
 
-    // Disable interrupts so we can mess with IDT
+        deb.r = pRegs;
+        deb.nInterrupt = nInt;
 
-    DisableInterrupts();
+        // Get the current GDT table
 
-    // Restore primary IDT so we can continue running the debugee
+        GetGDT(&deb.gdt);
+        deb.pGdt = (TGDT_Gate *) GET_DESC_BASE(&deb.gdt);
+        
+        // Restore original Linux interrupt table
 
-    SetIDT(&deb.idt);
+        RestoreIDT();
 
-    // Hook the debugee IDT
+        // Hook interrupts that we need to control to run debugger
 
-    HookDebuger();
+        HookIce();
+
+        // Be sure to enable interrupts so we can operate
+
+        EnableInterrupts();
+
+        ////////////////////////////// TA-DAAAA !!!
+                EnterDebugger();
+        //////////////////////////////
+
+        // Disable interrupts so we can mess with IDT
+
+        DisableInterrupts();
+
+        // Restore original Linux interrupt table
+
+        RestoreIDT();
+
+        // Hook back the debugee IDT
+
+        HookDebuger();
+
+        deb.fRunningIce = FALSE;
+    }
 
     // Return into the debugee where we left off or where the register structure
     // points to...
-
-    return( NULL );
-}    
-
-
-/******************************************************************************
-*                                                                             *
-*   void IceInterrupt( DWORD nInt )                                           *
-*                                                                             *
-*******************************************************************************
-*
-*   This function is called on an exception/interrupt/trap when the
-*   debugger is running
-*
-*   Where:
-*       nInt is the interrupt number that happen
-*
-******************************************************************************/
-void IceInterrupt( DWORD nInt )
-{
-    // Handle some limited number of interrupts, ignore the rest
-
-//    printk("<1> >> %02X \n", nInt);
-
-    switch( nInt )
-    {
-        case 0x21:      // Keyboard interrupt
-            Deb_Keyboard_Handler();
-        break;
-    }
 
     return( NULL );
 }    

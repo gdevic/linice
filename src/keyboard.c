@@ -31,10 +31,11 @@
 
 #include "clib.h"                       // Include C library header file
 
-#include "intel.h"                      // Include Intel-specific defines
+#include "intel.h"                      // Include Intel defines
 
-#include "i386.h"                       // Include assembler functions
+#include "i386.h"                       // Include assembly code
 
+#include "ice.h"                        // Include global structures
 
 /******************************************************************************
 *   Global Variables
@@ -42,44 +43,10 @@
 
 
 #define SC_CONTROL          29         // Control key key scan code
+#define SC_ALT              56         // Alt key scan code
 #define SC_LEFT_SHIFT       42         // Left shift key scan code
 #define SC_RIGHT_SHIFT      54         // Right shift key scan code
 #define SC_CAPS_LOCK        58         // Caps lock key scan code
-
-#define SC_ALT              0xFF        // ????????????
-
-#define F1            0x80
-#define F2            0x81
-#define F3            0x82
-#define F4            0x83
-#define F5            0x84
-#define F6            0x85
-#define F7            0x86
-#define F8            0x87
-#define F9            0x88
-#define F10           0x89
-#define F11           0x8A
-#define F12           0x8B
-
-#define ESC           27
-#define ENTER         '\n'
-#define NUMLOCK       18
-#define SCROLL        19
-#define HOME          20
-#define UP            21
-#define PGUP          22
-#define LEFT          23
-#define RIGHT         24
-#define END           25
-#define DOWN          26
-#define PGDN          28
-#define INS           29
-#define DEL           30
-
-
-#define KMOD_SHIFT      1               // Shift modifier
-#define KMOD_CTRL       2               // Control modifier
-#define KMOD_ALT        4               // Alt modifier
 
 /******************************************************************************
 *   Local Defines, Variables and Macros
@@ -104,9 +71,9 @@ static const BYTE ascii_table[2][128] = {
     '?',  ESC,  '!',  '@',  '#',  '$',  '%',  '^',       '&',  '*',  '(',  ')',  '_',  '+',  '\b', '\t',
     'Q',  'W',  'E',  'R',  'T',  'Y',  'U',  'I',       'O',  'P',  '{',  '}',  ENTER,'?',  'A',  'S',
     'D',  'F',  'G',  'H',  'J',  'K',  'L',  ':',       '"',  '~',  '?',  '|',  'Z',  'X',  'C',  'V',
-    'B',  'N',  'M',  '<',  '>',  '?',  '?',  '*',       '?',  ' ',  '?',   F1,   F2,   F3,   F4,   F5,
-      F6,   F7,   F8,   F9,   F10, NUMLOCK, SCROLL, HOME, UP,   PGUP,'?',  LEFT, '5',  RIGHT,'?',  END,
-     DOWN, PGDN, INS,  DEL, '?',  '?',  '?',   F11,       F12,
+    'B',  'N',  'M',  '<',  '>',  '?',  '?',  '*',       '?',  ' ',  '?',  SF1,  SF2,  SF3,  SF4,  SF5,
+    SF6,  SF7,  SF8,  SF9,  SF10, NUMLOCK, SCROLL, HOME, UP,   PGUP,'?',   LEFT, '5',  RIGHT,'?',  END,
+    DOWN, PGDN, INS,  DEL, '?',  '?',  '?',   SF11,      SF12,
 }
 };
 
@@ -120,31 +87,6 @@ static BOOL fCapsLock = FALSE;
 /******************************************************************************
 *   Functions
 ******************************************************************************/
-
-
-/******************************************************************************
-*                                                                             *
-*   static void AckKeyboard()                                                 *
-*                                                                             *
-*******************************************************************************
-*
-*   This helper function acknowledges the keyboard controller and the
-*   interrupt controller.
-*
-******************************************************************************/
-static void AckKeyboard()
-{
-    BYTE ScanCode;
-
-    // Acknowledge keyboard controller
-
-    ScanCode = inp( KBD_CONTROL );
-    outp( ScanCode | 0x80, KBD_CONTROL );
-    inp( PORT_DUMMY );
-    outp( ScanCode, KBD_CONTROL );
-    inp( PORT_DUMMY );
-}
-
 
 /******************************************************************************
 *                                                                             *
@@ -165,9 +107,7 @@ static void AckKeyboard()
 ******************************************************************************/
 BOOL CheckHotKey(void)
 {
-    static int x = 0;
-
-    BYTE ScanCode, Status;
+    BYTE ScanCode;
 
     ScanCode = inp( KBD_DATA );
 
@@ -201,10 +141,9 @@ BOOL CheckHotKey(void)
 ******************************************************************************/
 void Deb_Keyboard_Handler(void)
 {
-    BYTE AsciiCode, bNext;
+    WORD AsciiCode, bNext;
     BYTE ScanCode;
     BYTE Code, Pressed;
-    int pid;
 
 
     AsciiCode = 0;
@@ -273,6 +212,13 @@ void Deb_Keyboard_Handler(void)
         // Caps Lock key inverts the caps state of the alphabetical characters
         if( isalpha(AsciiCode) && fCapsLock )
             AsciiCode ^= 0x20;
+
+        // Ctrl and Alt keys add extra bits to a code
+        if( fControl )
+            AsciiCode |= CTRL;
+
+        if( fAlt )
+            AsciiCode |= ALT;
     }
 
     if( AsciiCode != 0 )
@@ -289,14 +235,19 @@ void Deb_Keyboard_Handler(void)
         }
     }
 
-    // Ack the keyboard controller
-    AckKeyboard();
+    // Acknowledge the keyboard controller
+
+    ScanCode = inp( KBD_CONTROL );
+    outp( ScanCode | 0x80, KBD_CONTROL );
+    inp( PORT_DUMMY );
+    outp( ScanCode, KBD_CONTROL );
+    inp( PORT_DUMMY );
 }
 
 
 /******************************************************************************
 *                                                                             *
-*   char GetKey( IN BOOL fBlock, OUT DWORD *pKeyMod )                         *
+*   WORD GetKey( IN BOOL fBlock )                                             *
 *                                                                             *
 *******************************************************************************
 *
@@ -307,24 +258,15 @@ void Deb_Keyboard_Handler(void)
 *   Where:
 *       fBlock is a blocking request.  If set to True, the function polls
 *       the keyboard until a key is available.
-*       pMod is the address of a variable receiving a keymap modifier bits:
-*           KMOD_SHIFT, KMOD_CTRL, KMOD_ALT
 *
 *   Returns:
 *       0 If no key was available
-*       ASCII code of a next key in a queue + *pKeyMod adjusted
+*       Pseudo-ASCII code of a next key in a queue
 *
 ******************************************************************************/
-char GetKey( BOOL fBlock, DWORD *pKeyMod )
+WORD GetKey( BOOL fBlock )
 {
-    char c;
-
-    // Set the key modifiers bits
-
-    *pKeyMod = 0;
-    if( fShift )    *pKeyMod |= KMOD_SHIFT;
-    if( fControl )  *pKeyMod |= KMOD_CTRL;
-    if( fAlt )      *pKeyMod |= KMOD_ALT;
+    WORD c;
 
     // If the blocking is False, return 0 if a key is not available
 

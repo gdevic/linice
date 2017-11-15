@@ -1,10 +1,10 @@
 /******************************************************************************
 *                                                                             *
-*   Module:     Printf.c                                                      *
+*   Module:     display.c                                                     *
 *                                                                             *
 *   Revision:   1.00                                                          *
 *                                                                             *
-*   Date:       11/4/97                                                       *
+*   Date:       9/4/97                                                        *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -12,23 +12,30 @@
 
     Module Description:
 
-        This module contains the code for the printf family of functions.
+    This module contains the printing code that is independent on the
+    type of output.
+
+    dprint() performs the functionality of printf() with some extra control
+    characters that are defined in Display.h file.
+
+    sprintf() is also here since it is basically using the same function.
 
 *******************************************************************************
 *                                                                             *
 *   Changes:                                                                  *
 *                                                                             *
-*   DATE     DESCRIPTION OF CHANGES                               AUTHOR      *
-* --------   ---------------------------------------------------  ----------- *
-* 04/28/96   Original                                             Goran Devic *
-* 10/26/00   Modified for LinIce                                  Goran Devic *
-* --------   ---------------------------------------------------  ----------- *
+*   DATE     REV   DESCRIPTION OF CHANGES                         AUTHOR      *
+* --------   ----  ---------------------------------------------  ----------- *
+* 9/4/97     1.00  Original                                       Goran Devic *
+* 11/13/00         Modified for LinIce                            Goran Devic *
+* --------   ----  ---------------------------------------------  ----------- *
 *******************************************************************************
 *   Include Files                                                             *
 ******************************************************************************/
 
 #include "clib.h"                       // Include C library header file
 
+#include "ice.h"                        // Include global structures
 
 /******************************************************************************
 *                                                                             *
@@ -36,14 +43,15 @@
 *                                                                             *
 ******************************************************************************/
 
+TPUTCHAR pfnPutChar;                    // Put character function
+
+int nCharsWritten;                      // Number of written characters
 
 /******************************************************************************
 *                                                                             *
 *   Local Defines, Variables and Macros                                       *
 *                                                                             *
 ******************************************************************************/
-
-#define WRITE_BUF_LEN    1024
 
 #define LEFT_JUSTIFY     0x0001
 #define PRINT_SIGN       0x0002
@@ -53,53 +61,64 @@
 #define NEGATIVE         0x0020
 
 
-static char printbuf[WRITE_BUF_LEN];
-static char buf[10];
-static const char hex[16]="0123456789abcdef";
-static const unsigned int dec[10] = {
-    1000000000,
-    100000000,
-    10000000,
-    1000000,
-    100000,
-    10000,
-    1000,
-    100,
-    10,
-    1
-};
-
-
 /******************************************************************************
 *                                                                             *
 *   Functions                                                                 *
 *                                                                             *
 ******************************************************************************/
 
+/******************************************************************************
+*                                                                             *
+*   sprintf() helper function that stores a character into a string           *
+*                                                                             *
+******************************************************************************/
+
+static char *str_buf;                   // String buffer pointer
+
+static void sputchar( char c )
+{
+    *str_buf++ = c;
+
+    nCharsWritten++;
+}
+
 
 /******************************************************************************
 *                                                                             *
-*   int vsprintf( char *dest, const char *format, va_list arg )               *
+*   int _print( char *format, va_list arg )                                   *
 *                                                                             *
 *******************************************************************************
 *
-*   This is a printf function that prints to a string.  Character 0 is
-#   appended after the last character in the destination (but is not counted).
+*   This is a generic print function.  It is used by the rest of print
+*   functions after they have set up the appropriate (pfnPutChar) function.
 *
 *   Where:
-*       dest is the string to print into
-#       format is a printf style format
-#       arg is the variable argument list
+*       format is the format of the string to be printed, standard "C"
+*       arg is a variable length list of arguments needed for printing
 *
 *   Returns:
-*       number of characters printed
+*       number of characters actually printed
 *
 ******************************************************************************/
-int vsprintf( char *dest, const char *format, va_list arg )
+static int _print( char *format, va_list arg )
 {
+    static const char hex[16]="0123456789abcdef";
+    static const unsigned int dec[10] = {
+        1000000000,
+        100000000,
+        10000000,
+        1000000,
+        100000,
+        10000,
+        1000,
+        100,
+        10,
+        1
+    };
+
+    char buf[10];
     char * fmt = format;
     char c;
-    char *str = dest;
     int i, j, k, l;
     int flags;
     int width;
@@ -111,20 +130,15 @@ int vsprintf( char *dest, const char *format, va_list arg )
     int *arg_pint;
 
 
-    while( c = *fmt++ )
+    nCharsWritten = 0;
+
+    while( (c = *fmt++) )
     {
         switch( c )
         {
-
-            // New line - send LF and CR characters
-            //
-            case '\n' :
-
-                *str++ = 0x0A;
-                *str++ = 0x0D;
-
-            break;
-
+            // Character \n resets x=0, advances to new line
+            // Character \r clears text to the end of line and resets x=0
+            // They are sent with the rest of the printable codes
 
             // Format control characters
             //
@@ -239,9 +253,9 @@ UnsignedInt:
                              while( width-k > 0 )
                              {
                                 if( flags&ZERO_PREFIX )
-                                    *str++ = '0';
+                                    (pfnPutChar)('0');
                                 else
-                                    *str++ = ' ';
+                                    (pfnPutChar)(' ');
 
                                 width--;
                              }
@@ -250,13 +264,13 @@ UnsignedInt:
                          // Take care of the sign
                          //
                          if( flags&NEGATIVE )
-                            *str++ = '-';
+                             (pfnPutChar)('-');
                          else
                              if( flags&PRINT_SIGN )
-                                *str++ = '+';
+                                 (pfnPutChar)('+');
                              else
                                  if( flags&PRINT_SPACE )
-                                    *str++ = ' ';
+                                     (pfnPutChar)(' ');
 
                          // If the left justify is set, print the number
                          // and pad it with spaces if width is greater
@@ -264,11 +278,11 @@ UnsignedInt:
                          if( flags&LEFT_JUSTIFY )
                          {
                             for( i=10-k; i<10; i++ )
-                                *str++ = buf[i];
+                                (pfnPutChar)( buf[i] );
 
                             while( width-k > 0 )
                             {
-                                *str++ = ' ';
+                                (pfnPutChar)(' ');
                                 width--;
                             }
                             break;
@@ -277,7 +291,7 @@ UnsignedInt:
                          // Finally, put out the digits
                          //
                          for( i=10-k; i<10; i++ )
-                            *str++ = buf[i];
+                             (pfnPutChar)( buf[i] );
 
                     break;
 
@@ -309,8 +323,8 @@ UnsignedInt:
 
                             // Uppercase hex if needed
                             //
-                            if( flags&HEX_UPPERCASE )
-                                j = toupper(j);
+                            if( (flags&HEX_UPPERCASE) && (j>'9') )
+                                j += 'A' - 'a';
 
                             buf[ l++ ] = j;
 
@@ -329,11 +343,11 @@ UnsignedInt:
                          if( flags&LEFT_JUSTIFY )
                          {
                             for( i=8-k; i<8; i++ )
-                                *str++ = buf[i];
+                                (pfnPutChar)( buf[i] );
 
                             while( width-k > 0 )
                             {
-                                *str++ = ' ';
+                                (pfnPutChar)(' ');
                                 width--;
                             }
 
@@ -347,9 +361,9 @@ UnsignedInt:
                          while( width-k > 0 )
                          {
                             if( flags&ZERO_PREFIX )
-                                *str++ = '0';
+                                (pfnPutChar)('0');
                             else
-                                *str++ = ' ';
+                                (pfnPutChar)(' ');
 
                             width--;
                          }
@@ -357,7 +371,8 @@ UnsignedInt:
                          // Finally, put out the digits
                          //
                          for( i=8-k; i<8; i++ )
-                            *str++ = buf[i];
+                             (pfnPutChar)( buf[i] );
+
 
                     break;
 
@@ -382,14 +397,14 @@ UnsignedInt:
                          if( !(flags&LEFT_JUSTIFY) && (i<width) )
                              for( j=0; j< width-i; j++ )
                              {
-                                *str++ = ' ';
+                                 (pfnPutChar)(' ');
                              }
 
                          // Print the entire string
 
-                         while( c = *arg_str++ )
+                         while( (c = *arg_str++) )
                          {
-                            *str++ = c;
+                            (pfnPutChar)( c );
                          }
 
                          // If the string was left justified and the width
@@ -398,7 +413,7 @@ UnsignedInt:
                          if( (flags&LEFT_JUSTIFY) && (i<width) )
                              for( j=0; j< width-i; j++ )
                              {
-                                *str++ = ' ';
+                                 (pfnPutChar)(' ');
                              }
 
                     break;
@@ -408,9 +423,21 @@ UnsignedInt:
                     //
                     case 'c':
 
+                         // Seems like I had this bug for a long time...
+                         //arg_chr = va_arg( arg, char );
+
                          arg_chr = va_arg( arg, int );
 
-                         *str++ = arg_chr;
+                         (pfnPutChar)( arg_chr );
+
+                    break;
+
+
+                    // '%' character
+                    //
+                    case '%':
+
+                         (pfnPutChar)( '%' );
 
                     break;
 
@@ -423,7 +450,7 @@ UnsignedInt:
 
                          arg_pint = va_arg( arg, int * );
 
-                         *arg_pint = str - dest;
+                         *arg_pint = nCharsWritten;
 
                     break;
 
@@ -439,132 +466,85 @@ UnsignedInt:
             //
             default:
 
-                *str++ = c;
+                (pfnPutChar)( c );
         }
     }
 
-    // Append zero at the destination string
-
-    *str = '\0';
-
-    return( str - dest );
+    return( nCharsWritten );
 }
 
 
-#if 0  
 
 /******************************************************************************
 *                                                                             *
-*   int printf( const char *format, ... )                                     *
+*   int sprintf( char *buf, const char *format, ... )                         *
 *                                                                             *
 *******************************************************************************
 *
-*   This is the printf function
+*   Standard sprintf() function that prints into a string.
 *
 *   Where:
-#       format is a printf style format
-#       ... is the argument list
+*       buf is a pointer to a destination buffer (where to print)
+*       format is the format of the string to be printed, standard "C"
 *
 *   Returns:
-*       number of characters printed
+*       number of characters actually printed
 *
 ******************************************************************************/
-int printf( const char *format, ... )
+int sprintf( char *buf, char *format, ... )
 {
+    TPUTCHAR pfnPutCharSave;
     va_list arg;
-    int i;
+    int value;
+
+    // Set the string pointer
+
+    str_buf = buf;
+
+    // Set the output function
+
+    pfnPutCharSave = pfnPutChar;
+    pfnPutChar = sputchar;
 
     va_start( arg, format );
-    i = vsprintf( printbuf, format, arg );
-    fputs(printbuf, stdout);
-    va_end( arg );
 
-    return i;
+    value = _print( format, arg );
+
+    // Zero-terminate the string
+
+    *str_buf = (char)0;
+
+    // Restore original put character function
+
+    pfnPutChar = pfnPutCharSave;
+
+    return( value );
 }
 
 
 /******************************************************************************
 *                                                                             *
-*   int vfprintf( FILE *fp, const char *format, va_list arg )                 *
+*   int dprint( char *format, ... )                                           *
 *                                                                             *
 *******************************************************************************
 *
-*   This is the printf function with variable number of arguments
+*   This is the main print function for debugger display.  It also has some
+*   added functionality in form of control codes.
 *
 *   Where:
-#       fp is the file stream
-#       format is a printf style format
-#       arg is the argument list
+*       format is the standard printf() format string
+*       ... standard printf() list of arguments.
 *
 *   Returns:
-*       number of characters printed
+*       number of characters actually printed.
 *
 ******************************************************************************/
-int vfprintf( FILE *fp, const char *format, va_list arg )
-{
-    int i = vsprintf( printbuf, format, arg );
-    fputs(printbuf, fp);
-
-    return i;
-}
-
-
-/******************************************************************************
-*                                                                             *
-*   int fprintf( FILE *fp, const char *format, ... )                          *
-*                                                                             *
-*******************************************************************************
-*
-*   This is the printf function to print to a file stream
-*
-*   Where:
-#       fp is the file stream
-#       format is a printf style format
-#       ... is the argument list
-*
-*   Returns:
-*       number of characters printed
-*
-******************************************************************************/
-int fprintf( FILE *fp, const char *format, ... )
+int dprint( char *format, ... )
 {
     va_list arg;
-    int i;
 
     va_start( arg, format );
-    i = vsprintf( printbuf, format, arg );
-    fputs(printbuf, fp);
-    va_end( arg );
 
-    return i;
-}
-
-#endif
-
-/******************************************************************************
-*                                                                             *
-*   int sprintf( char *str, const char *format, ... )                         *
-*                                                                             *
-*******************************************************************************
-*
-*   This is a printf function that prints to a string.
-*
-*   Where:
-#       format is a printf style format
-#       ... is the argument list
-*
-*   Returns:
-*       number of characters printed
-*
-******************************************************************************/
-int sprintf( char *str, const char *format, ... )
-{
-    va_list arg;
-    int i;
-
-    va_start( arg, format );
-    i = vsprintf( str, format, arg );
-    va_end( arg );
-    return i;
+    return _print( format, arg );
 }
 

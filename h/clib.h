@@ -66,6 +66,8 @@ typedef unsigned int   BOOL;
 
 #define NULL    0L
 
+#define MIN(a,b)        ((a)<(b)?(a):(b))
+#define MAX(a,b)        ((a)<(b)?(b):(a))
 
 ///////////////////////////////////////////////////////////////////////////////
 //
@@ -195,9 +197,12 @@ typedef char *va_list[1];
 
 // These are really fun !
 
-#define va_start(ap,pn) ((ap)[0]=(char *)&pn+((sizeof(pn)+sizeof(int)-1)&~(sizeof(int)-1)),(void)0)
+#define va_start(ap,pn) ((ap)[0]=(char *)&pn+ \
+    ((sizeof(pn)+sizeof(int)-1)&~(sizeof(int)-1)),(void)0)
 
-#define va_arg(ap,type)     ((ap)[0]+=  ((sizeof(type)+sizeof(int)-1)&~(sizeof(int)-1)),(*(type *)((ap)[0]-((sizeof(type)+sizeof(int)-1)&~(sizeof(int)-1)))))
+#define va_arg(ap,type)     ((ap)[0]+= \
+    ((sizeof(type)+sizeof(int)-1)&~(sizeof(int)-1)), \
+    (*(type *)((ap)[0]-((sizeof(type)+sizeof(int)-1)&~(sizeof(int)-1)))))
 
 #define va_end(ap)      ((ap)[0]=0,(void)0)
 
@@ -210,8 +215,8 @@ typedef char *va_list[1];
 
 typedef char *__va_list[1];
 
-extern int sprintf( char *str, const char *format, ... );
-extern int vsprintf( char *dest, const char *format, __va_list arg );
+extern int sprintf( char *str, char *format, ... );
+extern int vsprintf( char *dest, char *format, __va_list arg );
 
 extern int scanf( const char *fmt, ... );
 extern int vscanf( const char *fmt, __va_list arg );

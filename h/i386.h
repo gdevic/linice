@@ -9,7 +9,7 @@
 *   Author:     Goran Devic                                                   *
 *                                                                             *
 *******************************************************************************
-.-
+
     Module Description:
 
         This header file contains global exports from the i386.asm module.
@@ -73,7 +73,7 @@
 #define PORT_DUMMY          0x80
 
 
-// Array of interrupt handlers for running debugger
+// Array of pointers to interrupt handlers
 
 extern DWORD IceIntHandlers[];
 
@@ -85,26 +85,17 @@ extern DWORD IceIntHandlers[];
 ******************************************************************************/
 
 extern void GetIDT(TDescriptor *p);
-extern void SetIDT(TDescriptor *p);
-extern void IceKeyboard(void);
-extern void DebKeyboard(void);
-extern void IceInterrupt(DWORD nInt);
-                       
-extern BYTE inp(int port);
+extern void GetGDT(TDescriptor *p);
 extern void outp(int port, int value);
-extern void IssueInt3();
-
+extern BYTE inp(int port);
+extern BYTE ReadCRTC(DWORD BasePort, DWORD index);
+extern void WriteCRTC(DWORD BasePort, DWORD index, DWORD value);
 extern void DisableInterrupts();
 extern void EnableInterrupts();
-
-extern void Interrupt_0(void);
-extern void Interrupt_1(void);
-extern void Interrupt_3(void);
-extern void Interrupt_6(void);
-extern void Interrupt_8(void);
-extern void Interrupt_10(void);
-extern void Interrupt_13(void);
-extern void Interrupt_33(void);
+extern void IssueInt3();
+extern DWORD GetByte(WORD sel, DWORD offset);
+extern void memset_w(BYTE *dest, WORD fill, DWORD words);
+extern void HaltCpu(void);
 
 
 #endif //  _I386_H_

@@ -1,8 +1,8 @@
 /******************************************************************************
 *                                                                             *
-*   Module:     initial.c                                                     *
+*   Module:     unassemble.c                                                  *
 *                                                                             *
-*   Date:       10/26/00                                                      *
+*   Date:       11/16/00                                                      *
 *                                                                             *
 *   Author:     Goran Devic                                                   *
 *                                                                             *
@@ -10,7 +10,7 @@
 
     Module Description:
 
-        This module contains initial load/unload code
+        This module contains unassemble functions
 
 *******************************************************************************
 *                                                                             *
@@ -18,13 +18,11 @@
 *                                                                             *
 *   DATE     DESCRIPTION OF CHANGES                               AUTHOR      *
 * --------   ---------------------------------------------------  ----------- *
-* 10/26/00   Original                                             Goran Devic *
+* 11/16/00   Original                                             Goran Devic *
 * --------   ---------------------------------------------------  ----------- *
 *******************************************************************************
 *   Include Files                                                             *
 ******************************************************************************/
-
-#include <linux/module.h>               // Include module header file
 
 #include "clib.h"                       // Include C library header file
 
@@ -40,16 +38,27 @@
 *                                                                             *
 ******************************************************************************/
 
-int errno = 0;                          // Needed by the C library
-
-TDeb deb;                               // Debugee state structure
-
-
 /******************************************************************************
 *                                                                             *
 *   Local Defines, Variables and Macros                                       *
 *                                                                             *
 ******************************************************************************/
+
+BYTE test[10] = 
+{
+    0x3C, 0xAA
+};
+
+static char sLine[256];
+
+/******************************************************************************
+*                                                                             *
+*   External Functions                                                        *
+*                                                                             *
+******************************************************************************/
+
+extern BYTE Disassembler( TDisassembler *pDis );
+
 
 /******************************************************************************
 *                                                                             *
@@ -57,97 +66,78 @@ TDeb deb;                               // Debugee state structure
 *                                                                             *
 ******************************************************************************/
 
-void *malloc(size_t size)
+void PrintCode()
 {
-    return( NULL );
-}    
+    DWORD lines;
+    DWORD nLen;
+    BYTE codes[16];
+    TDisassembler dis;
+    WORD sel;
+    DWORD offset;
+    int i;
+
+    lines = deb.wc.nLines;
+    deb.codeMode = DC_ASM;              // Initially disassemble pure assembly
+    sel = deb.codeSel;
+    offset = deb.codeOffset;
 
 
-/******************************************************************************
-*                                                                             *
-*   int init_module(void)                                                     *
-*                                                                             *
-*******************************************************************************
-*
-*   This function is called when a module gets loaded.
-*
-*   Returns:
-*       0 to load module
-*       non-zero if a module should not be loaded
-*
-******************************************************************************/
-int init_module(void)
-{
-    printk("<1>LinIce Copyright 2000 by Goran Devic\n");
+    dis.dwFlags = DIS_DATA32 | DIS_ADDRESS32;
+    dis.wSel = sel;
+//    dis.bpTarget = (BYTE *) offset;
+    dis.bpTarget = (BYTE *) test;
 
-#if DBG
-    printk("<1>Debug build\n");
-    ASSERT(sizeof(TSS_Struct) == 104);
-    ASSERT(sizeof(TDescriptor) == 6);
+    dis.szDisasm = sLine;
+    dis.pCode = codes;
+
+//    while( lines-- > 0 )
+    {
+
+codes[15] = 0x88;
+        Disassembler( &dis );
+
+if( codes[15] != 0x88 )
+    dprint("CODES[15] CORRUPTED!!!\n");
+
+        dprint("len: %02X  flags=%X as=%d ", dis.bInstrLen, dis.dwFlags, dis.bAsciiLen );
+        for( i=0; i<dis.bInstrLen;i++ )
+        {
+            dprint("%02X ", dis.pCode[i]);
+        }
+        dprint(" %s\n", dis.szDisasm);
+        dputc('\n');
+                   
+        // Print selector:offset
+
+        // Clean the printout string line
+        memset(sLine, ' ', 256);
+        nLen = 0;
+
+        nLen += sprintf(sLine+nLen, "%04X:%08X  ", sel, (int) offset );
+        dprint("-%d-", nLen);
+
+        // If the code is on, print code bytes
+#if 0
+        if( deb.fSetCode )
+        {
+            for( i=0; i<MIN(dis.bInstrLen, 10); i++)
+            {
+                nLen += sprintf(sLine+nLen, "%02X", codes[i]);
+                dprint("-%d-", nLen);
+            }
+        }
 #endif
+        // Get the disassembled line
 
-    // Initialize deb data structure
+        nLen += sprintf(sLine+nLen, "%s", dis.szDisasm );
+        dprint("-%d-", nLen);
 
-    memset(&deb, 0, sizeof(deb));
+        // and finally print it out
 
-    deb.fInt1Here = TRUE;
-    deb.fInt3Here = TRUE;
-    deb.fSetCode  = TRUE;
+        dprint("%s\n", sLine);
 
-    // Set initial window visibility
-    deb.wr.fVisible = TRUE;
-    deb.wd.fVisible = TRUE;
-
-    deb.wr.nLines = 3;
-    deb.wd.nLines = 5;
-
-    deb.nLines = 25;        // Set 25 line display
-
-    deb.dumpMode = DD_BYTE; // Initially dump bytes
-    deb.dumpSel = 0x18;     // Linux data selector :-)
-    deb.dumpOffset = 0;     // Start at offset 0
-
-    deb.codeMode = DC_ASM;
-    deb.codeSel = 0x18;
-    deb.codeOffset = 0xC0000000;
-
-    // Initialize VGA text display subsystem
-
-    VgaInit();
-
-    // Store the current kernel IDT descriptor record so the 
-    // hook functions can use it. We assume IDT does not change.
-    GetIDT(&deb.idt);
-    deb.pIdt = (TIDT_Gate *) GET_DESC_BASE(&deb.idt);
-
-    // Save the IDT array while it is still pristine
-    SaveIDT();
-
-    // Hook the debugee IDT to break on selected interrupts/faults/traps
-    HookDebuger();
-
-    // Issue INT 3 to initially stop inside the debugger
-    IssueInt3();
-
-    return( 0 );
-}    
-
-
-/******************************************************************************
-*                                                                             *
-*   void cleanup_module(void)                                                 *
-*                                                                             *
-*******************************************************************************
-*
-*   This function is called when a module gets unloaded.
-*
-******************************************************************************/
-void cleanup_module(void)
-{
-    // Unhook all the interrupts on exit.
-
-    RestoreIDT();
-
-    printk("<1>LinIce unloaded.\n");
+        dis.bpTarget += dis.bInstrLen;
+        offset       += dis.bInstrLen;
+    }
 }    
 
