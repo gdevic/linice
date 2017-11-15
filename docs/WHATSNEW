@@ -1,0 +1,7 @@
+Release Notes:
+
+07-28-2005  Release 2.6
+--------------------------------------------------------------------------
+* Fixed	seg fault caused by getlogin() returning NULL case (fix by Guillaume)
+* Added module fail description for kernels 2.6.9 and above
+* Added this file with the summary of changes

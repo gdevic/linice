@@ -33,6 +33,7 @@ cd docs
 dos2unix CONTRIBUTORS
 dos2unix COPYING
 dos2unix README
+dos2unix WHATSNEW
 cd ..
 
 cd include

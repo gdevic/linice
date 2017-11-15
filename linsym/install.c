@@ -212,12 +212,18 @@ BOOL OpenSystemMap(char *pSystemMap)
 ******************************************************************************/
 BOOL IsRootUser(void)
 {
+    char *username;                     // Pointer to the login user name
+
+    // Beware the getlogin may fail and return NULL (fixed by Guillaume)
+    if( (username = getlogin())==NULL )
+        username = "?";
+
     // We require for either the login name or the USER environment variable to be 'root'
 
-    VERBOSE1 printf("getlogin()=%s\n", getlogin());
+    VERBOSE1 printf("getlogin()=%s\n", username);
     VERBOSE1 printf("USER      =%s\n", getenv("USER"));
 
-    if( !strcmp("root", getlogin()) || !strcmp(getenv("USER"), "root") )
+    if( !strcmp("root", username) || !strcmp(getenv("USER"), "root") )
         return( TRUE );
 
     // Print the error message since we will return FALSE and quit the command
@@ -702,6 +708,7 @@ BOOL OptInstall(char *pSystemMap)
         fprintf(stderr, "    Example:  export LINICE=/usr/src/linice/bin\n");
         fprintf(stderr, "  * Linice did not compile correctly so the module does not exist\n");
         fprintf(stderr, "  * Your Symbol.map file is not correct (use option -m <map>)\n");
+        fprintf(stderr, "  * Unsupported kernel version 2.6.9 and above\n");
         fprintf(stderr, "\n");
 
     }
