@@ -703,48 +703,70 @@ BOOL cmdSet(char *args, int subClass)
 
 /******************************************************************************
 *                                                                             *
-*   BOOL cmdLines(char *args, int subClass)                                   *
+*   BOOL cmdResize(char *args, int subClass)                                  *
 *                                                                             *
 *******************************************************************************
 *
-*   Display or change number of display lines
+*   Display or change number of display lines or width
+*
+*   Where:
+*       subClass = 0  command WIDTH (X-size)
+*       subClass = 1  command LINES (Y-size)
 *
 ******************************************************************************/
-BOOL cmdLines(char *args, int subClass)
+BOOL cmdResize(char *args, int subClass)
 {
-    DWORD lines;
+    DWORD value;
     BYTE n1, n2;
+    int x, y;
+
+    x = pOut->sizeX;
+    y = pOut->sizeY;
 
     if( *args==0 )
     {
-        // No arguments - display number of lines
-        dprinth(1, "Number of lines is %d", pOut->sizeY);
+        // No arguments - display the current screen size
+        dprinth(1, "Screen size is: LINES=%d WIDTH=%d", y, x);
     }
     else
     {
-        // Set the new number of lines
+        // Set the new number of lines or width
         // Get the 2-digit decimal number
         n1 = *(args); n2 = *(args+1);
         if( isdigit(n1) && isdigit(n2) )
         {
-            lines = (n1-'0') * 10 + (n2-'0');
+            value = (n1-'0') * 10 + (n2-'0');
 
-            if( lines >= 24 && lines <= 90 )
+            if( subClass==0 )
+                x = value;              // Command was WIDTH
+            else
+                y = value;              // Command was LINES
+
+            if( y >= 24 && y <= 90 )
             {
-                if( lines != pOut->sizeY )
+                if( x >= 80 && x <=120 )
                 {
-                    // Some exceptions: VT100 terminal can't change lines
-                    if( pOut==&outVT100 && lines!=24)
+                    // Check if the parameters are the same as active, so we
+                    // dont call function if we don't have to
+                    if( x!=pOut->sizeX || y!=pOut->sizeY )
                     {
-                        dprinth(1, "VT100 terminal supported with 24 lines only");
-                    }
-                    else
-                    {
-                        // Accept new number of lines and refresh the screen
-                        pOut->sizeY = lines;
-                        RecalculateDrawWindows();
+                        // Call the resize function of the output device
+                        // This function will do all necessary checking depending
+                        // on the device's capability
+
+                        if( (pOut->resize)(x, y)==TRUE )
+                        {
+                            // Call succeeded - set new size and redraw windows
+
+                            pOut->sizeX = x;
+                            pOut->sizeY = y;
+
+                            RecalculateDrawWindows();
+                        }
                     }
                 }
+                else
+                    dprinth(1, "Width has to be in the range [80, 120]");
             }
             else
                 dprinth(1, "Lines have to be in the range [24, 90]");

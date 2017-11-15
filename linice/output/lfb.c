@@ -156,6 +156,7 @@ static void DgaCls32();
 static void DgaCls16();
 
 static void DgaMouse(int x, int y);
+static BOOL DgaResize(int x, int y);
 
 extern void CacheTextScrollUp(DWORD top, DWORD bottom);
 extern void CacheTextCls();
@@ -243,6 +244,7 @@ int XInitPacket(TXINITPACKET *pXInit)
     outDga.sizeY = 25;
     outDga.sprint = DgaSprint;
     outDga.mouse = DgaMouse;
+    outDga.resize = DgaResize;
 
     dga.scrollTop = 0;
     dga.scrollBottom = outDga.sizeY - 1;
@@ -460,7 +462,7 @@ static void DgaCls32()
 
 /******************************************************************************
 *                                                                             *
-*   void MoveBackground(BOOL fSave)                                           *
+*   void SaveBackground(BOOL fSave)                                           *
 *                                                                             *
 *******************************************************************************
 *
@@ -470,7 +472,7 @@ static void DgaCls32()
 *                  FALSE for restore background
 *
 ******************************************************************************/
-static void MoveBackground(BOOL fSave)
+static void SaveBackground(BOOL fSave)
 {
     DWORD size, y, address;
     BYTE *pBuf;
@@ -536,6 +538,20 @@ static void DgaMouse(int x, int y)
 
 /******************************************************************************
 *                                                                             *
+*   static BOOL DgaResize(int x, int y)                                       *
+*                                                                             *
+*******************************************************************************
+*
+*   Resize DGA display
+*
+******************************************************************************/
+static BOOL DgaResize(int x, int y)
+{
+    return( TRUE );
+}
+
+/******************************************************************************
+*                                                                             *
 *   static void ScrollUp()                                                    *
 *                                                                             *
 *******************************************************************************
@@ -591,11 +607,11 @@ void DgaSprint(char *s)
         switch( c )
         {
             case DP_SAVEBACKGROUND:
-                    MoveBackground(TRUE);
+                    SaveBackground(TRUE);
                 break;
 
             case DP_RESTOREBACKGROUND:
-                    MoveBackground(FALSE);
+                    SaveBackground(FALSE);
                 break;
 
             case DP_CLS:
@@ -614,6 +630,10 @@ void DgaSprint(char *s)
             case DP_SETCURSORXY:
                     outDga.x = (*s++)-1;
                     outDga.y = (*s++)-1;
+                break;
+
+            case DP_SETCURSORSHAPE:
+                    deb.fOvertype = (*s++)-1;
                 break;
 
             case DP_SAVEXY:

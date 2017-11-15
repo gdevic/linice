@@ -170,6 +170,14 @@ BOOL cmdGo(char *args, int subClass)
         }
     }
 
+    // On the help line, print that the Linux is running...
+    dprint("%c%c%c%c%c%c    Linux is running... Press %s + %c to break\r%c",
+        DP_SAVEXY,
+        DP_SETCURSORXY, 1+0, 1+pOut->sizeY-1,
+        DP_SETCOLINDEX, COL_HELP,
+        deb.BreakKey & CHAR_CTRL? "CTRL" : "ALT", deb.BreakKey & 0x7F,
+        DP_RESTOREXY);
+
     return( FALSE );
 }
 

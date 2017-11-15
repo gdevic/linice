@@ -368,6 +368,7 @@ static int DriverIOCTL(struct inode *inode, struct file *file, unsigned int ioct
         break;
 
         case ICE_IOCTL_XDGA:            // Start using X linear framebuffer as the output device
+#if 1
             INFO(("ICE_IOCTL_XDGA\n"));
 
             // Copy the X-init block to the driver
@@ -377,6 +378,7 @@ static int DriverIOCTL(struct inode *inode, struct file *file, unsigned int ioct
                 retval = XInitPacket(&XInit);
             }
             else
+#endif
                 retval = -EFAULT;       // Faulty memory access
             break;
 

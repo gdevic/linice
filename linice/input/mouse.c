@@ -94,7 +94,10 @@ void MouseHandler(PTMPACKET pPacket)
         mouseY = (pOut->sizeY-1) * sens;
 
     // Call the function to display mouse
-    pOut->mouse(mouseX / sens, mouseY / sens);
+
+    // TODO: Revise whole mouse interface
+
+//  pOut->mouse(mouseX / sens, mouseY / sens);
 }
 
 

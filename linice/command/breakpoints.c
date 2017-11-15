@@ -133,11 +133,11 @@ static char *pBuf;
 
 extern DWORD GetHex(char **psString);
 
-DWORD fnBpCount(void) { return( deb.bpIndex>=0? bp[deb.bpIndex].CurHits : 0 ); };
-DWORD fnBpMiss(void) { return( deb.bpIndex>=0? bp[deb.bpIndex].CurMisses : 0 ); };
-DWORD fnBpTotal(void) { return( deb.bpIndex>=0? bp[deb.bpIndex].Hits : 0 ); };
-DWORD fnBpIndex(void) { return( deb.bpIndex ); };
-DWORD fnBpLog(void)
+DWORD fnBpCount(DWORD arg) { return( deb.bpIndex>=0? bp[deb.bpIndex].CurHits : 0 ); };
+DWORD fnBpMiss(DWORD arg) { return( deb.bpIndex>=0? bp[deb.bpIndex].CurMisses : 0 ); };
+DWORD fnBpTotal(DWORD arg) { return( deb.bpIndex>=0? bp[deb.bpIndex].Hits : 0 ); };
+DWORD fnBpIndex(DWORD arg) { return( deb.bpIndex ); };
+DWORD fnBpLog(DWORD arg)
 {
     // Log the breakpoint into the history buffer
     dprinth(1, "BPLOG Not implemented yet");

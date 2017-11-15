@@ -51,21 +51,21 @@
 *                                                                             *
 ******************************************************************************/
 
-static char *Strings[] = {
-    "NOERROR",                          // 0 - No error
-    "Syntax error",                     // ERR_SYNTAX_ERROR                 1
-    "Unknown command or macro",         // ERR_COMMAND                      2
-    "Not yet implemented",              // ERR_NOT_IMPLEMENTED              3
-    "Out of memory",                    // ERR_MEMORY                       4
+static char *Strings[MSG_LAST] = {
+    "NOERROR",                                  // 0 - No error
+    "Syntax error",                             // ERR_SYNTAX_ERROR                 1
+    "Unknown command or macro",                 // ERR_COMMAND                      2
+    "Not yet implemented",                      // ERR_NOT_IMPLEMENTED              3
+    "Out of memory",                            // ERR_MEMORY                       4
 
-    "Duplicate breakpoint",             // ERR_BPDUP                        5
-    "No more breakpoints available",    // ERR_BP_TOO_MANY                  6
-    "Debug register is already being used" // ERR_DRUSED                    7
-    "All debug registers used"          // ERR_DRUSEDUP                     8
+    "Duplicate breakpoint",                     // ERR_BPDUP                        5
+    "No more breakpoints available",            // ERR_BP_TOO_MANY                  6
+    "Debug register is already being used",     // ERR_DRUSED                    7
+    "All debug registers used",                 // ERR_DRUSEDUP                     8
 
-    "Expression?? What expression?",    // ERR_EXP_WHAT                     9
+    "Expression?? What expression?",            // ERR_EXP_WHAT                     9
 
-    "Out of memory"                     // ERR_INT_OUTOFMEM                 10
+    "Out of memory"                             // ERR_INT_OUTOFMEM                 10
 };
 
 /******************************************************************************
@@ -95,7 +95,7 @@ static char *Strings[] = {
 *
 *   Returns:
 *       String describing the error/message
-*       NULL if the index is incorrect
+*       "" if the index is incorrect
 *
 ******************************************************************************/
 char *Index2String(DWORD index)
@@ -103,6 +103,6 @@ char *Index2String(DWORD index)
     if( index < MSG_LAST )
         return( Strings[index] );
 
-    return( NULL );
+    return( "Internal error - bad error code" );
 }
 

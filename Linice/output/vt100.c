@@ -107,6 +107,7 @@ extern void SerialOut(BYTE data);
 extern void SerialOutString(char *str);
 extern void SerialMouse(int x, int y);
 
+static BOOL SerialResize(int x, int y);
 static void SerialSprint(char *s);
 
 
@@ -139,11 +140,29 @@ int InitVT100(void)
     outVT100.sizeY = VT100_MAX_Y;
     outVT100.sprint = SerialSprint;
     outVT100.mouse = SerialMouse;
+    outVT100.resize = SerialResize;
 
     // Send the init string to the VT100 terminal
     SerialOutString(sInitVT00);
 
     return(0);
+}
+
+
+/******************************************************************************
+*                                                                             *
+*   static BOOL SerialResize(int x, int y)                                    *
+*                                                                             *
+*******************************************************************************
+*
+*   Resize on a serial terminal is not supported
+*
+******************************************************************************/
+static BOOL SerialResize(int x, int y)
+{
+    dprinth(1, "Serial terminal has fixed size.");
+
+    return( FALSE );
 }
 
 

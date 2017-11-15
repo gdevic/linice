@@ -199,12 +199,12 @@ void RegDraw(BOOL fForce)
 
 static void EditInPlace(PTRegField pReg, int xDisp)
 {
-    BOOL fContinue = TRUE;
-    int xOrig, yOrig;
-    int xCur = 0, yCur = 0;
-    DWORD nibble;
-    DWORD value = 0;
-    CHAR Key;
+    BOOL fContinue = TRUE;              // Continuation flag
+    int xOrig, yOrig;                   // Cursor temporary store
+    int xCur = 0, yCur = 0;             // Current cursor coordinates
+    DWORD nibble;                       // Current typed nibble
+    DWORD value = 0;                    // and complete value
+    CHAR Key;                           // Current key pressed
 
     // If the register window is not visible, make it visible
     if( pWin->r.fVisible==FALSE )

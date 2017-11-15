@@ -57,15 +57,13 @@ static int iLast;                       // Last command entry index
 
 BOOL Unsupported(char *args, int subClass);
 
-extern BOOL hackED     (char *args, int subClass);      // eval.c
-
 extern BOOL cmdEvaluate(char *args, int subClass);      // eval.c
 extern BOOL cmdAltkey  (char *args, int subClass);      // customization.c
 extern BOOL cmdCode    (char *args, int subClass);      // customization.c
 extern BOOL cmdSet     (char *args, int subClass);      // customization.c
 extern BOOL cmdVar     (char *args, int subClass);      // customization.c
 extern BOOL cmdMacro   (char *args, int subClass);      // customization.c
-extern BOOL cmdLines   (char *args, int subClass);      // customization.c
+extern BOOL cmdResize  (char *args, int subClass);      // customization.c
 extern BOOL cmdColor   (char *args, int subClass);      // customization.c
 extern BOOL cmdSerial  (char *args, int subClass);      // customization.c
 extern BOOL cmdPause   (char *args, int subClass);      // customization.c
@@ -113,6 +111,7 @@ extern BOOL cmdPeek    (char *args, int subClass);      // page.c
 extern BOOL cmdPoke    (char *args, int subClass);      // page.c
 extern BOOL cmdPci     (char *args, int subClass);      // pci.c
 extern BOOL cmdDdump   (char *args, int subClass);      // data.c
+extern BOOL cmdEdit    (char *args, int subClass);      // data.c
 extern BOOL cmdFormat  (char *args, int subClass);      // data.c
 extern BOOL cmdUnasm   (char *args, int subClass);      // code.c
 extern BOOL cmdDot     (char *args, int subClass);      // code.c
@@ -164,14 +163,14 @@ TCommand Cmd[] = {
 {    "DRIVER",   6, 0, Unsupported,    "DRIVER [driver-name | address]", "ex: DRIVER ne2000.sys", 0 },
 {    "DS",       2, 0, Unsupported,    "DS [address [L length]]", "ex: DS EBX",   0 },
 {    "DT",       2, 0, Unsupported,    "DT [address [L length]]", "ex: DT EBX",   0 },
-{    "E",        1, 0, Unsupported,    "Edit [address] [data]", "ex: E 400000",  0 },
-{    "EB",       2, 1, Unsupported,    "EB [address] [data]", "ex: EB 324415",    0 },
+{    "E",        1, 0, cmdEdit,        "Edit [address] [data]", "ex: E 400000",  0 },
+{    "EB",       2, 1, cmdEdit,        "EB [address] [data]", "ex: EB 324415",    0 },
 {    "EC",       2, 0, Unsupported,    "EC Enable/disable code window", "ex: EC", 0 },
-{    "ED",       2, 3, hackED,         "ED [address] [data]", "ex: ED 84",    0 },
+{    "ED",       2, 4, cmdEdit,        "ED [address] [data]", "ex: ED 84",    0 },
 {    "EL",       2, 0, Unsupported,    "EL [address] [data]", "ex: EL DS:EBX",    0 },
 {    "ES",       2, 0, Unsupported,    "ES [address] [data]", "ex: ES DS:EDI",    0 },
 {    "ET",       2, 0, Unsupported,    "ET [address] [data]", "ex: ET DS:EBX",    0 },
-{    "EW",       2, 2, Unsupported,    "EW [address] [data]", "ex: EW ESP-8", 0 },
+{    "EW",       2, 2, cmdEdit,        "EW [address] [data]", "ex: EW ESP-8", 0 },
 {    "EXP",      3, 0, Unsupported,    "EXP [partial-name*]", "ex: EXP GLOB*",    0 },
 {    "CSIP",     4, 0, Unsupported,    "CSIP [OFF | [NOT] address address | [NOT] module-name]", "ex: CSIP NOT CS:201000 CS:205fff",  0 },
 {    "F",        1, 0, cmdFill,        "Fill address L length data-string", "ex: F EBX L 50 'ABCD'", 0 },
@@ -198,7 +197,7 @@ TCommand Cmd[] = {
 {    "IW",       2, 2, cmdIn,          "IW port", "ex: IW DX",    0 },
 {    "IDT",      3, 0, cmdIdt,         "IDT [int-number | IDT base-address]", "ex: IDT 21",   0 },
 {    "LDT",      3, 0, cmdLdt,         "LDT [selector | LDT table selector]", "ex: LDT 45",   0 },
-{    "LINES",    5, 0, cmdLines,       "LINES [25 | 43 | 50 | 60]", "ex: LINES 43",   0 },
+{    "LINES",    5, 1, cmdResize,      "LINES [25 | 43 | 50 | 60]", "ex: LINES 43",   0 },
 {    "LOCALS",   6, 0, cmdLocals,      "LOCALS", "ex: LOCALS",    0 },
 {    "M",        1, 0, cmdMove,        "Move source-address L length dest-address", "ex: M 4000 L 80 8000",    0 },
 {    "MACRO",    5, 0, cmdMacro,       "MACRO [macro-name] | [[*] | [= \"macro-body\"]]", "ex: MACRO Oops = \"i3here off; genint 3;\"",   0 },
@@ -251,7 +250,7 @@ TCommand Cmd[] = {
 {    "WC",       2, 0, cmdWc,          "WC [window-size]", "ex: WC 8",    0 },
 {    "WD",       2, 0, cmdWd,          "WD [window-size]", "ex: WD 4",    0 },
 {    "WF",       2, 0, Unsupported,    "WF [-D] [B | W | D | F | P | *]", "ex: WF", 0 },
-{    "WIDTH",    5, 0, Unsupported,    "WIDTH [80-160]", "ex: WIDTH 100", 0 },
+{    "WIDTH",    5, 0, cmdResize,      "WIDTH [80-160]", "ex: WIDTH 100", 0 },
 {    "WL",       2, 0, cmdWl,          "WL [window-size]", "ex: WL 8",    0 },
 {    "WHAT",     4, 0, Unsupported,    "WHAT expression", "ex: WHAT system",  0 },
 {    "WR",       2, 0, cmdWr,          "WR Toggle register window", "ex: WR", 0 },

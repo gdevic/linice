@@ -86,15 +86,19 @@
 #define MAX_BREAKPOINTS     256
 
 //////////////////////////////////////////////////////////////////////
-// Define number of bytes per line for data dump command (not tested)
-// Must be divisible by 4
+// Define number of bytes per line for data dump command.
+// This is hard-coded at 16 since data edit functions depend on that.
 #define DATA_BYTES          16
 
 //////////////////////////////////////////////////////////////////////
 // Define maximum X and Y size of the output window in all modes
 // and devices
+#define MAX_OUTPUT_SIZEX    160
+#define MAX_OUTPUT_SIZEY    100
+
+// TODO These are depriciated and will be removed
 #define MAX_X               160
-#define MAX_Y               90
+#define MAX_Y               90 
 
 //////////////////////////////////////////////////////////////////////
 // Define if the serial out connection will use polling method or

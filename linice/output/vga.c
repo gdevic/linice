@@ -108,6 +108,7 @@ static TVga vga;
 
 void VgaSprint(char *s);
 static void VgaMouse(int x, int y);
+static BOOL VgaResize(int x, int y);
 
 /******************************************************************************
 *                                                                             *
@@ -130,6 +131,7 @@ void VgaInit(void)
     outVga.sizeY = 25;
     outVga.sprint = VgaSprint;
     outVga.mouse = VgaMouse;
+    outVga.resize = VgaResize;
 
     vga.scrollTop = 0;
     vga.scrollBottom = MAX_SIZEY - 1;
@@ -261,21 +263,21 @@ static void ShowCursorPos(void)
 ******************************************************************************/
 static void VgaMouse(int x, int y)
 {
-    WORD wOffset;
+}
 
-    // Set the mouse cursor on the VGA screen
 
-    wOffset = y * 80 + x;
-    wOffset += (vgaState.CRTC[0x0C] << 8) | vgaState.CRTC[0x0D];
-
-    WriteCRTC(0x0E, wOffset >> 8);
-    WriteCRTC(0x0F, wOffset & 0xFF);
-
-    // Since we use hardware VGA cursor to show the mouse location, set
-    // its shape to block
-
-    WriteCRTC(0x0A, 0);                 // Cursor Start/End Registers
-    WriteCRTC(0x0B, 14);
+/******************************************************************************
+*                                                                             *
+*   static BOOL VgaResize(int x, int y)                                       *
+*                                                                             *
+*******************************************************************************
+*
+*   Resize VGA text display
+*
+******************************************************************************/
+static BOOL VgaResize(int x, int y)
+{
+    return( TRUE );
 }
 
 
@@ -438,7 +440,8 @@ void VgaSprint(char *s)
                     break;
             }
     
-            ShowCursorPos();
+            if( c !=DP_RESTOREBACKGROUND )
+                ShowCursorPos();
         }
         else
         {

@@ -273,6 +273,7 @@ typedef struct
 
     void (*sprint)(char *c);            // Effective print string function
     void (*mouse)(int, int);            // Function that displays mouse cursor
+    BOOL (*resize)(int, int);           // Resize window command
 
 } TOUT, *PTOUT;
 

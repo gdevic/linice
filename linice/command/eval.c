@@ -200,24 +200,24 @@ static TRegister Reg[] = {
 { "dx",  2, 0x0000FFFF, 0, offsetof(TREGS, edx) },
 { "edx", 3, 0xFFFFFFFF, 0, offsetof(TREGS, edx) },
 
-{ "cs",  2, 0x0000FFFF, 0, offsetof(TREGS, cs) },
-{ "ds",  2, 0x0000FFFF, 0, offsetof(TREGS, ds) },
-{ "es",  2, 0x0000FFFF, 0, offsetof(TREGS, es) },   // Should go before esi
-{ "fs",  2, 0x0000FFFF, 0, offsetof(TREGS, fs) },
-{ "gs",  2, 0x0000FFFF, 0, offsetof(TREGS, gs) },
-
 { "bp",  2, 0x0000FFFF, 0, offsetof(TREGS, ebp) },
 { "ebp", 3, 0xFFFFFFFF, 0, offsetof(TREGS, ebp) },
 { "sp",  2, 0x0000FFFF, 0, offsetof(TREGS, esp) },
-{ "esp", 3, 0xFFFFFFFF, 0, offsetof(TREGS, esp) },
+{ "esp", 3, 0xFFFFFFFF, 0, offsetof(TREGS, esp) },  // Should go before es
 { "si",  2, 0x0000FFFF, 0, offsetof(TREGS, esi) },
-{ "esi", 3, 0xFFFFFFFF, 0, offsetof(TREGS, esi) },
+{ "esi", 3, 0xFFFFFFFF, 0, offsetof(TREGS, esi) },  // Should go before es
 { "di",  2, 0x0000FFFF, 0, offsetof(TREGS, edi) },
 { "edi", 3, 0xFFFFFFFF, 0, offsetof(TREGS, edi) },
 { "fl",  2, 0x0000FFFF, 0, offsetof(TREGS, eflags) },
 { "efl", 3, 0xFFFFFFFF, 0, offsetof(TREGS, eflags) },
 { "ip",  2, 0x0000FFFF, 0, offsetof(TREGS, eip) },
 { "eip", 3, 0xFFFFFFFF, 0, offsetof(TREGS, eip) },
+
+{ "cs",  2, 0x0000FFFF, 0, offsetof(TREGS, cs) },
+{ "ds",  2, 0x0000FFFF, 0, offsetof(TREGS, ds) },
+{ "es",  2, 0x0000FFFF, 0, offsetof(TREGS, es) },
+{ "fs",  2, 0x0000FFFF, 0, offsetof(TREGS, fs) },
+{ "gs",  2, 0x0000FFFF, 0, offsetof(TREGS, gs) },
 
 { "CFL", 3, 1 << 0,     0, offsetof(TREGS, eflags) },
 { "PFL", 3, 1 << 2,     2, offsetof(TREGS, eflags) },
@@ -261,11 +261,11 @@ static DWORD fnWord(DWORD arg);
 static DWORD fnDword(DWORD arg);
 static DWORD fnHiword(DWORD arg);
 
-extern DWORD fnBpCount(void);
-extern DWORD fnBpMiss(void);
-extern DWORD fnBpTotal(void);
-extern DWORD fnBpIndex(void);
-extern DWORD fnBpLog(void);
+extern DWORD fnBpCount(DWORD arg);
+extern DWORD fnBpMiss(DWORD arg);
+extern DWORD fnBpTotal(DWORD arg);
+extern DWORD fnBpIndex(DWORD arg);
+extern DWORD fnBpLog(DWORD arg);
 
 
 typedef struct
@@ -927,21 +927,3 @@ BOOL cmdEvaluate(char *args, int subClass)
     return( TRUE );
 }
 
-
-BOOL hackED(char *args, int subClass)
-{
-    DWORD address, value;
-
-    if( *args )
-    {
-        if( Expression(&address, args, &args) )
-        {
-            if( Expression(&value, args, &args) )
-
-            dprinth(1, "%08X set to %08X", address, value);
-
-            *(DWORD *)address = value;
-        }
-    }
-    
-}

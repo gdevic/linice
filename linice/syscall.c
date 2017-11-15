@@ -93,13 +93,9 @@ static PFNDELETEMODULE sys_delete_module = NULL;
 
 asmlinkage int SyscallExit(int status)
 {
-    int retval;
-
     dprinth(1, "SYSCALL: %s: exit(%d)", current->comm, status);
 
-    retval = sys_exit(status);
-
-    return( retval );
+    return( sys_exit(status) );
 }
 
 
@@ -109,7 +105,7 @@ asmlinkage int SyscallFork(struct pt_regs regs)
 
     retval = sys_fork(regs);
 
-    dprinth(1, "SYSCALL: fork(%s) = %d", current->comm, retval);
+//    dprinth(1, "SYSCALL: fork(%s) = %d", current->comm, retval);
 
     return( retval );
 }
